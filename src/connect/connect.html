@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<!-- Role: Connect Tab — Nostr identity sign-up page -->
+<!-- Description: Full-page UI offering all three Nostr identity connection methods:
+     browser extension wallet (NIP-07), remote signer via bunker:// (NIP-46), and nsec import.
+     Opened by the popup when the user has no identity yet. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect — Discerned</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f0f0f;
+      color: #e8e8e8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 24px 64px;
+    }
+
+    /* ── Header ── */
+    .page-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .logo {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+
+    .page-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .page-intro {
+      font-size: 0.9rem;
+      color: #888;
+      line-height: 1.6;
+      max-width: 480px;
+    }
+
+    /* ── Connected state ── */
+    #already-connected {
+      display: none;
+      background: #0a2a0a;
+      border: 1px solid #166534;
+      border-radius: 12px;
+      padding: 28px 32px;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .connected-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .connected-title { font-size: 1.1rem; font-weight: 600; color: #4ade80; margin-bottom: 6px; }
+    .connected-desc  { font-size: 0.85rem; color: #86efac; line-height: 1.5; }
+
+    /* ── Method cards ── */
+    .methods {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .method-card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .method-card:first-child  { border-radius: 12px 12px 0 0; }
+    .method-card:last-child   { border-radius: 0 0 12px 12px; }
+    .method-card + .method-card { border-top: none; }
+
+    .method-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .method-icon {
+      font-size: 1.6rem;
+      flex-shrink: 0;
+      width: 40px;
+      text-align: center;
+    }
+
+    .method-meta { display: flex; flex-direction: column; gap: 4px; }
+
+    .method-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .method-badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: #7c3aed;
+      color: #fff;
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+
+    .method-subtitle {
+      font-size: 0.78rem;
+      color: #666;
+    }
+
+    .method-desc {
+      font-size: 0.85rem;
+      color: #888;
+      line-height: 1.6;
+    }
+
+    .install-links {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .install-links a {
+      font-size: 0.82rem;
+      color: #a78bfa;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .install-links a:hover { text-decoration: underline; }
+
+    /* ── Divider between cards ── */
+    .or-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #444;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 14px 32px;
+      background: #141414;
+      border-left: 1px solid #2a2a2a;
+      border-right: 1px solid #2a2a2a;
+    }
+
+    .or-divider::before,
+    .or-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #2a2a2a;
+    }
+
+    /* ── Inputs ── */
+    textarea {
+      width: 100%;
+      background: #252525;
+      border: 1px solid #3a3a3a;
+      border-radius: 6px;
+      color: #e8e8e8;
+      font-family: monospace;
+      font-size: 12px;
+      padding: 10px;
+      resize: vertical;
+      min-height: 64px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    textarea:focus { border-color: #555; }
+
+    input[type="password"] {
+      width: 100%;
+      background: #252525;
+      border: 1px solid #3a3a3a;
+      border-radius: 6px;
+      color: #e8e8e8;
+      font-size: 13px;
+      padding: 10px;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+    }
+    input[type="password"]:focus { border-color: #555; }
+
+    .warning-box {
+      background: #2a1f00;
+      border: 1px solid #6b4a00;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #f0c040;
+      line-height: 1.5;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, background 0.15s;
+      align-self: flex-start;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-primary   { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); color: #fff; }
+    .btn-primary:not(:disabled):hover { opacity: 0.88; }
+
+    .btn-secondary { background: #2a2a2a; color: #e8e8e8; border: 1px solid #444; }
+    .btn-secondary:not(:disabled):hover { background: #333; }
+
+    /* ── Status lines ── */
+    .status-line {
+      font-size: 0.82rem;
+      min-height: 18px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-line.error { color: #f87171; }
+    .status-line.ok    { color: #4ade80; }
+    .status-line.info  { color: #94a3b8; }
+    .status-line.spin  { color: #a78bfa; }
+
+    .spinner-inline {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid #555;
+      border-top-color: #a78bfa;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Panel-level code inline ── */
+    code {
+      background: #252525;
+      border: 1px solid #333;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-size: 0.9em;
+      color: #a78bfa;
+    }
+
+    a.inline { color: #a78bfa; text-decoration: none; }
+    a.inline:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <div class="logo">📡 Discerned</div>
+    <p class="page-title">Connect a Nostr identity</p>
+    <p class="page-intro">
+      A Nostr identity lets you broadcast evaluations publicly, build a verifiable reputation,
+      and be part of the Open Social Web. Choose how to connect — all methods are free.
+    </p>
+  </div>
+
+  <!-- Shown when already connected -->
+  <div id="already-connected">
+    <div class="connected-icon">✓</div>
+    <div class="connected-title" id="connected-title">Already connected</div>
+    <div class="connected-desc"  id="connected-desc">You can close this tab and start evaluating.</div>
+  </div>
+
+  <div class="methods" id="methods">
+
+    <!-- ── Method 1: Browser extension wallet (NIP-07) ── -->
+    <div class="method-card">
+      <div class="method-header">
+        <div class="method-icon">🔌</div>
+        <div class="method-meta">
+          <div class="method-title">Browser wallet</div>
+          <span class="method-badge">Recommended</span>
+        </div>
+      </div>
+      <p class="method-desc">
+        Install <a class="inline" href="https://chromewebstore.google.com/detail/alby-bitcoin-wallet-for-l/iokeahhehimjnekafflcihljlcjccdbe" target="_blank" rel="noopener">Alby</a> or
+        <a class="inline" href="https://chrome.google.com/webstore/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp" target="_blank" rel="noopener">nos2x</a>
+        to sign with your Nostr identity. After installing, browse any page — Discerned detects it automatically.
+      </p>
+      <div class="install-links">
+        <a href="https://chromewebstore.google.com/detail/alby-bitcoin-wallet-for-l/iokeahhehimjnekafflcihljlcjccdbe" target="_blank" rel="noopener">Install Alby →</a>
+        <a href="https://chrome.google.com/webstore/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp" target="_blank" rel="noopener">Install nos2x →</a>
+      </div>
+      <button class="btn btn-secondary" id="btn-detect-nip07">I already have one — detect it now</button>
+      <div class="status-line" id="nip07-status"></div>
+    </div>
+
+    <div class="or-divider">or</div>
+
+    <!-- ── Method 2: Remote signer / NIP-46 ── -->
+    <div class="method-card">
+      <div class="method-header">
+        <div class="method-icon">🔗</div>
+        <div class="method-meta">
+          <div class="method-title">Remote signer</div>
+          <div class="method-subtitle">via bunker:// link</div>
+        </div>
+      </div>
+      <p class="method-desc">
+        Create a free account at
+        <a class="inline" href="https://nstart.me" target="_blank" rel="noopener">nstart.me</a>,
+        then paste your <code>bunker://</code> link below.
+        Your private key never leaves the remote signer.
+      </p>
+      <textarea id="bunker-input" rows="3" placeholder="bunker://…"></textarea>
+      <button class="btn btn-primary" id="btn-connect-nip46">Connect account</button>
+      <div class="status-line" id="nip46-status"></div>
+    </div>
+
+    <div class="or-divider">or</div>
+
+    <!-- ── Method 3: Account key (nsec) ── -->
+    <div class="method-card">
+      <div class="method-header">
+        <div class="method-icon">🔑</div>
+        <div class="method-meta">
+          <div class="method-title">Account key</div>
+          <div class="method-subtitle">nsec import</div>
+        </div>
+      </div>
+      <div class="warning-box">
+        ⚠️ Your account key gives full access to your identity.
+        It will be encrypted with a PIN before being saved — only you can unlock it.
+      </div>
+      <textarea id="nsec-input" rows="2" placeholder="nsec1…"></textarea>
+      <input type="password" id="pin-input"    placeholder="PIN (minimum 6 characters)" />
+      <input type="password" id="pin-confirm"  placeholder="Confirm PIN" />
+      <button class="btn btn-primary" id="btn-save-nsec">Encrypt and save</button>
+      <div class="status-line" id="nsec-status"></div>
+    </div>
+
+  </div>
+
+  <script type="module" src="./connect.ts"></script>
+</body>
+</html>

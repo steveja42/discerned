@@ -1,0 +1,52 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="128" height="128" fill="#1a1a1a" rx="20"/>
+  
+  <!-- Stack of books (base) -->
+  <!-- Bottom book - dark blue -->
+  <rect x="20" y="85" width="88" height="12" fill="#1e3a8a" rx="2"/>
+  <rect x="20" y="85" width="88" height="3" fill="#3b82f6" opacity="0.5" rx="2"/>
+  
+  <!-- Middle book - purple -->
+  <rect x="25" y="73" width="78" height="12" fill="#581c87" rx="2"/>
+  <rect x="25" y="73" width="78" height="3" fill="#a855f7" opacity="0.5" rx="2"/>
+  
+  <!-- Top book - teal -->
+  <rect x="30" y="61" width="68" height="12" fill="#0f766e" rx="2"/>
+  <rect x="30" y="61" width="68" height="3" fill="#14b8a6" opacity="0.5" rx="2"/>
+  
+  <!-- Signal beacon tower -->
+  <!-- Base of tower -->
+  <rect x="58" y="55" width="12" height="6" fill="#64748b" rx="1"/>
+  
+  <!-- Tower pole -->
+  <rect x="61" y="25" width="6" height="30" fill="#94a3b8"/>
+  
+  <!-- Tower top -->
+  <circle cx="64" cy="25" r="6" fill="#0ea5e9"/>
+  <circle cx="64" cy="25" r="4" fill="#38bdf8"/>
+  
+  <!-- Signal waves (animated ripples) -->
+  <!-- Outer wave -->
+  <circle cx="64" cy="25" r="16" fill="none" stroke="#0ea5e9" stroke-width="2" opacity="0.4">
+    <animate attributeName="r" from="8" to="24" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" from="0.6" to="0" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Middle wave -->
+  <circle cx="64" cy="25" r="12" fill="none" stroke="#0ea5e9" stroke-width="2" opacity="0.6">
+    <animate attributeName="r" from="8" to="20" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" from="0.8" to="0" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Inner wave -->
+  <circle cx="64" cy="25" r="10" fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.8">
+    <animate attributeName="r" from="6" to="16" dur="2s" begin="1s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" from="1" to="0" dur="2s" begin="1s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Book page details -->
+  <line x1="24" y1="89" x2="24" y2="97" stroke="#93c5fd" stroke-width="0.5"/>
+  <line x1="29" y1="77" x2="29" y2="85" stroke="#c4b5fd" stroke-width="0.5"/>
+  <line x1="34" y1="65" x2="34" y2="73" stroke="#5eead4" stroke-width="0.5"/>
+</svg>

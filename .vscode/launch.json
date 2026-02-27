@@ -1,0 +1,131 @@
+
+    // Use IntelliSense to learn about possible attributes.  **/.vscode/profiles/
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+ {
+  "version": "0.2.0",
+  "configurations": [
+{
+  "name": "Debug: Chrome (Isolated)",
+  "type": "chrome",
+  "request": "launch",
+  "url": "https://example.com/",
+  "webRoot": "${workspaceFolder}",
+  "userDataDir": "${workspaceFolder}/.vscode/profiles/chrome_iso",
+  "runtimeArgs": [
+    "--load-extension=${workspaceFolder}/dist",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--remote-debugging-port=9222"
+  ],
+  "skipFiles": ["<node_internals>/**/*.js"]
+},
+{
+  "name": "Debug: Chrome (nos2x)",
+  "type": "chrome",
+  "request": "launch",
+  "url": "https://example.com/",
+  "webRoot": "${workspaceFolder}",
+  "userDataDir": "${workspaceFolder}/.vscode/profiles/chrome",
+  "runtimeArgs": [
+    "--load-extension=${workspaceFolder}/dist",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--remote-debugging-port=9222"
+  ],
+  "skipFiles": ["<node_internals>/**/*.js"]
+},
+    {
+      "name": "Debug: Brave (no nsec)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "https://example.com/",
+      "webRoot": "${workspaceFolder}",
+      /* --- Path for Windows --- */
+      "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      /* --- Path for macOS (Uncomment if needed) --- */
+      // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      "userDataDir": "${workspaceFolder}/.vscode/profiles/brave",
+      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run"
+      ]
+    },
+  {
+      "name": "Debug: Brave (nip07-nos2x)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "https://example.com/",
+      "webRoot": "${workspaceFolder}",
+      /* --- Path for Windows --- */
+      "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      /* --- Path for macOS (Uncomment if needed) --- */
+      // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      "userDataDir": "${workspaceFolder}/.vscode/profiles/brave_nip07",
+      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run"
+      ]
+    },
+     {
+      "name": "Debug: Brave (nip07-alby)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "https://example.com/",
+      "webRoot": "${workspaceFolder}",
+      /* --- Path for Windows --- */
+      "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      /* --- Path for macOS (Uncomment if needed) --- */
+      // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      "userDataDir": "${workspaceFolder}/.vscode/profiles/brave_alby_nip07",
+      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run"
+      ]
+    },
+      {
+      "name": "Debug: Brave (stored key)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "https://example.com/",
+      "webRoot": "${workspaceFolder}",
+      /* --- Path for Windows --- */
+      "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      /* --- Path for macOS (Uncomment if needed) --- */
+      // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      "userDataDir": "${workspaceFolder}/.vscode/profiles/brave_stored_key",
+      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run"
+      ]
+    },
+    {
+  "name": "Debug: Chrome (Existing Profile)",
+  "type": "chrome",
+  "request": "launch",
+  "url": "about:blank",
+  // 1. Point this to the "User Data" folder (NOT the profile folder itself)
+  "userDataDir": "C:\\Users\\YourName\\AppData\\Local\\Google\\Chrome\\User Data",
+  "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
+  "runtimeArgs": [
+    "--load-extension=${workspaceFolder}",
+    // 2. Specify the folder name of the profile (e.g., "Default" or "Profile 1")
+    "--profile-directory=Default",
+    "--remote-debugging-port=9222"
+  ]
+}
+  ],
+  "compounds": [
+    {
+      "name": "Launch All Browsers",
+      "configurations": [
+        "Debug: Chrome (Isolated)",
+        "Debug: Brave (Isolated)"
+      ]
+    }
+  ]
+}

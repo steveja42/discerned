@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<!-- Role: Popup — HTML shell -->
+<!-- Description: Extension toolbar popup. popup.ts renders auth state and usage counts at runtime. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discerned</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 340px;
+      background: #1a1a1a;
+      color: #e8e8e8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 0;
+    }
+
+    /* ── Header ── */
+    header {
+      padding: 16px 20px 14px;
+      border-bottom: 1px solid #2a2a2a;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo { font-size: 1.1rem; font-weight: 700; }
+    .tagline { font-size: 0.75rem; color: #666; }
+
+    /* ── Auth section ── */
+    #auth-section { padding: 0; }
+
+    /* Guest banner */
+    .guest-banner {
+      background: #2a1f00;
+      border-bottom: 1px solid #6b4a00;
+      padding: 14px 20px;
+    }
+
+    .guest-banner-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #f0c040;
+      margin-bottom: 4px;
+    }
+
+    .guest-banner-desc {
+      font-size: 0.78rem;
+      color: #b89040;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+
+    .btn-join {
+      display: block;
+      width: 100%;
+      padding: 9px;
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: opacity 0.15s;
+    }
+
+    .btn-join:hover { opacity: 0.85; }
+
+    /* Connected banner */
+    .connected-banner {
+      padding: 14px 20px;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    .connected-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .connected-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      flex-shrink: 0;
+    }
+
+    .connected-info { flex: 1; min-width: 0; }
+
+    .connected-label {
+      font-size: 0.72rem;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 2px;
+    }
+
+    .connected-method {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #22c55e;
+    }
+
+    .profile-id {
+      font-size: 0.72rem;
+      color: #888;
+      font-family: monospace;
+      margin-top: 8px;
+      background: #252525;
+      border-radius: 4px;
+      padding: 6px 8px;
+      word-break: break-all;
+    }
+
+    .profile-id-label {
+      font-size: 0.7rem;
+      color: #555;
+      margin-bottom: 2px;
+    }
+
+    .btn-disconnect {
+      font-size: 0.75rem;
+      color: #666;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    .btn-disconnect:hover { color: #f87171; background: #2a2020; }
+
+    /* PIN unlock (nsec after SW kill) */
+    .pin-unlock {
+      margin-top: 10px;
+      display: flex;
+      gap: 6px;
+    }
+
+    .pin-unlock input {
+      flex: 1;
+      background: #252525;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      color: #e8e8e8;
+      font-size: 0.82rem;
+      padding: 6px 8px;
+      outline: none;
+    }
+
+    .pin-unlock input:focus { border-color: #555; }
+
+    .btn-unlock {
+      padding: 6px 10px;
+      background: #333;
+      border: none;
+      border-radius: 4px;
+      color: #e8e8e8;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-unlock:hover { background: #444; }
+
+    .pin-error { font-size: 0.75rem; color: #f87171; margin-top: 4px; }
+
+    /* ── Usage ── */
+    .usage-section {
+      padding: 14px 20px;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    .usage-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 0.82rem;
+      color: #888;
+    }
+
+    .usage-value { color: #e8e8e8; font-weight: 600; }
+
+    /* ── How to use ── */
+    .howto {
+      padding: 14px 20px;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    .howto-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #555;
+      margin-bottom: 8px;
+    }
+
+    .howto-step {
+      font-size: 0.78rem;
+      color: #888;
+      line-height: 1.6;
+    }
+
+    /* ── Footer ── */
+    footer {
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      color: #555;
+    }
+
+    footer a { color: #555; text-decoration: none; }
+    footer a:hover { color: #888; }
+
+    .btn-export {
+      font-size: 0.72rem;
+      color: #555;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .btn-export:hover { color: #888; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="logo">📡 Discerned</div>
+      <div class="tagline">Value attribution for the Open Social Web</div>
+    </div>
+  </header>
+
+  <!-- Auth section — populated by popup.ts -->
+  <div id="auth-section"></div>
+
+  <div class="usage-section">
+    <div class="usage-item">
+      <span>🔒 Local clips</span>
+      <span class="usage-value" id="clip-count">—</span>
+    </div>
+    <div class="usage-item">
+      <span>📡 Public casts</span>
+      <span class="usage-value" id="cast-count">0</span>
+    </div>
+  </div>
+
+  <div class="howto">
+    <div class="howto-title">How to use</div>
+    <div class="howto-step">Right-click any page → "Discerned: Capture & Evaluate"</div>
+  </div>
+
+  <footer>
+    <a href="https://github.com/your-repo/discerned" target="_blank">GitHub</a>
+    <button class="btn-export" id="export-data">Export data</button>
+  </footer>
+
+  <script type="module" src="./popup.ts"></script>
+</body>
+</html>
