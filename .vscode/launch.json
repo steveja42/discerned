@@ -1,5 +1,5 @@
 
-    // Use IntelliSense to learn about possible attributes.  **/.vscode/profiles/
+    // Use IntelliSense to learn about possible attributes.  **/.vscode/browser-test-profiles/
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
  {
@@ -11,7 +11,7 @@
   "request": "launch",
   "url": "https://example.com/",
   "webRoot": "${workspaceFolder}",
-  "userDataDir": "${workspaceFolder}/.vscode/profiles/chrome_iso",
+  "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/chrome_iso",
   "runtimeArgs": [
     "--load-extension=${workspaceFolder}/dist",
     "--no-first-run",
@@ -26,7 +26,7 @@
   "request": "launch",
   "url": "https://example.com/",
   "webRoot": "${workspaceFolder}",
-  "userDataDir": "${workspaceFolder}/.vscode/profiles/chrome",
+  "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/chrome",
   "runtimeArgs": [
     "--load-extension=${workspaceFolder}/dist",
     "--no-first-run",
@@ -45,7 +45,7 @@
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       /* --- Path for macOS (Uncomment if needed) --- */
       // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-      "userDataDir": "${workspaceFolder}/.vscode/profiles/brave",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave",
       "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
@@ -62,7 +62,7 @@
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       /* --- Path for macOS (Uncomment if needed) --- */
       // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-      "userDataDir": "${workspaceFolder}/.vscode/profiles/brave_nip07",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave_nip07",
       "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
@@ -79,7 +79,7 @@
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       /* --- Path for macOS (Uncomment if needed) --- */
       // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-      "userDataDir": "${workspaceFolder}/.vscode/profiles/brave_alby_nip07",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave_alby_nip07",
       "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
@@ -96,7 +96,7 @@
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       /* --- Path for macOS (Uncomment if needed) --- */
       // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-      "userDataDir": "${workspaceFolder}/.vscode/profiles/brave_stored_key",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave_stored_key",
       "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"],
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
