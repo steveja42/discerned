@@ -259,7 +259,7 @@ Forbidden:     scripts, styles, event handlers, all other tags
 
 ## Contributing
 
-Discerned is open source (MIT License). Contributions welcome.
+Discerned is open source (GPL v3). Contributions welcome.
 
 1. Fork the repo
 2. Create a feature branch: `git checkout -b feature/my-feature`
@@ -271,7 +271,7 @@ Discerned is open source (MIT License). Contributions welcome.
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+GPL v3 — see [LICENSE](LICENSE) for details.
 
 ---
 
