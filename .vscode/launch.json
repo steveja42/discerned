@@ -124,7 +124,7 @@
       "name": "Launch All Browsers",
       "configurations": [
         "Debug: Chrome (Isolated)",
-        "Debug: Brave (Isolated)"
+        "Debug: Brave (no nsec)"
       ]
     }
   ]
