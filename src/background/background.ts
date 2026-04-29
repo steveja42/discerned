@@ -1,12 +1,15 @@
 // Role: Background Service Worker — core orchestrator
 // Description: Manages auth state (guest ephemeral key, NIP-07 via content-script delegation,
 //              NIP-46 remote signer, or NIP-49-encrypted nsec), creates context menus, routes
-//              CLIP/CAST messages, signs and publishes Nostr events, and stores private clips
-//              in IndexedDB. No DOM access — NIP-07 signing is delegated to the content script
-//              via SIGN_WITH_NIP07 messages.
-// Access: chrome.runtime, chrome.contextMenus, chrome.storage, IndexedDB, nostr-tools/pure
+//              CLIP/CAST messages, signs and publishes Nostr events, stores private clips
+//              in IndexedDB, and provides a privileged image-inlining endpoint for rich-format
+//              captures. Also toggles the toolbar action's popup per-tab so chrome:// pages
+//              show a friendly stub while normal pages launch the overlay directly.
+// Access: chrome.runtime, chrome.contextMenus, chrome.action, chrome.tabs, chrome.storage,
+//         IndexedDB, fetch (for INLINE_IMAGE), nostr-tools/pure
 
 import {
+  CAST_INLINE_BODY_MAX_CHARS,
   createQuoteNoteEvent,
   createResourceNoteEvent,
 } from '@/shared/nostr/events';
@@ -17,7 +20,7 @@ import {
   getOrCreateBunkerSigner,
   invalidateBunkerSigner,
 } from '@/shared/nostr/nip46-manager';
-import type { BackgroundMessage, BackgroundResponse, AuthState, CaptureResult, Evaluation } from '@/shared/types';
+import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation } from '@/shared/types';
 import { STORAGE_KEYS } from '@/shared/types';
 import { initLogBridge } from '@/shared/logger';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
@@ -36,10 +39,10 @@ let nsecPrivateKey: Uint8Array | null = null; // session-only; cleared when SW i
 // rather than once per domain. Persisted in session storage to survive SW wakeups.
 let canonicalNIP07TabId: number | null = null;
 
-/**
- * Restore auth state from storage. Called on SW startup and on install.
- * NIP-07 detection requires DOM — content scripts send NIP07_DETECTED when they load.
- */
+const POPUP_STUB_PATH = 'src/popup/popup.html';
+const RESTRICTED_URL_PREFIXES = ['chrome:', 'chrome-extension:', 'edge:', 'about:', 'devtools:', 'view-source:', 'file:'];
+const MAX_IMAGE_BYTES = 2_000_000;
+
 async function restoreAuthState(): Promise<void> {
   const stored = await chrome.storage.local.get([
     STORAGE_KEYS.AUTH_STATE,
@@ -52,12 +55,9 @@ async function restoreAuthState(): Promise<void> {
   if (saved?.type === 'nip46') {
     currentAuthState = saved;
   } else if (saved?.type === 'nsec') {
-    // nsecPrivateKey is null here — populated by UNLOCK_NSEC after SW wake
     currentAuthState = saved;
   } else if (saved?.type === 'pro') {
     currentAuthState = saved;
-    // Restore the canonical signing tab from session storage so we don't lose
-    // the already-approved origin on a SW wakeup within the same browser session.
     const session = await chrome.storage.session.get('canonicalNIP07TabId');
     const storedTabId = session['canonicalNIP07TabId'];
     if (typeof storedTabId === 'number') {
@@ -70,16 +70,11 @@ async function restoreAuthState(): Promise<void> {
   console.log('Discerned auth state:', currentAuthState.type);
 }
 
-// Restore on SW startup (not just on install)
 restoreAuthState();
 
-/**
- * Initialize on extension install/update
- */
 chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('Discerned extension installed/updated');
 
-  // Recreate context menu on each install/update to avoid duplicate-ID errors
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: 'discerned-capture',
@@ -88,7 +83,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     });
   });
 
-  // Open onboarding tab on fresh install only
   if (details.reason === 'install') {
     const s = await chrome.storage.local.get(STORAGE_KEYS.ONBOARDING_SHOWN);
     if (!s[STORAGE_KEYS.ONBOARDING_SHOWN]) {
@@ -101,7 +95,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 /**
- * Handle context menu clicks
+ * Right-click context menu activates the overlay on the active tab.
  */
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'discerned-capture' && tab?.id) {
@@ -112,7 +106,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 /**
- * Handle extension icon clicks (only fires when no default_popup is set)
+ * Toolbar icon click — fires only when no per-tab popup is set (see updatePopupForTab below).
+ * On normal pages this opens the overlay; on restricted pages a per-tab popup is set
+ * so onClicked never runs there.
  */
 chrome.action.onClicked.addListener((tab) => {
   if (tab.id) {
@@ -122,9 +118,45 @@ chrome.action.onClicked.addListener((tab) => {
   }
 });
 
-/**
- * Handle messages from content script / popup / onboarding
- */
+// ── Per-tab popup toggling ──────────────────────────────────────────────────
+//
+// On chrome:// / file:// / edge:// / etc., content scripts can't run, so the overlay
+// path would silently fail. Set a small popup stub for those tabs that explains why.
+// On normal pages, clear the popup so chrome.action.onClicked fires and launches the
+// overlay directly (Evernote-style icon click).
+
+function isRestrictedUrl(url: string | undefined): boolean {
+  if (!url) return true;
+  return RESTRICTED_URL_PREFIXES.some(p => url.startsWith(p));
+}
+
+async function updatePopupForTab(tabId: number, url: string | undefined): Promise<void> {
+  try {
+    if (isRestrictedUrl(url)) {
+      await chrome.action.setPopup({ tabId, popup: POPUP_STUB_PATH });
+    } else {
+      await chrome.action.setPopup({ tabId, popup: '' });
+    }
+  } catch {
+    // Tab may have closed; non-fatal.
+  }
+}
+
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    void updatePopupForTab(tabId, tab.url);
+  } catch { /* tab gone; ignore */ }
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.url || changeInfo.status === 'complete') {
+    void updatePopupForTab(tabId, tab.url);
+  }
+});
+
+// ── Message router ──────────────────────────────────────────────────────────
+
 chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendResponse) => {
   handleMessage(message, sender.tab?.id)
     .then(sendResponse)
@@ -135,14 +167,9 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     });
-
-  // Return true to indicate async response
   return true;
 });
 
-/**
- * Main message router
- */
 async function handleMessage(message: BackgroundMessage, senderTabId?: number): Promise<BackgroundResponse> {
   switch (message.type) {
     case 'CLIP':
@@ -160,9 +187,6 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
         console.log('NIP-07 extension detected — switching to pro mode');
       }
-      // Pin the first NIP-07 capable tab as the canonical signing origin.
-      // All future casts are routed through this tab so the wallet only
-      // needs to approve this origin once rather than once per domain.
       if (message.hasNIP07 && senderTabId !== undefined && canonicalNIP07TabId === null) {
         canonicalNIP07TabId = senderTabId;
         chrome.storage.session.set({ canonicalNIP07TabId: senderTabId }).catch(() => {});
@@ -191,158 +215,143 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       return { success: true };
 
     case 'SIGN_WITH_NIP07':
-      // This message is sent TO the content script, never received here
       return { success: false, error: 'SIGN_WITH_NIP07 is not handled by background' };
+
+    case 'INLINE_IMAGE':
+      return handleInlineImage(message.src);
 
     default:
       return { success: false, error: 'Unknown message type' };
   }
 }
 
-/**
- * Connect to a NIP-46 bunker via connection URI
- */
+// ── Auth handlers (unchanged from prior implementation) ─────────────────────
+
 async function handleConnectNip46(bunkerUri: string): Promise<BackgroundResponse> {
   try {
     const result = await connectFromBunkerUri(bunkerUri);
-
     const newState: AuthState = {
       type: 'nip46',
       pubkey: result.pubkey,
       bunkerRelays: result.bunkerRelays,
       remotePubkey: result.remotePubkey,
     };
-
     currentAuthState = newState;
-
     await chrome.storage.local.set({
       [STORAGE_KEYS.AUTH_STATE]: newState,
       [STORAGE_KEYS.NIP46_CLIENT_KEY]: result.clientKeyHex,
     });
-
     return { success: true, data: { pubkey: result.pubkey } };
   } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Connection failed',
-    };
+    return { success: false, error: error instanceof Error ? error.message : 'Connection failed' };
   }
 }
 
-/**
- * Save an nsec (private key) encrypted with a user PIN via NIP-49
- */
 async function handleConnectNsec(rawNsec: string, pin: string): Promise<BackgroundResponse> {
   try {
     const decoded = decode(rawNsec.trim());
     if (decoded.type !== 'nsec') {
       return { success: false, error: 'Invalid account key format. It should start with nsec1…' };
     }
-
     const privateKeyBytes = decoded.data;
     const pubkeyHex = getPublicKey(privateKeyBytes);
-
-    // NIP-49: scrypt-based encryption (may take ~200ms)
     const ncryptsec = nip49.encrypt(privateKeyBytes, pin);
-
-    // Hold decrypted key in session memory
     nsecPrivateKey = privateKeyBytes;
-
     const newState: AuthState = { type: 'nsec', pubkey: pubkeyHex, ncryptsec };
     currentAuthState = newState;
-
     await chrome.storage.local.set({
       [STORAGE_KEYS.AUTH_STATE]: newState,
       [STORAGE_KEYS.NSEC_ENCRYPTED]: ncryptsec,
     });
-
     return { success: true, data: { pubkey: pubkeyHex } };
   } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to save account key',
-    };
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to save account key' };
   }
 }
 
-/**
- * Unlock nsec after service worker restart (re-derive from stored ncryptsec + PIN)
- */
 async function handleUnlockNsec(pin: string): Promise<BackgroundResponse> {
   try {
     const stored = await chrome.storage.local.get(STORAGE_KEYS.NSEC_ENCRYPTED);
     const ncryptsec = stored[STORAGE_KEYS.NSEC_ENCRYPTED] as string | undefined;
-    if (!ncryptsec) {
-      return { success: false, error: 'No encrypted account key found' };
-    }
-
-    nsecPrivateKey = nip49.decrypt(ncryptsec, pin); // throws on wrong PIN
+    if (!ncryptsec) return { success: false, error: 'No encrypted account key found' };
+    nsecPrivateKey = nip49.decrypt(ncryptsec, pin);
     return { success: true };
   } catch {
     return { success: false, error: 'Incorrect PIN' };
   }
 }
 
-/**
- * Disconnect all auth — return to guest mode
- */
 async function handleDisconnectAuth(): Promise<BackgroundResponse> {
   invalidateBunkerSigner();
   nsecPrivateKey = null;
   currentAuthState = { type: 'guest' };
   guestPrivateKey = generateSecretKey();
-
   await chrome.storage.local.remove([
     STORAGE_KEYS.AUTH_STATE,
     STORAGE_KEYS.NIP46_CLIENT_KEY,
     STORAGE_KEYS.NSEC_ENCRYPTED,
   ]);
-
   return { success: true };
 }
 
-/**
- * Handle CLIP action (private storage)
- */
-async function handleClip(data: {
-  capture: CaptureResult;
-  evaluation: Evaluation;
-}): Promise<BackgroundResponse> {
+// ── Image inlining (privileged fetch) ───────────────────────────────────────
+
+async function handleInlineImage(src: string): Promise<BackgroundResponse> {
   try {
-    const payload = prepareClipPayload(data.capture, data.evaluation);
+    if (!/^https?:/i.test(src)) {
+      return { success: false, error: 'Unsupported scheme' };
+    }
+    const res = await fetch(src);
+    if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
 
-    // For MVP: Just store unencrypted in IndexedDB
-    // TODO: Add NIP-44 encryption in Phase 2
-    await saveClipLocally({
-      id: `clip_${Date.now()}`,
-      encrypted: JSON.stringify(payload), // Not actually encrypted yet
-      timestamp: Date.now(),
-    });
-
-    return { success: true, data: { storage: 'local' } };
-  } catch (error) {
-    console.error('Clip error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Clip failed',
-    };
+    const declaredLen = res.headers.get('content-length');
+    if (declaredLen && parseInt(declaredLen, 10) > MAX_IMAGE_BYTES) {
+      return { success: false, error: 'Image too large' };
+    }
+    const blob = await res.blob();
+    if (blob.size > MAX_IMAGE_BYTES) {
+      return { success: false, error: 'Image too large' };
+    }
+    const dataUri = await blobToDataUri(blob);
+    return { success: true, data: { dataUri } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'fetch failed' };
   }
 }
 
-/**
- * Handle CAST action (public signal)
- */
-async function handleCast(data: {
-  capture: CaptureResult;
-  evaluation: Evaluation;
-}, senderTabId?: number): Promise<BackgroundResponse> {
+function blobToDataUri(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+// ── CLIP / CAST handlers ────────────────────────────────────────────────────
+
+async function handleClip(data: { capture: Capture; evaluation: Evaluation }): Promise<BackgroundResponse> {
   try {
-    const eventTemplate = data.capture.type === 'quote'
-      ? createQuoteNoteEvent(data.capture, data.evaluation)
-      : createResourceNoteEvent(data.capture, data.evaluation);
+    const payload = prepareClipPayload(data.capture, data.evaluation);
+    await saveClipLocally({
+      id: data.capture.id,
+      encrypted: JSON.stringify(payload), // NIP-44 encryption pending — stored as plaintext JSON for now
+      timestamp: data.capture.timestamp,
+    });
+    return { success: true, data: { storage: 'local' } };
+  } catch (error) {
+    console.error('Clip error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Clip failed' };
+  }
+}
 
+async function handleCast(
+  data: { capture: Capture; evaluation: Evaluation },
+  senderTabId?: number,
+): Promise<BackgroundResponse> {
+  try {
+    const eventTemplate = buildCastTemplate(data.capture, data.evaluation);
     const signedEvent = await signEvent(eventTemplate, senderTabId);
-
     const publishResult = await publishWithMinimum(signedEvent, 2);
 
     if (!publishResult.success) {
@@ -359,34 +368,44 @@ async function handleCast(data: {
 
     const castPayload = prepareClipPayload(data.capture, data.evaluation);
     await saveClipLocally({
-      id: `clip_${Date.now()}`,
+      id: data.capture.id,
       encrypted: JSON.stringify(castPayload),
-      timestamp: Date.now(),
+      timestamp: data.capture.timestamp,
     });
 
     return {
       success: true,
-      data: {
-        eventId: signedEvent.id,
-        relays: publishResult.results,
-      },
+      data: { eventId: signedEvent.id, relays: publishResult.results },
     };
   } catch (error) {
     console.error('Cast error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Cast failed',
-    };
+    return { success: false, error: error instanceof Error ? error.message : 'Cast failed' };
   }
 }
 
 /**
- * Return the tab ID to use for NIP-07 signing.
- *
- * Prefers the canonical tab (the first tab where NIP-07 was detected, whose origin the
- * wallet already trusts). If that tab has been closed or discarded, falls back to the
- * sender tab and promotes it to canonical so the wallet only needs one fresh approval.
+ * Build the kind-1 event template for the given Capture. Selection casts include the
+ * quoted text inline (as today). Bookmark casts URL-summary only. Article / simplified
+ * / full-page casts URL-summary by default; if `bodyText` is short enough to safely
+ * fit on relays, the body is inlined too.
  */
+function buildCastTemplate(capture: Capture, evaluation: Evaluation) {
+  if (capture.format === 'selection') {
+    return createQuoteNoteEvent(capture, evaluation);
+  }
+  if (capture.format === 'bookmark') {
+    return createResourceNoteEvent(capture, evaluation);
+  }
+  // article / simplified-article / full-page
+  const bodyText = capture.bodyText?.trim() ?? '';
+  const inline = bodyText.length > 0 && bodyText.length <= CAST_INLINE_BODY_MAX_CHARS
+    ? bodyText
+    : undefined;
+  return createResourceNoteEvent(capture, evaluation, inline);
+}
+
+// ── Signing ─────────────────────────────────────────────────────────────────
+
 async function resolveSigningTab(fallbackTabId?: number): Promise<number> {
   if (canonicalNIP07TabId !== null) {
     try {
@@ -398,21 +417,12 @@ async function resolveSigningTab(fallbackTabId?: number): Promise<number> {
     canonicalNIP07TabId = null;
     chrome.storage.session.remove('canonicalNIP07TabId').catch(() => {});
   }
-
   if (!fallbackTabId) throw new Error('No tab available for NIP-07 signing');
-
   canonicalNIP07TabId = fallbackTabId;
   chrome.storage.session.set({ canonicalNIP07TabId: fallbackTabId }).catch(() => {});
   return fallbackTabId;
 }
 
-/**
- * Sign an event based on current auth state.
- * - pro: delegated to the canonical content-script tab (wallet approves origin once)
- * - nip46: signed by remote bunker (reconnects on-demand after SW wake)
- * - nsec: signed locally with decrypted key (requires PIN unlock after SW wake)
- * - guest: signed with ephemeral in-memory key
- */
 async function signEvent(
   template: Parameters<typeof finalizeEvent>[0],
   senderTabId?: number,
@@ -427,8 +437,6 @@ async function signEvent(
         event: template,
       }) as typeof response;
     } catch {
-      // Canonical tab's content script is unreachable (e.g. page navigated).
-      // Clear canonical and retry on the sender tab so the user gets one fresh prompt.
       if (tabId !== senderTabId && senderTabId) {
         canonicalNIP07TabId = null;
         chrome.storage.session.remove('canonicalNIP07TabId').catch(() => {});
@@ -445,7 +453,6 @@ async function signEvent(
     if (!response) throw new Error('NIP-07 content script did not respond');
     if (response.error) throw new Error(response.error);
     return response.signed;
-
   } else if (currentAuthState.type === 'nip46') {
     const stored = await chrome.storage.local.get(STORAGE_KEYS.NIP46_CLIENT_KEY);
     const clientKeyHex = stored[STORAGE_KEYS.NIP46_CLIENT_KEY] as string;
@@ -456,61 +463,91 @@ async function signEvent(
     };
     const signer = await getOrCreateBunkerSigner(clientKeyHex, bp);
     return signer.signEvent(template);
-
   } else if (currentAuthState.type === 'nsec') {
     if (!nsecPrivateKey) throw new Error('PIN_REQUIRED');
     return finalizeEvent(template, nsecPrivateKey);
-
   } else {
-    // Guest mode
     if (!guestPrivateKey) guestPrivateKey = generateSecretKey();
     return finalizeEvent(template, guestPrivateKey);
   }
 }
 
-/**
- * Save clip to local IndexedDB storage (used for all auth modes, not just guests).
- */
-async function saveClipLocally(clip: {
+// ── IndexedDB ───────────────────────────────────────────────────────────────
+
+const DB_VERSION = 3;
+
+interface ClipRow {
   id: string;
   encrypted: string;
   timestamp: number;
-}): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('discerned', 2);
+}
 
+async function saveClipLocally(clip: ClipRow): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('discerned', DB_VERSION);
     request.onerror = () => reject(request.error);
 
+    request.onupgradeneeded = (event) => {
+      const target = event.target as IDBOpenDBRequest;
+      const db = target.result;
+      const tx = target.transaction;
+      if (!db.objectStoreNames.contains('clips')) {
+        db.createObjectStore('clips', { keyPath: 'id' });
+        return;
+      }
+      // v2 → v3: translate legacy capture.type → format and pull selection-specific
+      // fields out of `content`/`context` into the unified shape.
+      if (tx) {
+        const store = tx.objectStore('clips');
+        const cursorReq = store.openCursor();
+        cursorReq.onsuccess = () => {
+          const cursor = cursorReq.result;
+          if (!cursor) return;
+          const row = cursor.value as ClipRow;
+          try { migrateRowInPlace(row); cursor.update(row); } catch { /* skip malformed */ }
+          cursor.continue();
+        };
+      }
+    };
+
     request.onsuccess = () => {
-      // Wrap in try/catch: db.transaction() throws a synchronous NotFoundError
-      // if the object store is missing. Without this the error escapes the
-      // Promise entirely and becomes an uncaught exception.
       try {
         const db = request.result;
         const transaction = db.transaction(['clips'], 'readwrite');
         const store = transaction.objectStore('clips');
-
-        store.add(clip);
-
-        transaction.oncomplete = () => {
-          db.close();
-          resolve();
-        };
-
+        store.put(clip);
+        transaction.oncomplete = () => { db.close(); resolve(); };
         transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB transaction failed'));
       } catch (err) {
         reject(err instanceof Error ? err : new Error(String(err)));
       }
     };
-
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains('clips')) {
-        db.createObjectStore('clips', { keyPath: 'id' });
-      }
-    };
   });
 }
 
-// Log when service worker starts
+function migrateRowInPlace(row: ClipRow): void {
+  if (!row?.encrypted) return;
+  const payload = JSON.parse(row.encrypted) as { capture?: Record<string, unknown>; [k: string]: unknown };
+  const cap = payload.capture;
+  if (!cap || typeof cap !== 'object') return;
+
+  if (typeof cap.format === 'string') return; // already migrated
+
+  const legacyType = cap.type as 'quote' | 'resource' | undefined;
+  if (legacyType === 'quote') {
+    cap.format = 'selection';
+    if (typeof cap.content === 'string') cap.selectionText = cap.content;
+    if (typeof cap.context === 'string') cap.selectionContext = cap.context;
+    delete cap.content;
+    delete cap.context;
+  } else if (legacyType === 'resource') {
+    cap.format = 'bookmark';
+    // title / thumbnail already match the new shape
+  }
+  delete cap.type;
+  if (!cap.id) cap.id = row.id;
+  if (!cap.title) cap.title = '';
+  row.encrypted = JSON.stringify(payload);
+}
+
 console.log('Discerned background service worker loaded');

@@ -5,13 +5,21 @@
 // Access: nostr-tools/nip44 (encrypt, decrypt, getConversationKey)
 
 import * as nip44 from 'nostr-tools/nip44';
-import type { CaptureResult, Evaluation } from '@/shared/types';
+import type { Capture, Evaluation } from '@/shared/types';
 
 export interface EncryptedClipPayload {
-  capture: CaptureResult;
+  capture: Capture;
   evaluation: Evaluation;
   timestamp: number;
 }
+
+const VALID_FORMATS = new Set([
+  'selection',
+  'article',
+  'simplified-article',
+  'full-page',
+  'bookmark',
+]);
 
 /**
  * Encrypt a clip payload using NIP-44
@@ -55,28 +63,26 @@ export function validateEncryptedPayload(payload: unknown): payload is Encrypted
     return false;
   }
 
-  const p = payload as any;
+  const p = payload as { capture?: unknown; evaluation?: unknown; timestamp?: unknown };
 
-  // Check capture
   if (!p.capture || typeof p.capture !== 'object') {
     return false;
   }
 
-  if (!['quote', 'resource'].includes(p.capture.type)) {
+  const cap = p.capture as { format?: unknown };
+  if (typeof cap.format !== 'string' || !VALID_FORMATS.has(cap.format)) {
     return false;
   }
 
-  // Check evaluation
   if (!p.evaluation || typeof p.evaluation !== 'object') {
     return false;
   }
-
-  if (!p.evaluation.interest || !p.evaluation.ethics || !p.evaluation.category) {
+  const ev = p.evaluation as { interest?: unknown; ethics?: unknown; category?: unknown };
+  if (!ev.interest || !ev.ethics || !ev.category) {
     return false;
   }
 
-  // Check timestamp
-  if (!Number.isInteger(p.timestamp) || p.timestamp < 0) {
+  if (!Number.isInteger(p.timestamp) || (p.timestamp as number) < 0) {
     return false;
   }
 
@@ -87,7 +93,7 @@ export function validateEncryptedPayload(payload: unknown): payload is Encrypted
  * Prepare payload for encryption
  */
 export function prepareClipPayload(
-  capture: CaptureResult,
+  capture: Capture,
   evaluation: Evaluation
 ): EncryptedClipPayload {
   return {
@@ -135,11 +141,11 @@ export function safeDecrypt(
 ): { success: true; payload: EncryptedClipPayload } | { success: false; error: string } {
   try {
     const payload = decryptClip(encrypted, conversationKey);
-    
+
     if (!validateEncryptedPayload(payload)) {
       return { success: false, error: 'Invalid payload structure' };
     }
-    
+
     return { success: true, payload };
   } catch (error) {
     console.error('Decryption failed:', error);

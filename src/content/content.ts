@@ -2,12 +2,12 @@
 // Description: Listens for ACTIVATE_DISCERNED (show overlay) and SIGN_WITH_NIP07 (delegate
 //              signing to this context) messages from the background. Coordinates capture,
 //              overlay rendering, and forwards Clip/Cast payloads back to the background.
-// Access: DOM (document.body), chrome.runtime.onMessage/sendMessage
+// Access: DOM (document.body), chrome.runtime.onMessage/sendMessage, chrome.storage.local
 
-import { captureContext, isCapturablePage } from './capture';
+import { captureContext, isCapturablePage, hasSelection } from './capture';
 import { DiscernedOverlay } from './overlay';
 import { detectAuthState, signWithNIP07 } from '@/shared/nostr/auth';
-import type { AuthState, BackgroundMessage, Evaluation } from '@/shared/types';
+import type { AuthState, BackgroundMessage, Capture, ClipFormat, Evaluation } from '@/shared/types';
 import { STORAGE_KEYS } from '@/shared/types';
 import { initLogBridge, relayLog } from '@/shared/logger';
 
@@ -16,16 +16,15 @@ initLogBridge('content');
 let currentOverlay: DiscernedOverlay | null = null;
 let cachedAuthState: AuthState = { type: 'guest' };
 
-/**
- * Listen for messages from the background script
- */
+const VALID_FORMATS: ClipFormat[] = [
+  'selection', 'article', 'simplified-article', 'full-page', 'bookmark',
+];
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'ACTIVATE_DISCERNED') {
     handleActivation();
     sendResponse({ success: true });
   } else if (message.type === 'SIGN_WITH_NIP07') {
-    // Background delegates NIP-07 signing here because the service worker
-    // has no DOM access for script injection.
     signWithNIP07(message.event as Parameters<typeof signWithNIP07>[0])
       .then(signed => sendResponse({ signed }))
       .catch((err: unknown) => sendResponse({
@@ -33,8 +32,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }));
     return true; // keep channel open for async response
   } else if (message.type === 'LOG_RELAY') {
-    // Re-emit relayed logs from popup/background using pre-override originals so they
-    // appear in VSCode's page-context debug session without picking up a [content] prefix.
     relayLog(message.level, message.source, message.serialized);
   }
   return true;
@@ -56,60 +53,89 @@ detectAuthState().then(state => {
 });
 
 /**
- * Main activation handler
+ * Decide which clip format to default to:
+ *   1. Selection present → 'selection'
+ *   2. Else last-used (if valid) → that
+ *   3. Else 'article'
  */
+async function pickInitialFormat(selectionPresent: boolean): Promise<ClipFormat> {
+  if (selectionPresent) return 'selection';
+  try {
+    const stored = await chrome.storage.local.get(STORAGE_KEYS.LAST_FORMAT);
+    const last = stored[STORAGE_KEYS.LAST_FORMAT];
+    if (typeof last === 'string' && (VALID_FORMATS as string[]).includes(last)) {
+      return last as ClipFormat;
+    }
+  } catch {
+    // Non-fatal; fall through.
+  }
+  return 'article';
+}
+
+async function rememberFormat(format: ClipFormat): Promise<void> {
+  try {
+    await chrome.storage.local.set({ [STORAGE_KEYS.LAST_FORMAT]: format });
+  } catch {
+    // Non-fatal.
+  }
+}
+
 async function handleActivation() {
-  // Check if page is capturable
   if (!isCapturablePage()) {
     console.warn('Discerned: Cannot capture on this page');
     return;
   }
 
-  // Close existing overlay if present
   if (currentOverlay) {
     currentOverlay.hide();
   }
 
-  // Capture current context
-  const capture = captureContext();
+  const selectionPresent = hasSelection();
+  const initialFormat = await pickInitialFormat(selectionPresent);
 
-  // Check if nudge has been dismissed by the user
   let nudgeDismissed = false;
   try {
     const stored = await chrome.storage.local.get(STORAGE_KEYS.OVERLAY_NUDGE_DISMISSED);
     nudgeDismissed = !!stored[STORAGE_KEYS.OVERLAY_NUDGE_DISMISSED];
   } catch {
-    // Non-fatal; default to showing nudge
+    // Non-fatal; default to showing nudge.
   }
 
-  // Get fresh auth state from background — avoids stale cache after the user
-  // connects an identity via the overlay without reloading the page.
   let freshAuthState: AuthState = cachedAuthState;
   try {
     const authRes = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' });
     if (authRes?.success && authRes.data) {
       freshAuthState = authRes.data as AuthState;
-      cachedAuthState = freshAuthState; // keep cache in sync
+      cachedAuthState = freshAuthState;
     }
   } catch {
-    // Non-fatal; fall back to cached state
+    // Non-fatal; fall back to cached state.
   }
 
-  // Create and show overlay
   currentOverlay = new DiscernedOverlay();
   document.body.appendChild(currentOverlay);
 
-  currentOverlay.show(capture, {
-    onClip: (evaluation: Evaluation) => handleClip(capture, evaluation),
-    onCast: (evaluation: Evaluation) => handleCast(capture, evaluation),
-  }, freshAuthState, nudgeDismissed);
+  await currentOverlay.show({
+    initialFormat,
+    hasSelection: selectionPresent,
+    onCapture: (format: ClipFormat) => captureContext(format),
+    onClip: async (capture: Capture, evaluation: Evaluation) => {
+      await handleClip(capture, evaluation);
+      void rememberFormat(capture.format);
+    },
+    onCast: async (capture: Capture, evaluation: Evaluation) => {
+      await handleCast(capture, evaluation);
+      void rememberFormat(capture.format);
+    },
+    authState: freshAuthState,
+    nudgeDismissed,
+  });
 }
 
 /**
  * Send a message to the background service worker with a timeout guard.
  * In Chrome MV3, chrome.runtime.sendMessage can hang indefinitely when the
- * service worker is slow to wake after being killed. The Promise never rejects —
- * it simply never resolves.
+ * service worker is slow to wake after being killed.
  *
  * CAST uses 30 s: relay-manager's per-relay timeout is 10 s, so the outer guard
  * must be larger to avoid racing the relay ACK wait. CLIP only needs ~1 s for
@@ -119,20 +145,15 @@ function sendToBackground(message: BackgroundMessage): Promise<{ success: boolea
   return Promise.race([
     chrome.runtime.sendMessage(message) as Promise<{ success: boolean; error?: string; data?: unknown }>,
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Background service worker did not respond')), 30000)
+      setTimeout(() => reject(new Error('Background service worker did not respond')), 30000),
     ),
   ]);
 }
 
-/**
- * Handle CLIP action - send to background for encryption and storage
- */
-async function handleClip(capture: ReturnType<typeof captureContext>, evaluation: Evaluation) {
+async function handleClip(capture: Capture, evaluation: Evaluation) {
   try {
     const response = await sendToBackground({ type: 'CLIP', data: { capture, evaluation } });
-    if (!response.success) {
-      throw new Error(response.error);
-    }
+    if (!response.success) throw new Error(response.error);
     console.log('Discerned: Successfully clipped');
   } catch (error) {
     console.error('Discerned: Clip failed', error);
@@ -140,15 +161,10 @@ async function handleClip(capture: ReturnType<typeof captureContext>, evaluation
   }
 }
 
-/**
- * Handle CAST action - send to background for signing and publishing
- */
-async function handleCast(capture: ReturnType<typeof captureContext>, evaluation: Evaluation) {
+async function handleCast(capture: Capture, evaluation: Evaluation) {
   try {
     const response = await sendToBackground({ type: 'CAST', data: { capture, evaluation } });
-    if (!response.success) {
-      throw new Error(response.error);
-    }
+    if (!response.success) throw new Error(response.error);
     console.log('Discerned: Successfully cast');
   } catch (error) {
     console.error('Discerned: Cast failed', error);
@@ -160,7 +176,7 @@ async function handleCast(capture: ReturnType<typeof captureContext>, evaluation
 /**
  * Show a fixed-position error toast when a cast fails.
  * The host element is positioned directly (not inside the shadow) so it sits cleanly
- * above the overlay backdrop without shadow-DOM stacking ambiguity.
+ * above the overlay panel without shadow-DOM stacking ambiguity.
  */
 function showCastErrorToast(message: string) {
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -189,5 +205,4 @@ function showCastErrorToast(message: string) {
   setTimeout(() => host.remove(), 5000);
 }
 
-// Log initialization
 console.log('Discerned content script loaded');

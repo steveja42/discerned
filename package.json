@@ -11,6 +11,7 @@
     "lint": "eslint src --ext ts,tsx"
   },
   "dependencies": {
+    "@mozilla/readability": "^0.5.0",
     "nostr-tools": "^2.7.2",
     "terser": "^5.46.0"
   },

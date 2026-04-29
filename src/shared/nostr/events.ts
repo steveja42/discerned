@@ -1,111 +1,138 @@
 // Role: Shared — Nostr event factory
-// Description: Builds EventTemplate objects for kind 1 (quote note or resource note)
-//              and kind 30078 (encrypted clip). Signing is handled by the background worker;
+// Description: Builds EventTemplate objects for kind 1 (selection quote, bookmark, or rich-format
+//              resource) and kind 30078 (encrypted clip). Signing is handled by the background worker;
 //              finalizeEventWithPrivateKey is provided only for guest mode / testing.
 // Access: nostr-tools/pure (finalizeEvent, event construction helpers)
 
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { EventTemplate, NostrEvent } from 'nostr-tools/core';
-import type { CaptureResult, Evaluation } from '@/shared/types';
+import type { Capture, Evaluation } from '@/shared/types';
 
 /**
- * Create a Note event (Kind 1) for quote captures
+ * Casts on rich-format clips inline the body in the event content only when the
+ * plain-text body is shorter than this threshold (≈8 KB). Longer bodies cast as
+ * URL-summary only — full content stays in the user's IndexedDB.
+ *
+ * Tuned to leave headroom under typical relay 64 KB event-size limits after
+ * tag overhead, signature, and JSON encoding.
+ */
+export const CAST_INLINE_BODY_MAX_CHARS = 8000;
+
+function baseEvaluationTags(capture: Capture, evaluation: Evaluation): string[][] {
+  const tags: string[][] = [
+    ['r', capture.url],
+    ['L', 'online.discerned.interest'],
+    ['L', 'online.discerned.ethics'],
+    ['L', 'online.discerned.category'],
+    ['l', evaluation.interest, 'online.discerned.interest'],
+    ['l', evaluation.ethics, 'online.discerned.ethics'],
+    ['l', evaluation.category, 'online.discerned.category'],
+    ['t', 'discerned'],
+    ['format', capture.format],
+    ['client', 'discerned'],
+  ];
+  if (capture.note && capture.note.trim().length > 0) {
+    tags.push(['note', capture.note]);
+  }
+  return tags;
+}
+
+function appendNoteToContent(content: string, capture: Capture): string {
+  if (!capture.note || capture.note.trim().length === 0) return content;
+  return `${content}\n\n— ${capture.note}`;
+}
+
+/**
+ * Create a Note event (Kind 1) for selection captures (quoted text inline).
  */
 export function createQuoteNoteEvent(
-  capture: CaptureResult & { type: 'quote' },
+  capture: Capture,
   evaluation: Evaluation
 ): EventTemplate {
-  if (capture.type !== 'quote') {
-    throw new Error('Invalid capture type for quote note event');
+  if (capture.format !== 'selection') {
+    throw new Error('createQuoteNoteEvent requires a selection-format capture');
   }
 
-  const content = [
+  const quotedText = capture.selectionText ?? '';
+
+  const baseContent = [
     `Discerned: ${evaluation.interest} / ${evaluation.ethics} — ${evaluation.category}`,
-    `> "${capture.content}"`,
+    `> "${quotedText}"`,
     '',
     capture.url,
   ].join('\n');
 
-  const template: EventTemplate = {
-    kind: 1,
-    created_at: Math.floor(capture.timestamp / 1000),
-    tags: [
-      ['r', capture.url],
-      ['L', 'online.discerned.interest'],
-      ['L', 'online.discerned.ethics'],
-      ['L', 'online.discerned.category'],
-      ['l', evaluation.interest, 'online.discerned.interest'],
-      ['l', evaluation.ethics, 'online.discerned.ethics'],
-      ['l', evaluation.category, 'online.discerned.category'],
-      ['t', 'discerned'],
-    ],
-    content,
-  };
-
-  // Preserve raw quote and context as tags for programmatic access
-  template.tags.push(['quote', capture.content]);
-  if (capture.context) {
-    template.tags.push(['context', capture.context]);
+  const tags = baseEvaluationTags(capture, evaluation);
+  tags.push(['quote', quotedText]);
+  if (capture.selectionContext) {
+    tags.push(['context', capture.selectionContext]);
   }
 
-  return template;
+  return {
+    kind: 1,
+    created_at: Math.floor(capture.timestamp / 1000),
+    tags,
+    content: appendNoteToContent(baseContent, capture),
+  };
 }
 
 /**
- * Create a Note event (Kind 1) for resource captures
+ * Create a Note event (Kind 1) for bookmark / article / simplified-article / full-page captures.
+ *
+ * For rich formats (article / simplified-article / full-page), the caller may pass `inlineBody`
+ * (plain text) when the body is small enough to fit safely on relays. When omitted (or for
+ * bookmark format) the event publishes URL-summary only — full body stays in IndexedDB.
  */
 export function createResourceNoteEvent(
-  capture: CaptureResult & { type: 'resource' },
-  evaluation: Evaluation
+  capture: Capture,
+  evaluation: Evaluation,
+  inlineBody?: string
 ): EventTemplate {
-  if (capture.type !== 'resource') {
-    throw new Error('Invalid capture type for note event');
+  if (capture.format === 'selection') {
+    throw new Error('createResourceNoteEvent does not accept selection format');
   }
 
-  // Construct human-readable content
-  const content = [
+  const lines = [
     `Discerned: ${evaluation.interest} / ${evaluation.ethics} — ${evaluation.category}`,
     '',
     capture.title,
     capture.url,
-  ].join('\n');
-
-  const template: EventTemplate = {
-    kind: 1,
-    created_at: Math.floor(capture.timestamp / 1000),
-    tags: [
-      ['r', capture.url],
-      ['L', 'online.discerned.interest'],
-      ['L', 'online.discerned.ethics'],
-      ['L', 'online.discerned.category'],
-      ['l', evaluation.interest, 'online.discerned.interest'],
-      ['l', evaluation.ethics, 'online.discerned.ethics'],
-      ['l', evaluation.category, 'online.discerned.category'],
-      ['t', 'discerned'],
-    ],
-    content,
-  };
-
-  // Add thumbnail if available
-  if (capture.thumbnail) {
-    template.tags.push(['image', capture.thumbnail]);
+  ];
+  if (inlineBody && inlineBody.trim().length > 0) {
+    lines.push('', '--- body ---', inlineBody);
   }
 
-  return template;
+  const tags = baseEvaluationTags(capture, evaluation);
+  if (capture.thumbnail) {
+    tags.push(['image', capture.thumbnail]);
+  }
+  if (inlineBody && inlineBody.trim().length > 0) {
+    tags.push(['body', inlineBody]);
+  }
+
+  return {
+    kind: 1,
+    created_at: Math.floor(capture.timestamp / 1000),
+    tags,
+    content: appendNoteToContent(lines.join('\n'), capture),
+  };
 }
 
 /**
- * Create an encrypted App Data event (Kind 30078) for private clips
+ * Create an encrypted App Data event (Kind 30078) for private clips.
+ * Tags are public — keep them minimal (no format/url leaks). The `d` tag matches the
+ * Capture's stable `id` so the user's own client can correlate IndexedDB rows with
+ * relay-synced replaceable events.
  */
 export function createEncryptedClipEvent(
-  encryptedPayload: string,
-  _pubkey: string
+  capture: Capture,
+  encryptedPayload: string
 ): EventTemplate {
   return {
     kind: 30078,
-    created_at: Math.floor(Date.now() / 1000),
+    created_at: Math.floor(capture.timestamp / 1000),
     tags: [
-      ['d', `clip_${Date.now()}`], // Unique identifier for replaceable event
+      ['d', capture.id],
       ['client', 'discerned'],
     ],
     content: encryptedPayload,
@@ -127,46 +154,14 @@ export function finalizeEventWithPrivateKey(
  * Validate a Nostr event structure
  */
 export function validateEvent(event: NostrEvent): boolean {
-  // Check required fields
-  if (!event.id || !event.pubkey || !event.sig) {
-    return false;
-  }
-
-  // Check id is 64 hex chars
-  if (!/^[0-9a-f]{64}$/.test(event.id)) {
-    return false;
-  }
-
-  // Check pubkey is 64 hex chars
-  if (!/^[0-9a-f]{64}$/.test(event.pubkey)) {
-    return false;
-  }
-
-  // Check sig is 128 hex chars
-  if (!/^[0-9a-f]{128}$/.test(event.sig)) {
-    return false;
-  }
-
-  // Check kind is valid integer
-  if (!Number.isInteger(event.kind) || event.kind < 0) {
-    return false;
-  }
-
-  // Check created_at is valid timestamp
-  if (!Number.isInteger(event.created_at) || event.created_at < 0) {
-    return false;
-  }
-
-  // Check tags is array
-  if (!Array.isArray(event.tags)) {
-    return false;
-  }
-
-  // Check content is string
-  if (typeof event.content !== 'string') {
-    return false;
-  }
-
+  if (!event.id || !event.pubkey || !event.sig) return false;
+  if (!/^[0-9a-f]{64}$/.test(event.id)) return false;
+  if (!/^[0-9a-f]{64}$/.test(event.pubkey)) return false;
+  if (!/^[0-9a-f]{128}$/.test(event.sig)) return false;
+  if (!Number.isInteger(event.kind) || event.kind < 0) return false;
+  if (!Number.isInteger(event.created_at) || event.created_at < 0) return false;
+  if (!Array.isArray(event.tags)) return false;
+  if (typeof event.content !== 'string') return false;
   return true;
 }
 

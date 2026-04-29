@@ -4,7 +4,12 @@
 //              shared across every component of the extension.
 // Access: none (pure types and constants; no runtime APIs)
 
-export type CaptureType = 'quote' | 'resource';
+export type ClipFormat =
+  | 'selection'
+  | 'article'
+  | 'simplified-article'
+  | 'full-page'
+  | 'bookmark';
 
 export type LogLevel = 'log' | 'warn' | 'error' | 'info' | 'debug';
 export type LogSource = 'content' | 'popup' | 'onboarding' | 'background';
@@ -28,32 +33,36 @@ export interface Evaluation {
   category: Category;
 }
 
-export interface QuoteCapture {
-  type: 'quote';
-  content: string;
+/**
+ * A single unified capture record. Format-specific fields are optional and only
+ * populated for the matching format(s). Stable `id` is shared between IndexedDB rows
+ * and any future kind-30078 `d`-tag mirror so a companion web app can correlate them.
+ */
+export interface Capture {
+  id: string;
+  format: ClipFormat;
   url: string;
-  context?: string; // Surrounding text for context
-  timestamp: number;
-}
-
-export interface ResourceCapture {
-  type: 'resource';
   title: string;
-  url: string;
-  thumbnail: string | null;
   timestamp: number;
+  note?: string;
+  // selection only
+  selectionText?: string;     // sanitized HTML
+  selectionContext?: string;  // ±100-char window
+  // article / simplified-article / full-page
+  bodyHtml?: string;          // sanitized HTML; image src may be data: or https:
+  bodyText?: string;          // plain text (Readability textContent or stripped)
+  // bookmark / article
+  thumbnail?: string | null;
 }
-
-export type CaptureResult = QuoteCapture | ResourceCapture;
 
 export interface ClipData {
-  capture: CaptureResult;
+  capture: Capture;
   evaluation: Evaluation;
-  encrypted: string; // NIP-44 encrypted JSON
+  encrypted: string; // NIP-44-shaped placeholder; MVP stores plaintext JSON
 }
 
 export interface CastData {
-  capture: CaptureResult;
+  capture: Capture;
   evaluation: Evaluation;
   eventId?: string; // Nostr event ID after publishing
 }
@@ -67,8 +76,8 @@ export type AuthState =
 
 // Messages between content script and background
 export type BackgroundMessage =
-  | { type: 'CLIP'; data: { capture: CaptureResult; evaluation: Evaluation } }
-  | { type: 'CAST'; data: { capture: CaptureResult; evaluation: Evaluation } }
+  | { type: 'CLIP'; data: { capture: Capture; evaluation: Evaluation } }
+  | { type: 'CAST'; data: { capture: Capture; evaluation: Evaluation } }
   | { type: 'GET_AUTH_STATE' }
   | { type: 'NIP07_DETECTED'; hasNIP07: boolean }
   | { type: 'CONNECT_NIP46'; bunkerUri: string }
@@ -77,7 +86,8 @@ export type BackgroundMessage =
   | { type: 'DISCONNECT_AUTH' }
   | { type: 'OPEN_ONBOARDING' }
   | { type: 'DISMISS_OVERLAY_NUDGE' }
-  | { type: 'SIGN_WITH_NIP07'; event: Record<string, unknown> };
+  | { type: 'SIGN_WITH_NIP07'; event: Record<string, unknown> }
+  | { type: 'INLINE_IMAGE'; src: string };
 
 export type BackgroundResponse =
   | { success: true; data?: unknown }
@@ -93,12 +103,13 @@ export const STORAGE_KEYS = {
   OVERLAY_NUDGE_DISMISSED: 'overlayNudgeDismissed',
   ONBOARDING_SHOWN: 'onboardingShown',
   CAST_COUNT: 'castCount',
+  LAST_FORMAT: 'lastFormat',
 } as const;
 
 // Default relay list
 export const DEFAULT_RELAYS = [
   'wss://relay.damus.io',
   'wss://nos.lol',
-  'wss://relay.snort.social',  
+  'wss://relay.snort.social',
   //not working 'wss://relay.nostr.band',
 ] as const;
