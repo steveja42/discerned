@@ -25,6 +25,9 @@ export interface OverlayShowOptions {
 
 type View = 'gate' | 'identity' | 'main' | 'settings';
 
+/** Formats that show a floating preview card to the right of the main panel. */
+const PREVIEW_FORMATS: ClipFormat[] = ['selection', 'simplified-article', 'bookmark'];
+
 export class DiscernedOverlay extends HTMLElement {
   private shadow: ShadowRoot;
   private opts: OverlayShowOptions | null = null;
@@ -38,6 +41,8 @@ export class DiscernedOverlay extends HTMLElement {
   private identityBackTarget: View = 'main';
   private captureGeneration = 0;
   private capturing = false;
+  private previewHost: HTMLElement | null = null;
+  private previewShadow: ShadowRoot | null = null;
 
   constructor() {
     super();
@@ -57,6 +62,7 @@ export class DiscernedOverlay extends HTMLElement {
 
   disconnectedCallback() {
     hideArticleHighlight();
+    this.removePreview();
   }
 
   async show(options: OverlayShowOptions): Promise<void> {
@@ -76,7 +82,108 @@ export class DiscernedOverlay extends HTMLElement {
 
   hide() {
     hideArticleHighlight();
+    this.removePreview();
     this.remove();
+  }
+
+  private removePreview() {
+    this.previewHost?.remove();
+    this.previewHost = null;
+    this.previewShadow = null;
+  }
+
+  private updatePreview() {
+    const showPreview = PREVIEW_FORMATS.includes(this.format);
+    if (!showPreview) {
+      this.removePreview();
+      return;
+    }
+    if (!this.previewHost) {
+      this.previewHost = document.createElement('div');
+      this.previewHost.style.cssText =
+        'position:fixed;left:390px;top:50%;transform:translateY(-50%);' +
+        'z-index:2147483646;display:block;max-width:320px;pointer-events:none;';
+      this.previewShadow = this.previewHost.attachShadow({ mode: 'closed' });
+      document.body.appendChild(this.previewHost);
+    }
+    const shadow = this.previewShadow!;
+    shadow.innerHTML = `
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box;
+            font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+        .preview-card {
+          background:#1e1e1e; border:1px solid #333; border-left:4px solid #0ea5e9;
+          border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:8px;
+          box-shadow:4px 4px 20px rgba(0,0,0,0.5);
+          animation:fadeIn .18s ease-out;
+          pointer-events:none;
+        }
+        @keyframes fadeIn { from { opacity:0; transform:translateX(-6px); } to { opacity:1; transform:none; } }
+        .preview-label {
+          font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; color:#0ea5e9;
+        }
+        .preview-thumb {
+          width:100%; max-height:120px; object-fit:cover; border-radius:5px;
+        }
+        .preview-title { color:#fff; font-size:13px; font-weight:600; line-height:1.4; }
+        .preview-text  { color:#bbb; font-size:12px; line-height:1.55; white-space:pre-wrap; }
+        .preview-url   { color:#666; font-size:11px; word-break:break-all; }
+        .preview-loading { display:flex; align-items:center; gap:8px; color:#888; font-size:12px; }
+        .spinner {
+          width:14px; height:14px; flex-shrink:0;
+          border:2px solid #333; border-top-color:#0ea5e9;
+          border-radius:50%; animation:spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform:rotate(360deg); } }
+      </style>
+      ${this.renderPreviewContent()}
+    `;
+  }
+
+  private renderPreviewContent(): string {
+    if (this.capturing && !this.capture) {
+      return `<div class="preview-card"><div class="preview-loading"><div class="spinner"></div><span>Capturing…</span></div></div>`;
+    }
+    const cap = this.capture;
+    if (!cap) return `<div class="preview-card"><div class="preview-loading"><span>No capture yet.</span></div></div>`;
+    const ev = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+    if (cap.format === 'selection') {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = cap.selectionText ?? '';
+      const text = tmp.textContent ?? '';
+      const preview = text.length > 400 ? text.slice(0, 400) + '…' : text;
+      return `
+        <div class="preview-card">
+          <div class="preview-label">Selection</div>
+          <div class="preview-text">${ev(preview)}</div>
+          <div class="preview-url">${ev(cap.url)}</div>
+        </div>`;
+    }
+
+    if (cap.format === 'simplified-article') {
+      const text = cap.bodyText ?? '';
+      const preview = text.length > 400 ? text.slice(0, 400) + '…' : text;
+      return `
+        <div class="preview-card">
+          <div class="preview-label">Simplified article</div>
+          <div class="preview-title">${ev(cap.title)}</div>
+          <div class="preview-text">${ev(preview)}</div>
+        </div>`;
+    }
+
+    if (cap.format === 'bookmark') {
+      const thumb = cap.thumbnail ? `<img class="preview-thumb" src="${ev(cap.thumbnail)}" alt="">` : '';
+      return `
+        <div class="preview-card">
+          <div class="preview-label">Bookmark</div>
+          ${thumb}
+          <div class="preview-title">${ev(cap.title)}</div>
+          <div class="preview-url">${ev(cap.url)}</div>
+        </div>`;
+    }
+
+    return '';
   }
 
   // ── Render dispatcher ──────────────────────────────────────────────────────
@@ -512,8 +619,6 @@ export class DiscernedOverlay extends HTMLElement {
         <div class="panel-body main-body">
           <div class="format-row">${chipHtml}</div>
 
-          <div class="preview-area" id="preview-area">${this.renderPreview()}</div>
-
           <div class="form-block">
             <label class="block-label" for="note-input">Notes</label>
             <textarea id="note-input" maxlength="2000" placeholder="Add a note or comment (optional)…">${this.escapeHtml(this.note)}</textarea>
@@ -612,6 +717,7 @@ export class DiscernedOverlay extends HTMLElement {
           b.classList.toggle('active', b.dataset.format === fmt);
         });
         this.applyHighlightForCurrentFormat();
+        this.updatePreview();
         const noticeEl = this.shadow.getElementById('cast-notice');
         if (noticeEl) noticeEl.innerHTML = this.renderCastNotice(isConnected);
         void this.refreshCapture();
@@ -651,67 +757,7 @@ export class DiscernedOverlay extends HTMLElement {
     this.validateForm();
   }
 
-  private renderPreview(): string {
-    if (this.capturing && !this.capture) {
-      return `<div class="preview-loading"><div class="spinner-small"></div><span>Capturing…</span></div>`;
-    }
-    if (!this.capture) {
-      return `<div class="preview-empty">No capture yet.</div>`;
-    }
-    const cap = this.capture;
-    const ev = this.escapeHtml.bind(this);
 
-    if (cap.format === 'selection') {
-      const tmp = document.createElement('div');
-      tmp.innerHTML = cap.selectionText ?? '';
-      const text = tmp.textContent ?? '';
-      const preview = text.length > 400 ? text.slice(0, 400) + '…' : text;
-      return `
-        <div class="preview-card preview-selection">
-          <div class="preview-text">${ev(preview)}</div>
-          <div class="preview-url">${ev(cap.url)}</div>
-        </div>
-      `;
-    }
-
-    if (cap.format === 'bookmark') {
-      const thumb = cap.thumbnail ? `<img class="preview-thumb" src="${ev(cap.thumbnail)}" alt="">` : '';
-      return `
-        <div class="preview-card preview-bookmark">
-          ${thumb}
-          <div class="preview-title">${ev(cap.title)}</div>
-          <div class="preview-url">${ev(cap.url)}</div>
-        </div>
-      `;
-    }
-
-    if (cap.format === 'full-page') {
-      return `
-        <div class="preview-card preview-full">
-          <div class="preview-title">${ev(cap.title)}</div>
-          <div class="preview-placeholder">📦 Full page capture stored locally</div>
-        </div>
-      `;
-    }
-
-    // article / simplified-article
-    const text = cap.bodyText ?? '';
-    const excerpt = text.length > 400 ? text.slice(0, 400) + '…' : text;
-    const thumb = cap.format === 'article' && cap.thumbnail
-      ? `<img class="preview-thumb" src="${ev(cap.thumbnail)}" alt="">`
-      : '';
-    const hint = cap.format === 'article'
-      ? `<div class="preview-hint">Outlined on the page →</div>`
-      : '';
-    return `
-      <div class="preview-card preview-article">
-        ${thumb}
-        <div class="preview-title">${ev(cap.title)}</div>
-        <div class="preview-text">${ev(excerpt)}</div>
-        ${hint}
-      </div>
-    `;
-  }
 
   private renderCastNotice(isConnected: boolean): string {
     const cap = this.capture;
@@ -738,8 +784,7 @@ export class DiscernedOverlay extends HTMLElement {
     if (!this.opts) return;
     const myGen = ++this.captureGeneration;
     this.capturing = true;
-    const previewEl = this.shadow.getElementById('preview-area');
-    if (previewEl) previewEl.innerHTML = this.renderPreview();
+    this.updatePreview();
 
     let cap: Capture | null = null;
     try {
@@ -751,8 +796,7 @@ export class DiscernedOverlay extends HTMLElement {
     if (myGen !== this.captureGeneration) return; // a newer capture has started; discard
     this.capture = cap;
     this.capturing = false;
-    const refreshedPreview = this.shadow.getElementById('preview-area');
-    if (refreshedPreview) refreshedPreview.innerHTML = this.renderPreview();
+    this.updatePreview();
     const noticeEl = this.shadow.getElementById('cast-notice');
     if (noticeEl) noticeEl.innerHTML = this.renderCastNotice(this.authState.type !== 'guest');
     this.validateForm();
