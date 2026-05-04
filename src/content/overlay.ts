@@ -9,6 +9,7 @@
 
 import type { AuthState, Capture, ClipFormat, Evaluation, InterestLevel, EthicsLevel, Category } from '@/shared/types';
 import { STORAGE_KEYS } from '@/shared/types';
+import { LL, log } from '@/shared/logger';
 import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
 import { showArticleHighlight, hideArticleHighlight } from './highlighter';
 import { npubEncode } from 'nostr-tools/nip19';
@@ -541,7 +542,7 @@ export class DiscernedOverlay extends HTMLElement {
       const clipEl = this.shadow.getElementById('clip-count');
       if (clipEl) clipEl.textContent = String(clipCount);
     } catch (err) {
-      console.warn('Failed to load stats', err);
+      log(LL.WARN, 'Failed to load stats', err);
     }
   }
 
@@ -790,7 +791,7 @@ export class DiscernedOverlay extends HTMLElement {
     try {
       cap = await this.opts.onCapture(this.format);
     } catch (err) {
-      console.warn('Discerned: capture failed', err);
+      log(LL.WARN, 'Discerned: capture failed', err);
     }
 
     if (myGen !== this.captureGeneration) return; // a newer capture has started; discard
@@ -915,7 +916,7 @@ export class DiscernedOverlay extends HTMLElement {
 
     if (shouldBroadcast) {
       this.opts.onCast(captureWithNote, evaluation).catch((err: unknown) => {
-        console.warn('Discerned: broadcast failed (clip already saved locally)',
+        log(LL.WARN, 'Discerned: broadcast failed (clip already saved locally)',
           err instanceof Error ? err.message : err);
       });
     }

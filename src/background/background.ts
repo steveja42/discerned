@@ -22,13 +22,12 @@ import {
 } from '@/shared/nostr/nip46-manager';
 import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation } from '@/shared/types';
 import { STORAGE_KEYS } from '@/shared/types';
-import { initLogBridge } from '@/shared/logger';
+import { LL, log } from '@/shared/logger';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
 import { decode } from 'nostr-tools/nip19';
 import * as nip49 from 'nostr-tools/nip49';
 import type { BunkerPointer } from 'nostr-tools/nip46';
 
-initLogBridge('background');
 
 let currentAuthState: AuthState = { type: 'guest' };
 let guestPrivateKey: Uint8Array | null = null;
@@ -67,13 +66,13 @@ async function restoreAuthState(): Promise<void> {
     currentAuthState = { type: 'guest' };
     if (!guestPrivateKey) guestPrivateKey = generateSecretKey();
   }
-  console.log('Discerned auth state:', currentAuthState.type);
+  log(LL.DEBUG, 'Discerned auth state:', currentAuthState.type);
 }
 
 restoreAuthState();
 
 chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log('Discerned extension installed/updated');
+  log(LL.NORMAL, 'Discerned extension installed/updated');
 
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
@@ -100,7 +99,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'discerned-capture' && tab?.id) {
     chrome.tabs.sendMessage(tab.id, { type: 'ACTIVATE_DISCERNED' }).catch(err => {
-      console.warn('Discerned: could not reach content script (try refreshing the tab):', err);
+      log(LL.WARN, 'Discerned: could not reach content script (try refreshing the tab):', err);
     });
   }
 });
@@ -113,7 +112,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 chrome.action.onClicked.addListener((tab) => {
   if (tab.id) {
     chrome.tabs.sendMessage(tab.id, { type: 'ACTIVATE_DISCERNED' }).catch(err => {
-      console.warn('Discerned: could not reach content script (try refreshing the tab):', err);
+      log(LL.WARN, 'Discerned: could not reach content script (try refreshing the tab):', err);
     });
   }
 });
@@ -161,7 +160,7 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
   handleMessage(message, sender.tab?.id)
     .then(sendResponse)
     .catch(error => {
-      console.error('Message handler error:', error);
+      log(LL.ERROR, 'Message handler error:', error);
       sendResponse({
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -185,12 +184,12 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       if (message.hasNIP07 && currentAuthState.type === 'guest') {
         currentAuthState = { type: 'pro', hasNIP07: true };
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
-        console.log('NIP-07 extension detected — switching to pro mode');
+        log(LL.NORMAL, 'NIP-07 extension detected — switching to pro mode');
       }
       if (message.hasNIP07 && senderTabId !== undefined && canonicalNIP07TabId === null) {
         canonicalNIP07TabId = senderTabId;
         chrome.storage.session.set({ canonicalNIP07TabId: senderTabId }).catch(() => {});
-        console.log(`NIP-07 canonical signing tab: ${senderTabId}`);
+        log(LL.DEBUG, `NIP-07 canonical signing tab: ${senderTabId}`);
       }
       return { success: true };
 
@@ -340,7 +339,7 @@ async function handleClip(data: { capture: Capture; evaluation: Evaluation }): P
     });
     return { success: true, data: { storage: 'local' } };
   } catch (error) {
-    console.error('Clip error:', error);
+    log(LL.ERROR, 'Clip error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Clip failed' };
   }
 }
@@ -360,7 +359,7 @@ async function handleCast(
     }
 
     const health = getRelayHealth(publishResult.results);
-    console.log(`Successfully cast to ${health.healthy}/${health.total} relays`);
+    log(LL.NORMAL, `Successfully cast to ${health.healthy}/${health.total} relays`);
 
     const stored = await chrome.storage.local.get(STORAGE_KEYS.CAST_COUNT);
     const prev = (stored[STORAGE_KEYS.CAST_COUNT] as number | undefined) ?? 0;
@@ -378,7 +377,7 @@ async function handleCast(
       data: { eventId: signedEvent.id, relays: publishResult.results },
     };
   } catch (error) {
-    console.error('Cast error:', error);
+    log(LL.ERROR, 'Cast error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Cast failed' };
   }
 }
@@ -550,4 +549,4 @@ function migrateRowInPlace(row: ClipRow): void {
   row.encrypted = JSON.stringify(payload);
 }
 
-console.log('Discerned background service worker loaded');
+log(LL.NORMAL, 'Discerned background service worker loaded');

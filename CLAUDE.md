@@ -108,6 +108,14 @@ When `false`, the bridge is a no-op; only the local `console` call fires in each
 - All `LOG_RELAY` forwarding is fire-and-forget — failures are silently swallowed
 - The `originals` snapshot in `logger.ts` must be taken **before** any override runs; `relayLog()` depends on it
 
+## Logging Rules
+
+- **Never use `console` directly** — always call `log(LOG_LEVEL.X, ...)` from `src/shared/logger.ts`
+- Import both `log` from `@/shared/logger` and `LOG_LEVEL` from `@/shared/types`
+- **Always include the URL** in log calls: pass `'url:', capture.url` (or `window.location.href` when no capture is in scope)
+- Levels: `TRACE=0`, `DEBUG=1`, `NORMAL=2`, `WARN=3`, `ERROR=4` — filtered by `activeLogLevel` (default `TRACE`)
+- Call `setLogLevel(LOG_LEVEL.WARN)` before publishing to Web Store to suppress verbose output
+
 ## Security Rules
 
 - All user-supplied HTML must pass through `sanitizeHtml()` in `src/content/capture.ts`

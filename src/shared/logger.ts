@@ -6,7 +6,16 @@
 //              also surface in VSCode's single page-context debug session.
 // Access: chrome.tabs (popup/background only), chrome.runtime (content/onboarding)
 
-import type { LogLevel, LogSource } from './types';
+import type { AppLogLevel, LogLevel, LogSource } from './types';
+
+/** Numeric log levels — higher number = more severe. */
+export const LL = {
+  TRACE:  0,
+  DEBUG:  1,
+  NORMAL: 2,
+  WARN:   3,
+  ERROR:  4,
+} as const;
 
 /**
  * REMOTE_LOGGING toggle
@@ -57,8 +66,20 @@ function forwardToActiveTab(source: LogSource, level: LogLevel, args: unknown[])
   }
 }
 
+/** Detect the current extension context from available globals. */
+function detectSource(): LogSource {
+  // background service worker: no DOM, but has chrome.tabs
+  if (typeof document === 'undefined') return 'background';
+  // popup: has DOM and chrome.tabs
+  if (typeof chrome !== 'undefined' && chrome.tabs) return 'popup';
+  // content script / onboarding: has DOM, no chrome.tabs
+  return 'content';
+}
+
+let bridgeInitialised = false;
+
 /**
- * Override console methods for the given extension context.
+ * Override console methods for the current extension context (auto-detected).
  *
  * - 'content' / 'onboarding': run inside the page VSCode is attached to, so their
  *   console output is already visible. We add a [source] prefix for clarity and do
@@ -68,9 +89,12 @@ function forwardToActiveTab(source: LogSource, level: LogLevel, args: unknown[])
  *   original locally (visible in the context's own DevTools) AND relay to the active
  *   tab via LOG_RELAY so VSCode captures them too.
  *
- * Call once at the very top of each entry point. No-op when REMOTE_LOGGING is false.
+ * Called automatically on the first log() call — no manual init needed.
  */
-export function initLogBridge(source: LogSource): void {
+function initLogBridge(): void {
+  if (bridgeInitialised) return;
+  bridgeInitialised = true;
+  const source = detectSource();
   const c = console as unknown as Record<LogLevel, (...args: unknown[]) => void>;
 
   for (const level of LEVELS) {
@@ -101,4 +125,34 @@ export function initLogBridge(source: LogSource): void {
 export function relayLog(level: LogLevel, source: LogSource, serialized: string[]): void {
   const fn = originals[level] ?? (console[level] as (...args: unknown[]) => void).bind(console);
   fn(`[${source}]`, ...serialized);
+}
+
+/**
+ * Minimum numeric level that will be emitted. Raise to suppress verbose output.
+ * LL.TRACE=0, DEBUG=1, NORMAL=2, WARN=3, ERROR=4
+ */
+let activeLogLevel: AppLogLevel = LL.TRACE;
+
+export function setLogLevel(level: AppLogLevel): void {
+  activeLogLevel = level;
+}
+
+const CONSOLE_METHOD: Record<AppLogLevel, LogLevel> = {
+  [LL.TRACE]:  'debug',
+  [LL.DEBUG]:  'debug',
+  [LL.NORMAL]: 'log',
+  [LL.WARN]:   'warn',
+  [LL.ERROR]:  'error',
+};
+
+/**
+ * Structured logger for use throughout the extension.
+ * Automatically initialises the log bridge on first call if not already done.
+ * @param level - numeric level from LL (TRACE=0 … ERROR=4)
+ */
+export function log(level: AppLogLevel, ...args: unknown[]): void {
+  if (!bridgeInitialised) initLogBridge();
+  if (level < activeLogLevel) return;
+  const method = CONSOLE_METHOD[level];
+  (console[method] as (...a: unknown[]) => void)(...args);
 }

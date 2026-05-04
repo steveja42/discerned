@@ -9,9 +9,8 @@ import { DiscernedOverlay } from './overlay';
 import { detectAuthState, signWithNIP07 } from '@/shared/nostr/auth';
 import type { AuthState, BackgroundMessage, Capture, ClipFormat, Evaluation } from '@/shared/types';
 import { STORAGE_KEYS } from '@/shared/types';
-import { initLogBridge, relayLog } from '@/shared/logger';
+import { LL, log, relayLog } from '@/shared/logger';
 
-initLogBridge('content');
 
 let currentOverlay: DiscernedOverlay | null = null;
 let cachedAuthState: AuthState = { type: 'guest' };
@@ -82,7 +81,7 @@ async function rememberFormat(format: ClipFormat): Promise<void> {
 
 async function handleActivation() {
   if (!isCapturablePage()) {
-    console.warn('Discerned: Cannot capture on this page');
+    log(LL.WARN, 'Discerned: Cannot capture on this page', 'url:', window.location.href);
     return;
   }
 
@@ -154,9 +153,9 @@ async function handleClip(capture: Capture, evaluation: Evaluation) {
   try {
     const response = await sendToBackground({ type: 'CLIP', data: { capture, evaluation } });
     if (!response.success) throw new Error(response.error);
-    console.log('Discerned: Successfully clipped');
+    log(LL.NORMAL, 'Discerned: Successfully clipped', 'url:', window.location.href);
   } catch (error) {
-    console.error('Discerned: Clip failed', error);
+    log(LL.ERROR, 'Discerned: Clip failed', error, 'url:', window.location.href);
     throw error;
   }
 }
@@ -165,9 +164,9 @@ async function handleCast(capture: Capture, evaluation: Evaluation) {
   try {
     const response = await sendToBackground({ type: 'CAST', data: { capture, evaluation } });
     if (!response.success) throw new Error(response.error);
-    console.log('Discerned: Successfully cast');
+    log(LL.NORMAL, 'Discerned: Successfully cast', 'url:', window.location.href);
   } catch (error) {
-    console.error('Discerned: Cast failed', error);
+    log(LL.ERROR, 'Discerned: Cast failed', error, 'url:', window.location.href);
     showCastErrorToast(error instanceof Error ? error.message : 'Broadcast failed');
     throw error;
   }
@@ -205,4 +204,4 @@ function showCastErrorToast(message: string) {
   setTimeout(() => host.remove(), 5000);
 }
 
-console.log('Discerned content script loaded');
+log(LL.NORMAL, 'Discerned content script loaded');

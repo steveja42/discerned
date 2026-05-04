@@ -4,10 +4,7 @@
 //              On successful connection, shows a confirmation and prompts the user to close the tab.
 // Access: chrome.runtime.sendMessage (background messages only), window.close
 
-import { initLogBridge } from '@/shared/logger';
 import type { AuthState } from '@/shared/types';
-
-initLogBridge('onboarding');
 
 document.addEventListener('DOMContentLoaded', async () => {
   await checkExistingAuth();

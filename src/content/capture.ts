@@ -9,6 +9,8 @@
 
 import { Readability } from '@mozilla/readability';
 import type { Capture, ClipFormat } from '@/shared/types';
+import { LL, log } from '@/shared/logger';
+
 
 // Known tracking/analytics query parameters to strip from captured URLs.
 // Organised by vendor for maintainability.
@@ -154,7 +156,7 @@ function extractContext(range: Range): string {
     ).trim();
     return `...${before} [...] ${after}...`;
   } catch (error) {
-    console.warn('Could not extract context:', error);
+    log(LL.WARN, 'Could not extract context:', error, 'url:', window.location.href);
     return '';
   }
 }
@@ -175,8 +177,7 @@ async function extractArticle(): Promise<Capture> {
   const parsed = parseReadability();
   const base = baseFields();
   if (!parsed) {
-    // Fallback: degrade to bookmark when Readability finds nothing parseable.
-    console.warn('Discerned: Readability could not parse this page; falling back to bookmark.');
+    log(LL.WARN, 'Discerned: Readability could not parse this page; falling back to bookmark.', 'url:', base.url);
     return { ...base, format: 'article', thumbnail: getPageThumbnail() };
   }
 
@@ -197,7 +198,7 @@ async function extractSimplifiedArticle(): Promise<Capture> {
   const parsed = parseReadability();
   const base = baseFields();
   if (!parsed) {
-    console.warn('Discerned: Readability could not parse this page; falling back to bookmark.');
+    log(LL.WARN, 'Discerned: Readability could not parse this page; falling back to bookmark.', 'url:', base.url);
     return { ...base, format: 'simplified-article', thumbnail: getPageThumbnail() };
   }
 
@@ -220,7 +221,7 @@ function parseReadability(): ReturnType<Readability['parse']> | null {
     const clone = document.cloneNode(true) as Document;
     return new Readability(clone).parse();
   } catch (err) {
-    console.warn('Discerned: Readability failed', err);
+    log(LL.WARN, 'Discerned: Readability failed', err, 'url:', window.location.href);
     return null;
   }
 }

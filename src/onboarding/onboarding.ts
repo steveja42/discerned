@@ -3,9 +3,6 @@
 //              Nostr identity setup happens inline inside the capture overlay.
 // Access: none (window.close only)
 
-import { initLogBridge } from '@/shared/logger';
-
-initLogBridge('onboarding');
 
 document.getElementById('btn-done')?.addEventListener('click', () => {
   window.close();

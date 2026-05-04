@@ -6,6 +6,7 @@
 
 import * as nip44 from 'nostr-tools/nip44';
 import type { Capture, Evaluation } from '@/shared/types';
+import { LL, log } from '@/shared/logger';
 
 export interface EncryptedClipPayload {
   capture: Capture;
@@ -124,7 +125,7 @@ export function safeEncrypt(
     const encrypted = encryptClip(payload, conversationKey);
     return { success: true, encrypted };
   } catch (error) {
-    console.error('Encryption failed:', error);
+    log(LL.ERROR, 'Encryption failed:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown encryption error',
@@ -148,7 +149,7 @@ export function safeDecrypt(
 
     return { success: true, payload };
   } catch (error) {
-    console.error('Decryption failed:', error);
+    log(LL.ERROR, 'Decryption failed:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown decryption error',

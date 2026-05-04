@@ -6,6 +6,3 @@
 //              has moved into the overlay's settings drawer.
 // Access: shared logger only; no DOM logic needed beyond the static HTML stub.
 
-import { initLogBridge } from '@/shared/logger';
-
-initLogBridge('popup');

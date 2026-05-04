@@ -12,6 +12,8 @@ export type ClipFormat =
   | 'bookmark';
 
 export type LogLevel = 'log' | 'warn' | 'error' | 'info' | 'debug';
+
+export type AppLogLevel = 0 | 1 | 2 | 3 | 4;
 export type LogSource = 'content' | 'popup' | 'onboarding' | 'background';
 
 // Sent from background/popup → active-tab content script so VSCode's page-context

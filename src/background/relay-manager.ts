@@ -7,6 +7,7 @@
 import { SimplePool } from 'nostr-tools/pool';
 import type { NostrEvent } from 'nostr-tools/core';
 import { DEFAULT_RELAYS } from '@/shared/types';
+import { LL, log } from '@/shared/logger';
 
 export interface PublishResult {
   relay: string;
@@ -65,11 +66,11 @@ class RelayPool {
         await relayPromise;
 
         clearTimeout(timeout);
-        console.log(`Published to ${url}:`, event.id);
+        log(LL.NORMAL, `Published to ${url}:`, event.id);
         resolve(true);
       } catch (error) {
         clearTimeout(timeout);
-        console.error(`Failed to publish to ${url}:`, error);
+        log(LL.ERROR, `Failed to publish to ${url}:`, error);
         reject(error);
       }
     });
