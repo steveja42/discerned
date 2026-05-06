@@ -81,6 +81,7 @@ export type BackgroundMessage =
   | { type: 'CLIP'; data: { capture: Capture; evaluation: Evaluation } }
   | { type: 'CAST'; data: { capture: Capture; evaluation: Evaluation } }
   | { type: 'GET_AUTH_STATE' }
+  | { type: 'GET_CLIPS' }
   | { type: 'NIP07_DETECTED'; hasNIP07: boolean }
   | { type: 'CONNECT_NIP46'; bunkerUri: string }
   | { type: 'CONNECT_NSEC'; rawNsec: string; pin: string }
@@ -107,6 +108,19 @@ export const STORAGE_KEYS = {
   CAST_COUNT: 'castCount',
   LAST_FORMAT: 'lastFormat',
 } as const;
+
+// Messages posted between the extension's web-bridge content script and the
+// companion web app at discerned.online. Both ends must origin-check before
+// acting on these (window.location.origin / e.origin).
+export type WebBridgeOutbound =
+  | {
+      type: 'DISCERNED_BRIDGE_HELLO';
+      pubkey: string | null;
+      authMethod: 'nip07' | 'nip46' | 'nsec' | 'guest' | null;
+    }
+  | { type: 'DISCERNED_BRIDGE_CLIPS'; clips: ClipData[] };
+
+export type WebBridgeInbound = { type: 'DISCERNED_WEB_READY' };
 
 // Default relay list
 export const DEFAULT_RELAYS = [

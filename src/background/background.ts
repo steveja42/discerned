@@ -20,7 +20,7 @@ import {
   getOrCreateBunkerSigner,
   invalidateBunkerSigner,
 } from '@/shared/nostr/nip46-manager';
-import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation } from '@/shared/types';
+import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation, ClipData } from '@/shared/types';
 import { STORAGE_KEYS } from '@/shared/types';
 import { LL, log } from '@/shared/logger';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
@@ -185,6 +185,9 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'GET_AUTH_STATE':
       return { success: true, data: currentAuthState };
 
+    case 'GET_CLIPS':
+      return handleGetClips();
+
     case 'NIP07_DETECTED':
       if (message.hasNIP07 && currentAuthState.type === 'guest') {
         currentAuthState = { type: 'pro', hasNIP07: true };
@@ -333,6 +336,40 @@ function blobToDataUri(blob: Blob): Promise<string> {
 }
 
 // ── CLIP / CAST handlers ────────────────────────────────────────────────────
+
+async function handleGetClips(): Promise<BackgroundResponse> {
+  return new Promise((resolve) => {
+    const request = indexedDB.open('discerned', DB_VERSION);
+    request.onerror = () => resolve({ success: false, error: 'IndexedDB open failed' });
+    request.onupgradeneeded = () => { /* read-only probe; no schema changes */ };
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('clips')) {
+        db.close();
+        resolve({ success: true, data: { clips: [] } });
+        return;
+      }
+      try {
+        const tx = db.transaction(['clips'], 'readonly');
+        const getAllReq = tx.objectStore('clips').getAll();
+        getAllReq.onsuccess = () => {
+          db.close();
+          const rows = (getAllReq.result as ClipRow[]) ?? [];
+          const clips: ClipData[] = [];
+          for (const row of rows) {
+            try { clips.push(JSON.parse(row.encrypted) as ClipData); } catch { /* skip */ }
+          }
+          clips.sort((a, b) => b.capture.timestamp - a.capture.timestamp);
+          resolve({ success: true, data: { clips } });
+        };
+        getAllReq.onerror = () => { db.close(); resolve({ success: true, data: { clips: [] } }); };
+      } catch {
+        db.close();
+        resolve({ success: true, data: { clips: [] } });
+      }
+    };
+  });
+}
 
 async function handleClip(data: { capture: Capture; evaluation: Evaluation }): Promise<BackgroundResponse> {
   try {
