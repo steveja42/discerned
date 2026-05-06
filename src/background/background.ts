@@ -42,6 +42,9 @@ const POPUP_STUB_PATH = 'src/popup/popup.html';
 const RESTRICTED_URL_PREFIXES = ['chrome:', 'chrome-extension:', 'edge:', 'about:', 'devtools:', 'view-source:', 'file:'];
 const MAX_IMAGE_BYTES = 2_000_000;
 
+const isBfcachePortError = (err: unknown) =>
+  ((err as { message?: string })?.message ?? '').includes('back/forward cache');
+
 async function restoreAuthState(): Promise<void> {
   const stored = await chrome.storage.local.get([
     STORAGE_KEYS.AUTH_STATE,
@@ -99,6 +102,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'discerned-capture' && tab?.id) {
     chrome.tabs.sendMessage(tab.id, { type: 'ACTIVATE_DISCERNED' }).catch(err => {
+      if (isBfcachePortError(err)) return;
       log(LL.WARN, 'Discerned: could not reach content script (try refreshing the tab):', err);
     });
   }
@@ -112,6 +116,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 chrome.action.onClicked.addListener((tab) => {
   if (tab.id) {
     chrome.tabs.sendMessage(tab.id, { type: 'ACTIVATE_DISCERNED' }).catch(err => {
+      if (isBfcachePortError(err)) return;
       log(LL.WARN, 'Discerned: could not reach content script (try refreshing the tab):', err);
     });
   }
