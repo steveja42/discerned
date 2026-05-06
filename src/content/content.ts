@@ -15,11 +15,20 @@ import { LL, log, relayLog } from '@/shared/logger';
 let currentOverlay: DiscernedOverlay | null = null;
 let cachedAuthState: AuthState = { type: 'guest' };
 
+function isContextValid(): boolean {
+  try {
+    return !!chrome.runtime?.id;
+  } catch {
+    return false;
+  }
+}
+
 const VALID_FORMATS: ClipFormat[] = [
   'selection', 'article', 'simplified-article', 'full-page', 'bookmark',
 ];
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (!isContextValid()) return false;
   if (message.type === 'ACTIVATE_DISCERNED') {
     handleActivation();
     sendResponse({ success: true });
@@ -42,7 +51,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
  */
 detectAuthState().then(state => {
   cachedAuthState = state;
-  if (state.type === 'pro') {
+  if (state.type === 'pro' && isContextValid()) {
     chrome.runtime.sendMessage({ type: 'NIP07_DETECTED', hasNIP07: true }).catch(() => {
       // Background may not be ready on the very first load — that's fine.
     });
@@ -141,6 +150,7 @@ async function handleActivation() {
  * an IndexedDB write, but 30 s is a safe uniform limit.
  */
 function sendToBackground(message: BackgroundMessage): Promise<{ success: boolean; error?: string; data?: unknown }> {
+  if (!isContextValid()) return Promise.reject(new Error('Extension context invalidated'));
   return Promise.race([
     chrome.runtime.sendMessage(message) as Promise<{ success: boolean; error?: string; data?: unknown }>,
     new Promise<never>((_, reject) =>
