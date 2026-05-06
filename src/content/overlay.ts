@@ -48,6 +48,7 @@ export class DiscernedOverlay extends HTMLElement {
   private category: Category = 'General';
   private previewHost: HTMLElement | null = null;
   private previewShadow: ShadowRoot | null = null;
+  private outsideClickHandler: ((e: PointerEvent) => void) | null = null;
 
   constructor() {
     super();
@@ -63,9 +64,17 @@ export class DiscernedOverlay extends HTMLElement {
     for (const type of ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'keydown', 'keyup', 'keypress']) {
       this.addEventListener(type, stop);
     }
+    this.outsideClickHandler = (e: PointerEvent) => {
+      if (!e.composedPath().includes(this)) this.hide();
+    };
+    document.addEventListener('pointerdown', this.outsideClickHandler);
   }
 
   disconnectedCallback() {
+    if (this.outsideClickHandler) {
+      document.removeEventListener('pointerdown', this.outsideClickHandler);
+      this.outsideClickHandler = null;
+    }
     hideArticleHighlight();
     this.removePreview();
   }
@@ -1436,6 +1445,8 @@ export class DiscernedOverlay extends HTMLElement {
 }
 
 // Register the custom element (guard against double-registration on re-injection)
-if (!customElements.get('discerned-overlay')) {
-  customElements.define('discerned-overlay', DiscernedOverlay);
-}
+try {
+  if (customElements != null && !customElements.get('discerned-overlay')) {
+    customElements.define('discerned-overlay', DiscernedOverlay);
+  }
+} catch { /* not a standard browsing context (iframe, worker, etc.) — skip registration */ }
