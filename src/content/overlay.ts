@@ -7,7 +7,7 @@
 // Access: Shadow DOM (ShadowRoot); chrome.runtime.sendMessage for auth + stats; on-page DOM
 //         (only for the article highlight rectangle, drawn into document.body).
 
-import type { AuthState, Capture, ClipFormat, Evaluation, InterestLevel, EthicsLevel, Category } from '@/shared/types';
+import type { AuthState, Capture, ClipFormat, Evaluation, InterestLevel, EthicsLevel, Category, PublishMode } from '@/shared/types';
 import { STORAGE_KEYS } from '@/shared/types';
 import { LL, log } from '@/shared/logger';
 import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
@@ -42,6 +42,10 @@ export class DiscernedOverlay extends HTMLElement {
   private identityBackTarget: View = 'main';
   private captureGeneration = 0;
   private capturing = false;
+  private publishMode: PublishMode = 'both';
+  private interest: InterestLevel = 'Interesting';
+  private ethics: EthicsLevel = 'Neutral';
+  private category: Category = 'General';
   private previewHost: HTMLElement | null = null;
   private previewShadow: ShadowRoot | null = null;
 
@@ -74,8 +78,40 @@ export class DiscernedOverlay extends HTMLElement {
     this.view = options.authState.type === 'guest' && !options.nudgeDismissed ? 'gate' : 'main';
     this.note = '';
 
-    // Initial render so the user sees the panel chrome immediately, then capture asynchronously.
+    // Initial render immediately so the user sees the panel chrome, then
+    // load persisted evaluation defaults and re-render main (if needed).
     this.render();
+
+    // Load persisted publish mode + evaluation defaults, then patch the main view.
+    // Done after the first render so the panel appears instantly with no async delay.
+    void (async () => {
+      try {
+        const stored = await chrome.storage.local.get([
+          STORAGE_KEYS.LAST_PUBLISH_MODE, STORAGE_KEYS.LAST_INTEREST,
+          STORAGE_KEYS.LAST_ETHICS, STORAGE_KEYS.LAST_CATEGORY,
+        ]);
+        const validModes: PublishMode[] = ['cast', 'local', 'both'];
+        const m = stored[STORAGE_KEYS.LAST_PUBLISH_MODE] as string | undefined;
+        if (m && (validModes as string[]).includes(m)) this.publishMode = m as PublishMode;
+
+        const validInterests: InterestLevel[] = ['Wise', 'Insightful', 'Interesting', 'Neutral', 'Noise'];
+        const si = stored[STORAGE_KEYS.LAST_INTEREST] as string | undefined;
+        if (si && (validInterests as string[]).includes(si)) this.interest = si as InterestLevel;
+
+        const validEthics: EthicsLevel[] = ['Exemplary', 'Honest', 'Biased', 'Neutral', 'Misleading', 'Malicious'];
+        const se = stored[STORAGE_KEYS.LAST_ETHICS] as string | undefined;
+        if (se && (validEthics as string[]).includes(se)) this.ethics = se as EthicsLevel;
+
+        const sc = stored[STORAGE_KEYS.LAST_CATEGORY] as string | undefined;
+        if (sc?.trim()) this.category = sc.trim();
+      } catch { /* non-fatal; use defaults */ }
+
+      if (this.authState.type === 'guest') this.publishMode = 'local';
+
+      // Re-render main view to reflect loaded state (only if main view is active).
+      if (this.view === 'main') this.render();
+    })();
+
     if (this.view === 'main') {
       await this.refreshCapture();
     }
@@ -627,30 +663,29 @@ export class DiscernedOverlay extends HTMLElement {
 
           <div class="form-block evaluation">
             <div class="form-group">
-              <label for="interest">Interest</label>
-              <select id="interest">
-                <option value="Wise">Wise</option>
-                <option value="Insightful">Insightful</option>
-                <option value="Interesting">Interesting</option>
-                <option value="Neutral" selected>Neutral</option>
-                <option value="Noise">Noise</option>
-              </select>
+              <label id="interest-label">Interest</label>
+              <ul class="eval-listbox" id="interest-list" role="listbox" tabindex="0"
+                  aria-labelledby="interest-label">
+                ${(['Wise','Insightful','Interesting','Neutral','Noise'] as const).map(v =>
+                  `<li role="option" class="eval-option${this.interest === v ? ' selected' : ''}"
+                       data-value="${v}" aria-selected="${this.interest === v}">${v}</li>`
+                ).join('')}
+              </ul>
             </div>
             <div class="form-group">
-              <label for="ethics">Ethics</label>
-              <select id="ethics">
-                <option value="Exemplary">Exemplary</option>
-                <option value="Honest">Honest</option>
-                <option value="Biased">Biased</option>
-                <option value="Neutral" selected>Neutral</option>
-                <option value="Misleading">Misleading</option>
-                <option value="Malicious">Malicious</option>
-              </select>
+              <label id="ethics-label">Ethics</label>
+              <ul class="eval-listbox" id="ethics-list" role="listbox" tabindex="0"
+                  aria-labelledby="ethics-label">
+                ${(['Exemplary','Honest','Biased','Neutral','Misleading','Malicious'] as const).map(v =>
+                  `<li role="option" class="eval-option${this.ethics === v ? ' selected' : ''}"
+                       data-value="${v}" aria-selected="${this.ethics === v}">${v}</li>`
+                ).join('')}
+              </ul>
             </div>
             <div class="form-group">
               <label for="category">Category</label>
               <div class="combobox" id="category-combobox">
-                <input type="text" id="category" value="General" autocomplete="off" spellcheck="false" />
+                <input type="text" id="category" value="${this.escapeHtml(this.category)}" autocomplete="off" spellcheck="false" />
                 <button type="button" class="combobox-toggle" id="category-toggle" tabindex="-1">▾</button>
                 <ul class="combobox-list" id="category-list" role="listbox">
                   <li data-value="General">General</li>
@@ -676,15 +711,27 @@ export class DiscernedOverlay extends HTMLElement {
               <span class="status-text">${isConnected ? 'Connected to Nostr' : 'Local only'}</span>
               ${!isConnected ? '<button class="link-btn" id="nostr-signup-link">Connect →</button>' : ''}
             </div>
-            <label class="keep-private-label">
-              <input type="checkbox" id="keep-private"${!isConnected ? ' checked disabled' : ''} />
-              <span>Keep private</span>
-            </label>
+            <div class="publish-mode-slider${!isConnected ? ' guest' : ''}" role="radiogroup" aria-label="Publish mode">
+              <div class="slider-track">
+                <div class="slider-pill" id="slider-pill"></div>
+                <button class="slider-seg${this.publishMode === 'cast' ? ' active' : ''}"
+                        id="seg-cast" role="radio" aria-checked="${this.publishMode === 'cast'}"
+                        ${!isConnected ? 'disabled' : ''}
+                        title="Publish to Nostr — your clip is public and signed with your identity">📡 Cast</button>
+                <button class="slider-seg${this.publishMode === 'both' ? ' active' : ''}"
+                        id="seg-both" role="radio" aria-checked="${this.publishMode === 'both'}"
+                        ${!isConnected ? 'disabled' : ''}
+                        title="Save privately and publish to Nostr — you keep a local copy too">🔒📡 Both</button>
+                <button class="slider-seg${this.publishMode === 'local' ? ' active' : ''}"
+                        id="seg-local" role="radio" aria-checked="${this.publishMode === 'local'}"
+                        title="Keep private — stored only on this device, never published">🔒 Local</button>
+              </div>
+            </div>
           </div>
           <button class="btn btn-clip" id="clip" disabled>
-            <span class="icon" id="clip-icon">${isConnected ? '📡' : '🔒'}</span>
+            <span class="icon" id="clip-icon">${this.getClipIcon()}</span>
             <span class="label">CLIP</span>
-            <span class="sublabel" id="clip-sublabel">${isConnected ? 'Clip & broadcast' : 'Private storage'}</span>
+            <span class="sublabel" id="clip-sublabel">${this.getClipSublabel()}</span>
           </button>
         </footer>
 
@@ -732,18 +779,98 @@ export class DiscernedOverlay extends HTMLElement {
       if (noticeEl) noticeEl.innerHTML = this.renderCastNotice(isConnected);
     });
 
-    const keepPrivateEl = this.shadow.getElementById('keep-private') as HTMLInputElement | null;
-    const clipIconEl = this.shadow.getElementById('clip-icon');
+    // ── Listbox helpers ───────────────────────────────────────────────────────
+    const updateListbox = (list: Element, value: string) => {
+      list.querySelectorAll<HTMLElement>('[role="option"]').forEach(li => {
+        const sel = li.dataset.value === value;
+        li.classList.toggle('selected', sel);
+        li.setAttribute('aria-selected', String(sel));
+      });
+    };
+
+    const listboxKeydown = (e: KeyboardEvent, list: Element, onSelect: (v: string) => void) => {
+      if (!['ArrowDown','ArrowUp','Home','End'].includes(e.key)) return;
+      e.preventDefault();
+      const opts = Array.from(list.querySelectorAll<HTMLElement>('[role="option"]'));
+      const cur = opts.findIndex(o => o.classList.contains('selected'));
+      let next = cur;
+      if (e.key === 'ArrowDown') next = Math.min(cur + 1, opts.length - 1);
+      if (e.key === 'ArrowUp')   next = Math.max(cur - 1, 0);
+      if (e.key === 'Home')      next = 0;
+      if (e.key === 'End')       next = opts.length - 1;
+      if (next === cur) return;
+      const v = opts[next]!.dataset.value ?? '';
+      onSelect(v);
+      updateListbox(list, v);
+      opts[next]!.scrollIntoView({ block: 'nearest' });
+    };
+
+    // ── Interest listbox ──────────────────────────────────────────────────────
+    const interestList = this.shadow.getElementById('interest-list')!;
+    interestList.addEventListener('click', e => {
+      const t = (e.target as Element).closest<HTMLElement>('[data-value]');
+      if (!t) return;
+      this.interest = t.dataset.value as InterestLevel;
+      updateListbox(interestList, this.interest);
+      void chrome.storage.local.set({ [STORAGE_KEYS.LAST_INTEREST]: this.interest });
+      this.validateForm();
+    });
+    interestList.addEventListener('keydown', e => listboxKeydown(e, interestList, v => {
+      this.interest = v as InterestLevel;
+      void chrome.storage.local.set({ [STORAGE_KEYS.LAST_INTEREST]: this.interest });
+      this.validateForm();
+    }));
+
+    // ── Ethics listbox ────────────────────────────────────────────────────────
+    const ethicsList = this.shadow.getElementById('ethics-list')!;
+    ethicsList.addEventListener('click', e => {
+      const t = (e.target as Element).closest<HTMLElement>('[data-value]');
+      if (!t) return;
+      this.ethics = t.dataset.value as EthicsLevel;
+      updateListbox(ethicsList, this.ethics);
+      void chrome.storage.local.set({ [STORAGE_KEYS.LAST_ETHICS]: this.ethics });
+      this.validateForm();
+    });
+    ethicsList.addEventListener('keydown', e => listboxKeydown(e, ethicsList, v => {
+      this.ethics = v as EthicsLevel;
+      void chrome.storage.local.set({ [STORAGE_KEYS.LAST_ETHICS]: this.ethics });
+      this.validateForm();
+    }));
+
+    // ── Publish-mode slider ───────────────────────────────────────────────────
+    const pill = this.shadow.getElementById('slider-pill');
+    const clipIconEl  = this.shadow.getElementById('clip-icon');
     const clipSublabelEl = this.shadow.getElementById('clip-sublabel');
-    const updateClipAppearance = () => {
-      const keepPrivate = keepPrivateEl?.checked ?? true;
-      const broadcastMode = !keepPrivate && isConnected;
-      if (clipIconEl) clipIconEl.textContent = broadcastMode ? '📡' : '🔒';
-      if (clipSublabelEl) clipSublabelEl.textContent = broadcastMode ? 'Clip & broadcast' : 'Private storage';
+    const order: PublishMode[] = ['cast', 'both', 'local'];
+
+    const updateSlider = (suppressAnim = false) => {
+      const idx = order.indexOf(this.publishMode);
+      if (pill) {
+        if (suppressAnim) pill.style.transition = 'none';
+        pill.style.transform = `translateX(${idx * 100}%)`;
+        if (suppressAnim) { void pill.offsetWidth; pill.style.transition = ''; }
+      }
+      this.shadow.querySelectorAll<HTMLElement>('.slider-seg').forEach(seg => {
+        const segMode = seg.id.replace('seg-', '') as PublishMode;
+        seg.classList.toggle('active', segMode === this.publishMode);
+        seg.setAttribute('aria-checked', String(segMode === this.publishMode));
+      });
+      if (clipIconEl)     clipIconEl.textContent     = this.getClipIcon();
+      if (clipSublabelEl) clipSublabelEl.textContent = this.getClipSublabel();
       const noticeEl = this.shadow.getElementById('cast-notice');
       if (noticeEl) noticeEl.innerHTML = this.renderCastNotice(isConnected);
     };
-    keepPrivateEl?.addEventListener('change', updateClipAppearance);
+
+    (['cast', 'both', 'local'] as const).forEach(mode => {
+      this.shadow.getElementById(`seg-${mode}`)?.addEventListener('click', () => {
+        if (!isConnected && mode !== 'local') return;
+        this.publishMode = mode;
+        updateSlider();
+        void chrome.storage.local.set({ [STORAGE_KEYS.LAST_PUBLISH_MODE]: mode });
+      });
+    });
+
+    updateSlider(true); // position pill without animation on first render
 
     this.shadow.getElementById('nostr-signup-link')?.addEventListener('click', () => {
       this.identityBackTarget = 'main';
@@ -753,7 +880,6 @@ export class DiscernedOverlay extends HTMLElement {
 
     this.shadow.getElementById('clip')?.addEventListener('click', () => this.handleClipAction());
 
-    this.shadow.querySelectorAll('select').forEach(s => s.addEventListener('change', () => this.validateForm()));
     this.setupCategoryCombobox();
     this.validateForm();
   }
@@ -764,8 +890,7 @@ export class DiscernedOverlay extends HTMLElement {
     const cap = this.capture;
     if (!cap) return '';
     if (!isConnected) return '';
-    const keepPrivateEl = this.shadow.getElementById('keep-private') as HTMLInputElement | null;
-    const willBroadcast = keepPrivateEl ? !keepPrivateEl.checked : false;
+    const willBroadcast = this.publishMode === 'cast' || this.publishMode === 'both';
     if (!willBroadcast) return '';
 
     const richFormats: ClipFormat[] = ['article', 'simplified-article', 'full-page'];
@@ -837,6 +962,8 @@ export class DiscernedOverlay extends HTMLElement {
 
     const selectValue = (value: string) => {
       input.value = value;
+      this.category = value;
+      void chrome.storage.local.set({ [STORAGE_KEYS.LAST_CATEGORY]: value });
       closeList();
       this.validateForm();
     };
@@ -871,55 +998,70 @@ export class DiscernedOverlay extends HTMLElement {
       li.addEventListener('click', () => selectValue((li as HTMLLIElement).dataset.value ?? li.textContent ?? ''));
     });
 
-    input.addEventListener('input', () => this.validateForm());
-    input.addEventListener('blur', () => { addCustomIfNew(input.value); closeList(); });
+    input.addEventListener('input', () => { this.category = input.value; this.validateForm(); });
+    input.addEventListener('blur', () => {
+      addCustomIfNew(input.value);
+      if (input.value.trim()) {
+        this.category = input.value.trim();
+        void chrome.storage.local.set({ [STORAGE_KEYS.LAST_CATEGORY]: this.category });
+      }
+      closeList();
+    });
   }
 
   private validateForm() {
-    const interest = (this.shadow.getElementById('interest') as HTMLSelectElement | null)?.value;
-    const ethics   = (this.shadow.getElementById('ethics')   as HTMLSelectElement | null)?.value;
-    const category = (this.shadow.getElementById('category') as HTMLInputElement  | null)?.value.trim();
-    const isValid = !!(interest && ethics && category) && !!this.capture && !this.capturing;
+    const category = (this.shadow.getElementById('category') as HTMLInputElement | null)?.value.trim();
+    const isValid = !!(this.interest && this.ethics && category) && !!this.capture && !this.capturing;
     const clipBtn = this.shadow.getElementById('clip') as HTMLButtonElement | null;
     if (clipBtn) clipBtn.disabled = !isValid;
   }
 
   private getEvaluation(): Evaluation {
-    const interest = (this.shadow.getElementById('interest') as HTMLSelectElement).value as InterestLevel;
-    const ethics   = (this.shadow.getElementById('ethics')   as HTMLSelectElement).value as EthicsLevel;
     const category = ((this.shadow.getElementById('category') as HTMLInputElement).value.trim() || 'General') as Category;
-    return { interest, ethics, category };
+    return { interest: this.interest, ethics: this.ethics, category };
   }
 
   private async handleClipAction() {
     if (!this.opts || !this.capture) return;
-    const keepPrivateEl = this.shadow.getElementById('keep-private') as HTMLInputElement | null;
-    const keepPrivate = keepPrivateEl?.checked ?? true;
     const isConnected = this.authState.type !== 'guest';
-    const shouldBroadcast = !keepPrivate && isConnected;
-
+    const mode: PublishMode = isConnected ? this.publishMode : 'local';
     const evaluation = this.getEvaluation();
     const noteEl = this.shadow.getElementById('note-input') as HTMLTextAreaElement | null;
     const note = (noteEl?.value ?? '').trim();
     const captureWithNote: Capture = note ? { ...this.capture, note } : this.capture;
 
     this.showLoading('Saving…');
-    try {
-      await this.opts.onClip(captureWithNote, evaluation);
-    } catch {
-      this.showError('Failed to clip. Please try again.');
-      return;
-    }
 
-    this.showSuccess(shouldBroadcast ? 'Clipped! 📡 Broadcasting…' : 'Clipped! 🔒');
-    setTimeout(() => this.hide(), 1500);
+    if (mode === 'local') {
+      try { await this.opts.onClip(captureWithNote, evaluation); }
+      catch { this.showError('Failed to clip. Please try again.'); return; }
+      this.showSuccess('Clipped! 🔒');
 
-    if (shouldBroadcast) {
+    } else if (mode === 'cast') {
+      // background CAST handler also saves locally, so skip explicit CLIP
+      this.showSuccess('📡 Broadcasting…');
+      this.opts.onCast(captureWithNote, evaluation).catch((err: unknown) => {
+        log(LL.WARN, 'Discerned: cast failed', err instanceof Error ? err.message : err);
+      });
+
+    } else {
+      // both: explicit local save first, then broadcast (idempotent double-save is safe)
+      try { await this.opts.onClip(captureWithNote, evaluation); }
+      catch { this.showError('Failed to clip. Please try again.'); return; }
+      this.showSuccess('Clipped! 📡 Broadcasting…');
       this.opts.onCast(captureWithNote, evaluation).catch((err: unknown) => {
         log(LL.WARN, 'Discerned: broadcast failed (clip already saved locally)',
           err instanceof Error ? err.message : err);
       });
     }
+
+    setTimeout(() => this.hide(), 1500);
+    void chrome.storage.local.set({
+      [STORAGE_KEYS.LAST_PUBLISH_MODE]: this.publishMode,
+      [STORAGE_KEYS.LAST_INTEREST]:     this.interest,
+      [STORAGE_KEYS.LAST_ETHICS]:       this.ethics,
+      [STORAGE_KEYS.LAST_CATEGORY]:     evaluation.category,
+    });
   }
 
   private showLoading(text: string) {
@@ -940,6 +1082,18 @@ export class DiscernedOverlay extends HTMLElement {
     if (!loading) return;
     loading.innerHTML = `<div class="error">✗ ${this.escapeHtml(message)}</div>`;
     setTimeout(() => { loading.style.display = 'none'; }, 2500);
+  }
+
+  private getClipIcon(): string {
+    if (this.publishMode === 'local') return '🔒';
+    if (this.publishMode === 'cast')  return '📡';
+    return '🔒📡';
+  }
+
+  private getClipSublabel(): string {
+    if (this.publishMode === 'local') return 'Private storage';
+    if (this.publishMode === 'cast')  return 'Nostr only';
+    return 'Clip & broadcast';
   }
 
   // ── Styles ─────────────────────────────────────────────────────────────────
@@ -1112,12 +1266,43 @@ export class DiscernedOverlay extends HTMLElement {
       .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; flex-shrink: 0; }
       .status-dot.connected { background: #22c55e; }
       .status-text { font-size: 11px; color: #888; }
-      .keep-private-label {
-        display: flex; align-items: center; gap: 6px;
-        font-size: 12px; color: #aaa; cursor: pointer; user-select: none;
+      .publish-mode-slider { display: flex; align-items: center; }
+      .slider-track {
+        position: relative; display: grid; grid-template-columns: repeat(3, 1fr);
+        background: #252525; border: 1px solid #3a3a3a; border-radius: 8px;
+        overflow: hidden; height: 28px; width: 174px;
       }
-      .keep-private-label input[type="checkbox"] { width: 14px; height: 14px; accent-color: #0ea5e9; cursor: pointer; }
-      .keep-private-label input[type="checkbox"]:disabled { cursor: not-allowed; }
+      .slider-pill {
+        position: absolute; top: 2px; bottom: 2px; left: 2px;
+        width: calc(33.333% - 2px); background: #0ea5e9; border-radius: 6px;
+        pointer-events: none;
+        transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+        will-change: transform;
+      }
+      .slider-seg {
+        position: relative; z-index: 1; background: none; border: none;
+        color: #888; font-size: 10px; font-weight: 500; cursor: pointer;
+        padding: 0 4px; display: flex; align-items: center; justify-content: center;
+        gap: 2px; white-space: nowrap; transition: color 0.15s; font-family: inherit;
+      }
+      .slider-seg:hover:not(:disabled) { color: #ddd; }
+      .slider-seg.active { color: #fff; font-weight: 600; }
+      .slider-seg:disabled { opacity: 0.4; cursor: not-allowed; }
+      .publish-mode-slider.guest .slider-seg:not(#seg-local) { opacity: 0.4; cursor: not-allowed; }
+      .slider-seg:focus-visible { outline: 2px solid #0ea5e9; outline-offset: -2px; border-radius: 6px; }
+
+      .eval-listbox {
+        list-style: none; background: #2a2a2a; border: 1px solid #444;
+        border-radius: 6px; overflow-y: auto; max-height: 130px;
+        padding: 2px 0; margin: 0; outline: none;
+      }
+      .eval-listbox:focus { border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,0.1); }
+      .eval-option {
+        padding: 5px 10px; font-size: 12px; color: #bbb; cursor: pointer;
+        user-select: none; transition: background 0.1s, color 0.1s;
+      }
+      .eval-option:hover { background: #353535; color: #fff; }
+      .eval-option.selected { background: #0c4a6e; color: #7dd3fc; font-weight: 600; }
 
       .link-btn {
         background: none; border: none; color: #0ea5e9;

@@ -28,6 +28,7 @@ export interface LogRelayMessage {
 export type InterestLevel = 'Wise' | 'Insightful' | 'Interesting' | 'Neutral' | 'Noise';
 export type EthicsLevel = 'Exemplary' | 'Honest' | 'Biased' | 'Neutral' | 'Misleading' | 'Malicious';
 export type Category = string; // Predefined: General, Tech, Finance, Health, Politics, Philosophy, Science, Culture; or custom
+export type PublishMode = 'cast' | 'local' | 'both';
 
 export interface Evaluation {
   interest: InterestLevel;
@@ -108,6 +109,10 @@ export const STORAGE_KEYS = {
   ONBOARDING_SHOWN: 'onboardingShown',
   CAST_COUNT: 'castCount',
   LAST_FORMAT: 'lastFormat',
+  LAST_PUBLISH_MODE: 'lastPublishMode',
+  LAST_INTEREST:     'lastInterest',
+  LAST_ETHICS:       'lastEthics',
+  LAST_CATEGORY:     'lastCategory',
 } as const;
 
 // Messages posted between the extension's web-bridge content script and the
