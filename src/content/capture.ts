@@ -177,8 +177,17 @@ async function extractArticle(): Promise<Capture> {
   const parsed = parseReadability();
   const base = baseFields();
   if (!parsed) {
-    log(LL.WARN, 'Discerned: Readability could not parse this page; falling back to bookmark.', 'url:', base.url);
-    return { ...base, format: 'article', thumbnail: getPageThumbnail() };
+    log(LL.WARN, 'Discerned: Readability could not parse this page; falling back to body text.', 'url:', base.url);
+    const bodyClone = document.body.cloneNode(true) as HTMLElement;
+    const sanitized = sanitizeElement(bodyClone);
+    const inlined = await inlineAllImages(sanitized);
+    return {
+      ...base,
+      format: 'article',
+      bodyHtml: inlined,
+      bodyText: (document.body.textContent || '').trim(),
+      thumbnail: getPageThumbnail(),
+    };
   }
 
   const sanitized = sanitizeHtmlString(parsed.content);
@@ -198,8 +207,14 @@ async function extractSimplifiedArticle(): Promise<Capture> {
   const parsed = parseReadability();
   const base = baseFields();
   if (!parsed) {
-    log(LL.WARN, 'Discerned: Readability could not parse this page; falling back to bookmark.', 'url:', base.url);
-    return { ...base, format: 'simplified-article', thumbnail: getPageThumbnail() };
+    log(LL.WARN, 'Discerned: Readability could not parse this page; falling back to body text.', 'url:', base.url);
+    const bodyText = (document.body.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+    return {
+      ...base,
+      format: 'simplified-article',
+      bodyText,
+      thumbnail: getPageThumbnail(),
+    };
   }
 
   // Preserve paragraph breaks: replace block boundaries with double newlines.
@@ -229,8 +244,11 @@ function parseReadability(): ReturnType<Readability['parse']> | null {
 // ── Full page ────────────────────────────────────────────────────────────────
 
 async function extractFullPage(): Promise<Capture> {
-  const html = document.documentElement.outerHTML;
-  const sanitized = sanitizeHtmlString(html);
+  // Clone the body only — using outerHTML (which includes <html>/<head>) causes
+  // DOMParser to restructure the document in ways that leave <script> content as
+  // orphaned text nodes that querySelectorAll('script') can't reach.
+  const bodyClone = document.body.cloneNode(true) as HTMLElement;
+  const sanitized = sanitizeElement(bodyClone);
   const inlined = await inlineAllImages(sanitized);
   return {
     ...baseFields(),
@@ -239,6 +257,11 @@ async function extractFullPage(): Promise<Capture> {
     bodyText: (document.body.textContent || '').trim(),
     thumbnail: getPageThumbnail(),
   };
+}
+
+function sanitizeElement(el: HTMLElement): string {
+  sanitiseTreeInPlace(el);
+  return el.innerHTML.trim();
 }
 
 // ── Sanitisation ─────────────────────────────────────────────────────────────
