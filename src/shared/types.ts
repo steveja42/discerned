@@ -90,7 +90,8 @@ export type BackgroundMessage =
   | { type: 'OPEN_ONBOARDING' }
   | { type: 'DISMISS_OVERLAY_NUDGE' }
   | { type: 'SIGN_WITH_NIP07'; event: Record<string, unknown> }
-  | { type: 'INLINE_IMAGE'; src: string };
+  | { type: 'INLINE_IMAGE'; src: string }
+  | { type: 'PUSH_NEW_CLIP'; clip: ClipData };
 
 export type BackgroundResponse =
   | { success: true; data?: unknown }
@@ -118,7 +119,8 @@ export type WebBridgeOutbound =
       pubkey: string | null;
       authMethod: 'nip07' | 'nip46' | 'nsec' | 'guest' | null;
     }
-  | { type: 'DISCERNED_BRIDGE_CLIPS'; clips: ClipData[] };
+  | { type: 'DISCERNED_BRIDGE_CLIPS'; clips: ClipData[] }
+  | { type: 'DISCERNED_BRIDGE_NEW_CLIP'; clip: ClipData };
 
 export type WebBridgeInbound = { type: 'DISCERNED_WEB_READY' };
 

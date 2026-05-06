@@ -13,7 +13,7 @@
 //              prevent cross-origin spoofing.
 // Access: chrome.runtime.sendMessage, IndexedDB (same profile as extension)
 
-import type { AuthState, ClipData, WebBridgeInbound, WebBridgeOutbound } from '@/shared/types';
+import type { AuthState, BackgroundMessage, ClipData, WebBridgeInbound, WebBridgeOutbound } from '@/shared/types';
 import { STORAGE_KEYS } from '@/shared/types';
 import { LL, log } from '@/shared/logger';
 
@@ -112,6 +112,14 @@ async function sendBridgeData(): Promise<void> {
 
   log(LL.NORMAL, `web-bridge: sent ${clips.length} clips to companion app`, 'url:', window.location.href);
 }
+
+// Listen for the background pushing a new clip after a CLIP/CAST completes.
+chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
+  if (!isContextValid()) return;
+  if (message.type === 'PUSH_NEW_CLIP') {
+    post({ type: 'DISCERNED_BRIDGE_NEW_CLIP', clip: message.clip });
+  }
+});
 
 // Listen for the web page signalling it's ready, then send data.
 // Also send immediately in case the script loads after the page already posted READY.

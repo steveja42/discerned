@@ -41,6 +41,16 @@ let canonicalNIP07TabId: number | null = null;
 const POPUP_STUB_PATH = 'src/popup/popup.html';
 const RESTRICTED_URL_PREFIXES = ['chrome:', 'chrome-extension:', 'edge:', 'about:', 'devtools:', 'view-source:', 'file:'];
 const MAX_IMAGE_BYTES = 2_000_000;
+const DISCERNED_URL_PATTERNS = ['https://discerned.online/*', 'http://localhost:3000/*'];
+
+async function pushClipToWebApp(clip: ClipData): Promise<void> {
+  const tabs = await chrome.tabs.query({ url: DISCERNED_URL_PATTERNS });
+  const message: BackgroundMessage = { type: 'PUSH_NEW_CLIP', clip };
+  for (const tab of tabs) {
+    if (tab.id === undefined) continue;
+    chrome.tabs.sendMessage(tab.id, message).catch(() => { /* non-fatal */ });
+  }
+}
 
 const isBfcachePortError = (err: unknown) =>
   ((err as { message?: string })?.message ?? '').includes('back/forward cache');
@@ -379,6 +389,7 @@ async function handleClip(data: { capture: Capture; evaluation: Evaluation }): P
       encrypted: JSON.stringify(payload), // NIP-44 encryption pending — stored as plaintext JSON for now
       timestamp: data.capture.timestamp,
     });
+    void pushClipToWebApp({ capture: data.capture, evaluation: data.evaluation, encrypted: '' });
     return { success: true, data: { storage: 'local' } };
   } catch (error) {
     log(LL.ERROR, 'Clip error:', error);
@@ -413,6 +424,7 @@ async function handleCast(
       encrypted: JSON.stringify(castPayload),
       timestamp: data.capture.timestamp,
     });
+    void pushClipToWebApp({ capture: data.capture, evaluation: data.evaluation, encrypted: '' });
 
     return {
       success: true,
