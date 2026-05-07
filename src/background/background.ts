@@ -451,9 +451,12 @@ function buildCastTemplate(capture: Capture, evaluation: Evaluation) {
   }
   // article / simplified-article / full-page
   const bodyText = capture.bodyText?.trim() ?? '';
-  const inline = bodyText.length > 0 && bodyText.length <= CAST_INLINE_BODY_MAX_CHARS
-    ? bodyText
-    : undefined;
+  let inline: string | undefined;
+  if (bodyText.length > 0) {
+    inline = bodyText.length <= CAST_INLINE_BODY_MAX_CHARS
+      ? bodyText
+      : bodyText.slice(0, CAST_INLINE_BODY_MAX_CHARS) + '\n\n[Content truncated due to length]';
+  }
   return createResourceNoteEvent(capture, evaluation, inline);
 }
 

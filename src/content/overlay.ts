@@ -27,7 +27,7 @@ export interface OverlayShowOptions {
 type View = 'gate' | 'identity' | 'main' | 'settings';
 
 /** Formats that show a floating preview card to the right of the main panel. */
-const PREVIEW_FORMATS: ClipFormat[] = ['selection', 'simplified-article', 'bookmark'];
+const PREVIEW_FORMATS: ClipFormat[] = ['selection', 'article', 'simplified-article', 'bookmark'];
 
 export class DiscernedOverlay extends HTMLElement {
   private shadow: ShadowRoot;
@@ -215,6 +215,19 @@ export class DiscernedOverlay extends HTMLElement {
           <div class="preview-label">Simplified article</div>
           <div class="preview-title">${ev(cap.title)}</div>
           <div class="preview-text">${ev(preview)}</div>
+        </div>`;
+    }
+
+    if (cap.format === 'article') {
+      const thumb = cap.thumbnail ? `<img class="preview-thumb" src="${ev(cap.thumbnail)}" alt="">` : '';
+      const excerpt = cap.bodyText ? ev(cap.bodyText.slice(0, 300)) + '…' : '';
+      return `
+        <div class="preview-card">
+          <div class="preview-label">Article</div>
+          ${thumb}
+          <div class="preview-title">${ev(cap.title)}</div>
+          ${excerpt ? `<div class="preview-text">${excerpt}</div>` : ''}
+          <div class="preview-url">${ev(cap.url)}</div>
         </div>`;
     }
 

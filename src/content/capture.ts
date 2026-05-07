@@ -128,7 +128,7 @@ function extractSelection(): Capture {
   }
 
   const range = selection.getRangeAt(0);
-  const fragment = range.cloneContents();
+  const fragment = wrapFragmentBoundaries(range);
   const sanitized = sanitizeFragment(fragment);
   const context = extractContext(range);
 
@@ -138,6 +138,66 @@ function extractSelection(): Capture {
     selectionText: sanitized,
     selectionContext: context,
   };
+}
+
+const BLOCK_TAGS = new Set([
+  'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'li', 'blockquote', 'pre', 'td', 'th', 'dt', 'dd', 'figcaption',
+]);
+
+/**
+ * Find the nearest block-level ancestor of a node that is still inside the
+ * editable content area (i.e. not body/html). Returns null if none found.
+ */
+function nearestBlock(node: Node): Element | null {
+  let cur: Node | null = node.nodeType === Node.TEXT_NODE ? node.parentElement : node as Element;
+  while (cur && cur !== document.body) {
+    if (cur.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has((cur as Element).tagName.toLowerCase())) {
+      return cur as Element;
+    }
+    cur = cur.parentElement;
+  }
+  return null;
+}
+
+/**
+ * Wrap the first and last children of a cloned fragment in the block-level
+ * tags of their live-DOM ancestors, so a partial selection like "Domain" still
+ * comes out as <h1>Domain</h1> rather than a bare text node.
+ */
+function wrapFragmentBoundaries(range: Range): DocumentFragment {
+  const fragment = range.cloneContents();
+
+  const startBlock = nearestBlock(range.startContainer);
+  const endBlock = nearestBlock(range.endContainer);
+
+  // Wrap the first child of the fragment if it is a bare text/inline node.
+  if (startBlock && fragment.firstChild) {
+    const first = fragment.firstChild;
+    if (first.nodeType === Node.TEXT_NODE ||
+        (first.nodeType === Node.ELEMENT_NODE && !BLOCK_TAGS.has((first as Element).tagName.toLowerCase()))) {
+      const wrapper = document.createElement(startBlock.tagName.toLowerCase());
+      // Copy class/id so heading levels etc. carry over.
+      if (startBlock.className) wrapper.className = startBlock.className;
+      wrapper.appendChild(first);
+      fragment.insertBefore(wrapper, fragment.firstChild);
+    }
+  }
+
+  // Wrap the last child of the fragment if it is a bare text/inline node and
+  // belongs to a different block than the start.
+  if (endBlock && endBlock !== startBlock && fragment.lastChild) {
+    const last = fragment.lastChild;
+    if (last.nodeType === Node.TEXT_NODE ||
+        (last.nodeType === Node.ELEMENT_NODE && !BLOCK_TAGS.has((last as Element).tagName.toLowerCase()))) {
+      const wrapper = document.createElement(endBlock.tagName.toLowerCase());
+      if (endBlock.className) wrapper.className = endBlock.className;
+      wrapper.appendChild(last);
+      fragment.appendChild(wrapper);
+    }
+  }
+
+  return fragment;
 }
 
 function extractContext(range: Range): string {
@@ -178,14 +238,14 @@ async function extractArticle(): Promise<Capture> {
   const base = baseFields();
   if (!parsed) {
     log(LL.WARN, 'Discerned: Readability could not parse this page; falling back to body text.', 'url:', base.url);
-    const bodyClone = document.body.cloneNode(true) as HTMLElement;
-    const sanitized = sanitizeElement(bodyClone);
-    const inlined = await inlineAllImages(sanitized);
+    const bodyClone = cloneBodyClean();
+    sanitiseTreeInPlace(bodyClone);
+    const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
     return {
       ...base,
       format: 'article',
       bodyHtml: inlined,
-      bodyText: (document.body.textContent || '').trim(),
+      bodyText: bodyClone.textContent?.trim() ?? '',
       thumbnail: getPageThumbnail(),
     };
   }
@@ -208,7 +268,9 @@ async function extractSimplifiedArticle(): Promise<Capture> {
   const base = baseFields();
   if (!parsed) {
     log(LL.WARN, 'Discerned: Readability could not parse this page; falling back to body text.', 'url:', base.url);
-    const bodyText = (document.body.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+    const bodyClone = cloneBodyClean();
+    sanitiseTreeInPlace(bodyClone);
+    const bodyText = (bodyClone.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim();
     return {
       ...base,
       format: 'simplified-article',
@@ -217,14 +279,17 @@ async function extractSimplifiedArticle(): Promise<Capture> {
     };
   }
 
-  // Preserve paragraph breaks: replace block boundaries with double newlines.
-  const text = parsed.textContent.replace(/\n{3,}/g, '\n\n').trim();
+  // Readability's content is already stripped of ads/nav/clutter — sanitize and
+  // store as bodyHtml so the web app can render it with original formatting intact.
+  const bodyHtml = sanitizeHtmlString(parsed.content);
+  const bodyText = parsed.textContent.replace(/\n{3,}/g, '\n\n').trim();
 
   return {
     ...base,
     format: 'simplified-article',
     title: parsed.title || base.title,
-    bodyText: text,
+    bodyHtml,
+    bodyText,
     thumbnail: getPageThumbnail(),
   };
 }
@@ -233,7 +298,13 @@ function parseReadability(): ReturnType<Readability['parse']> | null {
   try {
     // Readability mutates the document it's given — clone first so we don't
     // damage the live DOM (the on-page highlighter depends on it).
-    const clone = document.cloneNode(true) as Document;
+    // Use DOMParser rather than document.cloneNode(true): cloneNode produces a
+    // Document with __CE_registry=null, which crashes CE polyfills that wrap
+    // Node.prototype.cloneNode (e.g. injected by other extensions).
+    const clone = new DOMParser().parseFromString(
+      document.documentElement.outerHTML,
+      'text/html',
+    );
     return new Readability(clone).parse();
   } catch (err) {
     log(LL.WARN, 'Discerned: Readability failed', err, 'url:', window.location.href);
@@ -247,21 +318,26 @@ async function extractFullPage(): Promise<Capture> {
   // Clone the body only — using outerHTML (which includes <html>/<head>) causes
   // DOMParser to restructure the document in ways that leave <script> content as
   // orphaned text nodes that querySelectorAll('script') can't reach.
-  const bodyClone = document.body.cloneNode(true) as HTMLElement;
-  const sanitized = sanitizeElement(bodyClone);
-  const inlined = await inlineAllImages(sanitized);
+  const bodyClone = cloneBodyClean();
+  sanitiseTreeInPlace(bodyClone);
+  const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
   return {
     ...baseFields(),
     format: 'full-page',
     bodyHtml: inlined,
-    bodyText: (document.body.textContent || '').trim(),
+    bodyText: bodyClone.textContent?.trim() ?? '',
     thumbnail: getPageThumbnail(),
   };
 }
 
-function sanitizeElement(el: HTMLElement): string {
-  sanitiseTreeInPlace(el);
-  return el.innerHTML.trim();
+/**
+ * Deep-clone document.body with the Discerned overlay removed so it doesn't
+ * contaminate bodyText or bodyHtml captures.
+ */
+function cloneBodyClean(): HTMLElement {
+  const clone = document.body.cloneNode(true) as HTMLElement;
+  clone.querySelector('discerned-overlay')?.remove();
+  return clone;
 }
 
 // ── Sanitisation ─────────────────────────────────────────────────────────────
