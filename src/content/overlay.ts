@@ -1459,7 +1459,7 @@ export class DiscernedOverlay extends HTMLElement {
 
 // Register the custom element (guard against double-registration on re-injection)
 try {
-  if (customElements != null && !customElements.get('discerned-overlay')) {
+  if (!customElements.get('discerned-overlay')) {
     customElements.define('discerned-overlay', DiscernedOverlay);
   }
 } catch { /* not a standard browsing context (iframe, worker, etc.) — skip registration */ }

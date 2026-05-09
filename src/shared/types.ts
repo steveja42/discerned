@@ -92,7 +92,8 @@ export type BackgroundMessage =
   | { type: 'DISMISS_OVERLAY_NUDGE' }
   | { type: 'SIGN_WITH_NIP07'; event: Record<string, unknown> }
   | { type: 'INLINE_IMAGE'; src: string }
-  | { type: 'PUSH_NEW_CLIP'; clip: ClipData };
+  | { type: 'PUSH_NEW_CLIP'; clip: ClipData }
+  | { type: 'REGISTER_LOG_TAB' };
 
 export type BackgroundResponse =
   | { success: true; data?: unknown }

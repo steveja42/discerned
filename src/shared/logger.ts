@@ -46,20 +46,36 @@ function serializeArg(arg: unknown): string {
   return String(arg);
 }
 
-/** Forward a log call to the active tab's content script so it appears in VSCode. */
+// Tab IDs that have registered as log relay targets, ordered most-recent first.
+// Only the first entry receives logs — no duplicates. Background manages this
+// list via setLogRelayTabs() and removes entries when tabs close.
+let logRelayTabs: number[] = [];
+
+export function setLogRelayTabs(tabs: number[]): void {
+  logRelayTabs = tabs;
+}
+
+/** Forward a log call to the primary registered content script so it appears in VSCode. */
 function forwardToActiveTab(source: LogSource, level: LogLevel, args: unknown[]): void {
   try {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const payload = {
+      type: 'LOG_RELAY' as const,
+      source,
+      level,
+      serialized: args.map(serializeArg),
+    };
+
+    if (logRelayTabs.length > 0) {
+      chrome.tabs.sendMessage(logRelayTabs[0], payload).catch(() => { /* tab gone — drop */ });
+      return;
+    }
+
+    // Fallback before any content script has registered (e.g. on first SW startup).
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
       const tabId = tabs[0]?.id;
-      if (tabId === undefined) return;
-      chrome.tabs.sendMessage(tabId, {
-        type: 'LOG_RELAY',
-        source,
-        level,
-        serialized: args.map(serializeArg),
-      }).catch(() => {
-        // Content script not present on this tab (e.g. chrome:// page) — silently drop.
-      });
+      if (tabId !== undefined) {
+        chrome.tabs.sendMessage(tabId, payload).catch(() => { /* no content script — drop */ });
+      }
     });
   } catch {
     // chrome.tabs unavailable in this context — silently drop.

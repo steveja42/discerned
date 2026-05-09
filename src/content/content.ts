@@ -41,6 +41,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true; // keep channel open for async response
   } else if (message.type === 'LOG_RELAY') {
     relayLog(message.level, message.source, message.serialized);
+  } else if (message.type === 'SW_STARTED') {
+    // SW was restarted — re-register so background can relay logs to this tab.
+    chrome.runtime.sendMessage({ type: 'REGISTER_LOG_TAB' }).catch(() => {});
   }
   return true;
 });
@@ -214,4 +217,5 @@ function showCastErrorToast(message: string) {
   setTimeout(() => host.remove(), 5000);
 }
 
+chrome.runtime.sendMessage({ type: 'REGISTER_LOG_TAB' }).catch(() => {});
 log(LL.NORMAL, 'Discerned content script loaded');

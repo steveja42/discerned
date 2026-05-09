@@ -22,7 +22,7 @@ import {
 } from '@/shared/nostr/nip46-manager';
 import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation, ClipData } from '@/shared/types';
 import { STORAGE_KEYS } from '@/shared/types';
-import { LL, log } from '@/shared/logger';
+import { LL, log, setLogRelayTabs } from '@/shared/logger';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
 import { decode } from 'nostr-tools/nip19';
 import * as nip49 from 'nostr-tools/nip49';
@@ -37,6 +37,22 @@ let nsecPrivateKey: Uint8Array | null = null; // session-only; cleared when SW i
 // All casts are routed through this tab so the wallet approves the origin once
 // rather than once per domain. Persisted in session storage to survive SW wakeups.
 let canonicalNIP07TabId: number | null = null;
+
+// Ordered list of tab IDs (most-recent first) that have a live content script
+// and have registered as log relay targets. Only logRelayTabIds[0] receives logs.
+let logRelayTabIds: number[] = [];
+
+function registerLogTab(tabId: number): void {
+  logRelayTabIds = [tabId, ...logRelayTabIds.filter(id => id !== tabId)];
+  setLogRelayTabs(logRelayTabIds);
+}
+
+function unregisterLogTab(tabId: number): void {
+  logRelayTabIds = logRelayTabIds.filter(id => id !== tabId);
+  setLogRelayTabs(logRelayTabIds);
+}
+
+chrome.tabs.onRemoved.addListener(unregisterLogTab);
 
 const POPUP_STUB_PATH = 'src/popup/popup.html';
 const RESTRICTED_URL_PREFIXES = ['chrome:', 'chrome-extension:', 'edge:', 'about:', 'devtools:', 'view-source:', 'file:'];
@@ -236,6 +252,10 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
 
     case 'INLINE_IMAGE':
       return handleInlineImage(message.src);
+
+    case 'REGISTER_LOG_TAB':
+      if (senderTabId !== undefined) registerLogTab(senderTabId);
+      return { success: true };
 
     default:
       return { success: false, error: 'Unknown message type' };
@@ -607,3 +627,13 @@ function migrateRowInPlace(row: ClipRow): void {
 }
 
 log(LL.NORMAL, 'Discerned background service worker loaded');
+
+// Broadcast to all tabs so their content scripts re-register as log relay targets.
+// This re-populates logRelayTabIds after the service worker is killed and restarted.
+chrome.tabs.query({}).then(tabs => {
+  for (const tab of tabs) {
+    if (tab.id !== undefined) {
+      chrome.tabs.sendMessage(tab.id, { type: 'SW_STARTED' }).catch(() => { /* no content script — ok */ });
+    }
+  }
+});
