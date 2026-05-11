@@ -338,7 +338,14 @@ async function handleInlineImage(src: string): Promise<BackgroundResponse> {
     if (!/^https?:/i.test(src)) {
       return { success: false, error: 'Unsupported scheme' };
     }
-    const res = await fetch(src);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    let res: Response;
+    try {
+      res = await fetch(src, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
 
     const declaredLen = res.headers.get('content-length');

@@ -296,16 +296,38 @@ async function extractSimplifiedArticle(): Promise<Capture> {
 
 function parseReadability(): ReturnType<Readability['parse']> | null {
   try {
-    // Readability mutates the document it's given — clone first so we don't
-    // damage the live DOM (the on-page highlighter depends on it).
-    // Use DOMParser rather than document.cloneNode(true): cloneNode produces a
-    // Document with __CE_registry=null, which crashes CE polyfills that wrap
-    // Node.prototype.cloneNode (e.g. injected by other extensions).
-    const clone = new DOMParser().parseFromString(
-      document.documentElement.outerHTML,
-      'text/html',
-    );
-    return new Readability(clone).parse();
+    // Clone the *rendered* DOM rather than re-parsing outerHTML. outerHTML
+    // re-emits noscript blocks and inline scripts that some sites (e.g. FoxNews)
+    // use to inject a blocked-page interstitial — DOMParser would then hand
+    // Readability the wall instead of the article. document.body.cloneNode(true)
+    // reads the live rendered tree (same source full-page capture uses), which
+    // the browser has already resolved past those script gates.
+    // Avoids document.cloneNode(true) because that produces a Document with
+    // __CE_registry=null, crashing CE polyfills in other extensions.
+    const clone = document.implementation.createHTMLDocument(document.title);
+    const bodyClone = document.body.cloneNode(true) as HTMLElement;
+    bodyClone.querySelector('discerned-overlay')?.remove();
+    // Remove hidden elements and any node whose text is dominated by known
+    // anti-adblock phrases. These nodes score well with Readability because
+    // they are clean, short prose — we must excise them before parsing.
+    const ADBLOCK_SIGNAL = 'ad or script blocking software';
+    bodyClone.querySelectorAll<HTMLElement>('*').forEach(el => {
+      const t = el.textContent ?? '';
+      if (t.includes(ADBLOCK_SIGNAL)) {
+        log(LL.DEBUG, 'Discerned: removing adblock node', el.tagName, el.className, 'url:', window.location.href);
+        el.remove();
+      }
+    });
+    log(LL.DEBUG, 'Discerned: parseReadability body char count:', bodyClone.textContent?.length ?? 0, 'url:', window.location.href);
+    clone.body.replaceWith(bodyClone);
+    // Readability resolves relative URLs against the document location; provide
+    // a <base> so links/images in the cloned body resolve correctly.
+    const base = clone.createElement('base');
+    base.href = document.location.href;
+    clone.head.appendChild(base);
+    const result = new Readability(clone).parse();
+    log(LL.DEBUG, 'Discerned: Readability result title:', result?.title, 'textContent snippet:', result?.textContent?.slice(0, 200), 'url:', window.location.href);
+    return result;
   } catch (err) {
     log(LL.WARN, 'Discerned: Readability failed', err, 'url:', window.location.href);
     return null;
@@ -443,13 +465,23 @@ function sanitizeHtmlString(html: string): string {
 
 const INLINE_CONCURRENCY = 8;
 
+const INLINE_IMAGE_TIMEOUT_MS = 5000;
+
+// Round-trip to the background (which has <all_urls> host_permissions) to fetch
+// a remote image and return it as a base64 data URI. Falls back to the original
+// URL on failure or timeout so a single slow/blocked image never hangs the capture.
 async function inlineImage(src: string): Promise<string> {
   if (!src) return src;
   if (src.startsWith('data:')) return src;
   if (!/^https?:/i.test(src)) return src;
 
   try {
-    const res = await chrome.runtime.sendMessage({ type: 'INLINE_IMAGE', src });
+    const res = await Promise.race([
+      chrome.runtime.sendMessage({ type: 'INLINE_IMAGE', src }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), INLINE_IMAGE_TIMEOUT_MS),
+      ),
+    ]);
     if (res?.success && res.data && typeof (res.data as { dataUri?: string }).dataUri === 'string') {
       return (res.data as { dataUri: string }).dataUri;
     }
