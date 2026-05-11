@@ -445,14 +445,6 @@ async function handleCast(
     const prev = (stored[STORAGE_KEYS.CAST_COUNT] as number | undefined) ?? 0;
     await chrome.storage.local.set({ [STORAGE_KEYS.CAST_COUNT]: prev + 1 });
 
-    const castPayload = prepareClipPayload(data.capture, data.evaluation);
-    await saveClipLocally({
-      id: data.capture.id,
-      encrypted: JSON.stringify(castPayload),
-      timestamp: data.capture.timestamp,
-    });
-    void pushClipToWebApp({ capture: data.capture, evaluation: data.evaluation, encrypted: '' });
-
     return {
       success: true,
       data: { eventId: signedEvent.id, relays: publishResult.results },

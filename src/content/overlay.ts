@@ -1060,7 +1060,7 @@ export class DiscernedOverlay extends HTMLElement {
       this.showSuccess('Clipped! 🔒');
 
     } else if (mode === 'cast') {
-      // background CAST handler also saves locally, so skip explicit CLIP
+      // CAST only publishes to Nostr; local save requires an explicit CLIP action
       this.showSuccess('📡 Broadcasting…');
       this.opts.onCast(captureWithNote, evaluation).catch((err: unknown) => {
         log(LL.WARN, 'Discerned: cast failed', err instanceof Error ? err.message : err);
