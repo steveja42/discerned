@@ -137,34 +137,29 @@ pnpm lint         # ESLint on src/**/*.ts
 ```
 
 ### Project Structure
-```
-src/
-├── background/
-│   ├── background.ts         # Service worker: auth, signing, publishing
-│   └── relay-manager.ts      # SimplePool wrapper; ≥ 2 ACK policy
-├── content/
-│   ├── content.ts            # Entry; routes messages, relays logs
-│   ├── capture.ts            # Smart capture + HTML sanitiser
-│   ├── overlay.ts            # Shadow DOM evaluation UI
-│   └── nip07-bridge.ts       # MAIN world: proxies window.nostr
-├── onboarding/
-│   ├── onboarding.ts         # First-run welcome page
-│   └── onboarding.html
-├── connect/
-│   ├── connect.ts            # Identity setup (NIP-07/46/nsec)
-│   └── connect.html
-├── popup/
-│   ├── popup.ts              # Auth status, usage stats, disconnect
-│   └── popup.html
-└── shared/
-    ├── types.ts              # All interfaces, message types, storage keys
-    ├── logger.ts             # Centralised log bridge (all contexts → page console)
-    └── nostr/
-        ├── auth.ts           # Auth state helpers
-        ├── events.ts         # Nostr event construction (kind 1, 9802)
-        ├── encryption.ts     # NIP-44 wrapper (partial)
-        └── nip46-manager.ts  # BunkerSigner lifecycle (reconnects after SW kill)
-```
+
+| File | Description |
+|---|---|
+| [src/background/background.ts](src/background/background.ts) | Service worker: auth, signing, Nostr casting (CAST handler → relay publish) |
+| [src/background/relay-manager.ts](src/background/relay-manager.ts) | SimplePool wrapper; ≥ 2 ACK policy |
+| [src/content/content.ts](src/content/content.ts) | Entry; routes messages, relays logs |
+| [src/content/capture.ts](src/content/capture.ts) | Smart capture + HTML sanitiser |
+| [src/content/overlay.ts](src/content/overlay.ts) | Shadow DOM evaluation UI |
+| [src/content/highlighter.ts](src/content/highlighter.ts) | Text highlight / selection helpers |
+| [src/content/nip07-bridge.ts](src/content/nip07-bridge.ts) | MAIN world: proxies window.nostr |
+| [src/content/web-bridge.ts](src/content/web-bridge.ts) | Extension ↔ web app bridge messaging |
+| [src/onboarding/onboarding.ts](src/onboarding/onboarding.ts) | First-run welcome page |
+| [src/onboarding/onboarding.html](src/onboarding/onboarding.html) | Onboarding page markup |
+| [src/connect/connect.ts](src/connect/connect.ts) | Identity setup (NIP-07/46/nsec) |
+| [src/connect/connect.html](src/connect/connect.html) | Connect page markup |
+| [src/popup/popup.ts](src/popup/popup.ts) | Auth status, usage stats, disconnect |
+| [src/popup/popup.html](src/popup/popup.html) | Popup markup |
+| [src/shared/types.ts](src/shared/types.ts) | All interfaces, message types, storage keys |
+| [src/shared/logger.ts](src/shared/logger.ts) | Centralised log bridge (all contexts → page console) |
+| [src/shared/nostr/auth.ts](src/shared/nostr/auth.ts) | Auth state helpers |
+| [src/shared/nostr/events.ts](src/shared/nostr/events.ts) | Nostr event construction (kind 1, 9802) |
+| [src/shared/nostr/encryption.ts](src/shared/nostr/encryption.ts) | NIP-44 wrapper (partial) |
+| [src/shared/nostr/nip46-manager.ts](src/shared/nostr/nip46-manager.ts) | BunkerSigner lifecycle (reconnects after SW kill) |
 
 ### Key Design Decisions
 
