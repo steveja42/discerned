@@ -107,7 +107,7 @@ export class DiscernedOverlay extends HTMLElement {
         const si = stored[STORAGE_KEYS.LAST_INTEREST] as string | undefined;
         if (si && (validInterests as string[]).includes(si)) this.interest = si as InterestLevel;
 
-        const validEthics: EthicsLevel[] = ['Exemplary', 'Honest', 'Biased', 'Neutral', 'Misleading', 'Malicious'];
+        const validEthics: EthicsLevel[] = ['Exemplary', 'Honest', 'Neutral', 'Misleading', 'Malicious'];
         const se = stored[STORAGE_KEYS.LAST_ETHICS] as string | undefined;
         if (se && (validEthics as string[]).includes(se)) this.ethics = se as EthicsLevel;
 
@@ -704,7 +704,7 @@ export class DiscernedOverlay extends HTMLElement {
               <label id="ethics-label">Ethics</label>
               <ul class="eval-listbox" id="ethics-list" role="listbox" tabindex="0"
                   aria-labelledby="ethics-label">
-                ${(['Exemplary','Honest','Biased','Neutral','Misleading','Malicious'] as const).map(v =>
+                ${(['Exemplary','Honest','Neutral','Misleading','Malicious'] as const).map(v =>
                   `<li role="option" class="eval-option${this.ethics === v ? ' selected' : ''}"
                        data-value="${v}" aria-selected="${this.ethics === v}">${v}</li>`
                 ).join('')}

@@ -26,7 +26,7 @@ export interface LogRelayMessage {
 }
 
 export type InterestLevel = 'Wise' | 'Insightful' | 'Interesting' | 'Neutral' | 'Noise';
-export type EthicsLevel = 'Exemplary' | 'Honest' | 'Biased' | 'Neutral' | 'Misleading' | 'Malicious';
+export type EthicsLevel = 'Exemplary' | 'Honest' | 'Neutral' | 'Misleading' | 'Malicious';
 export type Category = string; // Predefined: General, Tech, Finance, Health, Politics, Philosophy, Science, Culture; or custom
 export type PublishMode = 'cast' | 'local' | 'both';
 

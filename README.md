@@ -232,7 +232,7 @@ Forbidden:     scripts, styles, event handlers, all other tags
 | Axis | Levels |
 |---|---|
 | Interest | Wise · Insightful · Interesting · Neutral · Noise |
-| Ethics | Exemplary · Honest · Biased · Neutral · Misleading · Malicious |
+| Ethics | Exemplary · Honest · Neutral · Misleading · Malicious |
 | Category | General · Tech · Finance · Health · Politics · Philosophy · Science · Culture · (custom) |
 
 ### Default Relays
