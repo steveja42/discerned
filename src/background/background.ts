@@ -68,6 +68,30 @@ async function pushClipToWebApp(clip: ClipData): Promise<void> {
   }
 }
 
+const LIBRARY_URL_PATTERNS = ['https://discerned.online/library*', 'http://localhost:3000/library*'];
+// Base URLs derived from DISCERNED_URL_PATTERNS (strip trailing /*).
+const DISCERNED_BASE_URLS = DISCERNED_URL_PATTERNS.map(p => p.replace(/\/\*$/, ''));
+
+// Returns localhost base if any localhost tab is open (dev server running), else production.
+async function resolveBaseUrl(): Promise<string> {
+  const localTabs = await chrome.tabs.query({ url: 'http://localhost:3000/*' });
+  return localTabs.length > 0 ? DISCERNED_BASE_URLS[1] : DISCERNED_BASE_URLS[0];
+}
+
+async function openLibraryTab(clipId: string): Promise<void> {
+  const base = await resolveBaseUrl();
+  const url = `${base}/library?clip=${encodeURIComponent(clipId)}`;
+  const [existing] = await chrome.tabs.query({ url: LIBRARY_URL_PATTERNS });
+  if (existing?.id !== undefined) {
+    await chrome.tabs.update(existing.id, { url, active: true });
+    if (existing.windowId !== undefined) {
+      chrome.windows.update(existing.windowId, { focused: true }).catch(() => {});
+    }
+  } else {
+    await chrome.tabs.create({ url });
+  }
+}
+
 const isBfcachePortError = (err: unknown) =>
   ((err as { message?: string })?.message ?? '').includes('back/forward cache');
 
@@ -241,6 +265,14 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
 
     case 'OPEN_ONBOARDING':
       chrome.tabs.create({ url: chrome.runtime.getURL('src/onboarding/onboarding.html') });
+      return { success: true };
+
+    case 'OPEN_LIBRARY':
+      openLibraryTab(message.clipId).catch(() => {});
+      return { success: true };
+
+    case 'OPEN_HOME':
+      resolveBaseUrl().then(base => chrome.tabs.create({ url: base })).catch(() => {});
       return { success: true };
 
     case 'DISMISS_OVERLAY_NUDGE':

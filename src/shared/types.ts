@@ -93,6 +93,8 @@ export type BackgroundMessage =
   | { type: 'SIGN_WITH_NIP07'; event: Record<string, unknown> }
   | { type: 'INLINE_IMAGE'; src: string }
   | { type: 'PUSH_NEW_CLIP'; clip: ClipData }
+  | { type: 'OPEN_LIBRARY'; clipId: string }
+  | { type: 'OPEN_HOME' }
   | { type: 'REGISTER_LOG_TAB' };
 
 export type BackgroundResponse =

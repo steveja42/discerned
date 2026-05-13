@@ -65,7 +65,7 @@ export class DiscernedOverlay extends HTMLElement {
       this.addEventListener(type, stop);
     }
     this.outsideClickHandler = (e: PointerEvent) => {
-      if (!e.composedPath().includes(this)) this.hide();
+      if (!e.composedPath().includes(this) && !this.previewHost?.contains(e.target as Node)) this.hide();
     };
     document.addEventListener('pointerdown', this.outsideClickHandler);
   }
@@ -148,8 +148,14 @@ export class DiscernedOverlay extends HTMLElement {
       this.previewHost = document.createElement('div');
       this.previewHost.style.cssText =
         'position:fixed;left:390px;top:50%;transform:translateY(-50%);' +
-        'z-index:2147483646;display:block;max-width:320px;pointer-events:none;';
+        'z-index:2147483646;display:block;max-width:320px;';
       this.previewShadow = this.previewHost.attachShadow({ mode: 'closed' });
+      // Stop host-page event delegation from firing on preview interactions.
+      // pointerdown is NOT stopped here — it's handled by the outside-click guard
+      // (which already exempts previewHost), allowing text selection to work.
+      for (const t of ['click', 'mousedown', 'mouseup', 'keydown', 'keyup']) {
+        this.previewHost.addEventListener(t, (e) => e.stopPropagation());
+      }
       document.body.appendChild(this.previewHost);
     }
     const shadow = this.previewShadow!;
@@ -162,7 +168,7 @@ export class DiscernedOverlay extends HTMLElement {
           border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:8px;
           box-shadow:4px 4px 20px rgba(0,0,0,0.5);
           animation:fadeIn .18s ease-out;
-          pointer-events:none;
+          user-select:text; cursor:text;
         }
         @keyframes fadeIn { from { opacity:0; transform:translateX(-6px); } to { opacity:1; transform:none; } }
         .preview-label {
@@ -1057,11 +1063,13 @@ export class DiscernedOverlay extends HTMLElement {
     if (mode === 'local') {
       try { await this.opts.onClip(captureWithNote, evaluation); }
       catch { this.showError('Failed to clip. Please try again.'); return; }
-      this.showSuccess('Clipped! 🔒');
+      this.removePreview();
+      this.showSuccess('Clipped! 🔒', captureWithNote.id);
 
     } else if (mode === 'cast') {
       // CAST only publishes to Nostr; local save requires an explicit CLIP action
-      this.showSuccess('📡 Broadcasting…');
+      this.removePreview();
+      this.showSuccess('📡 Broadcasting…', undefined, true);
       this.opts.onCast(captureWithNote, evaluation).catch((err: unknown) => {
         log(LL.WARN, 'Discerned: cast failed', err instanceof Error ? err.message : err);
       });
@@ -1070,14 +1078,14 @@ export class DiscernedOverlay extends HTMLElement {
       // both: explicit local save first, then broadcast (idempotent double-save is safe)
       try { await this.opts.onClip(captureWithNote, evaluation); }
       catch { this.showError('Failed to clip. Please try again.'); return; }
-      this.showSuccess('Clipped! 📡 Broadcasting…');
+      this.removePreview();
+      this.showSuccess('Clipped! 📡 Broadcasting…', captureWithNote.id);
       this.opts.onCast(captureWithNote, evaluation).catch((err: unknown) => {
         log(LL.WARN, 'Discerned: broadcast failed (clip already saved locally)',
           err instanceof Error ? err.message : err);
       });
     }
 
-    setTimeout(() => this.hide(), 1500);
     void chrome.storage.local.set({
       [STORAGE_KEYS.LAST_PUBLISH_MODE]: this.publishMode,
       [STORAGE_KEYS.LAST_INTEREST]:     this.interest,
@@ -1094,9 +1102,28 @@ export class DiscernedOverlay extends HTMLElement {
     if (p) p.textContent = text;
   }
 
-  private showSuccess(message: string) {
+  private showSuccess(message: string, clipId?: string, castOnly = false) {
     const loading = this.shadow.getElementById('loading');
-    if (loading) loading.innerHTML = `<div class="success">✓ ${this.escapeHtml(message)}</div>`;
+    if (!loading) return;
+    let linkHtml = '';
+    if (clipId) {
+      linkHtml = `<button class="open-library-btn">View in Library →</button>`;
+    } else if (castOnly) {
+      linkHtml = `<button class="open-library-btn">View in discerned.online →</button>`;
+    }
+    loading.innerHTML = `<div class="success">✓ ${this.escapeHtml(message)}${linkHtml ? `<br>${linkHtml}` : ''}<br><button class="dismiss-btn">Dismiss</button></div>`;
+    if (clipId) {
+      loading.querySelector('.open-library-btn')?.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ type: 'OPEN_LIBRARY', clipId }).catch(() => {});
+        this.hide();
+      });
+    } else if (castOnly) {
+      loading.querySelector('.open-library-btn')?.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ type: 'OPEN_HOME' }).catch(() => {});
+        this.hide();
+      });
+    }
+    loading.querySelector('.dismiss-btn')?.addEventListener('click', () => this.hide());
   }
 
   private showError(message: string) {
@@ -1453,6 +1480,16 @@ export class DiscernedOverlay extends HTMLElement {
       .loading p { color: #aaa; font-size: 14px; }
       .success { color: #22c55e; font-size: 18px; font-weight: 600; }
       .error   { color: #ef4444; font-size: 18px; font-weight: 600; }
+      .open-library-btn {
+        margin-top: 10px; background: none; border: none; padding: 0;
+        color: #3b82f6; font-size: 13px; cursor: pointer; text-decoration: underline;
+      }
+      .open-library-btn:hover { color: #60a5fa; }
+      .dismiss-btn {
+        margin-top: 8px; background: none; border: none; padding: 0;
+        color: #666; font-size: 12px; cursor: pointer; text-decoration: underline;
+      }
+      .dismiss-btn:hover { color: #aaa; }
     `;
   }
 }
