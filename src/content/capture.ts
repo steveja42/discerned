@@ -232,36 +232,79 @@ function extractBookmark(): Capture {
 
 // ── Article (Readability) ────────────────────────────────────────────────────
 
+// Selectors tried in order to find the article content element on the live page.
+// The first match with enough text content wins; Readability is used if none match.
+const ARTICLE_SELECTORS = [
+  'article',
+  '[role="article"]',
+  'main article',
+  'main',
+  '[role="main"]',
+];
+const ARTICLE_MIN_CHARS = 200;
+
+function findArticleElement(): Element | null {
+  for (const sel of ARTICLE_SELECTORS) {
+    const el = document.querySelector(sel);
+    if (el && (el.textContent ?? '').trim().length >= ARTICLE_MIN_CHARS) return el;
+  }
+  return null;
+}
+
 async function extractArticle(): Promise<Capture> {
-  const parsed = parseReadability();
   const base = baseFields();
   const thumbnailUrl = getPageThumbnail();
-  const [thumbnail] = await Promise.all([inlineImage(thumbnailUrl ?? '')]);
-  const inlinedThumbnail = thumbnailUrl ? thumbnail : null;
+  const inlinedThumbnail = thumbnailUrl ? await inlineImage(thumbnailUrl) : null;
 
-  if (!parsed) {
-    log(LL.WARN, 'Discerned: Readability could not parse this page; falling back to body text.', 'url:', base.url);
-    const bodyClone = cloneBodyClean();
-    sanitiseTreeInPlace(bodyClone);
-    const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
+  // Tier 1: semantic article element — preserves images at their correct positions.
+  const articleEl = findArticleElement();
+  if (articleEl) {
+    log(LL.NORMAL, `Discerned: article captured via semantic element <${articleEl.tagName.toLowerCase()}>`, 'url:', base.url);
+    const clone = articleEl.cloneNode(true) as Element;
+    clone.querySelector('discerned-overlay')?.remove();
+    sanitiseTreeInPlace(clone as HTMLElement);
+    const inlined = await inlineAllImages(clone.innerHTML.trim());
+    log(LL.NORMAL, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     return {
       ...base,
       format: 'article',
       bodyHtml: inlined,
-      bodyText: bodyClone.textContent?.trim() ?? '',
+      bodyText: clone.textContent?.trim() ?? '',
       thumbnail: inlinedThumbnail,
     };
   }
 
-  const sanitized = sanitizeHtmlString(parsed.content);
-  const inlined = await inlineAllImages(sanitized);
+  // Tier 2: Readability — for pages without semantic article markup.
+  const parsed = parseReadability();
+  if (parsed) {
+    log(LL.NORMAL, 'Discerned: article captured via Readability', 'url:', base.url);
+    let sanitized = sanitizeHtmlString(parsed.content);
+    if (!/<img[\s>]/i.test(sanitized) && thumbnailUrl && isSafeImageSrc(thumbnailUrl)) {
+      const alt = (parsed.title || base.title).replace(/"/g, '&quot;');
+      sanitized = `<figure><img src="${thumbnailUrl}" alt="${alt}"></figure>\n${sanitized}`;
+    }
+    const inlined = await inlineAllImages(sanitized);
+    log(LL.NORMAL, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
+    return {
+      ...base,
+      format: 'article',
+      title: parsed.title || base.title,
+      bodyHtml: inlined,
+      bodyText: parsed.textContent.trim(),
+      thumbnail: inlinedThumbnail,
+    };
+  }
 
+  // Tier 3: full body — last resort.
+  log(LL.WARN, 'Discerned: article falling back to full body', 'url:', base.url);
+  const bodyClone = cloneBodyClean();
+  sanitiseTreeInPlace(bodyClone);
+  const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
   return {
     ...base,
     format: 'article',
-    title: parsed.title || base.title,
     bodyHtml: inlined,
-    bodyText: parsed.textContent.trim(),
+    bodyText: bodyClone.textContent?.trim() ?? '',
     thumbnail: inlinedThumbnail,
   };
 }
@@ -280,18 +323,12 @@ function parseReadability(): ReturnType<Readability['parse']> | null {
     const clone = document.implementation.createHTMLDocument(document.title);
     const bodyClone = document.body.cloneNode(true) as HTMLElement;
     bodyClone.querySelector('discerned-overlay')?.remove();
-    // Remove hidden elements and any node whose text is dominated by known
-    // anti-adblock phrases. These nodes score well with Readability because
-    // they are clean, short prose — we must excise them before parsing.
+    // Remove nodes whose text is dominated by known anti-adblock phrases — these
+    // score well with Readability (clean short prose) but are not article content.
     const ADBLOCK_SIGNAL = 'ad or script blocking software';
     bodyClone.querySelectorAll<HTMLElement>('*').forEach(el => {
-      const t = el.textContent ?? '';
-      if (t.includes(ADBLOCK_SIGNAL)) {
-        log(LL.DEBUG, 'Discerned: removing adblock node', el.tagName, el.className, 'url:', window.location.href);
-        el.remove();
-      }
+      if ((el.textContent ?? '').includes(ADBLOCK_SIGNAL)) el.remove();
     });
-    log(LL.DEBUG, 'Discerned: parseReadability body char count:', bodyClone.textContent?.length ?? 0, 'url:', window.location.href);
     clone.body.replaceWith(bodyClone);
     // Readability resolves relative URLs against the document location; provide
     // a <base> so links/images in the cloned body resolve correctly.
@@ -299,7 +336,7 @@ function parseReadability(): ReturnType<Readability['parse']> | null {
     base.href = document.location.href;
     clone.head.appendChild(base);
     const result = new Readability(clone).parse();
-    log(LL.DEBUG, 'Discerned: Readability result title:', result?.title, 'textContent snippet:', result?.textContent?.slice(0, 200), 'url:', window.location.href);
+    log(LL.DEBUG, 'Discerned: Readability result title:', result?.title, 'url:', window.location.href);
     return result;
   } catch (err) {
     log(LL.WARN, 'Discerned: Readability failed', err, 'url:', window.location.href);
