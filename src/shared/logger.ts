@@ -120,6 +120,10 @@ function initLogBridge(): void {
 
     if (source === 'content' || source === 'onboarding') {
       // Already in the page context VSCode watches — just prefix for visual clarity.
+      // Skip warn/error: overriding those catches every third-party page error
+      // (ad SDKs, site scripts) and floods the console with noise we can't filter.
+      // Our log(LL.WARN/ERROR) calls are rerouted to console.log below instead.
+      if (level === 'warn' || level === 'error') continue;
       const orig = originals[level];
       c[level] = (...args: unknown[]) => orig(`[${source}]`, ...args);
     } else {
@@ -153,13 +157,22 @@ export function setLogLevel(level: AppLogLevel): void {
   activeLogLevel = level;
 }
 
-const CONSOLE_METHOD: Record<AppLogLevel, LogLevel> = {
-  [LL.TRACE]:  'debug',
-  [LL.DEBUG]:  'debug',
-  [LL.NORMAL]: 'log',
-  [LL.WARN]:   'warn',
-  [LL.ERROR]:  'error',
-};
+// In the content context we don't override console.warn/error (to avoid catching
+// third-party page errors). Route our WARN/ERROR through console.log instead so
+// they still get the [content] prefix and appear in VSCode's debug session.
+function consoleMethod(level: AppLogLevel, source: LogSource): LogLevel {
+  if ((source === 'content' || source === 'onboarding') && (level === LL.WARN || level === LL.ERROR)) {
+    return 'log';
+  }
+  const MAP: Record<AppLogLevel, LogLevel> = {
+    [LL.TRACE]:  'debug',
+    [LL.DEBUG]:  'debug',
+    [LL.NORMAL]: 'log',
+    [LL.WARN]:   'warn',
+    [LL.ERROR]:  'error',
+  };
+  return MAP[level];
+}
 
 /**
  * Structured logger for use throughout the extension.
@@ -169,6 +182,6 @@ const CONSOLE_METHOD: Record<AppLogLevel, LogLevel> = {
 export function log(level: AppLogLevel, ...args: unknown[]): void {
   if (!bridgeInitialised) initLogBridge();
   if (level < activeLogLevel) return;
-  const method = CONSOLE_METHOD[level];
+  const method = consoleMethod(level, detectSource());
   (console[method] as (...a: unknown[]) => void)(...args);
 }
