@@ -74,7 +74,9 @@ function forwardToActiveTab(source: LogSource, level: LogLevel, args: unknown[])
     chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
       const tabId = tabs[0]?.id;
       if (tabId !== undefined) {
-        chrome.tabs.sendMessage(tabId, payload).catch(() => { /* no content script — drop */ });
+        // Void the promise explicitly so unhandled-rejection handlers don't fire
+        // when there is no content script on the active tab yet.
+        void chrome.tabs.sendMessage(tabId, payload).catch(() => {});
       }
     });
   } catch {
@@ -97,13 +99,11 @@ let bridgeInitialised = false;
 /**
  * Override console methods for the current extension context (auto-detected).
  *
- * - 'content' / 'onboarding': run inside the page VSCode is attached to, so their
- *   console output is already visible. We add a [source] prefix for clarity and do
- *   nothing else.
+ * - 'content' / 'onboarding': already in the page VSCode watches — prefix only.
+ *   Warn/error are filtered through a guard so third-party page errors (ad SDKs,
+ *   site scripts) are not prefixed and shown as ours.
  *
- * - 'popup' / 'background': NOT in the page context VSCode watches. We call the
- *   original locally (visible in the context's own DevTools) AND relay to the active
- *   tab via LOG_RELAY so VSCode captures them too.
+ * - 'popup' / 'background': relay to the active tab via LOG_RELAY so VSCode sees them.
  *
  * Called automatically on the first log() call — no manual init needed.
  */
@@ -119,13 +119,20 @@ function initLogBridge(): void {
     if (!REMOTE_LOGGING) continue; // keep originals captured, skip the override
 
     if (source === 'content' || source === 'onboarding') {
-      // Already in the page context VSCode watches — just prefix for visual clarity.
-      // Skip warn/error: overriding those catches every third-party page error
-      // (ad SDKs, site scripts) and floods the console with noise we can't filter.
-      // Our log(LL.WARN/ERROR) calls are rerouted to console.log below instead.
-      if (level === 'warn' || level === 'error') continue;
       const orig = originals[level];
-      c[level] = (...args: unknown[]) => orig(`[${source}]`, ...args);
+      if (level === 'warn' || level === 'error') {
+        // Only prefix if the first arg is a string starting with 'Discerned' or '[',
+        // so third-party page errors pass through unprefixed.
+        c[level] = (...args: unknown[]) => {
+          if (typeof args[0] === 'string' && (args[0].startsWith('Discerned') || args[0].startsWith('['))) {
+            orig(`[${source}]`, ...args);
+          } else {
+            orig(...args);
+          }
+        };
+      } else {
+        c[level] = (...args: unknown[]) => orig(`[${source}]`, ...args);
+      }
     } else {
       // popup / background: relay to the active tab so VSCode's debug session sees it.
       const orig = originals[level];
@@ -157,22 +164,13 @@ export function setLogLevel(level: AppLogLevel): void {
   activeLogLevel = level;
 }
 
-// In the content context we don't override console.warn/error (to avoid catching
-// third-party page errors). Route our WARN/ERROR through console.log instead so
-// they still get the [content] prefix and appear in VSCode's debug session.
-function consoleMethod(level: AppLogLevel, source: LogSource): LogLevel {
-  if ((source === 'content' || source === 'onboarding') && (level === LL.WARN || level === LL.ERROR)) {
-    return 'log';
-  }
-  const MAP: Record<AppLogLevel, LogLevel> = {
-    [LL.TRACE]:  'debug',
-    [LL.DEBUG]:  'debug',
-    [LL.NORMAL]: 'log',
-    [LL.WARN]:   'warn',
-    [LL.ERROR]:  'error',
-  };
-  return MAP[level];
-}
+const CONSOLE_METHOD: Record<AppLogLevel, LogLevel> = {
+  [LL.TRACE]:  'debug',
+  [LL.DEBUG]:  'debug',
+  [LL.NORMAL]: 'log',
+  [LL.WARN]:   'warn',
+  [LL.ERROR]:  'error',
+};
 
 /**
  * Structured logger for use throughout the extension.
@@ -182,6 +180,6 @@ function consoleMethod(level: AppLogLevel, source: LogSource): LogLevel {
 export function log(level: AppLogLevel, ...args: unknown[]): void {
   if (!bridgeInitialised) initLogBridge();
   if (level < activeLogLevel) return;
-  const method = consoleMethod(level, detectSource());
+  const method = CONSOLE_METHOD[level];
   (console[method] as (...a: unknown[]) => void)(...args);
 }
