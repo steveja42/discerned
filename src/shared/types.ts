@@ -7,7 +7,6 @@
 export type ClipFormat =
   | 'selection'
   | 'article'
-  | 'simplified-article'
   | 'full-page'
   | 'bookmark';
 
@@ -51,7 +50,7 @@ export interface Capture {
   // selection only
   selectionText?: string;     // sanitized HTML
   selectionContext?: string;  // ±100-char window
-  // article / simplified-article / full-page
+  // article / full-page
   bodyHtml?: string;          // sanitized HTML; image src may be data: or https:
   bodyText?: string;          // plain text (Readability textContent or stripped)
   // bookmark / article

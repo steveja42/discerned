@@ -77,9 +77,9 @@ export function createQuoteNoteEvent(
 }
 
 /**
- * Create a Note event (Kind 1) for bookmark / article / simplified-article / full-page captures.
+ * Create a Note event (Kind 1) for bookmark / article / full-page captures.
  *
- * For rich formats (article / simplified-article / full-page), the caller may pass `inlineBody`
+ * For rich formats (article / full-page), the caller may pass `inlineBody`
  * (plain text) when the body is small enough to fit safely on relays. When omitted (or for
  * bookmark format) the event publishes URL-summary only — full body stays in IndexedDB.
  */

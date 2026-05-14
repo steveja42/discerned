@@ -24,7 +24,7 @@ function isContextValid(): boolean {
 }
 
 const VALID_FORMATS: ClipFormat[] = [
-  'selection', 'article', 'simplified-article', 'full-page', 'bookmark',
+  'selection', 'article', 'full-page', 'bookmark',
 ];
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -219,3 +219,11 @@ function showCastErrorToast(message: string) {
 
 chrome.runtime.sendMessage({ type: 'REGISTER_LOG_TAB' }).catch(() => {});
 log(LL.NORMAL, 'Discerned content script loaded');
+
+// When the browser restores this tab from the back/forward cache, the extension
+// port is stale. Re-register so the background can relay logs again.
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted && isContextValid()) {
+    chrome.runtime.sendMessage({ type: 'REGISTER_LOG_TAB' }).catch(() => {});
+  }
+});

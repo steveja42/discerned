@@ -17,7 +17,6 @@ export interface EncryptedClipPayload {
 const VALID_FORMATS = new Set([
   'selection',
   'article',
-  'simplified-article',
   'full-page',
   'bookmark',
 ]);

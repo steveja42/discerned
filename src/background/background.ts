@@ -500,7 +500,7 @@ function buildCastTemplate(capture: Capture, evaluation: Evaluation) {
   if (capture.format === 'bookmark') {
     return createResourceNoteEvent(capture, evaluation);
   }
-  // article / simplified-article / full-page
+  // article / full-page
   const bodyText = capture.bodyText?.trim() ?? '';
   let inline: string | undefined;
   if (bodyText.length > 0) {

@@ -27,7 +27,7 @@ export interface OverlayShowOptions {
 type View = 'gate' | 'identity' | 'main' | 'settings';
 
 /** Formats that show a floating preview card to the right of the main panel. */
-const PREVIEW_FORMATS: ClipFormat[] = ['selection', 'article', 'simplified-article', 'bookmark'];
+const PREVIEW_FORMATS: ClipFormat[] = ['selection', 'article', 'bookmark'];
 
 export class DiscernedOverlay extends HTMLElement {
   private shadow: ShadowRoot;
@@ -210,17 +210,6 @@ export class DiscernedOverlay extends HTMLElement {
           <div class="preview-label">Selection</div>
           <div class="preview-text">${ev(preview)}</div>
           <div class="preview-url">${ev(cap.url)}</div>
-        </div>`;
-    }
-
-    if (cap.format === 'simplified-article') {
-      const text = cap.bodyText ?? '';
-      const preview = text.length > 400 ? text.slice(0, 400) + '…' : text;
-      return `
-        <div class="preview-card">
-          <div class="preview-label">Simplified article</div>
-          <div class="preview-title">${ev(cap.title)}</div>
-          <div class="preview-text">${ev(preview)}</div>
         </div>`;
     }
 
@@ -659,7 +648,6 @@ export class DiscernedOverlay extends HTMLElement {
     const formats: Array<{ id: ClipFormat; label: string; icon: string; disabled?: boolean }> = [
       { id: 'selection',          label: 'Selection',  icon: '✂',  disabled: !this.hasSelection },
       { id: 'article',            label: 'Article',    icon: '📄' },
-      { id: 'simplified-article', label: 'Simplified', icon: '📝' },
       { id: 'full-page',          label: 'Full page',  icon: '🗞' },
       { id: 'bookmark',           label: 'Bookmark',   icon: '🔖' },
     ];
@@ -921,7 +909,7 @@ export class DiscernedOverlay extends HTMLElement {
     const willBroadcast = this.publishMode === 'cast' || this.publishMode === 'both';
     if (!willBroadcast) return '';
 
-    const richFormats: ClipFormat[] = ['article', 'simplified-article', 'full-page'];
+    const richFormats: ClipFormat[] = ['article', 'full-page'];
     if (!richFormats.includes(cap.format)) return '';
 
     const bodyText = cap.bodyText ?? '';

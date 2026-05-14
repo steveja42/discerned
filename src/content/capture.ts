@@ -1,5 +1,5 @@
 // Role: Content Script — capture layer
-// Description: Five-format clip extractor (selection, article, simplified-article, full-page,
+// Description: Four-format clip extractor (selection, article, full-page,
 //              bookmark). Sanitises all extracted HTML through a tag/attribute allowlist and
 //              inlines images via a privileged background fetch (background → manifest's
 //              host_permissions, which already covers <all_urls>). Each capture is assigned a
@@ -103,7 +103,6 @@ export async function captureContext(format: ClipFormat): Promise<Capture> {
   switch (format) {
     case 'selection':           return extractSelection();
     case 'article':             return extractArticle();
-    case 'simplified-article':  return extractSimplifiedArticle();
     case 'full-page':           return extractFullPage();
     case 'bookmark':            return extractBookmark();
   }
@@ -236,6 +235,10 @@ function extractBookmark(): Capture {
 async function extractArticle(): Promise<Capture> {
   const parsed = parseReadability();
   const base = baseFields();
+  const thumbnailUrl = getPageThumbnail();
+  const [thumbnail] = await Promise.all([inlineImage(thumbnailUrl ?? '')]);
+  const inlinedThumbnail = thumbnailUrl ? thumbnail : null;
+
   if (!parsed) {
     log(LL.WARN, 'Discerned: Readability could not parse this page; falling back to body text.', 'url:', base.url);
     const bodyClone = cloneBodyClean();
@@ -246,7 +249,7 @@ async function extractArticle(): Promise<Capture> {
       format: 'article',
       bodyHtml: inlined,
       bodyText: bodyClone.textContent?.trim() ?? '',
-      thumbnail: getPageThumbnail(),
+      thumbnail: inlinedThumbnail,
     };
   }
 
@@ -259,40 +262,10 @@ async function extractArticle(): Promise<Capture> {
     title: parsed.title || base.title,
     bodyHtml: inlined,
     bodyText: parsed.textContent.trim(),
-    thumbnail: getPageThumbnail(),
+    thumbnail: inlinedThumbnail,
   };
 }
 
-async function extractSimplifiedArticle(): Promise<Capture> {
-  const parsed = parseReadability();
-  const base = baseFields();
-  if (!parsed) {
-    log(LL.WARN, 'Discerned: Readability could not parse this page; falling back to body text.', 'url:', base.url);
-    const bodyClone = cloneBodyClean();
-    sanitiseTreeInPlace(bodyClone);
-    const bodyText = (bodyClone.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim();
-    return {
-      ...base,
-      format: 'simplified-article',
-      bodyText,
-      thumbnail: getPageThumbnail(),
-    };
-  }
-
-  // Readability's content is already stripped of ads/nav/clutter — sanitize and
-  // store as bodyHtml so the web app can render it with original formatting intact.
-  const bodyHtml = sanitizeHtmlString(parsed.content);
-  const bodyText = parsed.textContent.replace(/\n{3,}/g, '\n\n').trim();
-
-  return {
-    ...base,
-    format: 'simplified-article',
-    title: parsed.title || base.title,
-    bodyHtml,
-    bodyText,
-    thumbnail: getPageThumbnail(),
-  };
-}
 
 function parseReadability(): ReturnType<Readability['parse']> | null {
   try {
@@ -352,13 +325,30 @@ async function extractFullPage(): Promise<Capture> {
   };
 }
 
+const FIXED_MARKER = 'data-discerned-fixed';
+
 /**
- * Deep-clone document.body with the Discerned overlay removed so it doesn't
- * contaminate bodyText or bodyHtml captures.
+ * Deep-clone document.body with the Discerned overlay and ad/tracking overlays removed.
  */
 function cloneBodyClean(): HTMLElement {
+  // Mark fixed/sticky elements in the live DOM before cloning — getComputedStyle
+  // doesn't work on detached nodes, so we must identify them while still attached.
+  document.body.querySelectorAll<HTMLElement>('*').forEach(el => {
+    if (el.tagName.toLowerCase() === 'discerned-overlay') return;
+    const pos = window.getComputedStyle(el).position;
+    if (pos === 'fixed' || pos === 'sticky') {
+      el.setAttribute(FIXED_MARKER, '1');
+    }
+  });
+
   const clone = document.body.cloneNode(true) as HTMLElement;
+
+  // Remove temporary markers from the live DOM.
+  document.body.querySelectorAll(`[${FIXED_MARKER}]`).forEach(el => el.removeAttribute(FIXED_MARKER));
+
   clone.querySelector('discerned-overlay')?.remove();
+  clone.querySelectorAll(`[${FIXED_MARKER}]`).forEach(el => el.remove());
+
   return clone;
 }
 
@@ -507,7 +497,12 @@ async function inlineAllImages(html: string): Promise<string> {
     while (queue.length) {
       const img = queue.shift();
       if (!img) break;
-      const raw = img.getAttribute('src');
+      // Many news sites (CNN, etc.) lazy-load with data-src; prefer it over a
+      // placeholder 1×1 src. Also check data-lazy-src used by some WordPress themes.
+      const raw =
+        img.getAttribute('data-src') ||
+        img.getAttribute('data-lazy-src') ||
+        img.getAttribute('src');
       if (!raw) continue;
       let abs: string;
       try {
@@ -517,6 +512,9 @@ async function inlineAllImages(html: string): Promise<string> {
       }
       const inlined = await inlineImage(abs);
       img.setAttribute('src', inlined);
+      // Remove lazy-load attributes so the stored HTML is self-contained.
+      img.removeAttribute('data-src');
+      img.removeAttribute('data-lazy-src');
     }
   };
 
