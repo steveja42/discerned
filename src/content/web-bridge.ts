@@ -133,7 +133,35 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
       log(LL.ERROR, 'web-bridge: resync failed', err, 'url:', window.location.href);
     });
   }
+  if (message.type === 'NAVIGATE_TO_CLIP') {
+    // Tell the web page to focus this clip without any URL or React tree change.
+    post({ type: 'DISCERNED_BRIDGE_FOCUS_CLIP', clipId: message.clipId });
+    log(LL.NORMAL, 'web-bridge: focus clip', message.clipId, 'url:', window.location.href);
+  }
 });
+
+// Deferred proactive send — yields to DISCERNED_WEB_READY for 200 ms so that
+// when the content script reloads into an already-mounted page (e.g. after
+// extension reload), the web page's DISCERNED_WEB_READY arrives with the
+// correct clipCount and cancels this send, preventing a duplicate fetch.
+// If no DISCERNED_WEB_READY arrives within 200 ms (script loaded after READY
+// was posted and won't be re-posted), the proactive send fires normally.
+// Deduplication: only one sendBridgeData call fires per content script load.
+// React Strict Mode double-invokes effects, so DISCERNED_WEB_READY can arrive
+// twice within milliseconds. The first arrival wins; subsequent ones are ignored.
+let initialSendDone = false;
+
+function sendOnce(clipCount: number, label: string): void {
+  if (initialSendDone) return;
+  initialSendDone = true;
+  sendBridgeData(clipCount).catch((err: unknown) => {
+    log(LL.ERROR, `web-bridge: ${label} failed`, err, 'url:', window.location.href);
+  });
+}
+
+const proactiveTimer = setTimeout(() => {
+  sendOnce(0, 'initial sendBridgeData');
+}, 200);
 
 // Listen for messages from the web page.
 window.addEventListener('message', (e: MessageEvent) => {
@@ -141,9 +169,8 @@ window.addEventListener('message', (e: MessageEvent) => {
   if (e.source !== window) return;
   const msg = e.data as WebBridgeInbound | undefined;
   if (msg?.type === 'DISCERNED_WEB_READY') {
-    sendBridgeData(msg.clipCount).catch((err: unknown) => {
-      log(LL.ERROR, 'web-bridge: sendBridgeData failed', err, 'url:', window.location.href);
-    });
+    clearTimeout(proactiveTimer);
+    sendOnce(msg.clipCount, 'sendBridgeData');
   }
   if (msg?.type === 'DISCERNED_DELETE_CLIPS') {
     chrome.runtime.sendMessage({ type: 'DELETE_CLIPS', ids: msg.ids }).catch(() => { /* non-fatal */ });
@@ -151,12 +178,6 @@ window.addEventListener('message', (e: MessageEvent) => {
   if (msg?.type === 'DISCERNED_UPDATE_NOTE') {
     chrome.runtime.sendMessage({ type: 'UPDATE_CLIP_NOTE', id: msg.id, note: msg.note }).catch(() => { /* non-fatal */ });
   }
-});
-
-// Proactive send — covers the case where the content script loads after the
-// page has already fired DISCERNED_WEB_READY and is waiting.
-sendBridgeData().catch((err: unknown) => {
-  log(LL.ERROR, 'web-bridge: initial sendBridgeData failed', err, 'url:', window.location.href);
 });
 
 log(LL.NORMAL, 'Discerned web-bridge loaded', 'url:', window.location.href);

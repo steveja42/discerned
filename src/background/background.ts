@@ -95,10 +95,15 @@ async function openLibraryTab(clipId: string): Promise<void> {
   const url = `${base}/library?clip=${encodeURIComponent(clipId)}`;
   const [existing] = await chrome.tabs.query({ url: LIBRARY_URL_PATTERNS });
   if (existing?.id !== undefined) {
-    await chrome.tabs.update(existing.id, { url, active: true });
+    // Tab is already on the library — activate it and navigate client-side via
+    // the content script so React state (ClipStoreContext) is preserved and
+    // there is no full reload, flash, or redundant clip re-send.
+    await chrome.tabs.update(existing.id, { active: true });
     if (existing.windowId !== undefined) {
       chrome.windows.update(existing.windowId, { focused: true }).catch(() => {});
     }
+    chrome.tabs.sendMessage(existing.id, { type: 'NAVIGATE_TO_CLIP', clipId } satisfies BackgroundMessage)
+      .catch(() => { /* non-fatal — clip will appear via PUSH_NEW_CLIP */ });
   } else {
     await chrome.tabs.create({ url });
   }
@@ -309,6 +314,7 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
 
     case 'PUSH_NEW_CLIP':
     case 'FORCE_BRIDGE_RESYNC':
+    case 'NAVIGATE_TO_CLIP':
       // These are background→content messages; the background never receives them.
       return { success: false, error: 'Not handled by background' };
 

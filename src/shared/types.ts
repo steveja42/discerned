@@ -95,6 +95,7 @@ export type BackgroundMessage =
   | { type: 'INLINE_IMAGE'; src: string }
   | { type: 'PUSH_NEW_CLIP'; clip: ClipData }
   | { type: 'FORCE_BRIDGE_RESYNC' }
+  | { type: 'NAVIGATE_TO_CLIP'; clipId: string }
   | { type: 'OPEN_LIBRARY'; clipId: string }
   | { type: 'OPEN_HOME' }
   | { type: 'REGISTER_LOG_TAB' };
@@ -130,7 +131,8 @@ export type WebBridgeOutbound =
       authMethod: 'nip07' | 'nip46' | 'nsec' | 'guest' | null;
     }
   | { type: 'DISCERNED_BRIDGE_CLIPS'; clips: ClipData[] }
-  | { type: 'DISCERNED_BRIDGE_NEW_CLIP'; clip: ClipData };
+  | { type: 'DISCERNED_BRIDGE_NEW_CLIP'; clip: ClipData }
+  | { type: 'DISCERNED_BRIDGE_FOCUS_CLIP'; clipId: string };
 
 export type WebBridgeInbound =
   | { type: 'DISCERNED_WEB_READY'; clipCount: number }
