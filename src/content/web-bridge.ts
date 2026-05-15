@@ -91,7 +91,10 @@ async function fetchClips(): Promise<ClipData[]> {
 
 // ── Main ────────────────────────────────────────────────────────────────────
 
-async function sendBridgeData(): Promise<void> {
+// knownCount: the number of clips the web app already has. If IndexedDB has
+// the same count, skip sending DISCERNED_BRIDGE_CLIPS to avoid redundant transfers.
+// Pass 0 to force a full re-send (used on error recovery and cold load).
+async function sendBridgeData(knownCount = 0): Promise<void> {
   if (!isContextValid()) return;
   // Auth and clips can be fetched in parallel.
   const [authInfo, clips] = await Promise.all([
@@ -108,29 +111,45 @@ async function sendBridgeData(): Promise<void> {
   ]);
 
   post({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: authInfo.pubkey, authMethod: authInfo.authMethod });
-  post({ type: 'DISCERNED_BRIDGE_CLIPS', clips });
 
-  log(LL.NORMAL, `web-bridge: sent ${clips.length} clips to companion app`, 'url:', window.location.href);
+  if (clips.length !== knownCount) {
+    post({ type: 'DISCERNED_BRIDGE_CLIPS', clips });
+    log(LL.NORMAL, `web-bridge: sent ${clips.length} clips to companion app`, 'url:', window.location.href);
+  } else {
+    log(LL.NORMAL, `web-bridge: clip count unchanged (${clips.length}), skipping BRIDGE_CLIPS`, 'url:', window.location.href);
+  }
 }
 
-// Listen for the background pushing a new clip after a CLIP/CAST completes.
+// Listen for messages pushed from the background worker.
 chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
   if (!isContextValid()) return;
   if (message.type === 'PUSH_NEW_CLIP') {
     post({ type: 'DISCERNED_BRIDGE_NEW_CLIP', clip: message.clip });
   }
+  if (message.type === 'FORCE_BRIDGE_RESYNC') {
+    // Background signals a failed delete/note-update — re-send full clip list
+    // so the web app's optimistic state is corrected.
+    sendBridgeData(0).catch((err: unknown) => {
+      log(LL.ERROR, 'web-bridge: resync failed', err, 'url:', window.location.href);
+    });
+  }
 });
 
-// Listen for the web page signalling it's ready, then send data.
-// Also send immediately in case the script loads after the page already posted READY.
+// Listen for messages from the web page.
 window.addEventListener('message', (e: MessageEvent) => {
   if (e.origin !== ORIGIN) return;
   if (e.source !== window) return;
   const msg = e.data as WebBridgeInbound | undefined;
   if (msg?.type === 'DISCERNED_WEB_READY') {
-    sendBridgeData().catch((err: unknown) => {
+    sendBridgeData(msg.clipCount).catch((err: unknown) => {
       log(LL.ERROR, 'web-bridge: sendBridgeData failed', err, 'url:', window.location.href);
     });
+  }
+  if (msg?.type === 'DISCERNED_DELETE_CLIPS') {
+    chrome.runtime.sendMessage({ type: 'DELETE_CLIPS', ids: msg.ids }).catch(() => { /* non-fatal */ });
+  }
+  if (msg?.type === 'DISCERNED_UPDATE_NOTE') {
+    chrome.runtime.sendMessage({ type: 'UPDATE_CLIP_NOTE', id: msg.id, note: msg.note }).catch(() => { /* non-fatal */ });
   }
 });
 

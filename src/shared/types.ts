@@ -82,6 +82,8 @@ export type BackgroundMessage =
   | { type: 'CAST'; data: { capture: Capture; evaluation: Evaluation } }
   | { type: 'GET_AUTH_STATE' }
   | { type: 'GET_CLIPS' }
+  | { type: 'DELETE_CLIPS'; ids: string[] }
+  | { type: 'UPDATE_CLIP_NOTE'; id: string; note: string }
   | { type: 'NIP07_DETECTED'; hasNIP07: boolean }
   | { type: 'CONNECT_NIP46'; bunkerUri: string }
   | { type: 'CONNECT_NSEC'; rawNsec: string; pin: string }
@@ -92,6 +94,7 @@ export type BackgroundMessage =
   | { type: 'SIGN_WITH_NIP07'; event: Record<string, unknown> }
   | { type: 'INLINE_IMAGE'; src: string }
   | { type: 'PUSH_NEW_CLIP'; clip: ClipData }
+  | { type: 'FORCE_BRIDGE_RESYNC' }
   | { type: 'OPEN_LIBRARY'; clipId: string }
   | { type: 'OPEN_HOME' }
   | { type: 'REGISTER_LOG_TAB' };
@@ -129,7 +132,10 @@ export type WebBridgeOutbound =
   | { type: 'DISCERNED_BRIDGE_CLIPS'; clips: ClipData[] }
   | { type: 'DISCERNED_BRIDGE_NEW_CLIP'; clip: ClipData };
 
-export type WebBridgeInbound = { type: 'DISCERNED_WEB_READY' };
+export type WebBridgeInbound =
+  | { type: 'DISCERNED_WEB_READY'; clipCount: number }
+  | { type: 'DISCERNED_DELETE_CLIPS'; ids: string[] }
+  | { type: 'DISCERNED_UPDATE_NOTE'; id: string; note: string };
 
 // Default relay list
 export const DEFAULT_RELAYS = [

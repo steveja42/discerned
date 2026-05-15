@@ -68,6 +68,18 @@ async function pushClipToWebApp(clip: ClipData): Promise<void> {
   }
 }
 
+// Tells the web-bridge content script to re-send the full clip list to the page.
+// Used after a failed delete or note-update so the web app's optimistic state
+// is corrected to match the actual IndexedDB contents.
+async function pushResyncToWebApp(): Promise<void> {
+  const tabs = await chrome.tabs.query({ url: DISCERNED_URL_PATTERNS });
+  const message: BackgroundMessage = { type: 'FORCE_BRIDGE_RESYNC' };
+  for (const tab of tabs) {
+    if (tab.id === undefined) continue;
+    chrome.tabs.sendMessage(tab.id, message).catch(() => { /* non-fatal */ });
+  }
+}
+
 const LIBRARY_URL_PATTERNS = ['https://discerned.online/library*', 'http://localhost:3000/library*'];
 // Base URLs derived from DISCERNED_URL_PATTERNS (strip trailing /*).
 const DISCERNED_BASE_URLS = DISCERNED_URL_PATTERNS.map(p => p.replace(/\/\*$/, ''));
@@ -238,6 +250,12 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'GET_CLIPS':
       return handleGetClips();
 
+    case 'DELETE_CLIPS':
+      return handleDeleteClips(message.ids);
+
+    case 'UPDATE_CLIP_NOTE':
+      return handleUpdateClipNote(message.id, message.note);
+
     case 'NIP07_DETECTED':
       if (message.hasNIP07 && currentAuthState.type === 'guest') {
         currentAuthState = { type: 'pro', hasNIP07: true };
@@ -288,6 +306,11 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'REGISTER_LOG_TAB':
       if (senderTabId !== undefined) registerLogTab(senderTabId);
       return { success: true };
+
+    case 'PUSH_NEW_CLIP':
+    case 'FORCE_BRIDGE_RESYNC':
+      // These are background→content messages; the background never receives them.
+      return { success: false, error: 'Not handled by background' };
 
     default:
       return { success: false, error: 'Unknown message type' };
@@ -435,6 +458,99 @@ async function handleGetClips(): Promise<BackgroundResponse> {
       } catch {
         db.close();
         resolve({ success: true, data: { clips: [] } });
+      }
+    };
+  });
+}
+
+async function handleDeleteClips(ids: string[]): Promise<BackgroundResponse> {
+  return new Promise((resolve) => {
+    const request = indexedDB.open('discerned', DB_VERSION);
+    request.onerror = () => {
+      void pushResyncToWebApp();
+      resolve({ success: false, error: 'IndexedDB open failed' });
+    };
+    request.onupgradeneeded = () => { /* probe only */ };
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('clips') || ids.length === 0) {
+        db.close();
+        resolve({ success: true });
+        return;
+      }
+      try {
+        const tx = db.transaction(['clips'], 'readwrite');
+        const store = tx.objectStore('clips');
+        let pending = ids.length;
+        let failed = false;
+        for (const id of ids) {
+          const req = store.delete(id);
+          req.onerror = () => {
+            if (!failed) { failed = true; db.close(); void pushResyncToWebApp(); resolve({ success: false, error: 'Delete failed' }); }
+          };
+          req.onsuccess = () => {
+            pending--;
+            if (pending === 0 && !failed) {
+              db.close();
+              log(LL.DEBUG, `background: deleted ${ids.length} clip(s)`, ids.join(', '));
+              resolve({ success: true });
+            }
+          };
+        }
+      } catch {
+        db.close();
+        void pushResyncToWebApp();
+        resolve({ success: false, error: 'Transaction failed' });
+      }
+    };
+  });
+}
+
+async function handleUpdateClipNote(id: string, note: string): Promise<BackgroundResponse> {
+  return new Promise((resolve) => {
+    const request = indexedDB.open('discerned', DB_VERSION);
+    request.onerror = () => {
+      void pushResyncToWebApp();
+      resolve({ success: false, error: 'IndexedDB open failed' });
+    };
+    request.onupgradeneeded = () => { /* probe only */ };
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('clips')) {
+        db.close();
+        void pushResyncToWebApp();
+        resolve({ success: false, error: 'No clips store' });
+        return;
+      }
+      try {
+        const tx = db.transaction(['clips'], 'readwrite');
+        const store = tx.objectStore('clips');
+        const getReq = store.get(id);
+        getReq.onerror = () => { db.close(); void pushResyncToWebApp(); resolve({ success: false, error: 'Read failed' }); };
+        getReq.onsuccess = () => {
+          const row = getReq.result as ClipRow | undefined;
+          if (!row) { db.close(); void pushResyncToWebApp(); resolve({ success: false, error: 'Clip not found' }); return; }
+          try {
+            const payload = JSON.parse(row.encrypted) as ClipData;
+            payload.capture.note = note || undefined;
+            row.encrypted = JSON.stringify(payload);
+            const putReq = store.put(row);
+            putReq.onerror = () => { db.close(); void pushResyncToWebApp(); resolve({ success: false, error: 'Write failed' }); };
+            putReq.onsuccess = () => {
+              db.close();
+              log(LL.DEBUG, `background: updated note for clip ${id}`, `note: "${note}"`);
+              resolve({ success: true });
+            };
+          } catch {
+            db.close();
+            void pushResyncToWebApp();
+            resolve({ success: false, error: 'Parse failed' });
+          }
+        };
+      } catch {
+        db.close();
+        void pushResyncToWebApp();
+        resolve({ success: false, error: 'Transaction failed' });
       }
     };
   });
