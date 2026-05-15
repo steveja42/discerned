@@ -181,5 +181,6 @@ export function log(level: AppLogLevel, ...args: unknown[]): void {
   if (!bridgeInitialised) initLogBridge();
   if (level < activeLogLevel) return;
   const method = CONSOLE_METHOD[level];
-  (console[method] as (...a: unknown[]) => void)(...args);
+  const ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  (console[method] as (...a: unknown[]) => void)(ts, ...args);
 }
