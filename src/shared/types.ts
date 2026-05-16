@@ -84,6 +84,10 @@ export type BackgroundMessage =
   | { type: 'GET_CLIPS' }
   | { type: 'DELETE_CLIPS'; ids: string[] }
   | { type: 'UPDATE_CLIP_NOTE'; id: string; note: string }
+  | { type: 'IMPORT_CLIPS'; clips: ClipData[] }
+  | { type: 'UPDATE_CATEGORIES'; categories: string[] }
+  | { type: 'SYNC_CATEGORIES_TO_WEB' }
+  | { type: 'PUSH_CATEGORIES'; categories: string[] }
   | { type: 'NIP07_DETECTED'; hasNIP07: boolean }
   | { type: 'CONNECT_NIP46'; bunkerUri: string }
   | { type: 'CONNECT_NSEC'; rawNsec: string; pin: string }
@@ -121,6 +125,7 @@ export const STORAGE_KEYS = {
   LAST_CATEGORY:     'lastCategory',
   SMART_ARTICLE_DETECTION: 'smartArticleDetection',
   STRIP_INLINE_STYLES:     'stripInlineStyles',
+  CUSTOM_CATEGORIES:       'customCategories',
 } as const;
 
 // Messages posted between the extension's web-bridge content script and the
@@ -134,12 +139,15 @@ export type WebBridgeOutbound =
     }
   | { type: 'DISCERNED_BRIDGE_CLIPS'; clips: ClipData[] }
   | { type: 'DISCERNED_BRIDGE_NEW_CLIP'; clip: ClipData }
-  | { type: 'DISCERNED_BRIDGE_FOCUS_CLIP'; clipId: string };
+  | { type: 'DISCERNED_BRIDGE_FOCUS_CLIP'; clipId: string }
+  | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] };
 
 export type WebBridgeInbound =
   | { type: 'DISCERNED_WEB_READY'; clipCount: number }
   | { type: 'DISCERNED_DELETE_CLIPS'; ids: string[] }
-  | { type: 'DISCERNED_UPDATE_NOTE'; id: string; note: string };
+  | { type: 'DISCERNED_UPDATE_NOTE'; id: string; note: string }
+  | { type: 'DISCERNED_IMPORT_CLIPS'; clips: ClipData[] }
+  | { type: 'DISCERNED_UPDATE_CATEGORIES'; categories: string[] };
 
 // Default relay list
 export const DEFAULT_RELAYS = [
