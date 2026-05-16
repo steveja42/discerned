@@ -116,10 +116,10 @@ export class DiscernedOverlay extends HTMLElement {
       } catch { /* non-fatal; use defaults */ }
 
       try {
-        const catStored = await chrome.storage.local.get(STORAGE_KEYS.CUSTOM_CATEGORIES);
-        const persisted = (catStored[STORAGE_KEYS.CUSTOM_CATEGORIES] as string[] | undefined) ?? [];
-        this.customCategories = [...new Set([...this.customCategories, ...persisted])];
-      } catch { /* non-fatal; custom categories stay in-memory */ }
+        const catStored = await chrome.storage.local.get(STORAGE_KEYS.CATEGORIES);
+        const persisted = (catStored[STORAGE_KEYS.CATEGORIES] as string[] | undefined) ?? [];
+        this.customCategories = persisted.length > 0 ? persisted : this.customCategories;
+      } catch { /* non-fatal; categories stay in-memory */ }
 
       if (this.authState.type === 'guest') this.publishMode = 'local';
 
@@ -750,14 +750,6 @@ export class DiscernedOverlay extends HTMLElement {
                 <input type="text" id="category" value="${this.escapeHtml(this.category)}" autocomplete="off" spellcheck="false" />
                 <button type="button" class="combobox-toggle" id="category-toggle" tabindex="-1">▾</button>
                 <ul class="combobox-list" id="category-list" role="listbox">
-                  <li data-value="General">General</li>
-                  <li data-value="Tech">Tech</li>
-                  <li data-value="Finance">Finance</li>
-                  <li data-value="Health">Health</li>
-                  <li data-value="Politics">Politics</li>
-                  <li data-value="Philosophy">Philosophy</li>
-                  <li data-value="Science">Science</li>
-                  <li data-value="Culture">Culture</li>
                 </ul>
               </div>
             </div>
@@ -1007,14 +999,13 @@ export class DiscernedOverlay extends HTMLElement {
     const list   = this.shadow.getElementById('category-list')   as HTMLUListElement;
     if (!input || !toggle || !list) return;
 
-    // Re-add any previously entered custom categories so they survive a re-render.
+    // Populate category list from the unified categories array (initial + user-created).
     for (const c of this.customCategories) {
       const exists = Array.from(list.querySelectorAll('li')).some(li => li.dataset.value?.toLowerCase() === c.toLowerCase());
       if (!exists) {
         const li = document.createElement('li');
         li.dataset.value = c;
         li.textContent = c;
-        li.classList.add('custom-entry');
         list.appendChild(li);
       }
     }
@@ -1038,7 +1029,7 @@ export class DiscernedOverlay extends HTMLElement {
       );
       if (!alreadyExists) {
         this.customCategories.push(trimmed);
-        void chrome.storage.local.set({ [STORAGE_KEYS.CUSTOM_CATEGORIES]: [...this.customCategories] });
+        void chrome.storage.local.set({ [STORAGE_KEYS.CATEGORIES]: [...this.customCategories] });
         void chrome.runtime.sendMessage({ type: 'SYNC_CATEGORIES_TO_WEB' });
         const li = document.createElement('li');
         li.dataset.value = trimmed;

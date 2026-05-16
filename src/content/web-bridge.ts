@@ -119,12 +119,10 @@ async function sendBridgeData(knownCount = 0): Promise<void> {
     log(LL.NORMAL, `web-bridge: clip count unchanged (${clips.length}), skipping BRIDGE_CLIPS`, 'url:', window.location.href);
   }
 
-  // Always send custom categories so the web app's sidebar stays in sync.
-  const catStored = await chrome.storage.local.get(STORAGE_KEYS.CUSTOM_CATEGORIES);
-  const customCats = (catStored[STORAGE_KEYS.CUSTOM_CATEGORIES] as string[] | undefined) ?? [];
-  if (customCats.length > 0) {
-    post({ type: 'DISCERNED_BRIDGE_CATEGORIES', categories: customCats });
-  }
+  // Always send the full category list so the web app's sidebar stays in sync.
+  const catStored = await chrome.storage.local.get(STORAGE_KEYS.CATEGORIES);
+  const cats = (catStored[STORAGE_KEYS.CATEGORIES] as string[] | undefined) ?? [];
+  post({ type: 'DISCERNED_BRIDGE_CATEGORIES', categories: cats });
 }
 
 // Listen for messages pushed from the background worker.

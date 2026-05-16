@@ -165,7 +165,19 @@ async function restoreAuthState(): Promise<void> {
   log(LL.DEBUG, 'Discerned auth state:', currentAuthState.type);
 }
 
+const INITIAL_CATEGORIES = ['General', 'Tech', 'Finance', 'Health', 'Politics', 'Philosophy', 'Science', 'Culture'];
+
+// Migrate legacy customCategories → categories, or seed the initial list if absent.
+async function seedCategories(): Promise<void> {
+  const stored = await chrome.storage.local.get([STORAGE_KEYS.CATEGORIES, STORAGE_KEYS.CUSTOM_CATEGORIES]);
+  if (stored[STORAGE_KEYS.CATEGORIES]) return; // already migrated
+  const legacy = (stored[STORAGE_KEYS.CUSTOM_CATEGORIES] as string[] | undefined) ?? [];
+  const merged = [...INITIAL_CATEGORIES, ...legacy.filter(c => !INITIAL_CATEGORIES.map(x => x.toLowerCase()).includes(c.toLowerCase()))];
+  await chrome.storage.local.set({ [STORAGE_KEYS.CATEGORIES]: merged });
+}
+
 restoreAuthState();
+seedCategories();
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   log(LL.NORMAL, 'Discerned extension installed/updated');
@@ -342,13 +354,13 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       return handleImportClips(message.clips);
 
     case 'UPDATE_CATEGORIES':
-      await chrome.storage.local.set({ [STORAGE_KEYS.CUSTOM_CATEGORIES]: message.categories });
+      await chrome.storage.local.set({ [STORAGE_KEYS.CATEGORIES]: message.categories });
       return { success: true };
 
     case 'SYNC_CATEGORIES_TO_WEB': {
-      const catStored = await chrome.storage.local.get(STORAGE_KEYS.CUSTOM_CATEGORIES);
-      const custom = (catStored[STORAGE_KEYS.CUSTOM_CATEGORIES] as string[] | undefined) ?? [];
-      await pushCategoriesToWebApp(custom);
+      const catStored = await chrome.storage.local.get(STORAGE_KEYS.CATEGORIES);
+      const cats = (catStored[STORAGE_KEYS.CATEGORIES] as string[] | undefined) ?? [];
+      await pushCategoriesToWebApp(cats);
       return { success: true };
     }
 
