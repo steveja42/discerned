@@ -80,6 +80,32 @@ async function pushResyncToWebApp(): Promise<void> {
   }
 }
 
+async function pushCategoriesToWebApp(categories: string[]): Promise<void> {
+  const tabs = await chrome.tabs.query({ url: DISCERNED_URL_PATTERNS });
+  const message: BackgroundMessage = { type: 'PUSH_CATEGORIES', categories };
+  for (const tab of tabs) {
+    if (tab.id === undefined) continue;
+    chrome.tabs.sendMessage(tab.id, message).catch(() => { /* non-fatal */ });
+  }
+}
+
+async function handleImportClips(clips: ClipData[]): Promise<BackgroundResponse> {
+  try {
+    for (const clip of clips) {
+      await saveClipLocally({
+        id: clip.capture.id,
+        encrypted: JSON.stringify(clip),
+        timestamp: clip.capture.timestamp,
+      });
+    }
+    await pushResyncToWebApp();
+    return { success: true, data: { count: clips.length } };
+  } catch (error) {
+    log(LL.ERROR, 'Import clips error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Import failed' };
+  }
+}
+
 const LIBRARY_URL_PATTERNS = ['https://discerned.online/library*', 'http://localhost:3000/library*'];
 // Base URLs derived from DISCERNED_URL_PATTERNS (strip trailing /*).
 const DISCERNED_BASE_URLS = DISCERNED_URL_PATTERNS.map(p => p.replace(/\/\*$/, ''));
@@ -312,9 +338,24 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       if (senderTabId !== undefined) registerLogTab(senderTabId);
       return { success: true };
 
+    case 'IMPORT_CLIPS':
+      return handleImportClips(message.clips);
+
+    case 'UPDATE_CATEGORIES':
+      await chrome.storage.local.set({ [STORAGE_KEYS.CUSTOM_CATEGORIES]: message.categories });
+      return { success: true };
+
+    case 'SYNC_CATEGORIES_TO_WEB': {
+      const catStored = await chrome.storage.local.get(STORAGE_KEYS.CUSTOM_CATEGORIES);
+      const custom = (catStored[STORAGE_KEYS.CUSTOM_CATEGORIES] as string[] | undefined) ?? [];
+      await pushCategoriesToWebApp(custom);
+      return { success: true };
+    }
+
     case 'PUSH_NEW_CLIP':
     case 'FORCE_BRIDGE_RESYNC':
     case 'NAVIGATE_TO_CLIP':
+    case 'PUSH_CATEGORIES':
       // These are background→content messages; the background never receives them.
       return { success: false, error: 'Not handled by background' };
 

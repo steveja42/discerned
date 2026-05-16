@@ -115,6 +115,12 @@ export class DiscernedOverlay extends HTMLElement {
         if (sc?.trim()) this.category = sc.trim();
       } catch { /* non-fatal; use defaults */ }
 
+      try {
+        const catStored = await chrome.storage.local.get(STORAGE_KEYS.CUSTOM_CATEGORIES);
+        const persisted = (catStored[STORAGE_KEYS.CUSTOM_CATEGORIES] as string[] | undefined) ?? [];
+        this.customCategories = [...new Set([...this.customCategories, ...persisted])];
+      } catch { /* non-fatal; custom categories stay in-memory */ }
+
       if (this.authState.type === 'guest') this.publishMode = 'local';
 
       // Re-render main view to reflect loaded state (only if main view is active).
@@ -1032,6 +1038,8 @@ export class DiscernedOverlay extends HTMLElement {
       );
       if (!alreadyExists) {
         this.customCategories.push(trimmed);
+        void chrome.storage.local.set({ [STORAGE_KEYS.CUSTOM_CATEGORIES]: [...this.customCategories] });
+        void chrome.runtime.sendMessage({ type: 'SYNC_CATEGORIES_TO_WEB' });
         const li = document.createElement('li');
         li.dataset.value = trimmed;
         li.textContent = trimmed;

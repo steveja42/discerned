@@ -118,6 +118,13 @@ async function sendBridgeData(knownCount = 0): Promise<void> {
   } else {
     log(LL.NORMAL, `web-bridge: clip count unchanged (${clips.length}), skipping BRIDGE_CLIPS`, 'url:', window.location.href);
   }
+
+  // Always send custom categories so the web app's sidebar stays in sync.
+  const catStored = await chrome.storage.local.get(STORAGE_KEYS.CUSTOM_CATEGORIES);
+  const customCats = (catStored[STORAGE_KEYS.CUSTOM_CATEGORIES] as string[] | undefined) ?? [];
+  if (customCats.length > 0) {
+    post({ type: 'DISCERNED_BRIDGE_CATEGORIES', categories: customCats });
+  }
 }
 
 // Listen for messages pushed from the background worker.
@@ -137,6 +144,9 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
     // Tell the web page to focus this clip without any URL or React tree change.
     post({ type: 'DISCERNED_BRIDGE_FOCUS_CLIP', clipId: message.clipId });
     log(LL.NORMAL, 'web-bridge: focus clip', message.clipId, 'url:', window.location.href);
+  }
+  if (message.type === 'PUSH_CATEGORIES') {
+    post({ type: 'DISCERNED_BRIDGE_CATEGORIES', categories: message.categories });
   }
 });
 
@@ -177,6 +187,12 @@ window.addEventListener('message', (e: MessageEvent) => {
   }
   if (msg?.type === 'DISCERNED_UPDATE_NOTE') {
     chrome.runtime.sendMessage({ type: 'UPDATE_CLIP_NOTE', id: msg.id, note: msg.note }).catch(() => { /* non-fatal */ });
+  }
+  if (msg?.type === 'DISCERNED_IMPORT_CLIPS') {
+    chrome.runtime.sendMessage({ type: 'IMPORT_CLIPS', clips: msg.clips }).catch(() => { /* non-fatal */ });
+  }
+  if (msg?.type === 'DISCERNED_UPDATE_CATEGORIES') {
+    chrome.runtime.sendMessage({ type: 'UPDATE_CATEGORIES', categories: msg.categories }).catch(() => { /* non-fatal */ });
   }
 });
 
