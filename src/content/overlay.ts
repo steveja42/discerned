@@ -544,6 +544,23 @@ export class DiscernedOverlay extends HTMLElement {
             <div class="usage-row"><span>📡 Public casts</span><span class="usage-value" id="cast-count">—</span></div>
           </div>
           <div class="settings-card">
+            <div class="card-label">Capture</div>
+            <label class="toggle-row">
+              <input type="checkbox" id="opt-smart-article" />
+              <span class="toggle-label">
+                <span class="toggle-title">Smart article detection</span>
+                <span class="toggle-desc">Skip broad article containers (feeds, pages with nested articles or nav) and use Readability instead.</span>
+              </span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="opt-strip-styles" />
+              <span class="toggle-label">
+                <span class="toggle-title">Strip inline styles</span>
+                <span class="toggle-desc">Remove style= attributes from captured HTML so clips render with Reading Room styling only.</span>
+              </span>
+            </label>
+          </div>
+          <div class="settings-card">
             <button class="link-btn" id="settings-export">Export local clips as JSON</button>
           </div>
         </div>
@@ -582,6 +599,29 @@ export class DiscernedOverlay extends HTMLElement {
     this.shadow.getElementById('settings-export')?.addEventListener('click', () => this.exportClips());
 
     void this.loadStats();
+    void this.loadCaptureToggles();
+  }
+
+  private async loadCaptureToggles() {
+    try {
+      const stored = await chrome.storage.local.get([
+        STORAGE_KEYS.SMART_ARTICLE_DETECTION,
+        STORAGE_KEYS.STRIP_INLINE_STYLES,
+      ]);
+      const smartEl = this.shadow.getElementById('opt-smart-article') as HTMLInputElement | null;
+      const stripEl = this.shadow.getElementById('opt-strip-styles')  as HTMLInputElement | null;
+      if (smartEl) smartEl.checked = !!(stored[STORAGE_KEYS.SMART_ARTICLE_DETECTION] as boolean | undefined);
+      if (stripEl) stripEl.checked = !!(stored[STORAGE_KEYS.STRIP_INLINE_STYLES]     as boolean | undefined);
+
+      smartEl?.addEventListener('change', () => {
+        void chrome.storage.local.set({ [STORAGE_KEYS.SMART_ARTICLE_DETECTION]: smartEl.checked });
+      });
+      stripEl?.addEventListener('change', () => {
+        void chrome.storage.local.set({ [STORAGE_KEYS.STRIP_INLINE_STYLES]: stripEl.checked });
+      });
+    } catch (err) {
+      log(LL.WARN, 'Failed to load capture toggles', err);
+    }
   }
 
   private async loadStats() {
@@ -1446,6 +1486,11 @@ export class DiscernedOverlay extends HTMLElement {
       .pin-row input { flex: 1; background: #252525; border: 1px solid #3a3a3a; border-radius: 4px; color: #e8e8e8; font-size: 12px; padding: 6px 8px; outline: none; }
       .pin-row .btn { padding: 6px 10px; font-size: 12px; }
       .pin-error { font-size: 12px; color: #f87171; margin-top: 4px; }
+      .toggle-row { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+      .toggle-row input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; accent-color: #0ea5e9; width: 14px; height: 14px; cursor: pointer; }
+      .toggle-label { display: flex; flex-direction: column; gap: 2px; }
+      .toggle-title { font-size: 12px; color: #e8e8e8; }
+      .toggle-desc  { font-size: 11px; color: #888; line-height: 1.45; }
 
       /* Loading overlay */
       .loading {

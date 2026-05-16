@@ -95,15 +95,23 @@ export function hasSelection(): boolean {
   return !!sel && sel.toString().trim().length > 0;
 }
 
+export interface CaptureOptions {
+  /** Skip bare `<article>` elements that look like page containers (have nested articles,
+   *  nav/header/footer descendants, or many top-level sections) and hand them to Readability. */
+  smartArticleDetection: boolean;
+  /** Strip inline style attributes from captured HTML before storing. */
+  stripInlineStyles: boolean;
+}
+
 /**
  * Branch on format and produce a fully-populated Capture. Image-inlining and Readability
  * parsing are async so this returns a Promise.
  */
-export async function captureContext(format: ClipFormat): Promise<Capture> {
+export async function captureContext(format: ClipFormat, opts: CaptureOptions = { smartArticleDetection: false, stripInlineStyles: false }): Promise<Capture> {
   switch (format) {
     case 'selection':           return extractSelection();
-    case 'article':             return extractArticle();
-    case 'full-page':           return extractFullPage();
+    case 'article':             return extractArticle(opts);
+    case 'full-page':           return extractFullPage(opts);
     case 'bookmark':            return extractBookmark();
   }
 }
@@ -127,7 +135,10 @@ function extractSelection(): Capture {
   }
 
   const range = selection.getRangeAt(0);
+  const cleanup = markExcluded(document.body);
   const fragment = wrapFragmentBoundaries(range);
+  cleanup();
+  removeMarked(fragment);
   const sanitized = sanitizeFragment(fragment);
   const context = extractContext(range);
 
@@ -243,26 +254,53 @@ const ARTICLE_SELECTORS = [
 ];
 const ARTICLE_MIN_CHARS = 200;
 
-function findArticleElement(): Element | null {
+/**
+ * Returns true when an article element looks like a page-level container rather
+ * than a focused piece of content. Checked only when smartArticleDetection is on.
+ *
+ * Signals (any one is sufficient):
+ *   1. Contains nested <article> elements — it's a feed/list, not a single piece.
+ *   2. Contains a <nav> descendant — page chrome leaked into the article.
+ *   3. Contains a top-level <header> or <footer> — structural page sections inside.
+ *   4. Has ≥ 3 direct <section> children — more like a hub page than an article.
+ */
+function looksLikeContainer(el: Element): boolean {
+  if (el.querySelector('article')) return true;
+  if (el.querySelector('nav')) return true;
+  if (el.querySelector(':scope > header, :scope > footer')) return true;
+  const directSections = Array.from(el.children).filter(c => c.tagName.toLowerCase() === 'section');
+  if (directSections.length >= 3) return true;
+  return false;
+}
+
+function findArticleElement(smartDetection: boolean): Element | null {
   for (const sel of ARTICLE_SELECTORS) {
     const el = document.querySelector(sel);
-    if (el && (el.textContent ?? '').trim().length >= ARTICLE_MIN_CHARS) return el;
+    if (!el || (el.textContent ?? '').trim().length < ARTICLE_MIN_CHARS) continue;
+    if (smartDetection && looksLikeContainer(el)) {
+      log(LL.NORMAL, `Discerned: skipping <${el.tagName.toLowerCase()}> (looks like container) — falling to Readability`, 'url:', window.location.href);
+      return null;
+    }
+    return el;
   }
   return null;
 }
 
-async function extractArticle(): Promise<Capture> {
+async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const base = baseFields();
   const thumbnailUrl = getPageThumbnail();
   const inlinedThumbnail = thumbnailUrl ? await inlineImage(thumbnailUrl) : null;
 
   // Tier 1: semantic article element — preserves images at their correct positions.
-  const articleEl = findArticleElement();
+  const articleEl = findArticleElement(opts.smartArticleDetection);
   if (articleEl) {
     log(LL.NORMAL, `Discerned: article captured via semantic element <${articleEl.tagName.toLowerCase()}>`, 'url:', base.url);
+    const cleanup = markExcluded(document.body);
     const clone = articleEl.cloneNode(true) as Element;
+    cleanup();
     clone.querySelector('discerned-overlay')?.remove();
-    sanitiseTreeInPlace(clone as HTMLElement);
+    removeMarked(clone);
+    sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
     const inlined = await inlineAllImages(clone.innerHTML.trim());
     log(LL.NORMAL, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     return {
@@ -346,12 +384,12 @@ function parseReadability(): ReturnType<Readability['parse']> | null {
 
 // ── Full page ────────────────────────────────────────────────────────────────
 
-async function extractFullPage(): Promise<Capture> {
+async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
   // Clone the body only — using outerHTML (which includes <html>/<head>) causes
   // DOMParser to restructure the document in ways that leave <script> content as
   // orphaned text nodes that querySelectorAll('script') can't reach.
   const bodyClone = cloneBodyClean();
-  sanitiseTreeInPlace(bodyClone);
+  sanitiseTreeInPlace(bodyClone, opts.stripInlineStyles);
   const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
   return {
     ...baseFields(),
@@ -362,29 +400,43 @@ async function extractFullPage(): Promise<Capture> {
   };
 }
 
-const FIXED_MARKER = 'data-discerned-fixed';
+const EXCL_MARKER = 'data-discerned-excl';
 
 /**
- * Deep-clone document.body with the Discerned overlay and ad/tracking overlays removed.
+ * Mark elements in the live DOM that should be excluded from any clone, then
+ * return a cleanup that removes those markers from the live DOM.
+ * Must be called while elements are still attached — getComputedStyle requires
+ * an attached node. The markers survive cloneNode/cloneContents, so the clone
+ * can be cleaned up with removeMarked() afterward.
  */
-function cloneBodyClean(): HTMLElement {
-  // Mark fixed/sticky elements in the live DOM before cloning — getComputedStyle
-  // doesn't work on detached nodes, so we must identify them while still attached.
-  document.body.querySelectorAll<HTMLElement>('*').forEach(el => {
+function markExcluded(root: HTMLElement = document.body): () => void {
+  root.querySelectorAll<HTMLElement>('*').forEach(el => {
     if (el.tagName.toLowerCase() === 'discerned-overlay') return;
-    const pos = window.getComputedStyle(el).position;
-    if (pos === 'fixed' || pos === 'sticky') {
-      el.setAttribute(FIXED_MARKER, '1');
+    const s = window.getComputedStyle(el);
+    if (s.position === 'fixed' || s.position === 'sticky' ||
+        s.display === 'none' || s.visibility === 'hidden') {
+      el.setAttribute(EXCL_MARKER, '1');
     }
   });
+  return () => root.querySelectorAll(`[${EXCL_MARKER}]`).forEach(el => el.removeAttribute(EXCL_MARKER));
+}
 
+/** Remove all marked elements from a detached clone or fragment. */
+function removeMarked(root: Element | DocumentFragment): void {
+  (root as Element).querySelectorAll(`[${EXCL_MARKER}]`).forEach(el => el.remove());
+}
+
+/**
+ * Deep-clone document.body with the Discerned overlay, fixed/sticky chrome,
+ * and hidden elements removed.
+ */
+function cloneBodyClean(): HTMLElement {
+  const cleanup = markExcluded(document.body);
   const clone = document.body.cloneNode(true) as HTMLElement;
-
-  // Remove temporary markers from the live DOM.
-  document.body.querySelectorAll(`[${FIXED_MARKER}]`).forEach(el => el.removeAttribute(FIXED_MARKER));
+  cleanup();
 
   clone.querySelector('discerned-overlay')?.remove();
-  clone.querySelectorAll(`[${FIXED_MARKER}]`).forEach(el => el.remove());
+  removeMarked(clone);
 
   return clone;
 }
@@ -428,7 +480,7 @@ function scrubStyle(value: string): string {
     .replace(/behavior\s*:/gi, '');
 }
 
-function sanitiseElement(element: Element) {
+function sanitiseElement(element: Element, stripStyles = false) {
   const tagName = element.tagName.toLowerCase();
 
   if (!ALLOWED_TAGS.has(tagName)) {
@@ -440,6 +492,7 @@ function sanitiseElement(element: Element) {
 
   Array.from(element.attributes).forEach(attr => {
     const name = attr.name.toLowerCase();
+    if (name === 'style' && stripStyles) { element.removeAttribute(attr.name); return; }
     const allowed = ALLOWED_ATTRS_GLOBAL.has(name) || perTag.has(name);
     if (!allowed) { element.removeAttribute(attr.name); return; }
 
@@ -455,14 +508,14 @@ function sanitiseElement(element: Element) {
   });
 }
 
-function sanitiseTreeInPlace(root: Element) {
+function sanitiseTreeInPlace(root: Element, stripStyles = false) {
   // Drop dangerous elements outright before walking.
   root.querySelectorAll('script, style, iframe, object, embed, link, meta, noscript').forEach(el => el.remove());
 
   const walk = (node: Node) => {
     Array.from(node.childNodes).forEach(walk);
     if (node.nodeType !== Node.ELEMENT_NODE) return;
-    sanitiseElement(node as Element);
+    sanitiseElement(node as Element, stripStyles);
   };
   Array.from(root.childNodes).forEach(walk);
 }

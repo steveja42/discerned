@@ -5,6 +5,7 @@
 // Access: DOM (document.body), chrome.runtime.onMessage/sendMessage, chrome.storage.local
 
 import { captureContext, isCapturablePage, hasSelection } from './capture';
+import type { CaptureOptions } from './capture';
 import { DiscernedOverlay } from './overlay';
 import { detectAuthState, signWithNIP07 } from '@/shared/nostr/auth';
 import type { AuthState, BackgroundMessage, Capture, ClipFormat, Evaluation } from '@/shared/types';
@@ -129,7 +130,22 @@ async function handleActivation() {
   await currentOverlay.show({
     initialFormat,
     hasSelection: selectionPresent,
-    onCapture: (format: ClipFormat) => captureContext(format),
+    onCapture: async (format: ClipFormat) => {
+      let captureOpts: CaptureOptions = { smartArticleDetection: false, stripInlineStyles: false };
+      try {
+        const stored = await chrome.storage.local.get([
+          STORAGE_KEYS.SMART_ARTICLE_DETECTION,
+          STORAGE_KEYS.STRIP_INLINE_STYLES,
+        ]);
+        captureOpts = {
+          smartArticleDetection: !!(stored[STORAGE_KEYS.SMART_ARTICLE_DETECTION] as boolean | undefined),
+          stripInlineStyles:     !!(stored[STORAGE_KEYS.STRIP_INLINE_STYLES]     as boolean | undefined),
+        };
+      } catch {
+        // Non-fatal; use defaults.
+      }
+      return captureContext(format, captureOpts);
+    },
     onClip: async (capture: Capture, evaluation: Evaluation) => {
       await handleClip(capture, evaluation);
       void rememberFormat(capture.format);

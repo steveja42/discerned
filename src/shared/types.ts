@@ -119,6 +119,8 @@ export const STORAGE_KEYS = {
   LAST_INTEREST:     'lastInterest',
   LAST_ETHICS:       'lastEthics',
   LAST_CATEGORY:     'lastCategory',
+  SMART_ARTICLE_DETECTION: 'smartArticleDetection',
+  STRIP_INLINE_STYLES:     'stripInlineStyles',
 } as const;
 
 // Messages posted between the extension's web-bridge content script and the
