@@ -495,7 +495,7 @@ function blobToDataUri(blob: Blob): Promise<string> {
 
 async function handleGetClipCount(): Promise<BackgroundResponse> {
   return new Promise((resolve) => {
-    const request = indexedDB.open('discerned', DB_VERSION);
+    const request = indexedDB.open('discerned');
     request.onerror = () => resolve({ success: false, error: 'IndexedDB open failed' });
     request.onupgradeneeded = () => { /* read-only probe; no schema changes */ };
     request.onsuccess = () => {
@@ -513,7 +513,7 @@ async function handleGetClipCount(): Promise<BackgroundResponse> {
 
 async function handleGetClips(): Promise<BackgroundResponse> {
   return new Promise((resolve) => {
-    const request = indexedDB.open('discerned', DB_VERSION);
+    const request = indexedDB.open('discerned');
     request.onerror = () => resolve({ success: false, error: 'IndexedDB open failed' });
     request.onupgradeneeded = () => { /* read-only probe; no schema changes */ };
     request.onsuccess = () => {
@@ -568,7 +568,7 @@ async function handleGetClips(): Promise<BackgroundResponse> {
 async function handleDeleteClips(ids: string[]): Promise<BackgroundResponse> {
   const validIds = ids.filter(Boolean);
   return new Promise((resolve) => {
-    const request = indexedDB.open('discerned', DB_VERSION);
+    const request = indexedDB.open('discerned');
     request.onerror = () => {
       void pushResyncToWebApp();
       resolve({ success: false, error: 'IndexedDB open failed' });
@@ -611,7 +611,7 @@ async function handleDeleteClips(ids: string[]): Promise<BackgroundResponse> {
 
 async function handleUpdateClipNote(id: string, note: string): Promise<BackgroundResponse> {
   return new Promise((resolve) => {
-    const request = indexedDB.open('discerned', DB_VERSION);
+    const request = indexedDB.open('discerned');
     request.onerror = () => {
       void pushResyncToWebApp();
       resolve({ success: false, error: 'IndexedDB open failed' });
