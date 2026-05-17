@@ -144,6 +144,7 @@ async function handleActivation() {
       } catch {
         // Non-fatal; use defaults.
       }
+      log(LL.DEBUG, `Discerned: capture starting — format="${format}" smartArticleDetection=${captureOpts.smartArticleDetection} stripInlineStyles=${captureOpts.stripInlineStyles}`, 'url:', window.location.href);
       return captureContext(format, captureOpts);
     },
     onClip: async (capture: Capture, evaluation: Evaluation) => {
