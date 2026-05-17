@@ -38,6 +38,28 @@
         "<node_internals>/**/*.js"
       ]
     },
+        {
+      "name": "Debug: Brave (default)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "https://example.com/",
+      "webRoot": "${workspaceFolder}",
+      /* --- Path for Windows --- */
+      "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      /* --- Path for macOS (Uncomment if needed) --- */
+      // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      "userDataDir": "C:\\Users\\steve\\AppData\\Local\\BraveSoftware\\Brave-Browser\\User Data",
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run",
+        "--profile-directory=Default",
+        "--remote-debugging-port=9222"
+      ]
+    },
     {
       "name": "Debug: Brave (no nsec)",
       "type": "chrome",
