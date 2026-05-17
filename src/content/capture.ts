@@ -26,6 +26,8 @@ const TRACKING_PARAMS = new Set([
   'fbclid', 'fb_action_ids', 'fb_action_types', 'fb_source',
   // Twitter / X
   'twclid',
+  'ref_src', 'ref_url',
+  'twsrc', 'twcamp', 'twterm', 'twgr', 'twcon',
   // Instagram
   'igshid',
   // TikTok
@@ -127,10 +129,9 @@ function baseFields(): Pick<Capture, 'id' | 'url' | 'title' | 'timestamp'> {
 
 // ── Selection ────────────────────────────────────────────────────────────────
 
-function extractSelection(): Capture {
+async function extractSelection(): Promise<Capture> {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0 || selection.toString().trim().length === 0) {
-    // Caller should guard against this; degrade gracefully to a bookmark.
     return extractBookmark();
   }
 
@@ -139,13 +140,17 @@ function extractSelection(): Capture {
   const fragment = wrapFragmentBoundaries(range);
   cleanup();
   removeMarked(fragment);
+  // Twitter GIFs and videos are <video poster="..."> — convert to <img> so they
+  // survive sanitisation (which drops <video> as a non-allowed tag).
+  substituteVideosWithPosters(fragment);
   const sanitized = sanitizeFragment(fragment);
   const context = extractContext(range);
+  const inlined = await inlineAllImages(sanitized);
 
   return {
     ...baseFields(),
     format: 'selection',
-    selectionText: sanitized,
+    selectionText: inlined,
     selectionContext: context,
   };
 }
@@ -241,6 +246,301 @@ function extractBookmark(): Capture {
   };
 }
 
+// ── Twitter / X extractor ────────────────────────────────────────────────────
+
+/**
+ * Build a clean tweet card from Twitter's live DOM using data-testid selectors,
+ * which are stable across Twitter's obfuscated class names. Returns null if any
+ * required element is missing so the caller can fall through to generic capture.
+ */
+/** Extract name, badges, text, photos, and video poster from a tweet container element. */
+async function extractTweetBlock(root: Element) {
+  const userNameEl = root.querySelector<HTMLElement>('[data-testid="User-Name"]');
+  const displayName = userNameEl?.querySelector<HTMLElement>('span > span')?.textContent?.trim() ?? '';
+
+  // Handle: prefer an <a href="/..."> inside User-Name (outer tweet), fall back to
+  // the first @-prefixed span anywhere in the root (quoted tweet's handle is outside User-Name).
+  const handleFromLink = userNameEl?.querySelector<HTMLAnchorElement>('a[href^="/"]')
+    ?.getAttribute('href')?.replace(/^\//, '') ?? '';
+  const handleFromSpan = !handleFromLink
+    ? Array.from(root.querySelectorAll<HTMLElement>('span'))
+        .find(s => s.textContent?.trim().startsWith('@'))
+        ?.textContent?.trim().replace(/^@/, '') ?? ''
+    : '';
+  const handle = handleFromLink || handleFromSpan;
+
+  // Relative time shown in quoted tweets (e.g. "22h")
+  const quoteTimeEl = root.querySelector<HTMLElement>('time[datetime]');
+  const quoteTime = quoteTimeEl?.textContent?.trim() ?? '';
+  const nameLinkEl = userNameEl?.querySelector<HTMLElement>('a[href^="/"]');
+  const badgeEls = nameLinkEl
+    ? Array.from(nameLinkEl.querySelectorAll<HTMLElement>('img, svg[data-testid="icon-verified"]'))
+    : [];
+  const badgeHtmlParts = await Promise.all(badgeEls.map(async (el) => {
+    if (el.tagName.toLowerCase() === 'img') {
+      const imgEl = el as HTMLImageElement;
+      const alt = imgEl.alt ?? '';
+      const src = imgEl.src;
+      if (!src || !isSafeImageSrc(src)) return alt ? `<span>${alt}</span>` : '';
+      const inlined = await inlineImage(src);
+      return `<img class="tweet-badge-emoji" src="${inlined}" alt="${alt.replace(/"/g,'&quot;')}" width="16" height="16">`;
+    }
+    return `<svg class="tweet-badge-verified" viewBox="0 0 22 22" aria-label="Verified" width="16" height="16"><path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"/></svg>`;
+  }));
+  const tweetTextEl = root.querySelector<HTMLElement>('[data-testid="tweetText"]');
+  const sanitisedText = sanitizeHtmlString(tweetTextEl?.innerHTML ?? '');
+  const plainText = tweetTextEl?.textContent?.trim() ?? '';
+  // Videos: collect ALL video players — tweets can have 2 side-by-side videos.
+  // For each tweetPhoto container with a videoPlayer, capture poster, duration, and aspect ratio.
+  const videoInfos: VideoInfo[] = Array.from(root.querySelectorAll<HTMLElement>('[data-testid="tweetPhoto"]'))
+    .filter(c => c.querySelector('[data-testid="videoPlayer"]'))
+    .flatMap(container => {
+      const videoEl = container.querySelector<HTMLVideoElement>('[data-testid="videoPlayer"] video[poster]');
+      const poster = videoEl?.getAttribute('poster') ?? null;
+      if (!poster || !isSafeImageSrc(poster)) return [];
+      const duration = Array.from(container.querySelectorAll<HTMLElement>('span'))
+        .find(s => /^\d+:\d+$/.test(s.textContent?.trim() ?? ''))
+        ?.textContent?.trim() ?? null;
+      const sizer = container.querySelector<HTMLElement>('[style*="padding-bottom"]');
+      const pb = sizer?.style.paddingBottom ?? '';
+      const aspectPct = (() => { const v = parseFloat(pb); return Number.isFinite(v) && v > 0 ? v : null; })();
+      return [{ poster, duration, aspectPct }];
+    });
+
+  // Photo srcs: only from tweetPhoto containers that do NOT contain a video player.
+  const photoSrcs = Array.from(root.querySelectorAll<HTMLElement>('[data-testid="tweetPhoto"]'))
+    .filter(container => !container.querySelector('[data-testid="videoPlayer"]'))
+    .flatMap(container => Array.from(container.querySelectorAll<HTMLImageElement>('img')))
+    .map(img => img.src).filter(isSafeImageSrc);
+
+  return { displayName, handle, quoteTime, badgesHtml: badgeHtmlParts.join(''), sanitisedText, plainText, photoSrcs, videoInfos };
+}
+
+type VideoInfo = { poster: string; duration: string | null; aspectPct: number | null };
+
+function buildSingleVideoHtml(poster: string, duration: string | null, aspectPct: number | null, href: string): string {
+  const maxWidth = aspectPct && aspectPct > 100
+    ? `${Math.round(100 / (aspectPct / 100))}%`
+    : '100%';
+  const safeDuration = duration
+    ? duration.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    : null;
+  return `<a class="tweet-video" href="${href}" target="_blank" rel="noopener noreferrer" style="max-width:${maxWidth}">
+  <img src="${poster}" alt="Video thumbnail" class="tweet-video-poster">
+  <div class="tweet-video-play" aria-label="Play video">
+    <svg viewBox="0 0 24 24" width="48" height="48"><path d="M8 5v14l11-7z"/></svg>
+  </div>${safeDuration ? `<span class="tweet-video-duration">${safeDuration}</span>` : ''}
+</a>`;
+}
+
+function buildVideoHtml(inlinedVideos: Array<{ poster: string; duration: string | null; aspectPct: number | null }>, href: string): string {
+  if (inlinedVideos.length === 0) return '';
+  const items = inlinedVideos.map(v => buildSingleVideoHtml(v.poster, v.duration, v.aspectPct, href));
+  if (items.length === 1) return items[0];
+  // Multiple videos: render in a grid row matching how X shows side-by-side videos.
+  return `<div class="tweet-video-grid">${items.join('')}</div>`;
+}
+
+async function extractTweet(base: Pick<Capture, 'id' | 'url' | 'title' | 'timestamp'>): Promise<Capture | null> {
+  const article = document.querySelector('article[data-testid="tweet"]') ??
+                  document.querySelector('article');
+  if (!article) return null;
+
+  // Reposter header — [data-testid="socialContext"] lives inside the article's first
+  // column (above the tweet body). It contains the reposter's name and a repost SVG.
+  const socialCtx = article.querySelector<HTMLElement>('[data-testid="socialContext"]');
+  let reposterHtml = '';
+  if (socialCtx) {
+    const reposterText = socialCtx.textContent?.trim() ?? '';
+    const repostSvgEl = socialCtx.querySelector('svg');
+    let repostSvgHtml = '';
+    if (repostSvgEl) {
+      const clone = repostSvgEl.cloneNode(true) as SVGElement;
+      clone.removeAttribute('class');
+      clone.querySelectorAll('[class]').forEach(el => el.removeAttribute('class'));
+      repostSvgHtml = clone.outerHTML;
+    }
+    const safeName = reposterText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    reposterHtml = `<div class="tweet-repost-header">${repostSvgHtml}<span>${safeName}</span></div>`;
+    log(LL.DEBUG, `Discerned: repost detected — "${reposterText}"`, 'url:', base.url);
+  }
+
+  // Quoted tweet — Twitter wraps it in a [role="link"] block with its own User-Name
+  // and tweetText. Swap it out with a comment placeholder while extracting the outer
+  // tweet so outer queries don't descend into the quote's elements.
+  // The quoted tweet is the only [role="link"] inside the article that also
+  // contains a [data-testid="User-Name"] — the outer tweet's User-Name is never
+  // inside a role="link" wrapper.
+  const quoteContainer = article.querySelector<HTMLElement>('[role="link"]:has([data-testid="User-Name"])');
+  const isQuote = !!(quoteContainer?.querySelector('[data-testid="tweetText"]'));
+  let quotedHtml = '';
+
+  if (isQuote && quoteContainer) {
+    log(LL.DEBUG, `Discerned: quote tweet detected — "${quoteContainer.querySelector('[data-testid="tweetText"]')?.textContent?.trim().slice(0, 60)}"`, 'url:', base.url);
+    const qb = await extractTweetBlock(quoteContainer);
+    const qAvatarImg = quoteContainer.querySelector<HTMLImageElement>('[data-testid="Tweet-User-Avatar"] img');
+    const qAvatarSrc = qAvatarImg?.src ?? '';
+    const [qAvatar, ...qInlinedRest] = await Promise.all([
+      qAvatarSrc && isSafeImageSrc(qAvatarSrc) ? inlineImage(qAvatarSrc) : Promise.resolve(''),
+      ...qb.videoInfos.map(v => inlineImage(v.poster)),
+      ...qb.photoSrcs.map(inlineImage),
+    ]);
+    const qInlinedVideoPosters = qInlinedRest.slice(0, qb.videoInfos.length);
+    const qPhotos = qInlinedRest.slice(qb.videoInfos.length);
+    const qAvatarHtml = qAvatar
+      ? `<img class="tweet-avatar tweet-avatar--sm" src="${qAvatar}" alt="${qb.displayName.replace(/"/g,'&quot;')}" width="24" height="24">`
+      : '';
+    const qSafeName = qb.displayName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const qSafeHandle = qb.handle.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const qSafeTime = qb.quoteTime.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const qPhotosHtml = qPhotos.filter(Boolean).map(src =>
+      `<div class="tweet-photo"><img src="${src}" alt="Image"></div>`).join('');
+    const qInlinedVideoInfos = qb.videoInfos
+      .map((v, i) => ({ poster: qInlinedVideoPosters[i] || v.poster, duration: v.duration, aspectPct: v.aspectPct }))
+      .filter(v => v.poster);
+    const qVideoHtml = buildVideoHtml(qInlinedVideoInfos, base.url);
+    quotedHtml = `<div class="tweet-quote">
+  <div class="tweet-header">
+    ${qAvatarHtml}
+    <div class="tweet-author">
+      <span class="tweet-name">${qSafeName}${qb.badgesHtml}</span>
+      <span class="tweet-handle">@${qSafeHandle}${qSafeTime ? ` · <span class="tweet-quote-time">${qSafeTime}</span>` : ''}</span>
+    </div>
+  </div>
+  <div class="tweet-text">${qb.sanitisedText}</div>
+  ${qVideoHtml}${qPhotosHtml}
+</div>`;
+  } else {
+    log(LL.DEBUG, 'Discerned: no quote tweet detected', 'url:', base.url);
+  }
+
+  // Swap quote out, extract outer tweet, swap back — keeps the live DOM intact.
+  let outerBlock: Awaited<ReturnType<typeof extractTweetBlock>>;
+  if (isQuote && quoteContainer) {
+    const placeholder = document.createComment('discerned-quote');
+    quoteContainer.replaceWith(placeholder);
+    outerBlock = await extractTweetBlock(article);
+    placeholder.replaceWith(quoteContainer);
+  } else {
+    outerBlock = await extractTweetBlock(article);
+  }
+
+  const { displayName, handle, badgesHtml, sanitisedText } = outerBlock;
+  // Photos in the outer tweet only (exclude any inside the quote container)
+  const tweetPhotoSrcs = Array.from(article.querySelectorAll<HTMLImageElement>('[data-testid="tweetPhoto"] img'))
+    .filter(img => !quoteContainer?.contains(img))
+    .map(img => img.src).filter(isSafeImageSrc);
+
+  // Date/time — grab the <time> element and its parent link href
+  const timeEl = article.querySelector<HTMLTimeElement>('time[datetime]');
+  const dateText = timeEl?.textContent?.trim() ?? '';
+  const dateHref = timeEl?.closest('a')?.getAttribute('href') ?? '';
+
+  // Engagement stats — lift each button's SVG icon + count text directly from the DOM.
+  // We strip Twitter's obfuscated class names (useless without their stylesheet) but keep
+  // viewBox and path data so the icons render correctly with our own sizing CSS.
+  const STAT_TESTIDS = ['reply', 'retweet', 'like', 'bookmark'] as const;
+  const statItems: Array<{ svg: string; count: string; label: string }> = [];
+  for (const testId of STAT_TESTIDS) {
+    const btn = article.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+    if (!btn) continue;
+    const svgEl = btn.querySelector('svg');
+    if (!svgEl) continue;
+    const svgClone = svgEl.cloneNode(true) as SVGElement;
+    svgClone.removeAttribute('class');
+    svgClone.querySelectorAll('[class]').forEach(el => el.removeAttribute('class'));
+    const countEl = btn.querySelector('[data-testid="app-text-transition-container"] span span');
+    statItems.push({
+      svg: svgClone.outerHTML,
+      count: countEl?.textContent?.trim() ?? '',
+      label: btn.getAttribute('aria-label') ?? testId,
+    });
+  }
+
+  // Avatar
+  const avatarImg = article.querySelector<HTMLImageElement>('[data-testid="Tweet-User-Avatar"] img') ??
+                    article.querySelector<HTMLImageElement>('img');
+  const avatarSrc = avatarImg?.src ?? '';
+
+  if (!displayName && !sanitisedText) {
+    log(LL.DEBUG, 'Discerned: tweet extractor found no name/text, falling through', 'url:', base.url);
+    return null;
+  }
+
+  const safeDisplayName = displayName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const safeHandle = handle.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Inline avatar + all outer photos + all video posters in parallel
+  const [inlinedAvatar, ...inlinedRest] = await Promise.all([
+    avatarSrc && isSafeImageSrc(avatarSrc) ? inlineImage(avatarSrc) : Promise.resolve(''),
+    ...outerBlock.videoInfos.map(v => inlineImage(v.poster)),
+    ...tweetPhotoSrcs.map(src => inlineImage(src)),
+  ]);
+  const inlinedVideoPosters = inlinedRest.slice(0, outerBlock.videoInfos.length);
+  const inlinedPhotos = inlinedRest.slice(outerBlock.videoInfos.length);
+
+  const avatarHtml = inlinedAvatar
+    ? `<img class="tweet-avatar" src="${inlinedAvatar}" alt="${safeDisplayName}" width="48" height="48">`
+    : '';
+
+  const inlinedVideoInfos = outerBlock.videoInfos
+    .map((v, i) => ({ poster: inlinedVideoPosters[i] || v.poster, duration: v.duration, aspectPct: v.aspectPct }))
+    .filter(v => v.poster);
+  const videoHtml = buildVideoHtml(inlinedVideoInfos, base.url);
+
+  const photosHtml = [
+    ...inlinedPhotos.filter(Boolean).map(src => `<div class="tweet-photo"><img src="${src}" alt="Image"></div>`),
+  ].join('');
+
+  // Footer: date link + stat buttons (SVG icon + count lifted from Twitter's DOM)
+  const safeDate = dateText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const safeDateHref = dateHref.startsWith('/') ? `https://x.com${dateHref}` : '';
+  const dateHtml = safeDate
+    ? (safeDateHref
+        ? `<a class="tweet-date" href="${safeDateHref}">${safeDate}</a>`
+        : `<span class="tweet-date">${safeDate}</span>`)
+    : '';
+  const statsHtml = statItems.map(({ svg, count, label }) =>
+    `<span class="tweet-stat" aria-label="${label.replace(/"/g,'&quot;')}">${svg}${count ? `<span class="tweet-stat-count">${count}</span>` : ''}</span>`
+  ).join('');
+  const footerHtml = (dateHtml || statsHtml)
+    ? `<div class="tweet-footer">${dateHtml}${statsHtml ? `<span class="tweet-stats">${statsHtml}</span>` : ''}</div>`
+    : '';
+
+  const bodyHtml = `<div class="tweet-card">
+  ${reposterHtml}
+  <div class="tweet-header">
+    ${avatarHtml}
+    <div class="tweet-author">
+      <span class="tweet-name">${safeDisplayName}${badgesHtml}</span>
+      <span class="tweet-handle">@${safeHandle}</span>
+    </div>
+  </div>
+  <div class="tweet-text">${sanitisedText}</div>
+  ${videoHtml}
+  ${photosHtml}
+  ${quotedHtml}
+  ${footerHtml}
+</div>`;
+
+  log(LL.NORMAL, `Discerned: tweet captured — name="${displayName}" handle="@${handle}" photos=${inlinedPhotos.filter(Boolean).length} videos=${inlinedVideoInfos.length} repost=${!!reposterHtml} quoted=${!!quotedHtml} stats=${statItems.length}`, 'url:', base.url);
+
+  // X appends ` https://t.co/… " / X` or just `" / X` to the page title.
+  const tweetTitle = base.title
+    .replace(/\s+https:\/\/t\.co\/\S+/i, '')  // strip trailing t.co URL
+    .replace(/["\s]+\/\s*X\s*$/i, '')          // strip closing `" / X`
+    .trim() || base.title;
+
+  return {
+    ...base,
+    title: tweetTitle,
+    format: 'article',
+    bodyHtml,
+    bodyText: `${displayName} @${handle}\n\n${outerBlock.plainText}`,
+    thumbnail: null,
+  };
+}
+
 // ── Article (Readability) ────────────────────────────────────────────────────
 
 // Selectors tried in order to find the article content element on the live page.
@@ -288,6 +588,15 @@ function findArticleElement(smartDetection: boolean): Element | null {
 
 async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const base = baseFields();
+  log(LL.DEBUG, `Discerned: extractArticle — smartArticleDetection=${opts.smartArticleDetection} stripInlineStyles=${opts.stripInlineStyles}`, 'url:', base.url);
+
+  // Tier 0: Twitter/X — extract clean tweet card from data-testid selectors.
+  if (/^https?:\/\/(www\.)?(twitter|x)\.com\//i.test(window.location.href)) {
+    const tweet = await extractTweet(base);
+    if (tweet) return tweet;
+    log(LL.DEBUG, 'Discerned: Twitter extractor yielded nothing, falling through to generic', 'url:', base.url);
+  }
+
   const thumbnailUrl = getPageThumbnail();
   const inlinedThumbnail = thumbnailUrl ? await inlineImage(thumbnailUrl) : null;
 
@@ -300,7 +609,12 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     cleanup();
     clone.querySelector('discerned-overlay')?.remove();
     removeMarked(clone);
+    substituteVideosWithPosters(clone);
+    const imgsBefore = clone.querySelectorAll('img').length;
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
+    const imgsAfter = clone.querySelectorAll('img[style]').length;
+    log(LL.DEBUG, `Discerned: sanitiseTreeInPlace done — ${imgsBefore} imgs, ${imgsAfter} with remaining inline style, stripInlineStyles=${opts.stripInlineStyles}`, 'url:', base.url);
+    log(LL.DEBUG, `Discerned: sanitised bodyHtml (first 2000 chars): ${clone.innerHTML.slice(0, 2000)}`, 'url:', base.url);
     const inlined = await inlineAllImages(clone.innerHTML.trim());
     log(LL.NORMAL, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     return {
@@ -336,6 +650,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   // Tier 3: full body — last resort.
   log(LL.WARN, 'Discerned: article falling back to full body', 'url:', base.url);
   const bodyClone = cloneBodyClean();
+  substituteVideosWithPosters(bodyClone);
   sanitiseTreeInPlace(bodyClone);
   const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
   return {
@@ -389,6 +704,7 @@ async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
   // DOMParser to restructure the document in ways that leave <script> content as
   // orphaned text nodes that querySelectorAll('script') can't reach.
   const bodyClone = cloneBodyClean();
+  substituteVideosWithPosters(bodyClone);
   sanitiseTreeInPlace(bodyClone, opts.stripInlineStyles);
   const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
   return {
@@ -480,6 +796,27 @@ function scrubStyle(value: string): string {
     .replace(/behavior\s*:/gi, '');
 }
 
+const IMG_LAYOUT_PROPS = [
+  'position', 'float', 'top', 'right', 'bottom', 'left',
+  'z-index', 'transform', 'translate', 'rotate', 'scale',
+];
+
+function scrubImgStyle(value: string): string {
+  const el = document.createElement('div');
+  el.setAttribute('style', scrubStyle(value));
+  const stripped: string[] = [];
+  for (const prop of IMG_LAYOUT_PROPS) {
+    if (el.style.getPropertyValue(prop)) {
+      stripped.push(prop);
+      el.style.removeProperty(prop);
+    }
+  }
+  if (stripped.length > 0) {
+    log(LL.DEBUG, `Discerned: scrubImgStyle stripped [${stripped.join(', ')}] from img inline style`, 'url:', window.location.href);
+  }
+  return el.style.cssText;
+}
+
 function sanitiseElement(element: Element, stripStyles = false) {
   const tagName = element.tagName.toLowerCase();
 
@@ -497,7 +834,7 @@ function sanitiseElement(element: Element, stripStyles = false) {
     if (!allowed) { element.removeAttribute(attr.name); return; }
 
     if (name === 'style') {
-      const safe = scrubStyle(attr.value);
+      const safe = tagName === 'img' ? scrubImgStyle(attr.value) : scrubStyle(attr.value);
       if (safe.trim()) element.setAttribute('style', safe);
       else element.removeAttribute('style');
     } else if (tagName === 'img' && name === 'src') {
@@ -505,6 +842,25 @@ function sanitiseElement(element: Element, stripStyles = false) {
     } else if (tagName === 'a' && name === 'href') {
       if (!isSafeHref(attr.value)) element.removeAttribute('href');
     }
+  });
+}
+
+/**
+ * Replace Twitter's video player structure with a plain <img src="poster"> so that
+ * GIFs and video thumbnails survive sanitisation. Replaces the nearest
+ * [data-testid="tweetPhoto"] ancestor when present (which removes Twitter's aspect-ratio
+ * sizer divs that would otherwise constrain the image size), otherwise replaces the
+ * <video> element directly.
+ */
+function substituteVideosWithPosters(root: Element | DocumentFragment): void {
+  (root as Element).querySelectorAll('video[poster]').forEach(video => {
+    const poster = video.getAttribute('poster');
+    if (!poster || !isSafeImageSrc(poster)) { video.closest('[data-testid="tweetPhoto"]')?.remove() ?? video.remove(); return; }
+    const img = document.createElement('img');
+    img.src = poster;
+    img.alt = video.getAttribute('aria-label') ?? 'Video';
+    const container = video.closest('[data-testid="tweetPhoto"]');
+    (container ?? video).replaceWith(img);
   });
 }
 
