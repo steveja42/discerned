@@ -546,7 +546,7 @@ export class DiscernedOverlay extends HTMLElement {
           ${authBlock}
           <div class="settings-card">
             <div class="card-label">Usage</div>
-            <div class="usage-row"><span>🔒 Local clips</span><span class="usage-value" id="clip-count">—</span></div>
+            <button class="usage-row usage-row-link" id="open-library-btn"><span>🔒 Local clips</span><span class="usage-value" id="clip-count">—</span></button>
             <div class="usage-row"><span>📡 Public casts</span><span class="usage-value" id="cast-count">—</span></div>
           </div>
           <div class="settings-card">
@@ -573,7 +573,11 @@ export class DiscernedOverlay extends HTMLElement {
       </div>
     `;
 
-    this.shadow.getElementById('close')?.addEventListener('click', () => this.hide());
+    this.shadow.getElementById('close')?.addEventListener('click', () => {
+      this.view = 'main';
+      this.render();
+      if (!this.capture) void this.refreshCapture();
+    });
     this.shadow.getElementById('settings-back')?.addEventListener('click', () => {
       this.view = 'main';
       this.render();
@@ -600,6 +604,11 @@ export class DiscernedOverlay extends HTMLElement {
       if (!pin) return;
       const res = await chrome.runtime.sendMessage({ type: 'UNLOCK_NSEC', pin });
       if (errEl) errEl.textContent = res.success ? '' : 'Incorrect PIN. Please try again.';
+    });
+
+    this.shadow.getElementById('open-library-btn')?.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'OPEN_LIBRARY' }).catch(() => {});
+      this.hide();
     });
 
     this.shadow.getElementById('settings-export')?.addEventListener('click', () => this.exportClips());
@@ -637,7 +646,8 @@ export class DiscernedOverlay extends HTMLElement {
       const castEl = this.shadow.getElementById('cast-count');
       if (castEl) castEl.textContent = String(castCount);
 
-      const clipCount = await this.countLocalClips();
+      const countRes = await chrome.runtime.sendMessage({ type: 'GET_CLIP_COUNT' }).catch(() => null);
+      const clipCount = (countRes?.success && typeof countRes.data?.count === 'number') ? countRes.data.count : 0;
       const clipEl = this.shadow.getElementById('clip-count');
       if (clipEl) clipEl.textContent = String(clipCount);
     } catch (err) {
@@ -645,36 +655,9 @@ export class DiscernedOverlay extends HTMLElement {
     }
   }
 
-  private countLocalClips(): Promise<number> {
-    return new Promise((resolve) => {
-      const req = indexedDB.open('discerned', 3);
-      req.onerror = () => resolve(0);
-      req.onsuccess = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains('clips')) { db.close(); resolve(0); return; }
-        const tx = db.transaction(['clips'], 'readonly');
-        const countReq = tx.objectStore('clips').count();
-        countReq.onsuccess = () => { db.close(); resolve(countReq.result); };
-        countReq.onerror = () => { db.close(); resolve(0); };
-      };
-      req.onupgradeneeded = () => resolve(0);
-    });
-  }
-
   private async exportClips() {
-    const clips = await new Promise<unknown[]>((resolve) => {
-      const req = indexedDB.open('discerned', 3);
-      req.onerror = () => resolve([]);
-      req.onsuccess = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains('clips')) { db.close(); resolve([]); return; }
-        const tx = db.transaction(['clips'], 'readonly');
-        const getAllReq = tx.objectStore('clips').getAll();
-        getAllReq.onsuccess = () => { db.close(); resolve(getAllReq.result as unknown[]); };
-        getAllReq.onerror = () => { db.close(); resolve([]); };
-      };
-      req.onupgradeneeded = () => resolve([]);
-    });
+    const res = await chrome.runtime.sendMessage({ type: 'GET_CLIPS' }).catch(() => null);
+    const clips: unknown[] = (res?.success && Array.isArray(res.data?.clips)) ? res.data.clips : [];
     if (clips.length === 0) return;
     const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(clips, null, 2));
     const link = document.createElement('a');
@@ -1479,6 +1462,9 @@ export class DiscernedOverlay extends HTMLElement {
       .card-value.ok { color: #4ade80; }
       .profile-id { font-size: 12px; color: #888; font-family: monospace; background: #1a1a1a; border-radius: 4px; padding: 6px 8px; word-break: break-all; }
       .usage-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #888; }
+      .usage-row-link { background: none; border: none; width: 100%; cursor: pointer; border-radius: 4px; padding: 2px 4px; margin: -2px -4px; transition: background 0.15s; font-family: inherit; }
+      .usage-row-link:hover { background: #2a2a2a; color: #e8e8e8; }
+      .usage-row-link:hover .usage-value { color: #7dd3fc; }
       .usage-value { color: #e8e8e8; font-weight: 600; }
       .pin-unlock summary { font-size: 12px; color: #888; cursor: pointer; }
       .pin-row { display: flex; gap: 6px; margin-top: 6px; }

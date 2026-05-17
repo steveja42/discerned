@@ -100,7 +100,8 @@ export type BackgroundMessage =
   | { type: 'PUSH_NEW_CLIP'; clip: ClipData }
   | { type: 'FORCE_BRIDGE_RESYNC' }
   | { type: 'NAVIGATE_TO_CLIP'; clipId: string }
-  | { type: 'OPEN_LIBRARY'; clipId: string }
+  | { type: 'GET_CLIP_COUNT' }
+  | { type: 'OPEN_LIBRARY'; clipId?: string }
   | { type: 'OPEN_HOME' }
   | { type: 'REGISTER_LOG_TAB' };
 

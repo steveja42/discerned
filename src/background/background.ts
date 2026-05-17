@@ -116,9 +116,9 @@ async function resolveBaseUrl(): Promise<string> {
   return localTabs.length > 0 ? DISCERNED_BASE_URLS[1] : DISCERNED_BASE_URLS[0];
 }
 
-async function openLibraryTab(clipId: string): Promise<void> {
+async function openLibraryTab(clipId?: string): Promise<void> {
   const base = await resolveBaseUrl();
-  const url = `${base}/library?clip=${encodeURIComponent(clipId)}`;
+  const url = clipId ? `${base}/library?clip=${encodeURIComponent(clipId)}` : `${base}/library`;
   const [existing] = await chrome.tabs.query({ url: LIBRARY_URL_PATTERNS });
   if (existing?.id !== undefined) {
     // Tab is already on the library — activate it and navigate client-side via
@@ -128,8 +128,10 @@ async function openLibraryTab(clipId: string): Promise<void> {
     if (existing.windowId !== undefined) {
       chrome.windows.update(existing.windowId, { focused: true }).catch(() => {});
     }
-    chrome.tabs.sendMessage(existing.id, { type: 'NAVIGATE_TO_CLIP', clipId } satisfies BackgroundMessage)
-      .catch(() => { /* non-fatal — clip will appear via PUSH_NEW_CLIP */ });
+    if (clipId) {
+      chrome.tabs.sendMessage(existing.id, { type: 'NAVIGATE_TO_CLIP', clipId } satisfies BackgroundMessage)
+        .catch(() => { /* non-fatal — clip will appear via PUSH_NEW_CLIP */ });
+    }
   } else {
     await chrome.tabs.create({ url });
   }
@@ -289,6 +291,9 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
 
     case 'GET_AUTH_STATE':
       return { success: true, data: currentAuthState };
+
+    case 'GET_CLIP_COUNT':
+      return handleGetClipCount();
 
     case 'GET_CLIPS':
       return handleGetClips();
@@ -488,6 +493,24 @@ function blobToDataUri(blob: Blob): Promise<string> {
 
 // ── CLIP / CAST handlers ────────────────────────────────────────────────────
 
+async function handleGetClipCount(): Promise<BackgroundResponse> {
+  return new Promise((resolve) => {
+    const request = indexedDB.open('discerned', DB_VERSION);
+    request.onerror = () => resolve({ success: false, error: 'IndexedDB open failed' });
+    request.onupgradeneeded = () => { /* read-only probe; no schema changes */ };
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('clips')) { db.close(); resolve({ success: true, data: { count: 0 } }); return; }
+      try {
+        const tx = db.transaction(['clips'], 'readonly');
+        const countReq = tx.objectStore('clips').count();
+        countReq.onsuccess = () => { db.close(); resolve({ success: true, data: { count: countReq.result } }); };
+        countReq.onerror = () => { db.close(); resolve({ success: true, data: { count: 0 } }); };
+      } catch { db.close(); resolve({ success: true, data: { count: 0 } }); }
+    };
+  });
+}
+
 async function handleGetClips(): Promise<BackgroundResponse> {
   return new Promise((resolve) => {
     const request = indexedDB.open('discerned', DB_VERSION);
@@ -501,17 +524,37 @@ async function handleGetClips(): Promise<BackgroundResponse> {
         return;
       }
       try {
-        const tx = db.transaction(['clips'], 'readonly');
-        const getAllReq = tx.objectStore('clips').getAll();
+        // readwrite so we can repair legacy rows that have no capture.id
+        const tx = db.transaction(['clips'], 'readwrite');
+        const store = tx.objectStore('clips');
+        const getAllReq = store.getAll();
         getAllReq.onsuccess = () => {
-          db.close();
           const rows = (getAllReq.result as ClipRow[]) ?? [];
           const clips: ClipData[] = [];
           for (const row of rows) {
-            try { clips.push(JSON.parse(row.encrypted) as ClipData); } catch { /* skip */ }
+            try {
+              const clip = JSON.parse(row.encrypted) as ClipData;
+              // Repair rows that survived a buggy migration with no capture.id.
+              if (!clip.capture.id) {
+                const newId = crypto.randomUUID();
+                clip.capture.id = newId;
+                const repairedRow: ClipRow = { id: newId, encrypted: JSON.stringify(clip), timestamp: row.timestamp };
+                try { if (row.id) store.delete(row.id); } catch { /* invalid key — nothing to delete */ }
+                store.put(repairedRow);
+              }
+              clips.push(clip);
+            } catch { /* skip malformed */ }
           }
-          clips.sort((a, b) => b.capture.timestamp - a.capture.timestamp);
-          resolve({ success: true, data: { clips } });
+          tx.oncomplete = () => {
+            db.close();
+            clips.sort((a, b) => b.capture.timestamp - a.capture.timestamp);
+            resolve({ success: true, data: { clips } });
+          };
+          tx.onerror = () => {
+            db.close();
+            clips.sort((a, b) => b.capture.timestamp - a.capture.timestamp);
+            resolve({ success: true, data: { clips } });
+          };
         };
         getAllReq.onerror = () => { db.close(); resolve({ success: true, data: { clips: [] } }); };
       } catch {
@@ -523,6 +566,7 @@ async function handleGetClips(): Promise<BackgroundResponse> {
 }
 
 async function handleDeleteClips(ids: string[]): Promise<BackgroundResponse> {
+  const validIds = ids.filter(Boolean);
   return new Promise((resolve) => {
     const request = indexedDB.open('discerned', DB_VERSION);
     request.onerror = () => {
@@ -532,7 +576,7 @@ async function handleDeleteClips(ids: string[]): Promise<BackgroundResponse> {
     request.onupgradeneeded = () => { /* probe only */ };
     request.onsuccess = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains('clips') || ids.length === 0) {
+      if (!db.objectStoreNames.contains('clips') || validIds.length === 0) {
         db.close();
         resolve({ success: true });
         return;
@@ -540,9 +584,9 @@ async function handleDeleteClips(ids: string[]): Promise<BackgroundResponse> {
       try {
         const tx = db.transaction(['clips'], 'readwrite');
         const store = tx.objectStore('clips');
-        let pending = ids.length;
+        let pending = validIds.length;
         let failed = false;
-        for (const id of ids) {
+        for (const id of validIds) {
           const req = store.delete(id);
           req.onerror = () => {
             if (!failed) { failed = true; db.close(); void pushResyncToWebApp(); resolve({ success: false, error: 'Delete failed' }); }
@@ -551,7 +595,7 @@ async function handleDeleteClips(ids: string[]): Promise<BackgroundResponse> {
             pending--;
             if (pending === 0 && !failed) {
               db.close();
-              log(LL.DEBUG, `background: deleted ${ids.length} clip(s)`, ids.join(', '));
+              log(LL.DEBUG, `background: deleted ${validIds.length} clip(s)`, validIds.join(', '));
               resolve({ success: true });
             }
           };
@@ -813,7 +857,17 @@ function migrateRowInPlace(row: ClipRow): void {
   const cap = payload.capture;
   if (!cap || typeof cap !== 'object') return;
 
-  if (typeof cap.format === 'string') return; // already migrated
+  if (typeof cap.format === 'string') {
+    // Already shape-migrated, but still repair missing id (can happen for rows
+    // that went through an earlier buggy migration that assigned row.id = undefined).
+    if (!cap.id) {
+      const newRowId = row.id || crypto.randomUUID();
+      cap.id = newRowId;
+      row.id = newRowId;
+      row.encrypted = JSON.stringify(payload);
+    }
+    return;
+  }
 
   const legacyType = cap.type as 'quote' | 'resource' | undefined;
   if (legacyType === 'quote') {
@@ -827,7 +881,11 @@ function migrateRowInPlace(row: ClipRow): void {
     // title / thumbnail already match the new shape
   }
   delete cap.type;
-  if (!cap.id) cap.id = row.id;
+  if (!cap.id) {
+    const newRowId = row.id || crypto.randomUUID();
+    cap.id = newRowId;
+    row.id = newRowId;
+  }
   if (!cap.title) cap.title = '';
   row.encrypted = JSON.stringify(payload);
 }
