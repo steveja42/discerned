@@ -174,7 +174,9 @@ const proactiveTimer = setTimeout(() => {
 // Listen for messages from the web page.
 window.addEventListener('message', (e: MessageEvent) => {
   if (e.origin !== ORIGIN) return;
-  if (e.source !== window) return;
+  // Note: in an extension content script, `window` is the isolated world's
+  // wrapper — distinct from the page's `window` that's the message source.
+  // We can't compare e.source === window. Rely on origin only.
   const msg = e.data as WebBridgeInbound | undefined;
   if (msg?.type === 'DISCERNED_WEB_READY') {
     clearTimeout(proactiveTimer);
