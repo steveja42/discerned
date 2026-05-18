@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "chrome",
+            "request": "attach",
+            "name": "Attach to Chrome (shared with extension debugger)",
+            "port": 9222,
+            "urlFilter": "http://localhost:3000/*",
+            "webRoot": "${workspaceFolder}",
+            "sourceMapPathOverrides": {
+                "webpack://_N_E/*": "${workspaceFolder}/*"
+            },
+            "disableNetworkCache": false,
+            "smartStep": true,
+            "skipFiles": [
+                "chrome-extension://**"
+            ]
+        },
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Launch Chrome against localhost:3000",
+            "url": "http://localhost:3000",
+            "webRoot": "${workspaceFolder}",
+            "sourceMapPathOverrides": {
+                "webpack://_N_E/*": "${workspaceFolder}/*"
+            }
+        }
+    ]
+}
