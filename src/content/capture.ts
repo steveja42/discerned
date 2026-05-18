@@ -828,6 +828,26 @@ function isSafeHref(href: string): boolean {
   return false;
 }
 
+/**
+ * Return a safe, absolute href for storage, or null if the href is unsafe.
+ * Site-relative paths (e.g. "/u/npub1...") are resolved against the source
+ * page's URL so the stored clip's links survive after the user navigates
+ * away. Rejects javascript:, data:, and other non-navigational schemes.
+ */
+function resolveHref(href: string): string | null {
+  const trimmed = href.trim();
+  if (!trimmed) return null;
+  if (isSafeHref(trimmed)) return trimmed;
+  // Reject dangerous schemes outright.
+  if (/^(javascript|data|vbscript|file):/i.test(trimmed)) return null;
+  try {
+    const abs = new URL(trimmed, window.location.href).toString();
+    return isSafeHref(abs) ? abs : null;
+  } catch {
+    return null;
+  }
+}
+
 function scrubStyle(value: string): string {
   return value
     .replace(/expression\s*\(/gi, '')
@@ -858,11 +878,24 @@ function scrubImgStyle(value: string): string {
   return el.style.cssText;
 }
 
+// When these tags are unwrapped, their text content would otherwise glue to
+// adjacent sibling text — e.g. <button>Replies (1)</button><button>Reposts
+// (1)</button> becomes "Replies (1)Reposts (1)". Inserting space text nodes
+// around the unwrapped children preserves the visual word boundary.
+const SPACE_ON_UNWRAP = new Set([
+  'button', 'label', 'dt', 'dd', 'summary', 'details', 'fieldset', 'legend',
+  'nav', 'header', 'footer', 'aside', 'section', 'article',
+]);
+
 function sanitiseElement(element: Element, stripStyles = false) {
   const tagName = element.tagName.toLowerCase();
 
   if (!ALLOWED_TAGS.has(tagName)) {
-    element.replaceWith(...Array.from(element.childNodes));
+    const children = Array.from(element.childNodes);
+    const replacements: Node[] = SPACE_ON_UNWRAP.has(tagName)
+      ? [document.createTextNode(' '), ...children, document.createTextNode(' ')]
+      : children;
+    element.replaceWith(...replacements);
     return;
   }
 
@@ -881,7 +914,17 @@ function sanitiseElement(element: Element, stripStyles = false) {
     } else if (tagName === 'img' && name === 'src') {
       if (!isSafeImageSrc(attr.value)) element.removeAttribute('src');
     } else if (tagName === 'a' && name === 'href') {
-      if (!isSafeHref(attr.value)) element.removeAttribute('href');
+      const resolved = resolveHref(attr.value);
+      if (resolved) {
+        element.setAttribute('href', resolved);
+        // Captured clips are rendered in our own UI; we never want a link
+        // click to navigate the host page away from the library. Force
+        // every preserved <a> to open in a new tab with a safe rel.
+        element.setAttribute('target', '_blank');
+        element.setAttribute('rel', 'noopener noreferrer');
+      } else {
+        element.removeAttribute('href');
+      }
     }
   });
 }
