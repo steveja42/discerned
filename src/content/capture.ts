@@ -628,7 +628,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
     const imgsAfter = clone.querySelectorAll('img[style]').length;
     log(LL.DEBUG, `Discerned: sanitiseTreeInPlace done — ${imgsBefore} imgs, ${imgsAfter} with remaining inline style, stripInlineStyles=${opts.stripInlineStyles}`, 'url:', base.url);
-    log(LL.DEBUG, `Discerned: sanitised bodyHtml (first 2000 chars): ${clone.innerHTML.slice(0, 2000)}`, 'url:', base.url);
+    log(LL.TRACE, `Discerned: sanitised bodyHtml (first 2000 chars): ${clone.innerHTML.slice(0, 2000)}`, 'url:', base.url);
     const inlined = await inlineAllImages(clone.innerHTML.trim());
     log(LL.NORMAL, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     return {
