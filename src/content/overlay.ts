@@ -181,7 +181,7 @@ export class DiscernedOverlay extends HTMLElement {
           font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; color:#0ea5e9;
         }
         .preview-thumb {
-          width:100%; max-height:120px; object-fit:cover; border-radius:5px;
+          max-width:100%; max-height:120px; width:auto; height:auto; object-fit:contain; border-radius:5px; align-self:flex-start;
         }
         .preview-title { color:#fff; font-size:13px; font-weight:600; line-height:1.4; }
         .preview-text  { color:#bbb; font-size:12px; line-height:1.55; white-space:pre-wrap; }
@@ -1234,8 +1234,8 @@ export class DiscernedOverlay extends HTMLElement {
         display: flex; flex-direction: column; gap: 6px;
       }
       .preview-thumb {
-        width: 100%; max-height: 120px;
-        object-fit: cover; border-radius: 6px;
+        max-width: 100%; max-height: 120px; width: auto; height: auto;
+        object-fit: contain; border-radius: 6px; align-self: flex-start;
       }
       .preview-title { color: #fff; font-size: 14px; font-weight: 600; }
       .preview-text { color: #ccc; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
