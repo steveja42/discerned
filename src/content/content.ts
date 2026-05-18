@@ -244,3 +244,51 @@ window.addEventListener('pageshow', (e) => {
     chrome.runtime.sendMessage({ type: 'REGISTER_LOG_TAB' }).catch(() => {});
   }
 });
+
+// Dev-mode test bridge — Vite tree-shakes this when __DISCERNED_TEST_BUILD__
+// is false (production builds). Lets Playwright drive captureContext() and the
+// CLIP path without the overlay.
+if (__DISCERNED_TEST_BUILD__) {
+  window.addEventListener('message', async (e) => {
+    // Note: in an extension content script, `window` is the isolated world's
+    // wrapper — distinct from the page's `window` that's the message source.
+    // We can't compare e.source === window. Rely on origin only.
+    if (e.origin !== window.location.origin) return;
+    const data = e.data as { type?: string; format?: ClipFormat; opts?: CaptureOptions; capture?: Capture; evaluation?: Evaluation };
+    if (!data || typeof data.type !== 'string') return;
+
+    if (data.type === '__DISCERNED_TEST_CAPTURE') {
+      try {
+        const cap = await captureContext(
+          data.format ?? 'article',
+          data.opts ?? { smartArticleDetection: true, stripInlineStyles: false },
+        );
+        window.postMessage(
+          { type: '__DISCERNED_TEST_CAPTURE_RESULT', capture: cap },
+          window.location.origin,
+        );
+      } catch (err) {
+        window.postMessage(
+          { type: '__DISCERNED_TEST_CAPTURE_RESULT', error: err instanceof Error ? err.message : String(err) },
+          window.location.origin,
+        );
+      }
+    } else if (data.type === '__DISCERNED_TEST_CLIP' && data.capture && data.evaluation) {
+      try {
+        const response = await sendToBackground({
+          type: 'CLIP',
+          data: { capture: data.capture, evaluation: data.evaluation },
+        });
+        window.postMessage(
+          { type: '__DISCERNED_TEST_CLIP_RESULT', result: response },
+          window.location.origin,
+        );
+      } catch (err) {
+        window.postMessage(
+          { type: '__DISCERNED_TEST_CLIP_RESULT', error: err instanceof Error ? err.message : String(err) },
+          window.location.origin,
+        );
+      }
+    }
+  });
+}

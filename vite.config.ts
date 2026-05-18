@@ -33,6 +33,12 @@ export default defineConfig(({ mode }) => ({
     sourcemap: mode !== 'production',
     rollupOptions: {},
   },
+  // Test-only message hooks in content.ts/background.ts are gated on this flag.
+  // `pnpm build:test` runs with --mode test, which keeps them; `pnpm build`
+  // (default production) replaces the flag with false and tree-shakes them out.
+  define: {
+    __DISCERNED_TEST_BUILD__: JSON.stringify(mode === 'test' || mode === 'development'),
+  },
   plugins: [
     stripVendorSourcemapRefs,
     crx({ manifest }),
