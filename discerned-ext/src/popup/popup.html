@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<!-- Role: Popup — restricted-page stub
+     Description: Shown only when the toolbar icon is clicked on a tab where content scripts
+                  cannot run (chrome://, file://, edge://, the Web Store, etc.). Background
+                  toggles default_popup per-tab via chrome.action.setPopup so normal pages
+                  open the overlay directly instead. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discerned</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 280px;
+      background: #1a1a1a;
+      color: #e8e8e8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 16px 18px;
+    }
+    h1 { font-size: 0.95rem; color: #fff; margin-bottom: 6px; }
+    p  { font-size: 0.8rem; color: #888; line-height: 1.55; }
+    .icon { font-size: 1.6rem; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+  <div class="icon">📡</div>
+  <h1>Discerned can't clip this page</h1>
+  <p>Browser-internal pages (chrome://, file://, the Web Store) don't allow extensions to inject the clipper. Open a normal web page and try again.</p>
+  <script type="module" src="./popup.ts"></script>
+</body>
+</html>

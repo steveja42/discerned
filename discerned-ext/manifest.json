@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "Discerned",
+  "version": "0.1.0",
+  "description": "Value Attribution Layer for the Web - Capture, evaluate, and signal content to the Nostr network",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2SlJEy0Dz14OKq1+rXwJQBkZlveUvp5AemDlZ/A9uj0iIQnl/XcdkeLS2lkhIRJj14woamdHGl6s1tLcqzndU4dg6YAaxqRrCtvld97FjuuDWS2jyWELZ6k4WFg3NnC3t3XfsYuBjVWMAUSIXvgIFQK9bTrHcFbcJQkuwFIM6qsQ2LCsnxDhhtvK5l37KWhgwCnNc7aEpjB2xJsbMFQgmzoEEfIoKdLIIHVReTmaIQnXqfveJitK3YjHkY7KfMQnMxASJ2fu5BKQlOi+n1Da+RlVKb5odgmoUf2ZdEyePXmQp5vykoMJF15IPfFzKnwvuyNKIOk3PE4aKgm52YVHCwIDAQAB",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "src/background/background.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/nip07-bridge.ts"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/content.ts"],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://discerned.online/*", "http://localhost:3000/*"],
+      "js": ["src/content/web-bridge.ts"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["src/onboarding/onboarding.html", "src/popup/popup.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
