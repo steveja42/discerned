@@ -137,9 +137,20 @@ async function extractSelection(): Promise<Capture> {
 
   const range = selection.getRangeAt(0);
   const cleanup = markExcluded(document.body);
+  // Annotate <img>s under the range's common ancestor before cloneContents
+  // runs inside wrapFragmentBoundaries, so the cloned fragment carries
+  // rendered width/height attributes. Over-annotating outside the range is
+  // harmless — only images that end up in the fragment matter, and the
+  // sizeCleanup runs synchronously.
+  const ancestor = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+    ? range.commonAncestorContainer as Element
+    : range.commonAncestorContainer.parentElement;
+  const sizeCleanup = ancestor ? annotateLiveImageSizes(ancestor) : () => {};
   const fragment = wrapFragmentBoundaries(range);
+  sizeCleanup();
   cleanup();
   removeMarked(fragment);
+  stripSizeMarkers(fragment);
   // Twitter GIFs and videos are <video poster="..."> — convert to <img> so they
   // survive sanitisation (which drops <video> as a non-allowed tag).
   substituteVideosWithPosters(fragment);
@@ -605,10 +616,13 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   if (articleEl) {
     log(LL.NORMAL, `Discerned: article captured via semantic element <${articleEl.tagName.toLowerCase()}>`, 'url:', base.url);
     const cleanup = markExcluded(document.body);
+    const sizeCleanup = annotateLiveImageSizes(articleEl);
     const clone = articleEl.cloneNode(true) as Element;
+    sizeCleanup();
     cleanup();
     clone.querySelector('discerned-overlay')?.remove();
     removeMarked(clone);
+    stripSizeMarkers(clone);
     substituteVideosWithPosters(clone);
     const imgsBefore = clone.querySelectorAll('img').length;
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
@@ -650,6 +664,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   // Tier 3: full body — last resort.
   log(LL.WARN, 'Discerned: article falling back to full body', 'url:', base.url);
   const bodyClone = cloneBodyClean();
+  stripSizeMarkers(bodyClone);
   substituteVideosWithPosters(bodyClone);
   sanitiseTreeInPlace(bodyClone);
   const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
@@ -744,11 +759,15 @@ function removeMarked(root: Element | DocumentFragment): void {
 
 /**
  * Deep-clone document.body with the Discerned overlay, fixed/sticky chrome,
- * and hidden elements removed.
+ * and hidden elements removed. Annotates every <img> with its rendered size
+ * before cloning so the captured HTML preserves source-page proportions even
+ * after sanitisation strips wrapper classes.
  */
 function cloneBodyClean(): HTMLElement {
   const cleanup = markExcluded(document.body);
+  const sizeCleanup = annotateLiveImageSizes(document.body);
   const clone = document.body.cloneNode(true) as HTMLElement;
+  sizeCleanup();
   cleanup();
 
   clone.querySelector('discerned-overlay')?.remove();
@@ -767,12 +786,34 @@ const ALLOWED_TAGS = new Set([
   'figure', 'figcaption',
   'table', 'thead', 'tbody', 'tr', 'td', 'th',
   'hr', 'div', 'img',
+  // SVG icon glyphs — preserved so action/badge icons survive sanitisation on
+  // sites that use inline SVG instead of font icons. <script> and <foreignObject>
+  // are intentionally excluded.
+  'svg', 'path', 'g', 'circle', 'rect', 'line', 'polyline', 'polygon',
+  'ellipse', 'defs', 'use', 'title', 'symbol',
 ]);
 const ALLOWED_ATTRS_GLOBAL = new Set(['style']);
 const ALLOWED_ATTRS_PER_TAG: Record<string, Set<string>> = {
   a:   new Set(['href']),
   img: new Set(['src', 'alt', 'title', 'width', 'height']),
+  // Note: keys here MUST be lowercase — sanitiseElement compares attr.name.toLowerCase().
+  // SVG camelCase attrs (viewBox, gradientUnits, etc.) are written as their lowercased
+  // form, which matches the lowercased-attribute-name lookup browsers do on HTML-parsed SVG.
+  svg: new Set(['viewbox', 'xmlns', 'width', 'height', 'fill', 'stroke',
+    'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'aria-label', 'role', 'focusable']),
+  path: new Set(['d', 'fill', 'stroke', 'stroke-width', 'stroke-linecap',
+    'stroke-linejoin', 'fill-rule', 'clip-rule', 'opacity']),
+  g: new Set(['fill', 'stroke', 'stroke-width', 'transform', 'opacity']),
+  circle: new Set(['cx', 'cy', 'r', 'fill', 'stroke', 'stroke-width']),
+  rect: new Set(['x', 'y', 'width', 'height', 'rx', 'ry', 'fill', 'stroke', 'stroke-width']),
+  line: new Set(['x1', 'y1', 'x2', 'y2', 'stroke', 'stroke-width']),
+  polyline: new Set(['points', 'fill', 'stroke', 'stroke-width']),
+  polygon: new Set(['points', 'fill', 'stroke', 'stroke-width']),
+  ellipse: new Set(['cx', 'cy', 'rx', 'ry', 'fill', 'stroke', 'stroke-width']),
+  use: new Set(['href', 'x', 'y', 'width', 'height']),
 };
+
+const MAX_SVGS_PER_ARTICLE = 50;
 
 function isSafeImageSrc(src: string): boolean {
   if (src.startsWith('data:image/')) return true;
@@ -845,6 +886,51 @@ function sanitiseElement(element: Element, stripStyles = false) {
   });
 }
 
+const SIZE_MARKER = 'data-discerned-sized';
+
+/**
+ * Write each live <img>'s rendered width/height onto the live element as
+ * width/height attributes, so subsequent cloneNode(true) copies them into
+ * the detached tree. Returns a cleanup() that removes the markers from the
+ * live DOM after cloning. Must be called BEFORE cloneNode.
+ *
+ * Without this, sanitisation strips wrapper classes and the browser falls back
+ * to intrinsic pixel size — making avatars huge and skewing column layouts.
+ * The img tag's allowlist already passes width/height through sanitisation.
+ *
+ * Live-DOM mutation is the only reliable way to pair sizes across the
+ * clone — cleanup steps like markExcluded/removeMarked can delete <img>s
+ * (e.g. a sticky-header logo), breaking any index-based pairing on the clone.
+ */
+function annotateLiveImageSizes(liveRoot: Element): () => void {
+  const liveImgs = Array.from(liveRoot.querySelectorAll('img'));
+  const annotated: Array<{ img: HTMLImageElement; hadWidth: boolean; hadHeight: boolean }> = [];
+  liveImgs.forEach(img => {
+    const rect = img.getBoundingClientRect();
+    const w = Math.round(rect.width);
+    const h = Math.round(rect.height);
+    if (w <= 0 || h <= 0) return;
+    const hadWidth = img.hasAttribute('width');
+    const hadHeight = img.hasAttribute('height');
+    if (!hadWidth) img.setAttribute('width', String(w));
+    if (!hadHeight) img.setAttribute('height', String(h));
+    img.setAttribute(SIZE_MARKER, '1');
+    annotated.push({ img, hadWidth, hadHeight });
+  });
+  return () => {
+    annotated.forEach(({ img, hadWidth, hadHeight }) => {
+      if (!hadWidth) img.removeAttribute('width');
+      if (!hadHeight) img.removeAttribute('height');
+      img.removeAttribute(SIZE_MARKER);
+    });
+  };
+}
+
+/** Strip the size marker from a cloned tree (the marker attr survives cloneNode). */
+function stripSizeMarkers(root: Element | DocumentFragment): void {
+  (root as Element).querySelectorAll(`[${SIZE_MARKER}]`).forEach(el => el.removeAttribute(SIZE_MARKER));
+}
+
 /**
  * Replace Twitter's video player structure with a plain <img src="poster"> so that
  * GIFs and video thumbnails survive sanitisation. Replaces the nearest
@@ -865,8 +951,10 @@ function substituteVideosWithPosters(root: Element | DocumentFragment): void {
 }
 
 function sanitiseTreeInPlace(root: Element, stripStyles = false) {
-  // Drop dangerous elements outright before walking.
-  root.querySelectorAll('script, style, iframe, object, embed, link, meta, noscript').forEach(el => el.remove());
+  // Drop dangerous elements outright before walking. <foreignObject> can host
+  // arbitrary HTML inside <svg>; drop it explicitly even though it's not in the
+  // SVG whitelist (the walk-unwrap below would otherwise leak its children).
+  root.querySelectorAll('script, style, iframe, object, embed, link, meta, noscript, foreignObject').forEach(el => el.remove());
 
   const walk = (node: Node) => {
     Array.from(node.childNodes).forEach(walk);
@@ -874,6 +962,14 @@ function sanitiseTreeInPlace(root: Element, stripStyles = false) {
     sanitiseElement(node as Element, stripStyles);
   };
   Array.from(root.childNodes).forEach(walk);
+
+  // Cap inline SVGs per article — pathological pages (icon galleries) could
+  // otherwise bloat the stored Nostr event.
+  const svgs = root.querySelectorAll('svg');
+  if (svgs.length > MAX_SVGS_PER_ARTICLE) {
+    log(LL.DEBUG, `Discerned: sanitiseTreeInPlace dropping ${svgs.length - MAX_SVGS_PER_ARTICLE} of ${svgs.length} SVGs (cap=${MAX_SVGS_PER_ARTICLE})`, 'url:', window.location.href);
+    for (let i = MAX_SVGS_PER_ARTICLE; i < svgs.length; i++) svgs[i].remove();
+  }
 }
 
 /**
