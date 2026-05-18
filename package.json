@@ -9,7 +9,7 @@
     "dev": "vite dev",
     "watch": "vite build --watch",
     "build": "tsc && vite build",
-    "build:test": "tsc && vite build --mode test",
+    "build:test": "tsc && vite build --mode test --outDir dist-test",
     "type-check": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run",

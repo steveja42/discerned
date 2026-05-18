@@ -1,3 +1,4 @@
 node_modules
 .vscode/browser-test-profiles
 dist
+dist-test
