@@ -1,0 +1,7 @@
+packages:
+  - 'discerned-ext'
+  - 'discerned-web'
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true

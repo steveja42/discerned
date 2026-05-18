@@ -1,0 +1,11 @@
+{
+  "format": "article",
+  "title": { "contains": "Breaking" },
+  "url": "http://127.0.0.1:4173/news-article.html",
+  "bodyText": {
+    "minLength": 700,
+    "contains": ["Bryden Institute", "ethanol", "Lunde"]
+  },
+  "bodyHtml": { "hasImgs": true, "noScripts": true },
+  "thumbnail": "present"
+}

@@ -1,0 +1,10 @@
+{
+  "format": "article",
+  "title": { "contains": "Tantalum" },
+  "url": "http://127.0.0.1:4173/wikipedia.html",
+  "bodyText": {
+    "minLength": 500,
+    "contains": ["Tantalum", "Ekeberg", "References"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

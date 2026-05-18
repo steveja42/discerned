@@ -1,0 +1,23 @@
+{
+  "name": "discerned-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "pnpm -r --filter=./discerned-ext --filter=./discerned-web test",
+    "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "test:live": "cross-env LIVE=1 playwright test -c tests/e2e/playwright.config.ts --grep @live",
+    "pretest:e2e": "pnpm --filter=./discerned-ext build:test && pnpm --filter=./discerned-web build"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "cross-env": "^7.0.3",
+    "fast-glob": "^3.3.2",
+    "nostr-tools": "^2.7.2",
+    "tsx": "4.19.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "format": "article",
+  "title": { "contains": "tiny-yaml" },
+  "url": "http://127.0.0.1:4173/github-readme.html",
+  "bodyText": {
+    "minLength": 300,
+    "contains": ["Installation", "YAML", "MIT"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

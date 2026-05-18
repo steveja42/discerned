@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Show HN: I rewrote curl in Rust for fun | Hacker News</title>
+</head>
+<body>
+<center>
+<table id="hnmain">
+  <tr><td id="pagespace" title="Show HN: I rewrote curl in Rust for fun"></td></tr>
+  <tr><td>
+    <table class="fatitem">
+      <tr><td><a class="titlelink" href="https://example.com/rust-curl">Show HN: I rewrote curl in Rust for fun</a></td></tr>
+      <tr><td>1283 points by ferris_admirer 4 hours ago | 412 comments</td></tr>
+    </table>
+    <article id="comments">
+      <p><b>tedmiston:</b> Cool project. How does it handle HTTP/2 push frames? The reference implementation is famously fiddly.</p>
+      <p><b>ferris_admirer:</b> Right now it doesn't. The plan is to lean on hyper for the protocol layer and only implement the CLI surface myself. The HTTP/2 push semantics depend on what hyper exposes.</p>
+      <p><b>another_user:</b> Curious why not just contribute to hyper-cli? Seems like a lot of duplicated effort.</p>
+      <p><b>ferris_admirer:</b> hyper-cli's scope is much narrower than curl. I want all the weird flags — --resolve, --interface, --cookie-jar, --connect-to. That's not in scope for hyper-cli.</p>
+      <p><b>seasonedhacker:</b> Have you compared startup time to real curl? On my box curl starts in 5ms and that's a big part of why it's nice for shell scripts.</p>
+      <p><b>ferris_admirer:</b> Yes — 8ms cold, 4ms warm. The Rust version is a hair slower cold but identical warm.</p>
+    </article>
+  </td></tr>
+</table>
+</center>
+</body>
+</html>

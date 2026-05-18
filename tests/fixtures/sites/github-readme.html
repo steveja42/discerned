@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tiny-yaml/tiny-yaml: A 5kb YAML parser for browsers</title>
+</head>
+<body>
+<header><nav><a href="/">Home</a></nav></header>
+<main>
+  <article class="markdown-body">
+    <h1>tiny-yaml</h1>
+    <p>A 5kb YAML 1.2 parser for browsers and Node, with zero dependencies.</p>
+    <h2>Installation</h2>
+    <pre><code class="lang-bash">npm install tiny-yaml</code></pre>
+    <h2>Usage</h2>
+    <pre><code class="lang-js">import { parse } from 'tiny-yaml';
+
+const doc = parse('foo: bar\nbaz:\n  - 1\n  - 2');
+console.log(doc.foo); // 'bar'
+console.log(doc.baz); // [1, 2]
+</code></pre>
+    <h2>Why?</h2>
+    <p>Existing YAML libraries are large and pull in big dependency trees. tiny-yaml covers the YAML 1.2 core schema in a single file and is suitable for use in size-constrained environments like Chrome extensions and edge functions.</p>
+    <h2>What is not supported</h2>
+    <ul>
+      <li>Custom tags beyond the core schema</li>
+      <li>Streaming parse for very large documents</li>
+      <li>YAML 1.1 boolean coercion (yes/no, on/off)</li>
+    </ul>
+    <h2>License</h2>
+    <p>MIT</p>
+  </article>
+</main>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "format": "article",
+  "title": { "contains": "Nothing Here" },
+  "url": "http://127.0.0.1:4173/malformed.html",
+  "bodyText": { "minLength": 0 },
+  "bodyHtml": { "noScripts": true }
+}

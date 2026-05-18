@@ -1,0 +1,10 @@
+{
+  "format": "article",
+  "title": { "contains": "Plain Text" },
+  "url": "http://127.0.0.1:4173/plain-text.html",
+  "bodyText": {
+    "minLength": 200,
+    "contains": ["Readability", "Plain text"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

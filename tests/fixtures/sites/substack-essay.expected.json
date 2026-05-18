@@ -1,0 +1,11 @@
+{
+  "format": "article",
+  "title": { "contains": "Cost of Coordination" },
+  "url": "http://127.0.0.1:4173/substack-essay.html",
+  "bodyText": {
+    "minLength": 1200,
+    "contains": ["coordination", "trust", "decentralization"]
+  },
+  "bodyHtml": { "noScripts": true },
+  "thumbnail": "present"
+}

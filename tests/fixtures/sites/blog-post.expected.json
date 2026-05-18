@@ -1,0 +1,10 @@
+{
+  "format": "article",
+  "title": { "contains": "Slow Reading" },
+  "url": "http://127.0.0.1:4173/blog-post.html",
+  "bodyText": {
+    "minLength": 500,
+    "contains": ["slow", "paragraph", "notebook"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

@@ -1,0 +1,10 @@
+{
+  "format": "article",
+  "title": { "contains": "Show HN" },
+  "url": "http://127.0.0.1:4173/hn-thread.html",
+  "bodyText": {
+    "minLength": 300,
+    "contains": ["curl", "hyper", "HTTP/2"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

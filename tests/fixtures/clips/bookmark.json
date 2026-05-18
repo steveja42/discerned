@@ -1,0 +1,15 @@
+{
+  "capture": {
+    "id": "fixture-bookmark-001",
+    "format": "bookmark",
+    "url": "https://example.com/papers/efficient-attention",
+    "title": "Efficient Attention Mechanisms in Practice",
+    "timestamp": 1740300000000,
+    "thumbnail": "https://example.com/papers/efficient-attention/og.png"
+  },
+  "evaluation": {
+    "interest": "Insightful",
+    "ethics": "Honest",
+    "category": "Tech"
+  }
+}

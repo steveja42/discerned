@@ -1,0 +1,16 @@
+{
+  "capture": {
+    "id": "fixture-selection-001",
+    "format": "selection",
+    "url": "https://example.com/articles/slow-reading",
+    "title": "On Slow Reading",
+    "timestamp": 1740000000000,
+    "selectionText": "<p>The pleasure of a sentence is not how fast you get through it, but how slowly it lets you stay.</p>",
+    "selectionContext": "...trust, you have everything you need. [...] If you have a pen and a paragraph..."
+  },
+  "evaluation": {
+    "interest": "Wise",
+    "ethics": "Honest",
+    "category": "Philosophy"
+  }
+}

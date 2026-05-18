@@ -1,0 +1,22 @@
+[
+  {
+    "url": "https://en.wikipedia.org/wiki/Tantalum",
+    "format": "article",
+    "bodyTextContains": ["Tantalum", "chemical element"]
+  },
+  {
+    "url": "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API",
+    "format": "article",
+    "bodyTextContains": ["Fetch API", "Request"]
+  },
+  {
+    "url": "https://github.com/anthropics/anthropic-sdk-python",
+    "format": "article",
+    "bodyTextContains": ["anthropic", "pip"]
+  },
+  {
+    "url": "https://news.ycombinator.com/news",
+    "format": "bookmark",
+    "bodyTextContains": []
+  }
+]

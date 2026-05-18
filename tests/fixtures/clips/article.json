@@ -1,0 +1,17 @@
+{
+  "capture": {
+    "id": "fixture-article-001",
+    "format": "article",
+    "url": "https://daily-ledger.example.com/breakthrough-catalyst",
+    "title": "Breaking: Local Researchers Discover New Catalyst",
+    "timestamp": 1740100000000,
+    "bodyHtml": "<h1>Breaking: Local Researchers Discover New Catalyst</h1><p>A team of chemists at the Bryden Institute have demonstrated a new copper-iron alloy catalyst...</p>",
+    "bodyText": "Breaking: Local Researchers Discover New Catalyst. A team of chemists at the Bryden Institute have demonstrated a new copper-iron alloy catalyst that converts carbon dioxide into ethanol with 81 percent efficiency.",
+    "thumbnail": "https://example.com/og/news-hero.jpg"
+  },
+  "evaluation": {
+    "interest": "Insightful",
+    "ethics": "Honest",
+    "category": "Science"
+  }
+}

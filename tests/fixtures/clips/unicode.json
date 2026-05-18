@@ -1,0 +1,16 @@
+{
+  "capture": {
+    "id": "fixture-unicode-001",
+    "format": "selection",
+    "url": "https://example.com/世界/今日のニュース",
+    "title": "今日のニュース — 量子もつれの新発見 🧪",
+    "timestamp": 1740500000000,
+    "selectionText": "<p>量子もつれは、二つの粒子が空間的に離れていても、その状態が瞬時に相関するという現象である。🌌</p>",
+    "selectionContext": "...次の段落では、 [...] さらに詳しく説明する。"
+  },
+  "evaluation": {
+    "interest": "Insightful",
+    "ethics": "Honest",
+    "category": "Science"
+  }
+}

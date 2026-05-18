@@ -1,0 +1,10 @@
+{
+  "format": "article",
+  "title": { "contains": "Alex Kim" },
+  "url": "http://127.0.0.1:4173/twitter-thread.html",
+  "bodyText": {
+    "minLength": 80,
+    "contains": ["cooperative game theory"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

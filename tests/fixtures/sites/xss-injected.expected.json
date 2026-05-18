@@ -1,0 +1,10 @@
+{
+  "format": "article",
+  "title": { "contains": "Hostile" },
+  "url": "http://127.0.0.1:4173/xss-injected.html",
+  "bodyText": {
+    "minLength": 300,
+    "contains": ["benign content", "Lorem ipsum"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

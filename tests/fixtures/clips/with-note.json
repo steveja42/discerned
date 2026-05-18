@@ -1,0 +1,17 @@
+{
+  "capture": {
+    "id": "fixture-with-note-001",
+    "format": "article",
+    "url": "https://example.com/essays/notice-trust",
+    "title": "Noticing Trust",
+    "timestamp": 1740400000000,
+    "note": "Reminded me of Schelling's focal points — the part where she says trust is invisible until it is gone.",
+    "bodyHtml": "<p>Trust is invisible until it is gone, which is precisely when it is most expensive to replace.</p>",
+    "bodyText": "Trust is invisible until it is gone, which is precisely when it is most expensive to replace."
+  },
+  "evaluation": {
+    "interest": "Wise",
+    "ethics": "Exemplary",
+    "category": "Philosophy"
+  }
+}

