@@ -7,7 +7,7 @@
 
 [build]
   command = "pnpm install --frozen-lockfile && pnpm --filter=./discerned-web build"
-  publish = ".next"
+  publish = "discerned-web/.next"
 
 [build.environment]
   PNPM_VERSION = "11"
