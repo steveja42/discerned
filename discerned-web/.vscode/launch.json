@@ -6,7 +6,7 @@
             "request": "attach",
             "name": "Attach to Chrome (shared with extension debugger)",
             "port": 9222,
-            "urlFilter": "http://localhost:3000/*",
+            "urlFilter": "*://{localhost:3000,discerned.online}/*",
             "webRoot": "${workspaceFolder}",
             "sourceMapPathOverrides": {
                 "webpack://_N_E/*": "${workspaceFolder}/*"
