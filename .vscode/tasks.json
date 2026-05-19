@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev: extension",
+      "type": "shell",
+      "command": "pnpm dev",
+      "options": { "cwd": "${workspaceFolder:🧩 Extension}" },
+      "isBackground": true,
+      "presentation": {
+        "group": "dev",
+        "panel": "dedicated",
+        "reveal": "always",
+        "echo": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: web",
+      "type": "shell",
+      "command": "pnpm dev",
+      "options": { "cwd": "${workspaceFolder:🌐 Web app}" },
+      "isBackground": true,
+      "presentation": {
+        "group": "dev",
+        "panel": "dedicated",
+        "reveal": "always",
+        "echo": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: both",
+      "dependsOn": ["dev: extension", "dev: web"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    }
+  ]
+}
