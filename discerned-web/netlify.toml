@@ -11,4 +11,5 @@
 
 [build.environment]
   PNPM_VERSION = "11"
-  NODE_VERSION = "20"
+  # Node 22 LTS is required by pnpm 11 (uses node:sqlite, introduced in Node 22).
+  NODE_VERSION = "22"
