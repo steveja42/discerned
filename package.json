@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "build": "pnpm --filter=./discerned-web build",
     "test": "pnpm -r --filter=./discerned-ext --filter=./discerned-web test",
     "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
     "test:live": "cross-env LIVE=1 playwright test -c tests/e2e/playwright.config.ts --grep @live",

@@ -1,3 +1,14 @@
+# Netlify reads this file when "package path" is set to discerned-web/ in the
+# Netlify dashboard. The build runs with the working directory at the monorepo
+# root, but Netlify treats discerned-web/ as the effective project root.
+#
+# Use --filter so pnpm runs the build in this package regardless of where
+# pnpm is invoked from.
+
 [build]
-  command = "pnpm build"
-  publish = "out"
+  command = "pnpm install --frozen-lockfile && pnpm --filter=./discerned-web build"
+  publish = ".next"
+
+[build.environment]
+  PNPM_VERSION = "11"
+  NODE_VERSION = "20"
