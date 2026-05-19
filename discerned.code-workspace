@@ -1,0 +1,32 @@
+{
+  "folders": [
+    { "path": "discerned-ext", "name": "🧩 Extension" },
+    { "path": "discerned-web", "name": "🌐 Web app" },
+    { "path": "tests",         "name": "🧪 E2E tests" },
+    { "path": ".",             "name": "📁 Monorepo root" }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/.next": true,
+      "**/dist": false,
+      "**/dist-test": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/.next": true,
+      "**/dist": true,
+      "**/dist-test": true,
+      "**/test-results": true,
+      "**/discerned-web - Copy": true,
+      "**/discernedx": true,
+      "**/legacy": true,
+      "**/marketing": true
+    },
+    "typescript.tsdk": "discerned-web/node_modules/typescript/lib",
+    "eslint.workingDirectories": [
+      { "directory": "discerned-ext", "changeProcessCWD": true },
+      { "directory": "discerned-web", "changeProcessCWD": true }
+    ]
+  }
+}
