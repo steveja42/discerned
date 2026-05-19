@@ -28,5 +28,23 @@
       { "directory": "discerned-ext", "changeProcessCWD": true },
       { "directory": "discerned-web", "changeProcessCWD": true }
     ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "compounds": [
+      {
+        "name": "🚀 Debug everything (Brave + extension + web)",
+        "configurations": [
+          "Debug: Brave (default)",
+          "Attach to Chrome (shared with extension debugger)"
+        ],
+        "stopAll": true,
+        "presentation": {
+          "hidden": false,
+          "group": "1_compounds",
+          "order": 1
+        }
+      }
+    ]
   }
 }
