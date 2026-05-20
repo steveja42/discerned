@@ -1006,7 +1006,7 @@ a { color: inherit; }
   word-break: break-word;
 }
 .clip-body * { max-width: 100%; box-sizing: border-box; }
-.clip-body img { display: block !important; position: static !important; float: none !important; height: auto; border-radius: 4px; margin: 12px 0; }
+.clip-body img { display: block !important; position: static !important; float: none !important; width: auto !important; max-width: 100% !important; height: auto !important; max-height: 420px !important; object-fit: contain !important; object-position: left top !important; border-radius: 4px; margin: 12px 0; }
 .clip-body .tweet-card { display: flex; flex-direction: column; gap: 10px; }
 .clip-body .tweet-header { display: flex; align-items: center; gap: 10px; }
 .clip-body .tweet-avatar { width: 48px !important; height: 48px !important; border-radius: 50% !important; flex-shrink: 0; margin: 0 !important; }
@@ -1128,6 +1128,82 @@ a { color: inherit; }
   margin-right: 12px;
   vertical-align: middle;
 }
+/* Neutralise leaked layout-positioning inline styles. Div-soup SPAs (Bluesky,
+   Mastodon, etc.) position content with transform/absolute/sticky inside a
+   flexbox shell. Sanitisation keeps inline `style` on non-img elements, so
+   those transforms (e.g. transform: translateX(-105px)) survive into the clip
+   and shove content off-screen. None of it is meaningful in a static clip —
+   reset it so normal block/flex flow (and the dx-* rules below) take over. */
+.clip-body * {
+  transform: none !important;
+  position: static !important;
+  float: none !important;
+  inset: auto !important;
+  aspect-ratio: auto !important;
+}
+/* Aspect-ratio sizer boxes (Bluesky/Mastodon wrap media in an empty box whose
+   height comes from aspect-ratio + an absolutely-positioned img). Once position
+   is reset the img flows out and the box collapses — but a min-height set in the
+   inline style can still reserve a tall empty gap. Collapse boxes that have no
+   own text and no direct image. */
+.clip-body div:not(:has(> img)):not(:has(> svg)):empty {
+  min-height: 0 !important;
+  height: auto !important;
+}
+/* Percentage heights on wrapper divs (height:100% on media-box chains) resolve
+   against a now-static parent and reserve tall empty gaps. Let any div that
+   isn't itself an image flow to its content height. */
+.clip-body div {
+  height: auto !important;
+  min-height: 0 !important;
+}
+/* Percentage-padding aspect-ratio hack. Older media boxes reserve height with
+   `overflow:hidden; padding-top: NN%` over an absolutely-positioned img. After
+   the position reset the img flows out but the percentage padding still reserves
+   inches of empty space above it. The overflow:hidden + padding-top pairing is
+   the sizer signature — zero its vertical padding. */
+.clip-body div[style*="overflow: hidden"][style*="padding-top"],
+.clip-body div[style*="overflow: hidden"][style*="padding-bottom"] {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+/* Inline link/mention wrappers. Bluesky's rich text is a flexbox row whose
+   @mentions and #hashtags are each wrapped in a block <div><div><a>…</a></div>
+   </div>. After sanitisation those divs default to block and each link drops
+   onto its own line. Inside a tagged post, collapse wrapper-divs that hold only
+   a single anchor (and no block content) back to inline so they flow within the
+   sentence as they did on the source page. */
+.clip-body .dx-post div:has(> a:only-child),
+.clip-body .dx-post div:has(> div > a:only-child) {
+  display: inline !important;
+}
+.clip-body .dx-post div:has(> a:only-child) > a {
+  display: inline !important;
+}
+/* Restore flex containers. Div-soup SPAs set `display:flex` via a stripped CSS
+   class but keep `flex-direction`/`flex-flow`/`justify-content`/`gap` inline.
+   After sanitisation the container loses its flex display and its row of items
+   (image grids, stat rows, "·time" rows, the reposts/quotes/likes counts)
+   collapses to vertical block stacking. An inline flex-direction/flex-flow or
+   a justify-content is a reliable signal it was a flex row/column. */
+.clip-body [style*="flex-direction"],
+.clip-body [style*="flex-flow"],
+.clip-body [style*="justify-content"] {
+  display: flex !important;
+}
+/* Image grids: the two-up/​four-up media boxes wrap each photo so it fills a
+   flex cell. With display:flex restored, give the cell a sane basis and let the
+   photo fill it instead of being capped at its 420px image-rule max-height. */
+.clip-body [style*="flex-direction: row"] > div {
+  min-width: 0;
+}
+.clip-body [style*="flex-direction: row"] img {
+  width: 100% !important;
+  height: auto !important;
+  max-height: 320px !important;
+  object-fit: cover !important;
+}
+
 /* ── dx-* semantic markers stamped by tagSemanticStructure in capture.ts ───
    The capture pipeline detects header rows (avatar + name), quoted-post
    cards (an <a> wrapping a multi-element block), and icon/stat rows, and
@@ -1163,13 +1239,29 @@ a { color: inherit; }
   padding-top: 0;
   margin-top: 0;
 }
-/* Round only images inside a dx-header — the avatar. */
-.clip-body .dx-header img {
+/* Round and pin the avatar. Two ways an avatar is identified: an explicit
+   dx-avatar marker stamped by a site tagger (precise — won't catch body photos),
+   or, as a fallback for the generic tagger, a small image directly in a header.
+   Pin a fixed size and override any inline width/height:100% the source page set
+   (SPAs like Bluesky size the avatar via its container, which is gone after
+   sanitisation — without a pin the avatar fills the full clip width). */
+.clip-body img.dx-avatar,
+.clip-body .dx-header > :first-child img {
   display: inline-block !important;
   margin: 0 !important;
   flex-shrink: 0;
+  width: 44px !important;
+  height: 44px !important;
+  max-height: 44px !important;
+  object-fit: cover !important;
   border-radius: 50% !important;
   vertical-align: middle;
+}
+/* The avatar branch is the header's first child; cap its width so a
+   container-less avatar wrapper doesn't stretch the flex row. */
+.clip-body .dx-header > :first-child {
+  width: 44px;
+  min-width: 44px;
 }
 /* dx-post: the primary captured post. dx-reply: a reply in a thread. Each
    gets its own block-level container with a hairline separator. */

@@ -786,7 +786,9 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const inlinedThumbnail = thumbnailUrl ? await inlineImage(thumbnailUrl) : null;
 
   // Tier 1: semantic article element — preserves images at their correct positions.
-  const articleEl = findArticleElement(opts.smartArticleDetection);
+  // Skipped when a site tagger pinned an explicit capture root (Tier 1.5 below
+  // uses it): the tagger's root is more precise than a page-level <main>/<article>.
+  const articleEl = siteTaggerRoot ? null : findArticleElement(opts.smartArticleDetection);
   if (articleEl) {
     log(LL.NORMAL, `Discerned: article captured via semantic element <${articleEl.tagName.toLowerCase()}>`, 'url:', base.url);
     const cleanup = markExcluded(document.body);
@@ -819,12 +821,15 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   // Mastodon, Bluesky, Threads, Reddit's new UI) that render as div-soup with
   // hashed class names — no semantic markup, Readability gives up. Pick the
   // largest centre-column block with real prose by visual layout.
-  const layoutEl = findContentBlockByLayout();
+  // A site tagger may have already pinpointed the content root; prefer it so we
+  // don't capture page chrome (sidebars, search, banners) the finder would grab.
+  const layoutEl = siteTaggerRoot ?? findContentBlockByLayout();
   if (layoutEl) {
     log(LL.NORMAL, `Discerned: article captured via layout finder <${layoutEl.tagName.toLowerCase()}>`, 'url:', base.url);
     const cleanup = markExcluded(document.body);
     const sizeCleanup = annotateLiveImageSizes(layoutEl);
-    const expanded = maybeExpandToFeed(layoutEl);
+    // A tagger-supplied root is already the intended scope — don't widen it.
+    const expanded = siteTaggerRoot ? layoutEl : maybeExpandToFeed(layoutEl);
     const clone = expanded.cloneNode(true) as Element;
     sizeCleanup();
     cleanup();
@@ -1089,25 +1094,115 @@ function tagPrimal(root: Document | Element): void {
   });
 }
 
-type SiteTagger = (root: Document | Element) => void;
+// A site tagger stamps dx-* markers on the live DOM and may optionally return
+// a narrowed capture root (e.g. the posts column, excluding page chrome). When
+// it returns an element, extractArticle captures that subtree instead of asking
+// the generic layout finder — the tagger has authoritative knowledge of where
+// the content lives. Returning nothing leaves root selection to the pipeline.
+/**
+ * Tag bsky.app posts. Bluesky is a React SPA with hashed class names but stable
+ * `data-testid` attributes:
+ *   - `feedItem-by-<handle>`        each post row on a profile/feed page
+ *   - `postThreadItem-by-<handle>`  each post on a thread (main post + replies)
+ *   - `userAvatarImage`             the avatar
+ *   - `replyBtn` / `likeBtn`        buttons in the action/stats row
+ *
+ * Each post lays out as: [avatar | name+handle+date] then body, then a stats
+ * row. Two header variants exist: replies/feed items carry a `/post/` date
+ * anchor in the header; the thread's *main* post does not (the date is plain
+ * text and a Follow button sits where the date would be). So we anchor the
+ * header on the avatar <a> + the author-name <a> (a /profile/ link that isn't
+ * the avatar), which is present in both variants.
+ *
+ * Returns the content column as the narrowed capture root — `profileScreen` on
+ * a profile page, `postThreadScreen` on a thread — so the clip excludes page
+ * chrome (global search box, sign-in bar, trending sidebar) that the generic
+ * <main>/layout finders would otherwise pull in.
+ */
+function tagBsky(root: Document | Element): Element | void {
+  const posts = Array.from(
+    root.querySelectorAll('[data-testid^="feedItem-by-"], [data-testid^="postThreadItem-by-"]'),
+  );
+  for (const post of posts) {
+    appendClass(post, 'dx-post');
+
+    const avatarImg = post.querySelector('[data-testid="userAvatarImage"] img, [data-testid="userAvatarImage"]');
+    const avatarAnchor = post.querySelector('[data-testid="userAvatarImage"]')?.closest('a') ?? null;
+    // Mark the avatar image directly so its round-pin CSS doesn't leak onto body
+    // photos that happen to fall inside the (sometimes broad) header wrapper.
+    if (avatarImg) {
+      const img = avatarImg.tagName === 'IMG' ? avatarImg : avatarImg.querySelector('img');
+      if (img) appendClass(img, 'dx-avatar');
+    }
+    // The author-name anchor: a /profile/ link that is NOT the avatar anchor and
+    // carries visible text (the display name). Present in both header variants.
+    let nameAnchor: Element | null = null;
+    for (const a of Array.from(post.querySelectorAll('a[href*="/profile/"]'))) {
+      if (a === avatarAnchor || avatarAnchor?.contains(a)) continue;
+      if ((a.textContent ?? '').trim().length > 0) { nameAnchor = a; break; }
+    }
+    if (avatarAnchor && nameAnchor) {
+      const headerRow = commonWrapper(avatarAnchor, nameAnchor, post);
+      if (headerRow) appendClass(headerRow, 'dx-header');
+    }
+
+    // Stats row: the wrapper holding the reply/repost/like/share buttons.
+    const replyBtn = post.querySelector('[data-testid="replyBtn"]');
+    const likeBtn = post.querySelector('[data-testid="likeBtn"]');
+    if (replyBtn && likeBtn) {
+      const statsRow = commonWrapper(replyBtn, likeBtn, post);
+      if (statsRow) appendClass(statsRow, 'dx-stats');
+    }
+  }
+
+  // Narrow the capture to the content column. profileScreen on a profile page,
+  // postThreadScreen on a thread page; neither present → leave root to the pipeline.
+  const column =
+    root.querySelector('[data-testid="profileScreen"]') ??
+    root.querySelector('[data-testid="postThreadScreen"]');
+  return column ?? undefined;
+}
+
+/**
+ * Lowest common ancestor of `a` and `b` that is still a descendant of `bound`.
+ * Returns null if they share no ancestor under `bound`.
+ */
+function commonWrapper(a: Element, b: Element, bound: Element): Element | null {
+  const ancestors = new Set<Element>();
+  for (let cur: Element | null = a; cur && cur !== bound.parentElement; cur = cur.parentElement) {
+    ancestors.add(cur);
+  }
+  for (let cur: Element | null = b; cur && cur !== bound.parentElement; cur = cur.parentElement) {
+    if (ancestors.has(cur)) return cur;
+  }
+  return null;
+}
+
+type SiteTagger = (root: Document | Element) => Element | void;
 
 const SITE_TAGGERS: Array<{ match: (host: string) => boolean; tag: SiteTagger; name: string }> = [
   { name: 'primal', match: h => /(^|\.)primal\.net$/i.test(h), tag: tagPrimal },
+  { name: 'bsky', match: h => /(^|\.)bsky\.app$/i.test(h), tag: tagBsky },
 ];
 
 /**
  * Apply the matching site tagger (if any) to the document. Called from
  * extractArticle before the layout-finder/Readability path runs so the
  * captured HTML carries dx-* markers regardless of which tier wins.
- * Returns true if a site tagger ran, so the generic semantic-structure
- * pass can be skipped (it would re-tag the same elements differently).
+ * Sets siteTaggerActive (so the generic semantic-structure pass is skipped)
+ * and siteTaggerRoot (the narrowed capture root, when the tagger returns one).
  */
 function applySiteTagger(): boolean {
   const host = window.location.hostname;
   for (const t of SITE_TAGGERS) {
     if (t.match(host)) {
       log(LL.NORMAL, `Discerned: applying ${t.name} site tagger`, 'url:', window.location.href);
-      try { t.tag(document); return true; } catch (err) {
+      try {
+        const root = t.tag(document);
+        siteTaggerRoot = root ?? null;
+        if (root) log(LL.NORMAL, `Discerned: ${t.name} tagger returned narrowed root <${root.tagName.toLowerCase()}>`, 'url:', window.location.href);
+        return true;
+      } catch (err) {
         log(LL.WARN, `Discerned: ${t.name} tagger failed:`, err);
         return false;
       }
@@ -1120,6 +1215,10 @@ function applySiteTagger(): boolean {
 // tagSemanticStructure checks this and skips the generic pass — the site
 // tagger has authoritative knowledge for this page.
 let siteTaggerActive = false;
+
+// Set by applySiteTagger when the matching tagger returns a narrowed capture
+// root. extractArticle uses it in preference to the generic layout finder.
+let siteTaggerRoot: Element | null = null;
 
 // ── Semantic structure tagging (generic fallback) ────────────────────────────
 //
@@ -1281,7 +1380,12 @@ const ALLOWED_ATTRS_PER_TAG: Record<string, Set<string>> = {
   use: new Set(['href', 'x', 'y', 'width', 'height']),
 };
 
-const MAX_SVGS_PER_ARTICLE = 50;
+// Cap inline SVGs to guard against pathological icon-gallery pages bloating the
+// stored event. A long social thread legitimately needs many: each post's action
+// row (reply/repost/like/share/options) is ~5 small glyph SVGs, so a 40-reply
+// thread carries ~200. Set the cap high enough to keep those while still bounding
+// truly pathological pages.
+const MAX_SVGS_PER_ARTICLE = 400;
 
 function isSafeImageSrc(src: string): boolean {
   if (src.startsWith('data:image/')) return true;
@@ -1467,6 +1571,22 @@ function substituteVideosWithPosters(root: Element | DocumentFragment): void {
     img.alt = video.getAttribute('aria-label') ?? 'Video';
     const container = video.closest('[data-testid="tweetPhoto"]');
     (container ?? video).replaceWith(img);
+  });
+
+  // Background-image video posters. Bluesky (and similar players) render a video
+  // embed as a <div style="background-image:url(…thumbnail.jpg); background:#000">
+  // with no <video>/<img>. Sanitisation strips `url(`, leaving a blank black box.
+  // Pull the poster URL into a real <img> so it survives and gets inlined.
+  (root as Element).querySelectorAll<HTMLElement>('[style*="background-image"]').forEach(el => {
+    const url = el.style.backgroundImage.match(/https?:\/\/[^"')\s]+/)?.[0];
+    if (!url || !/\.(jpe?g|png|webp|gif)/i.test(url) || !isSafeImageSrc(url)) return;
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = 'Video';
+    // Replace the player's aspect-ratio sizer wrapper when present so we don't
+    // leave the empty black box around the new poster.
+    const box = el.closest('[style*="aspect-ratio"]') ?? el;
+    box.replaceWith(img);
   });
 }
 

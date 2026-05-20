@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Post by TestUser</title>
+<meta property="og:title" content="Post by TestUser on Bluesky">
+</head>
+<body>
+<div id="root">
+  <div data-testid="postThreadScreen">
+    <!-- Primary post -->
+    <div data-testid="postThreadItem-by-testuser.bsky.social" role="link">
+      <div>
+        <a href="/profile/testuser.bsky.social" aria-label="TestUser's avatar" role="link">
+          <div data-testid="userAvatarImage">
+            <img src="https://cdn.bsky.app/img/avatar/plain/did:plc:test/avatar.jpg@jpeg" alt="TestUser's avatar" width="42" height="42">
+          </div>
+        </a>
+        <div>
+          <a href="/profile/testuser.bsky.social">TestUser</a>
+          <span>@testuser.bsky.social</span>
+          <a href="/profile/testuser.bsky.social/post/abc123" aria-label="May 20, 2026 at 10:00 AM" role="link">
+            <span>·</span>
+          </a>
+        </div>
+      </div>
+      <div data-testid="contentHider-post">
+        <div data-testid="postText" dir="auto">
+          <div>This is the primary post about freedom and democracy.</div>
+          <div>It contains multiple lines of text for the body check.</div>
+        </div>
+        <div>
+          <img src="https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:test/post-image.jpg@jpeg" alt="Post image" width="515" height="290">
+        </div>
+      </div>
+      <div>
+        <div>
+          <button aria-label="Reply (42 replies)" role="button" data-testid="replyBtn">
+            <svg viewBox="0 0 24 24"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
+            <div dir="auto">42</div>
+          </button>
+        </div>
+        <div>
+          <button aria-label="Repost or quote post" role="button">
+            <svg viewBox="0 0 24 24"><path d="M7 16V4m0 0L3 8m4-4 4 4"/></svg>
+            <div dir="auto" data-testid="repostCount">18</div>
+          </button>
+        </div>
+        <div>
+          <button aria-label="Like (123 likes)" role="button" data-testid="likeBtn">
+            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            <div dir="auto">123</div>
+          </button>
+        </div>
+        <div>
+          <button aria-label="Add to saved posts" role="button" data-testid="postBookmarkBtn">
+            <svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reply 1 -->
+    <div data-testid="postThreadItem-by-replier1.bsky.social" role="link">
+      <div>
+        <a href="/profile/replier1.bsky.social" aria-label="Replier One's avatar" role="link">
+          <div data-testid="userAvatarImage">
+            <img src="https://cdn.bsky.app/img/avatar/plain/did:plc:replier1/avatar.jpg@jpeg" alt="Replier One's avatar" width="42" height="42">
+          </div>
+        </a>
+        <div>
+          <a href="/profile/replier1.bsky.social">Replier One</a>
+          <span>@replier1.bsky.social</span>
+          <a href="/profile/replier1.bsky.social/post/def456" aria-label="May 20, 2026 at 10:05 AM" role="link">
+            <span>·</span>
+          </a>
+        </div>
+      </div>
+      <div data-testid="contentHider-post">
+        <div data-testid="postText" dir="auto">
+          <div>Great point! I completely agree with your take on this important issue.</div>
+        </div>
+      </div>
+      <div>
+        <div>
+          <button aria-label="Reply (3 replies)" role="button" data-testid="replyBtn">
+            <svg viewBox="0 0 24 24"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
+            <div dir="auto">3</div>
+          </button>
+        </div>
+        <div>
+          <button aria-label="Repost or quote post" role="button">
+            <svg viewBox="0 0 24 24"><path d="M7 16V4m0 0L3 8m4-4 4 4"/></svg>
+            <div dir="auto" data-testid="repostCount">1</div>
+          </button>
+        </div>
+        <div>
+          <button aria-label="Like (7 likes)" role="button" data-testid="likeBtn">
+            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            <div dir="auto">7</div>
+          </button>
+        </div>
+        <div>
+          <button aria-label="Add to saved posts" role="button" data-testid="postBookmarkBtn">
+            <svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reply 2 -->
+    <div data-testid="postThreadItem-by-replier2.bsky.social" role="link">
+      <div>
+        <a href="/profile/replier2.bsky.social" aria-label="Replier Two's avatar" role="link">
+          <div data-testid="userAvatarImage">
+            <img src="https://cdn.bsky.app/img/avatar/plain/did:plc:replier2/avatar.jpg@jpeg" alt="Replier Two's avatar" width="42" height="42">
+          </div>
+        </a>
+        <div>
+          <a href="/profile/replier2.bsky.social">Replier Two</a>
+          <span>@replier2.bsky.social</span>
+          <a href="/profile/replier2.bsky.social/post/ghi789" aria-label="May 20, 2026 at 10:10 AM" role="link">
+            <span>·</span>
+          </a>
+        </div>
+      </div>
+      <div data-testid="contentHider-post">
+        <div data-testid="postText" dir="auto">
+          <div>Thanks for sharing this perspective on democracy and freedom of speech.</div>
+        </div>
+      </div>
+      <div>
+        <div>
+          <button aria-label="Reply (1 reply)" role="button" data-testid="replyBtn">
+            <svg viewBox="0 0 24 24"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
+            <div dir="auto">1</div>
+          </button>
+        </div>
+        <div>
+          <button aria-label="Repost or quote post" role="button">
+            <svg viewBox="0 0 24 24"><path d="M7 16V4m0 0L3 8m4-4 4 4"/></svg>
+            <div dir="auto" data-testid="repostCount">0</div>
+          </button>
+        </div>
+        <div>
+          <button aria-label="Like (2 likes)" role="button" data-testid="likeBtn">
+            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            <div dir="auto">2</div>
+          </button>
+        </div>
+        <div>
+          <button aria-label="Add to saved posts" role="button" data-testid="postBookmarkBtn">
+            <svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

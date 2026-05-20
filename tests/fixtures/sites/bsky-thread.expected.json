@@ -1,0 +1,19 @@
+{
+  "format": "article",
+  "title": { "contains": "TestUser" },
+  "url": "http://127.0.0.1:4173/bsky-thread.html",
+  "bodyText": {
+    "minLength": 100,
+    "contains": [
+      "primary post about freedom",
+      "Replier One",
+      "Replier Two",
+      "democracy and freedom"
+    ]
+  },
+  "bodyHtml": {
+    "noScripts": true,
+    "hasImgs": true,
+    "containsClasses": ["dx-header", "dx-stats"]
+  }
+}

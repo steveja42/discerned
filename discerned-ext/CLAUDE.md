@@ -84,7 +84,9 @@ All tiers clone the live DOM, run `tagSemanticStructure()` (generic) or rely on 
 
 The matching layout CSS lives in `discerned-web/app/globals.css` under `.clip-body .dx-*`. **To add a site**: copy `tagPrimal`, swap the selectors, register it in `SITE_TAGGERS`. No web-app change needed unless the site has a new layout quirk.
 
-`tagPrimal` (primal.net) is the reference implementation.
+A tagger may optionally **return a capture root** (`Element | void`). When it does, `extractArticle` captures that subtree instead of running the generic article/layout finders — use this to scope the clip to the content column and exclude page chrome (sidebars, search, banners). Returning nothing leaves root selection to the pipeline (still stamping markers).
+
+`tagPrimal` (primal.net) is the reference implementation. `tagBsky` (bsky.app) is a second example: it tags each `[data-testid^="feedItem-by-"]` post (`dx-post` + `dx-header` + `dx-stats`) and returns the `profileScreen` column as the capture root. Bluesky positions content with inline `transform`/`position`/`aspect-ratio` that survive sanitisation (only `<img>` styles get scrubbed); `globals.css` neutralises those inside `.clip-body` so the dx-* layout takes over.
 
 ### Sanitisation
 

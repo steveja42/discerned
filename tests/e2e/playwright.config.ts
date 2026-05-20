@@ -57,5 +57,10 @@ export default defineConfig({
       testMatch: /primal-visual\.spec\.ts/,
       retries: 0,
     },
+    {
+      name: 'bsky-visual',
+      testMatch: /bsky-visual\.spec\.ts/,
+      retries: 0,
+    },
   ],
 });
