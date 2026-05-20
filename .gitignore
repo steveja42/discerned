@@ -10,6 +10,7 @@ node_modules/
 
 # Test artifacts
 test-results/
+test-output/
 playwright-report/
 playwright/.cache/
 coverage/

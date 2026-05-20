@@ -1062,16 +1062,17 @@ a { color: inherit; }
   stroke: currentColor;
   flex-shrink: 0;
 }
+/* Small images at avatar-ish widths get inline-block + margin so they sit
+   beside following text in dense rows. Rounding is reserved for images
+   inside known avatar contexts (.dx-header, .dx-quote, .tweet-*) — applying
+   it universally turns arbitrary content images into ovals. */
 .clip-body img[width="16"], .clip-body img[width="20"], .clip-body img[width="24"],
-.clip-body img[width="28"], .clip-body img[width="32"], .clip-body img[width="40"],
-.clip-body img[width="48"], .clip-body img[width="56"], .clip-body img[width="64"] {
+.clip-body img[width="28"], .clip-body img[width="32"], .clip-body img[width="36"],
+.clip-body img[width="40"], .clip-body img[width="48"], .clip-body img[width="56"],
+.clip-body img[width="64"] {
   display: inline-block !important;
   margin: 0 4px 0 0 !important;
   vertical-align: middle;
-  border-radius: 50%;
-}
-.clip-body img[width="16"], .clip-body img[width="20"], .clip-body img[width="24"] {
-  border-radius: 0 !important;
 }
 /* :has(img) (not just direct child) catches the common pattern
    <a><span><img></span></a> where the avatar img is wrapped in a span. */
@@ -1126,6 +1127,217 @@ a { color: inherit; }
   gap: 6px;
   margin-right: 12px;
   vertical-align: middle;
+}
+/* ── dx-* semantic markers stamped by tagSemanticStructure in capture.ts ───
+   The capture pipeline detects header rows (avatar + name), quoted-post
+   cards (an <a> wrapping a multi-element block), and icon/stat rows, and
+   stamps these classes so default block flow doesn't stack everything
+   vertically and link underline doesn't bleed into card content. */
+.clip-body .dx-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: nowrap;
+  margin: 8px 0;
+  line-height: 1.25;
+}
+.clip-body .dx-header > * {
+  margin: 0;
+}
+/* The avatar branch (first child with an img) shouldn't stretch. */
+.clip-body .dx-header > :first-child {
+  flex-shrink: 0;
+}
+/* The name branch (everything else) stacks name on top, handle below. */
+.clip-body .dx-header > :not(:first-child) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.25;
+}
+/* Pull the first text/span in the name column to the exact top — when an
+   <a> wraps the avatar, the next sibling sometimes carries top padding from
+   the Georgia line-box. Set padding-top: 0 explicitly. */
+.clip-body .dx-header > :not(:first-child) > :first-child {
+  padding-top: 0;
+  margin-top: 0;
+}
+/* Round only images inside a dx-header — the avatar. */
+.clip-body .dx-header img {
+  display: inline-block !important;
+  margin: 0 !important;
+  flex-shrink: 0;
+  border-radius: 50% !important;
+  vertical-align: middle;
+}
+/* dx-post: the primary captured post. dx-reply: a reply in a thread. Each
+   gets its own block-level container with a hairline separator. */
+.clip-body .dx-post,
+.clip-body .dx-reply {
+  display: block;
+  margin: 0 0 16px 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--rule-soft);
+}
+.clip-body .dx-post:first-child,
+.clip-body .dx-reply:first-of-type {
+  border-top: none;
+}
+.clip-body .dx-reply {
+  padding-left: 0;
+}
+/* dx-reply-row: a reply's avatar + (name + body) split. Two direct children;
+   first is the avatar wrapper, second is the name/body column. */
+.clip-body .dx-reply-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.clip-body .dx-reply-row > :first-child {
+  flex-shrink: 0;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  overflow: hidden;
+}
+.clip-body .dx-reply-row > :first-child img {
+  display: block !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  width: 40px;
+  height: 40px;
+}
+/* Avatar placeholder: when the leftSide wrapper has no <img> (primal renders
+   the avatar lazily and some replies never loaded), show a classic
+   anonymous-user silhouette so the row still aligns left-to-right. The
+   silhouette is an inline SVG data URI — no external request, no flash. */
+.clip-body .dx-reply-row > :first-child:not(:has(img)),
+.clip-body .dx-header > :first-child:not(:has(img)) {
+  background-color: #d5cfc4;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><circle cx='20' cy='15' r='7' fill='%23a39e94'/><path d='M6 36c0-8 6-13 14-13s14 5 14 13z' fill='%23a39e94'/></svg>");
+  background-size: cover;
+  background-position: center;
+  border-radius: 50%;
+}
+.clip-body .dx-reply-row > :last-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* dx-author: a single inline row holding username, verification icon, time
+   (and sometimes a verified-by handle). Default block flow would stack
+   these on separate lines — keep them inline with a space gap so
+   "Akashi Hyogo  1 day" reads naturally. */
+.clip-body .dx-author {
+  display: inline;
+}
+/* All descendants flow inline so name, verification, handle, and time sit on
+   one line and only wrap when the line genuinely runs out of room. */
+.clip-body .dx-author *,
+.clip-body .dx-author > * {
+  display: inline;
+}
+/* Space between adjacent inline children (replaces what would otherwise be
+   collapsed whitespace between primal's <span>/<div> siblings). */
+.clip-body .dx-author > * + *,
+.clip-body .dx-author > * > * + * {
+  margin-left: 4px;
+}
+/* The name itself (first span at top level) is bold. */
+.clip-body .dx-author > :first-child,
+.clip-body .dx-author > :first-child > :first-child {
+  font-weight: 600;
+}
+/* The trailing time chunk (last direct child of dx-author) is small + muted. */
+.clip-body .dx-author > :last-child:not(:first-child) {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* dx-zaps-row: primal's top-zappers row (avatar + sats × N). Stamp on
+   _zapHighlights_; render the inner buttons as inline-flex chips. */
+.clip-body .dx-zaps-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 8px 0;
+}
+.clip-body .dx-zaps-row > * {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* dx-quote: a quoted/embedded note shown inline. Single bordered card. */
+.clip-body .dx-quote {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--rule-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 10px 0;
+  background: var(--paper-2, rgba(0,0,0,0.02));
+}
+.clip-body .dx-quote * {
+  text-decoration: none;
+}
+/* dx-quote-frag: individual <a> elements primal renders for the same embedded
+   note (header, body, mentions, image). Strip their inline-link treatment so
+   they don't underline or break the card layout — they're already inside a
+   dx-quote wrapper that provides the visual frame. */
+.clip-body .dx-quote-frag {
+  display: inline;
+  color: inherit;
+  text-decoration: none;
+}
+.clip-body .dx-quote .dx-quote-frag {
+  display: block;
+  margin: 0;
+}
+/* Body-text fragment (no header, no img — just text) needs paragraph spacing. */
+.clip-body .dx-quote .dx-quote-frag:not(:has(.dx-header)):not(:has(img)) {
+  margin: 6px 0;
+  line-height: 1.5;
+}
+/* Image-only fragment: let the image sit on its own line at reasonable size. */
+.clip-body .dx-quote-frag > img,
+.clip-body .dx-quote-frag:has(> img):only-child img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+/* Hide dx-quote cards that captured no content. */
+.clip-body .dx-quote:empty {
+  display: none;
+}
+.clip-body .dx-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.clip-body .dx-stats > * {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  flex-shrink: 0;
+}
+/* A nested .dx-stats inside another .dx-stats is double-tagging caused by
+   primal having two _footer_ wrappers around the same logical row. Hide
+   the outer one (which has no useful styling) and let the inner one render. */
+.clip-body .dx-stats > .dx-stats {
+  display: contents;
 }
 .detail-thumb {
   width: 100%;

@@ -597,9 +597,183 @@ function findArticleElement(smartDetection: boolean): Element | null {
   return null;
 }
 
+// ── Layout-based content-block finder ────────────────────────────────────────
+//
+// Many modern SPAs (Nostr clients, Mastodon, Bluesky, Threads, Lemmy, Reddit's
+// new UI) render entirely as <div> soup with hashed class names — none of the
+// ARTICLE_SELECTORS match, and Readability (tuned for blog/news prose) tends to
+// give up and return a tiny subtree. This heuristic picks the best content
+// element by *visual layout* instead of markup semantics: the largest block in
+// the page's central column that contains real prose (not just buttons/icons).
+
+const LAYOUT_MIN_TEXT_CHARS = 200;
+const LAYOUT_MAX_LINK_TEXT_RATIO = 0.85; // dominated by link text = nav/feed of cards
+const LAYOUT_MAX_BUTTON_DENSITY = 0.15; // buttons/textLength — high = UI chrome
+const LAYOUT_SKIP_TAGS = new Set([
+  'script', 'style', 'noscript', 'nav', 'header', 'footer', 'aside',
+  'svg', 'path', 'button', 'input', 'select', 'textarea', 'form', 'iframe',
+  // Content leaves — picking one of these means we miss siblings. Prefer the
+  // container (article, main, div, section) that holds them.
+  'p', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'code',
+]);
+
+interface BlockScore {
+  el: Element;
+  score: number;
+  textLen: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Score an element as a candidate content block. Higher is better.
+ * Returns null if the element is disqualified (off-screen, too small,
+ * dominated by UI chrome, etc.).
+ */
+function scoreContentBlock(el: Element, hasLayout: boolean): BlockScore | null {
+  if (LAYOUT_SKIP_TAGS.has(el.tagName.toLowerCase())) return null;
+
+  const rect = el.getBoundingClientRect();
+  // Reject elements that ARE the body / html — they own the whole page chrome.
+  if (el === document.body || el === document.documentElement) return null;
+
+  if (hasLayout) {
+    // Soft size gate: prefer elements visible in the layout but don't require
+    // them. Tests/sparse pages may render content at much smaller sizes.
+    if (rect.width > 0 && rect.width < 200) return null;
+  }
+
+  const text = (el.textContent ?? '').trim();
+  if (text.length < LAYOUT_MIN_TEXT_CHARS) return null;
+
+  // Reject elements dominated by link text — those are link lists / nav menus.
+  const linkText = Array.from(el.querySelectorAll('a'))
+    .map(a => (a.textContent ?? '').trim())
+    .join(' ');
+  const linkRatio = linkText.length / Math.max(text.length, 1);
+  if (linkRatio > LAYOUT_MAX_LINK_TEXT_RATIO) return null;
+
+  // Reject elements with too many buttons relative to text — UI chrome.
+  const buttonCount = el.querySelectorAll('button, [role="button"]').length;
+  const buttonDensity = buttonCount / Math.max(text.length / 100, 1);
+  if (buttonDensity > LAYOUT_MAX_BUTTON_DENSITY * 100) return null;
+
+  const imgCount = el.querySelectorAll('img').length;
+  const paragraphCount = el.querySelectorAll('p, blockquote, li, h1, h2, h3, h4').length;
+
+  // Score: visual area + text density, boosted by paragraphs/images, penalised
+  // by link density. Centre-column elements score highest because area dominates.
+  const area = rect.width * rect.height;
+  const visualScore = Math.sqrt(area);
+  const textScore = text.length;
+  const structureBonus = paragraphCount * 50 + imgCount * 20;
+  const linkPenalty = 1 - linkRatio;
+
+  const score = (visualScore + textScore + structureBonus) * linkPenalty;
+  return { el, score, textLen: text.length, width: rect.width, height: rect.height };
+}
+
+/**
+ * Find the best content block on the page using layout heuristics. Walks every
+ * element, scores those that look like content, and returns the highest-scoring.
+ * Skips descendants once an ancestor wins — picking the outermost qualifying
+ * block avoids tearing children out of their parent's layout.
+ */
+function findContentBlockByLayout(): Element | null {
+  // In headless/jsdom environments getBoundingClientRect returns zeros for
+  // every element. Detect this once: when there's no real layout, skip the
+  // size gating but require a higher structural bar (multiple child blocks)
+  // before accepting a candidate — without rects we can't distinguish the
+  // "main column" from a single paragraph in body root.
+  const probe = document.body.getBoundingClientRect();
+  const hasLayout = probe.width > 0 && probe.height > 0;
+  const all = Array.from(document.body.querySelectorAll('*'));
+  const scored: BlockScore[] = [];
+  for (const el of all) {
+    const s = scoreContentBlock(el, hasLayout);
+    if (s) scored.push(s);
+  }
+  if (scored.length === 0) return null;
+  // Headless safety: require at least 3 block-level descendants to count.
+  // Real layout gating already enforces this implicitly via the 300×200 box.
+  if (!hasLayout) {
+    const filtered = scored.filter(s =>
+      s.el.querySelectorAll('p, div, li, blockquote, h1, h2, h3, h4').length >= 3
+    );
+    if (filtered.length === 0) return null;
+    scored.length = 0;
+    scored.push(...filtered);
+  }
+
+  // Sort by descending score, then pick the best whose chosen ancestor isn't already taken.
+  scored.sort((a, b) => b.score - a.score);
+  const chosen: Element[] = [];
+  for (const s of scored) {
+    const containedByChosen = chosen.some(c => c.contains(s.el));
+    const containsChosen = chosen.some(c => s.el.contains(c));
+    // Prefer the outer block: if this candidate contains one already chosen,
+    // remove the inner one and take this outer one.
+    if (containsChosen) {
+      for (let i = chosen.length - 1; i >= 0; i--) {
+        if (s.el.contains(chosen[i])) chosen.splice(i, 1);
+      }
+      chosen.push(s.el);
+    } else if (!containedByChosen) {
+      chosen.push(s.el);
+    }
+  }
+
+  // Return the highest-scoring of the final chosen set.
+  if (chosen.length === 0) return null;
+  const best = scored.find(s => chosen.includes(s.el))!;
+  log(LL.NORMAL, `Discerned: layout-finder picked <${best.el.tagName.toLowerCase()}> textLen=${best.textLen} ${Math.round(best.width)}×${Math.round(best.height)}`, 'url:', window.location.href);
+  return best.el;
+}
+
+/**
+ * When `el` is one of several structurally-similar siblings (a feed or thread
+ * card), return its parent so the whole feed is captured. Otherwise return `el`.
+ *
+ * Signal: count siblings sharing `el`'s tag and class signature. If 2+ match
+ * and together they hold significantly more text than `el` alone, the parent
+ * is the thread/feed container.
+ */
+function maybeExpandToFeed(el: Element): Element {
+  const parent = el.parentElement;
+  if (!parent || parent === document.body) return el;
+
+  const sig = `${el.tagName.toLowerCase()}|${el.className}`;
+  const siblings = Array.from(parent.children).filter(c =>
+    `${c.tagName.toLowerCase()}|${c.className}` === sig
+  );
+  if (siblings.length < 2) return el;
+
+  const elText = (el.textContent ?? '').trim().length;
+  const parentText = (parent.textContent ?? '').trim().length;
+  // Parent must hold ≥ 1.5× the chosen element's text — otherwise the siblings
+  // are mostly empty/decorative and expanding adds noise.
+  if (parentText < elText * 1.5) return el;
+
+  // Don't expand past a sensible boundary — bail if the parent looks like the
+  // page chrome (full viewport width or contains nav/header).
+  const parentRect = parent.getBoundingClientRect();
+  if (parentRect.width > window.innerWidth * 0.95) return el;
+  if (parent.querySelector(':scope > nav, :scope > header, :scope > footer')) return el;
+
+  log(LL.NORMAL, `Discerned: layout-finder expanded to feed parent — ${siblings.length} siblings, ${parentText} chars vs ${elText} alone`, 'url:', window.location.href);
+  return parent;
+}
+
 async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const base = baseFields();
   log(LL.DEBUG, `Discerned: extractArticle — smartArticleDetection=${opts.smartArticleDetection} stripInlineStyles=${opts.stripInlineStyles}`, 'url:', base.url);
+
+  // Apply per-site live-DOM tagger (if registered for this hostname) so the
+  // captured HTML carries dx-* markers across sanitisation regardless of
+  // which extraction tier wins below. When a site tagger runs, the generic
+  // semantic-structure pass downstream is skipped so it doesn't re-tag the
+  // same elements with conflicting markers.
+  siteTaggerActive = applySiteTagger();
 
   // Tier 0: Twitter/X — extract clean tweet card from data-testid selectors.
   if (/^https?:\/\/(www\.)?(twitter|x)\.com\//i.test(window.location.href)) {
@@ -624,6 +798,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     removeMarked(clone);
     stripSizeMarkers(clone);
     substituteVideosWithPosters(clone);
+    tagSemanticStructure(clone);
     const imgsBefore = clone.querySelectorAll('img').length;
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
     const imgsAfter = clone.querySelectorAll('img[style]').length;
@@ -631,6 +806,36 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     log(LL.TRACE, `Discerned: sanitised bodyHtml (first 2000 chars): ${clone.innerHTML.slice(0, 2000)}`, 'url:', base.url);
     const inlined = await inlineAllImages(clone.innerHTML.trim());
     log(LL.NORMAL, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
+    return {
+      ...base,
+      format: 'article',
+      bodyHtml: inlined,
+      bodyText: clone.textContent?.trim() ?? '',
+      thumbnail: inlinedThumbnail,
+    };
+  }
+
+  // Tier 1.5: layout-based content-block finder. For SPAs (Nostr clients,
+  // Mastodon, Bluesky, Threads, Reddit's new UI) that render as div-soup with
+  // hashed class names — no semantic markup, Readability gives up. Pick the
+  // largest centre-column block with real prose by visual layout.
+  const layoutEl = findContentBlockByLayout();
+  if (layoutEl) {
+    log(LL.NORMAL, `Discerned: article captured via layout finder <${layoutEl.tagName.toLowerCase()}>`, 'url:', base.url);
+    const cleanup = markExcluded(document.body);
+    const sizeCleanup = annotateLiveImageSizes(layoutEl);
+    const expanded = maybeExpandToFeed(layoutEl);
+    const clone = expanded.cloneNode(true) as Element;
+    sizeCleanup();
+    cleanup();
+    clone.querySelector('discerned-overlay')?.remove();
+    removeMarked(clone);
+    stripSizeMarkers(clone);
+    substituteVideosWithPosters(clone);
+    tagSemanticStructure(clone);
+    sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
+    const inlined = await inlineAllImages(clone.innerHTML.trim());
+    log(LL.NORMAL, `Discerned: layout-finder imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     return {
       ...base,
       format: 'article',
@@ -666,6 +871,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const bodyClone = cloneBodyClean();
   stripSizeMarkers(bodyClone);
   substituteVideosWithPosters(bodyClone);
+  tagSemanticStructure(bodyClone);
   sanitiseTreeInPlace(bodyClone);
   const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
   return {
@@ -689,7 +895,14 @@ function parseReadability(): ReturnType<Readability['parse']> | null {
     // Avoids document.cloneNode(true) because that produces a Document with
     // __CE_registry=null, crashing CE polyfills in other extensions.
     const clone = document.implementation.createHTMLDocument(document.title);
+    // Annotate live <img>s with their rendered size before cloning so Readability's
+    // output preserves source-page proportions. Without this, sanitisation strips
+    // class-based sizing and images fall back to intrinsic resolution — making
+    // avatars on SPA feed pages (primal, mastodon, etc.) huge.
+    const sizeCleanup = annotateLiveImageSizes(document.body);
     const bodyClone = document.body.cloneNode(true) as HTMLElement;
+    sizeCleanup();
+    stripSizeMarkers(bodyClone);
     bodyClone.querySelector('discerned-overlay')?.remove();
     // Remove nodes whose text is dominated by known anti-adblock phrases — these
     // score well with Readability (clean short prose) but are not article content.
@@ -776,6 +989,256 @@ function cloneBodyClean(): HTMLElement {
   return clone;
 }
 
+// ── Per-site live-DOM taggers ────────────────────────────────────────────────
+//
+// Each tagger runs once on the *live* page DOM (before we clone for capture),
+// using site-specific structural selectors to stamp `dx-*` class markers
+// (dx-post, dx-reply, dx-quote, dx-header) that survive sanitisation. The
+// generic semantic tagger then runs as a fallback for sites without a tagger.
+//
+// To add a site: write a tagger function that walks the live DOM with
+// structural selectors stable for that site (data-* attributes, class-name
+// prefixes), stamps the relevant dx-* markers, and register it in SITE_TAGGERS
+// by hostname. Keep the tagger small — five-to-ten querySelectorAll calls.
+// Layout is left to CSS via the dx-* selectors.
+//
+// The clip pipeline then runs the regular layout-finder/Readability, but the
+// captured HTML carries our markers across sanitisation and the web app's
+// .clip-body CSS produces a clean visual.
+
+/**
+ * Tag primal.net note threads. Stable anchors:
+ *   - `[class*="_primaryNote_"]`  the main note container
+ *   - `[class*="_noteThread_"]`   each reply in the replies holder
+ *   - `[class*="_mentionedNote_"]` or `[class*="embeddedNote"]` quoted note
+ *   - `[class*="_header_"]` or `[class*="_headerInfo_"]`  avatar+name row
+ *
+ * Primal renders embedded notes as multiple sibling <a> elements (header,
+ * body, mentions, image — each its own <a> pointing at the same nevent).
+ * We mark them all `dx-quote-frag` and let CSS draw a single bordered
+ * card around them via grouping styles (see globals.css).
+ */
+function tagPrimal(root: Document | Element): void {
+  // Primary note
+  root.querySelectorAll('[class*="_primaryNote_"]').forEach(el => appendClass(el, 'dx-post'));
+  // Replies
+  root.querySelectorAll('[class*="_noteThread_"]').forEach(el => appendClass(el, 'dx-reply'));
+  // Embedded notes — these are <a> elements wrapping fragments. We tag the
+  // ANCESTOR DIV (the embedded-note row container) so CSS can draw one card
+  // around all the <a> siblings inside it. The wrapper is the closest div
+  // that has both a header <a> and a body <a> as descendants.
+  const embeddedAnchors = Array.from(
+    root.querySelectorAll('a[class*="_mentionedNote_"], a[class*="embeddedNote"]'),
+  );
+  const wrappers = new Set<Element>();
+  for (const a of embeddedAnchors) {
+    // Walk up at most 5 levels to find a wrapper div that contains multiple
+    // sibling <a> elements all pointing to the same href. That wrapper is
+    // the visual card.
+    let cur: Element | null = a.parentElement;
+    let depth = 0;
+    while (cur && depth < 5) {
+      const sameHrefSiblings = Array.from(cur.children).filter(
+        c => c.tagName === 'A' && c.getAttribute('href') === a.getAttribute('href'),
+      );
+      if (sameHrefSiblings.length >= 1 && cur.children.length <= 6) {
+        wrappers.add(cur);
+        break;
+      }
+      cur = cur.parentElement;
+      depth++;
+    }
+    // Tag the <a> with the FRAG marker so CSS strips its underline/border
+    // (it's already inside a dx-quote wrapper that provides the frame).
+    appendClass(a, 'dx-quote-frag');
+    // Remove any pre-existing dx-quote on the <a> from earlier passes — the
+    // wrapper is the bordered card, fragments must not draw their own border.
+    a.classList.remove('dx-quote');
+  }
+  for (const w of wrappers) appendClass(w, 'dx-quote');
+  // Headers — three patterns in primal:
+  //   1. Primary notes: _headerInfo_ wraps avatar+name.
+  //   2. Quoted/embedded notes: _mentionedNoteHeader_ wraps avatar+name.
+  //   3. Reply notes use _content_ as wrapper of _leftSide_ + _rightSide_.
+  root.querySelectorAll('[class*="_headerInfo_"], [class*="_mentionedNoteHeader_"]').forEach(el => {
+    if (el.querySelector('img')) appendClass(el, 'dx-header');
+  });
+  // Reply notes: tag the _content_ wrapper inside _noteThread_ as dx-reply-row.
+  // The wrapper has _leftSide_ (avatar) + _rightSide_ (name + body) as its
+  // two direct children — exactly the avatar+name flex pattern.
+  root.querySelectorAll('[class*="_noteThread_"] > [class*="_content_"]').forEach(el => {
+    if (el.querySelector('[class*="_leftSide_"]') && el.querySelector('[class*="_rightSide_"]')) {
+      appendClass(el, 'dx-reply-row');
+    }
+  });
+  // Author info row (name + verification + time). Stamped on the small
+  // wrapper that contains the username, a verification icon, and a timestamp
+  // — these should sit inline on one line with spaces between them. Primal
+  // uses _authorInfo_ in replies and _userInfo_ + _time_ in quote headers.
+  root.querySelectorAll('[class*="_authorInfo_"], [class*="_postInfo_"]').forEach(el => {
+    appendClass(el, 'dx-author');
+  });
+  // Top-zaps row (avatar + sats amount, repeated). Tag _zapHighlights_ as
+  // an inline-flex row so the buttons sit on one line instead of stacking.
+  root.querySelectorAll('[class*="_zapHighlights_"]').forEach(el => appendClass(el, 'dx-zaps-row'));
+  // Footers / stats rows (reply/like/repost). Tag only the inner footer that
+  // actually contains buttons — primal nests two _footer_ divs, the outer is
+  // just a wrapper.
+  root.querySelectorAll('[class*="_footer_"]').forEach(el => {
+    if (el.querySelector('button')) appendClass(el, 'dx-stats');
+  });
+}
+
+type SiteTagger = (root: Document | Element) => void;
+
+const SITE_TAGGERS: Array<{ match: (host: string) => boolean; tag: SiteTagger; name: string }> = [
+  { name: 'primal', match: h => /(^|\.)primal\.net$/i.test(h), tag: tagPrimal },
+];
+
+/**
+ * Apply the matching site tagger (if any) to the document. Called from
+ * extractArticle before the layout-finder/Readability path runs so the
+ * captured HTML carries dx-* markers regardless of which tier wins.
+ * Returns true if a site tagger ran, so the generic semantic-structure
+ * pass can be skipped (it would re-tag the same elements differently).
+ */
+function applySiteTagger(): boolean {
+  const host = window.location.hostname;
+  for (const t of SITE_TAGGERS) {
+    if (t.match(host)) {
+      log(LL.NORMAL, `Discerned: applying ${t.name} site tagger`, 'url:', window.location.href);
+      try { t.tag(document); return true; } catch (err) {
+        log(LL.WARN, `Discerned: ${t.name} tagger failed:`, err);
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
+// Module-level flag: true when applySiteTagger() found a match for this URL.
+// tagSemanticStructure checks this and skips the generic pass — the site
+// tagger has authoritative knowledge for this page.
+let siteTaggerActive = false;
+
+// ── Semantic structure tagging (generic fallback) ────────────────────────────
+//
+// Live pages use flexbox + class-scoped CSS to lay out headers (avatar | name)
+// and quoted-post cards. After sanitisation strips those classes, default
+// block flow stacks everything vertically and links underline their children.
+// Stamp our own `dx-*` class markers on detected structures so the web app's
+// CSS can restore the intended layout.
+
+const HEADER_AVATAR_MAX_PX = 72;
+const HEADER_NAME_MAX_CHARS = 80;
+const QUOTE_MIN_TEXT_CHARS = 40;
+const STATS_MIN_ICON_SIBLINGS = 3;
+
+function appendClass(el: Element, token: string): void {
+  const existing = el.getAttribute('class') ?? '';
+  if (existing.split(/\s+/).includes(token)) return;
+  el.setAttribute('class', existing ? `${existing} ${token}` : token);
+}
+
+/** True if the element directly contains a small image (avatar-sized). */
+function hasAvatarImage(el: Element): HTMLImageElement | null {
+  const imgs = el.querySelectorAll('img');
+  for (const img of Array.from(imgs)) {
+    const w = parseInt(img.getAttribute('width') ?? '0', 10);
+    const h = parseInt(img.getAttribute('height') ?? '0', 10);
+    if (w > 0 && h > 0 && w <= HEADER_AVATAR_MAX_PX && h <= HEADER_AVATAR_MAX_PX) {
+      return img;
+    }
+  }
+  return null;
+}
+
+/**
+ * Walk the captured tree and stamp semantic class markers:
+ *
+ *   - `dx-header`: a container element whose direct children include both an
+ *     avatar-sized image and a short text block. Web CSS lays this out as a
+ *     horizontal flex row instead of stacked blocks.
+ *
+ *   - `dx-quote`: an <a> element wrapping a multi-element block (i.e. used as
+ *     a card link, not a text link). Web CSS resets text-decoration inside
+ *     and gives the block a subtle border/padding so it reads as quoted.
+ *
+ *   - `dx-stats`: a parent of ≥ 3 sibling action elements that each contain
+ *     an SVG or button. Web CSS lays this out as an inline-flex row.
+ */
+function tagSemanticStructure(root: Element): void {
+  // Skip the generic pass entirely when a site-specific tagger has already
+  // marked the page authoritatively.
+  if (siteTaggerActive) return;
+  // Quotes first — an <a> with substantial nested content. Pre-sanitisation,
+  // before <button>/<svg> children are unwrapped, so the structure is intact.
+  root.querySelectorAll('a').forEach(a => {
+    const elementChildCount = a.querySelectorAll('*').length;
+    const text = (a.textContent ?? '').trim();
+    const hasMedia = !!a.querySelector('img, video, picture');
+    // A real link is short text inside an <a>. A "card link" wraps several
+    // elements OR is long-form text plus media — that's a quoted post.
+    if ((elementChildCount >= 3 && text.length >= QUOTE_MIN_TEXT_CHARS) ||
+        (hasMedia && text.length >= QUOTE_MIN_TEXT_CHARS)) {
+      appendClass(a, 'dx-quote');
+    }
+  });
+
+  // Stats rows BEFORE headers — so a stats container isn't also mis-tagged
+  // as a header just because one of its many children happens to contain an
+  // icon image (primal's "top zaps" preview avatars do exactly this). The
+  // header pass below skips elements already tagged dx-stats.
+  root.querySelectorAll('*').forEach(parent => {
+    const children = Array.from(parent.children);
+    if (children.length < STATS_MIN_ICON_SIBLINGS) return;
+    const actionChildren = children.filter(c =>
+      c.tagName.toLowerCase() === 'button' || c.querySelector('svg')
+    );
+    if (actionChildren.length >= STATS_MIN_ICON_SIBLINGS &&
+        actionChildren.length / children.length >= 0.6) {
+      appendClass(parent, 'dx-stats');
+    }
+  });
+
+  // Headers — find the DEEPEST element whose direct children are an avatar
+  // branch (img, no significant text) and a name branch (short text, no
+  // avatar). Walking the all-elements list in reverse hits deeper children
+  // first; we skip any element that contains an already-tagged descendant,
+  // so only the innermost match wins.
+  const allElements = Array.from(root.querySelectorAll('*'));
+  allElements.reverse();
+  const headerTagged: Element[] = [];
+  for (const el of allElements) {
+    if (el.classList.contains('dx-stats')) continue;
+    // Skip if a descendant has already been tagged — we want the innermost.
+    if (headerTagged.some(t => el.contains(t) && el !== t)) continue;
+    const children = Array.from(el.children);
+    // A header has exactly 2 direct children (avatar + name). Some clients
+    // include a third (timestamp). Reject anything wider — likely a feed row.
+    if (children.length < 2 || children.length > 3) continue;
+    let avatarChildIdx = -1;
+    let nameChildIdx = -1;
+    let stop = false;
+    for (let i = 0; i < children.length; i++) {
+      const c = children[i];
+      // A stats child means this is not a header.
+      if (c.classList.contains('dx-stats')) { stop = true; break; }
+      const hasAvatar = !!hasAvatarImage(c);
+      const text = (c.textContent ?? '').trim();
+      if (hasAvatar && text.length < 4) {
+        if (avatarChildIdx === -1) avatarChildIdx = i;
+      } else if (!hasAvatar && text.length > 0 && text.length <= HEADER_NAME_MAX_CHARS * 2) {
+        if (nameChildIdx === -1) nameChildIdx = i;
+      }
+    }
+    if (stop || avatarChildIdx < 0 || nameChildIdx < 0) continue;
+    if (el.querySelectorAll('*').length > 40) continue;
+    appendClass(el, 'dx-header');
+    headerTagged.push(el);
+  }
+}
+
 // ── Sanitisation ─────────────────────────────────────────────────────────────
 
 const ALLOWED_TAGS = new Set([
@@ -792,7 +1255,12 @@ const ALLOWED_TAGS = new Set([
   'svg', 'path', 'g', 'circle', 'rect', 'line', 'polyline', 'polygon',
   'ellipse', 'defs', 'use', 'title', 'symbol',
 ]);
-const ALLOWED_ATTRS_GLOBAL = new Set(['style']);
+const ALLOWED_ATTRS_GLOBAL = new Set(['style', 'class']);
+// Only class tokens with these prefixes survive sanitisation. `dx-*` is stamped
+// by tagSemanticStructure() to carry layout hints (header rows, quoted-post
+// cards, icon/stat rows) across the class-stripping boundary. `tweet-*` comes
+// from the Twitter extractor. Both are added by our code, not the source page.
+const TRUSTED_CLASS_PREFIXES = ['dx-', 'tweet-'];
 const ALLOWED_ATTRS_PER_TAG: Record<string, Set<string>> = {
   a:   new Set(['href']),
   img: new Set(['src', 'alt', 'title', 'width', 'height']),
@@ -911,6 +1379,15 @@ function sanitiseElement(element: Element, stripStyles = false) {
       const safe = tagName === 'img' ? scrubImgStyle(attr.value) : scrubStyle(attr.value);
       if (safe.trim()) element.setAttribute('style', safe);
       else element.removeAttribute('style');
+    } else if (name === 'class') {
+      // Keep only tokens stamped by our own capture pipeline (dx-* layout hints
+      // and tweet-* from the Twitter extractor). Everything else — including
+      // source-page hashed classes — is dropped.
+      const kept = attr.value.split(/\s+/).filter(t =>
+        t && TRUSTED_CLASS_PREFIXES.some(p => t.startsWith(p))
+      );
+      if (kept.length > 0) element.setAttribute('class', kept.join(' '));
+      else element.removeAttribute('class');
     } else if (tagName === 'img' && name === 'src') {
       if (!isSafeImageSrc(attr.value)) element.removeAttribute('src');
     } else if (tagName === 'a' && name === 'href') {

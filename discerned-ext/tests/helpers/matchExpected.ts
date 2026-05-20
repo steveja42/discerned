@@ -9,7 +9,7 @@ export interface ExpectedCapture {
   title?: { contains?: string; equals?: string; matches?: string };
   url: string;
   bodyText?: { minLength?: number; contains?: string[] };
-  bodyHtml?: { hasImgs?: boolean; noScripts?: true; allowsOnly?: string[] };
+  bodyHtml?: { hasImgs?: boolean; noScripts?: true; allowsOnly?: string[]; containsClasses?: string[] };
   thumbnail?: 'present' | 'absent';
   selectionText?: { contains?: string };
 }
@@ -58,6 +58,11 @@ export function matchExpected(cap: Capture, exp: ExpectedCapture): void {
     }
     if (exp.bodyHtml.hasImgs) {
       expect(html, 'has <img>').toMatch(/<img[\s>]/i);
+    }
+    for (const cls of exp.bodyHtml.containsClasses ?? []) {
+      expect(html, `bodyHtml contains class="${cls}"`).toMatch(
+        new RegExp(`class\\s*=\\s*"[^"]*\\b${cls}\\b[^"]*"`),
+      );
     }
   }
 

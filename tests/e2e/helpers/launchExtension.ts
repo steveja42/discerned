@@ -19,10 +19,14 @@ export async function launchWithExtension(): Promise<ExtensionContext> {
   const userDataDir = mkdtempSync(join(tmpdir(), 'discerned-e2e-'));
   // Chromium MV3 extensions historically don't load in --headless=new on every
   // Chromium build; an unspecified headless flag with Playwright's own headed
-  // mode is the most reliable shape. If you need true headless on CI, set
-  // PWDEBUG_HEADLESS_NEW=1 to opt in.
+  // mode is the most reliable shape. Set PWDEBUG_HEADLESS_NEW=1 to use the
+  // new headless mode (works on recent Chromium and is much faster — no
+  // window pops up).
   const headlessNew = !!process.env.PWDEBUG_HEADLESS_NEW;
   const ctx = await chromium.launchPersistentContext(userDataDir, {
+    // headless: false with --headless=new in args is the Playwright-recommended
+    // shape for headless extension loading; Playwright's own headless mode
+    // (headless: true) uses a different binary that doesn't load extensions.
     headless: false,
     args: [
       `--disable-extensions-except=${EXTENSION_PATH}`,

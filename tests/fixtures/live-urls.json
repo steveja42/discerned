@@ -18,5 +18,10 @@
     "url": "https://news.ycombinator.com/news",
     "format": "bookmark",
     "bodyTextContains": []
+  },
+  {
+    "url": "https://primal.net/e/nevent1qqs23jpquykrlg2psqhyhhxzn06nmf3dr6yejwvgws0733x8d9vgnugqfuqeq",
+    "format": "article",
+    "bodyTextContains": ["Terrible", "Harmful", "Gigi"]
   }
 ]

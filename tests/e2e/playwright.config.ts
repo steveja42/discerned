@@ -52,5 +52,10 @@ export default defineConfig({
       grep: /@live/,
       retries: 0,
     },
+    {
+      name: 'primal-visual',
+      testMatch: /primal-visual\.spec\.ts/,
+      retries: 0,
+    },
   ],
 });
