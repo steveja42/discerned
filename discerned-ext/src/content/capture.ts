@@ -1083,9 +1083,10 @@ function tagPrimal(root: Document | Element): void {
   root.querySelectorAll('[class*="_authorInfo_"], [class*="_postInfo_"]').forEach(el => {
     appendClass(el, 'dx-author');
   });
-  // Top-zaps row (avatar + sats amount, repeated). Tag _zapHighlights_ as
-  // an inline-flex row so the buttons sit on one line instead of stacking.
-  root.querySelectorAll('[class*="_zapHighlights_"]').forEach(el => appendClass(el, 'dx-zaps-row'));
+  // Top-zaps row (avatar + sats). _zapHighlights_ = primary note row;
+  // _zapHighlightsCompact_ = inline variant inside replies; _topZaps_ = outer
+  // wrapper. Tag all three so the row lays out horizontally.
+  root.querySelectorAll('[class*="_zapHighlights"], [class*="_topZaps_"]').forEach(el => appendClass(el, 'dx-zaps-row'));
   // Footers / stats rows (reply/like/repost). Tag only the inner footer that
   // actually contains buttons — primal nests two _footer_ divs, the outer is
   // just a wrapper.
@@ -1635,7 +1636,7 @@ function sanitizeHtmlString(html: string): string {
 
 // ── Image inlining (background round-trip) ───────────────────────────────────
 
-const INLINE_CONCURRENCY = 8;
+const INLINE_CONCURRENCY = 16;
 
 const INLINE_IMAGE_TIMEOUT_MS = 5000;
 

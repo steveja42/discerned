@@ -1006,7 +1006,7 @@ a { color: inherit; }
   word-break: break-word;
 }
 .clip-body * { max-width: 100%; box-sizing: border-box; }
-.clip-body img { display: block !important; position: static !important; float: none !important; width: auto !important; max-width: 100% !important; height: auto !important; max-height: 420px !important; object-fit: contain !important; object-position: left top !important; border-radius: 4px; margin: 12px 0; }
+.clip-body img { display: block !important; position: static !important; float: none !important; max-width: 100% !important; height: auto !important; max-height: 420px !important; object-fit: contain !important; object-position: left top !important; border-radius: 4px; margin: 12px 0; }
 .clip-body .tweet-card { display: flex; flex-direction: column; gap: 10px; }
 .clip-body .tweet-header { display: flex; align-items: center; gap: 10px; }
 .clip-body .tweet-avatar { width: 48px !important; height: 48px !important; border-radius: 50% !important; flex-shrink: 0; margin: 0 !important; }
@@ -1151,9 +1151,10 @@ a { color: inherit; }
   height: auto !important;
 }
 /* Percentage heights on wrapper divs (height:100% on media-box chains) resolve
-   against a now-static parent and reserve tall empty gaps. Let any div that
-   isn't itself an image flow to its content height. */
-.clip-body div {
+   against a now-static parent and reserve tall empty gaps. Only override divs
+   that carry an explicit inline height — natural-flow divs should keep their
+   content height. Exclude dx-* containers which have their own sizing rules. */
+.clip-body div[style*="height"]:not(.dx-post):not(.dx-reply):not(.dx-reply-row):not(.dx-header):not(.dx-zaps-row):not(.dx-stats):not(.dx-author):not(.dx-quote) {
   height: auto !important;
   min-height: 0 !important;
 }
@@ -1173,11 +1174,11 @@ a { color: inherit; }
    onto its own line. Inside a tagged post, collapse wrapper-divs that hold only
    a single anchor (and no block content) back to inline so they flow within the
    sentence as they did on the source page. */
-.clip-body .dx-post div:has(> a:only-child),
-.clip-body .dx-post div:has(> div > a:only-child) {
+.clip-body .dx-post div:has(> a:only-child):not(.dx-header):not(.dx-reply-row):not(.dx-quote):not(.dx-quote-frag),
+.clip-body .dx-post div:has(> div > a:only-child):not(.dx-header):not(.dx-reply-row):not(.dx-quote):not(.dx-quote-frag) {
   display: inline !important;
 }
-.clip-body .dx-post div:has(> a:only-child) > a {
+.clip-body .dx-post div:has(> a:only-child):not(.dx-header):not(.dx-reply-row):not(.dx-quote):not(.dx-quote-frag) > a {
   display: inline !important;
 }
 /* Restore flex containers. Div-soup SPAs set `display:flex` via a stripped CSS
@@ -1185,19 +1186,23 @@ a { color: inherit; }
    After sanitisation the container loses its flex display and its row of items
    (image grids, stat rows, "·time" rows, the reposts/quotes/likes counts)
    collapses to vertical block stacking. An inline flex-direction/flex-flow or
-   a justify-content is a reliable signal it was a flex row/column. */
-.clip-body [style*="flex-direction"],
-.clip-body [style*="flex-flow"],
-.clip-body [style*="justify-content"] {
+   a justify-content is a reliable signal it was a flex row/column.
+   Exclude elements that already have explicit dx-* display rules, and their
+   descendants — the latter guards primal headers/reply-rows whose inner wrapper
+   divs carry inline flex styles that would otherwise get re-flexed. */
+.clip-body :not(.dx-header, .dx-header *, .dx-reply-row, .dx-reply-row *, .dx-zaps-row, .dx-stats, .dx-author, .dx-post, .dx-reply)[style*="flex-direction"],
+.clip-body :not(.dx-header, .dx-header *, .dx-reply-row, .dx-reply-row *, .dx-zaps-row, .dx-stats, .dx-author, .dx-post, .dx-reply)[style*="flex-flow"],
+.clip-body :not(.dx-header, .dx-header *, .dx-reply-row, .dx-reply-row *, .dx-zaps-row, .dx-stats, .dx-author, .dx-post, .dx-reply)[style*="justify-content"] {
   display: flex !important;
 }
-/* Image grids: the two-up/​four-up media boxes wrap each photo so it fills a
+/* Image grids: the two-up/four-up media boxes wrap each photo so it fills a
    flex cell. With display:flex restored, give the cell a sane basis and let the
-   photo fill it instead of being capped at its 420px image-rule max-height. */
-.clip-body [style*="flex-direction: row"] > div {
+   photo fill it instead of being capped at its 420px image-rule max-height.
+   Same exclusion as flex-restore: skip dx-* avatar containers entirely. */
+.clip-body :not(.dx-header, .dx-header *, .dx-reply-row, .dx-reply-row *, .dx-zaps-row)[style*="flex-direction: row"] > div {
   min-width: 0;
 }
-.clip-body [style*="flex-direction: row"] img {
+.clip-body :not(.dx-header, .dx-header *, .dx-reply-row, .dx-reply-row *, .dx-zaps-row)[style*="flex-direction: row"] img:not(.dx-avatar) {
   width: 100% !important;
   height: auto !important;
   max-height: 320px !important;
@@ -1363,6 +1368,18 @@ a { color: inherit; }
   gap: 4px;
   flex-shrink: 0;
 }
+/* Zapper avatar images — pin to the source width/height attrs (22px).
+   The global img rule sets width:auto !important which inflates these. */
+.clip-body .dx-zaps-row img {
+  width: 22px !important;
+  height: 22px !important;
+  max-height: 22px !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  display: inline-block !important;
+  margin: 0 !important;
+  flex-shrink: 0;
+}
 
 /* dx-quote: a quoted/embedded note shown inline. Single bordered card. */
 .clip-body .dx-quote {
@@ -1430,6 +1447,14 @@ a { color: inherit; }
    the outer one (which has no useful styling) and let the inner one render. */
 .clip-body .dx-stats > .dx-stats {
   display: contents;
+}
+/* Compact zap rows (reply-level _zapHighlightsCompact_) already show the
+   zap total inline. The _footer_ stats row immediately after repeats the same
+   number, creating a visible duplicate. Hide the stats row when it follows a
+   dx-zaps-row (directly or via a plain wrapper div). */
+.clip-body .dx-zaps-row + div > .dx-stats,
+.clip-body .dx-zaps-row + .dx-stats {
+  display: none;
 }
 .detail-thumb {
   width: 100%;

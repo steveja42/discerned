@@ -6,11 +6,12 @@
 // Run with: PRIMAL=1 PWDEBUG_HEADLESS_NEW=1 pnpm exec playwright test \
 //   -c tests/e2e/playwright.config.ts tests/e2e/primal-visual.spec.ts
 
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
 
 const PRIMAL_URL =
+  process.env.PRIMAL_URL ||
   'https://primal.net/e/nevent1qqs23jpquykrlg2psqhyhhxzn06nmf3dr6yejwvgws0733x8d9vgnugqfuqeq';
 
 test.describe.configure({ mode: 'serial' });
@@ -191,6 +192,55 @@ test('primal: capture clip, render in web app, screenshot card', async () => {
       });
     });
     fs.writeFileSync(out('primal-element-info.json'), JSON.stringify(elementInfo, null, 2), 'utf8');
+
+    // ── Structural assertions ────────────────────────────────────────────────
+    // These catch CSS regressions that screenshots alone miss.
+
+    const headers = elementInfo.filter(e => e.cls.includes('dx-header'));
+    const replies = elementInfo.filter(e => e.cls.includes('dx-reply') && !e.cls.includes('dx-reply-row'));
+
+    // dx-header must be display:flex — if it becomes "inline" the username
+    // drops below the avatar instead of sitting beside it.
+    for (const h of headers) {
+      expect(h.display, `dx-header display should be flex, got "${h.display}" (text: "${h.text}")`).toBe('flex');
+    }
+
+    // dx-header height must be ≤ 90px — a stacked (broken) header is 2-3×
+    // the avatar height because the name wraps below it.
+    for (const h of headers) {
+      expect(h.h, `dx-header height should be ≤ 90px, got ${h.h}px (text: "${h.text}")`).toBeLessThanOrEqual(90);
+    }
+
+    // Each dx-reply must have a positive height (not collapsed).
+    for (const r of replies) {
+      expect(r.h, `dx-reply height should be > 0 (text: "${r.text}")`).toBeGreaterThan(0);
+    }
+
+    // All dx-zaps-row containers must be display:flex (horizontal row).
+    // Compact reply zaps use _zapHighlightsCompact_ — if the tagger selector
+    // misses it (e.g. trailing underscore mismatch), they stack vertically.
+    const zapRowDisplays = await clipBody.evaluate((root) => {
+      return Array.from(root.querySelectorAll('.dx-zaps-row')).map(el => ({
+        display: getComputedStyle(el).display,
+        imgCount: el.querySelectorAll('img').length,
+      }));
+    });
+    for (const { display, imgCount } of zapRowDisplays) {
+      if (imgCount > 0) {
+        expect(display, `dx-zaps-row with images should be flex, got "${display}"`).toBe('flex');
+      }
+    }
+
+    // Zapper avatar images must be small — if the global img width:auto rule
+    // leaks in, they inflate to their natural photo size (300-500px).
+    const zapperAvatarWidths = await clipBody.evaluate((root) => {
+      const imgs = Array.from(root.querySelectorAll('.dx-zaps-row img'));
+      return imgs.map(img => ({ w: (img as HTMLImageElement).offsetWidth, h: (img as HTMLImageElement).offsetHeight }));
+    });
+    for (const { w, h } of zapperAvatarWidths) {
+      expect(w, `dx-zaps-row avatar width should be ≤ 32px, got ${w}px`).toBeLessThanOrEqual(32);
+      expect(h, `dx-zaps-row avatar height should be ≤ 32px, got ${h}px`).toBeLessThanOrEqual(32);
+    }
 
     // Also dump the body HTML to a file for inspection. Strip base64 data
     // URIs so the file is readable.
