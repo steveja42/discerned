@@ -1565,7 +1565,7 @@ function stripSizeMarkers(root: Element | DocumentFragment): void {
 function substituteVideosWithPosters(root: Element | DocumentFragment): void {
   (root as Element).querySelectorAll('video[poster]').forEach(video => {
     const poster = video.getAttribute('poster');
-    if (!poster || !isSafeImageSrc(poster)) { video.closest('[data-testid="tweetPhoto"]')?.remove() ?? video.remove(); return; }
+    if (!poster || !isSafeImageSrc(poster)) { const container = video.closest('[data-testid="tweetPhoto"]'); if (container) { container.remove(); } else { video.remove(); } return; }
     const img = document.createElement('img');
     img.src = poster;
     img.alt = video.getAttribute('aria-label') ?? 'Video';
