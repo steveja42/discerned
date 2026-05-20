@@ -81,8 +81,8 @@ The repo has a multi-layer test suite covering both sub-projects and the full cl
 - `tests/e2e/web-rendering.spec.ts` — injects fixture clips through real postMessage bridge into `/library`, asserts `<ClipRow>` rendering.
 - `tests/e2e/web-feed.spec.ts` — uses `page.routeWebSocket` to mock the Nostr relay and verify public feed rendering.
 - `tests/e2e/end-to-end.spec.ts` — full pipeline: capture → real CLIP handler → IndexedDB → bridge → `/library` rendering.
-- `tests/e2e/live.spec.ts` — opt-in (`LIVE=1`), hits real URLs from `tests/fixtures/live-urls.json`.
-- `tests/e2e/primal-visual.spec.ts` — separate Playwright project (`--project=primal-visual`).
+- `tests/e2e/live.spec.ts` — opt-in (`LIVE=1`), hits real URLs from `tests/fixtures/live-urls.json` (includes a primal.net note thread).
+- `tests/e2e/primal-visual.spec.ts` — opt-in visual harness (`PRIMAL=1`, `PWDEBUG_HEADLESS_NEW=1` for headless). Loads real primal.net with the extension, captures a clip, renders it through the web app's `/library`, and screenshots the rendered `.clip-body`. Used to iterate on the per-site tagger + `dx-*` CSS (see `discerned-ext/CLAUDE.md` → Capture pipeline). All artifacts (screenshots, structure dumps, rendered HTML) write to `test-output/` (gitignored). Run: `PRIMAL=1 PWDEBUG_HEADLESS_NEW=1 pnpm exec playwright test -c tests/e2e/playwright.config.ts tests/e2e/primal-visual.spec.ts`
 
 ### Fixtures
 - `tests/fixtures/sites/*.html` + `*.expected.json` — 10 HTML pages covering news, blog, Wikipedia, Twitter/X DOM, GitHub README, HN, Substack, plain text, malformed, XSS payloads.
@@ -118,4 +118,4 @@ Commands:
 
 ## Status
 
-MVP — Chrome extension and web app are functional. Test suite: 78 unit tests + 14 e2e tests, all green. Android and iOS sub-projects planned.
+MVP — Chrome extension and web app are functional. Test suite: 60 extension + web unit tests, 15 e2e tests, all green (plus opt-in `LIVE` and `PRIMAL` visual specs). Captured clips from div-soup SPAs (Nostr clients like primal.net, Mastodon, Bluesky) render as readable threads via the per-site tagger + `dx-*` marker system. Android and iOS sub-projects planned.

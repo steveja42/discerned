@@ -46,6 +46,19 @@ All tokens live in `app/globals.css` under `body.style-editorial`. Do not add in
 
 The design prototype lives at `C:\Users\steve\Downloads\discerned web design\design_handoff_discerned\` — reference it when making UI changes.
 
+## Captured-clip rendering (`.clip-body` + `dx-*`)
+
+`DetailPanel.tsx` renders a clip's captured `bodyHtml` via `dangerouslySetInnerHTML` into a `.clip-body` div. The extension's capture pipeline sanitises that HTML and stamps `dx-*` class markers (the only page-origin classes that survive sanitisation, alongside `tweet-*`). All layout for captured social-post threads lives in `app/globals.css` under `.clip-body .dx-*`:
+
+- `dx-post` / `dx-reply` — block containers with hairline separators
+- `dx-reply-row` — flex row: avatar wrapper (first child) + name/body column. Missing-avatar wrappers (`:not(:has(img))`) get an inline-SVG silhouette placeholder.
+- `dx-header` — avatar + name flex row (`align-items: flex-start` so name top-aligns with avatar)
+- `dx-author` — inline username + verification + handle + time (one line)
+- `dx-quote` — bordered embedded-note card; `dx-quote-frag` are the `<a>` fragments inside it (sites split one quote across sibling `<a>`s) — frags get underline/border stripped
+- `dx-zaps-row` / `dx-stats` — horizontal icon/amount rows
+
+The marker contract is defined extension-side in `discerned-ext/src/content/capture.ts` (`SITE_TAGGERS` / `tagPrimal`). When adding a marker there, add its CSS here. Verify visually with the Playwright spec `tests/e2e/primal-visual.spec.ts` (writes screenshots to `test-output/`).
+
 ## File structure
 
 ```

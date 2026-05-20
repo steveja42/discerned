@@ -53,6 +53,43 @@ Path alias: `@/*` → `src/*`
 - **Evaluation axes**: Interest (5 levels) · Ethics (5 levels) · Category (7 options)
 - **Auth modes**: NIP-07 (browser extension wallet), Local (no cast), NIP-46
 
+## Capture pipeline (`src/content/capture.ts`)
+
+`captureContext(format)` branches by `ClipFormat`. For `'article'` (the rich-content path), extraction runs in tiers, first match wins:
+
+- **Tier 0 — Twitter/X**: `extractTweet()` builds a clean tweet card from `data-testid` selectors.
+- **Site taggers** (`applySiteTagger()`): before the tiers below, a per-site live-DOM tagger (if one matches the hostname) stamps `dx-*` class markers on the page so the captured HTML carries layout hints across sanitisation. When a site tagger runs, the generic semantic tagger is skipped (`siteTaggerActive`).
+- **Tier 1 — semantic element**: `findArticleElement()` picks `<article>`/`<main>`/`[role=...]` when present.
+- **Tier 1.5 — layout finder**: `findContentBlockByLayout()` scores every block by visual area + text density − link/button density, then `maybeExpandToFeed()` widens to a feed/thread parent. This is what makes div-soup SPAs (Nostr clients, Mastodon, Bluesky, Reddit) capture the right content.
+- **Tier 2 — Readability**: Mozilla Readability for blog/news pages.
+- **Tier 3 — full body**: last resort.
+
+All tiers clone the live DOM, run `tagSemanticStructure()` (generic) or rely on the site tagger's markers, then `sanitiseTreeInPlace()`, then `inlineAllImages()` (round-trips images through the background's privileged fetch → base64).
+
+### Per-site taggers + `dx-*` markers
+
+`SITE_TAGGERS` is a registry of `{ match: (host) => bool, tag: (root) => void }`. Each tagger walks the **live** DOM with selectors stable for that site (data attributes or class-name *prefixes* like `[class*="_primaryNote_"]`, since SPA class hashes change between builds) and stamps `dx-*` classes:
+
+| Marker | Meaning |
+|---|---|
+| `dx-post` | the primary captured post |
+| `dx-reply` | a reply in a thread |
+| `dx-reply-row` | a reply's avatar + (name/body) split (flex row) |
+| `dx-header` | avatar + name row |
+| `dx-author` | inline username + verification + handle + time |
+| `dx-quote` | a quoted/embedded note card (bordered) |
+| `dx-quote-frag` | one `<a>` fragment of a quote (sites split a quote across sibling `<a>`s) |
+| `dx-zaps-row` | horizontal zappers row |
+| `dx-stats` | reply/like/repost icon row |
+
+The matching layout CSS lives in `discerned-web/app/globals.css` under `.clip-body .dx-*`. **To add a site**: copy `tagPrimal`, swap the selectors, register it in `SITE_TAGGERS`. No web-app change needed unless the site has a new layout quirk.
+
+`tagPrimal` (primal.net) is the reference implementation.
+
+### Sanitisation
+
+`sanitiseTreeInPlace()` whitelists tags (`ALLOWED_TAGS` — includes `div, span, img, table, svg` glyphs, etc.) and per-tag attributes (`ALLOWED_ATTRS_PER_TAG`). The `class` attribute is allowed but **only tokens with `dx-` or `tweet-` prefixes survive** (`TRUSTED_CLASS_PREFIXES`); source-page hashed classes are stripped. This is how the `dx-*` markers reach the rendered clip while the page's own CSS classes don't.
+
 ## File Naming Conventions
 
 - **No `index.ts` entry points** — name entry files after their directory (e.g., `background.ts`, `content.ts`, `popup.ts`)
@@ -61,7 +98,7 @@ Path alias: `@/*` → `src/*`
 
 - **TypeScript strict mode** — no `any`, no unused vars/params (tsconfig enforces both as errors)
 - **Vanilla TypeScript** — no React or UI frameworks; Shadow DOM for style isolation
-- **HTML sanitization** — whitelist only: `b, i, a, p, br, strong, em` (XSS prevention)
+- **HTML sanitization** — tag/attribute whitelist in `ALLOWED_TAGS` / `ALLOWED_ATTRS_PER_TAG` (see Sanitisation section below); `class` kept only for `dx-*`/`tweet-*` tokens (XSS prevention)
 - **WSS only** — never use unencrypted WebSocket for relay connections
 - **No source maps** in production builds
 
