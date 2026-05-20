@@ -4,6 +4,11 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 import type { ClipData } from '@/lib/types';
 import { sendDeleteClips, sendUpdateNote, sendUpdateCategories } from '@/lib/bridge/extension-bridge';
 
+export interface ClipBody {
+  bodyHtml?: string;
+  thumbnail?: string | null;
+}
+
 interface ClipStoreState {
   clips: ClipData[];
   bridgePresent: boolean;
@@ -11,6 +16,7 @@ interface ClipStoreState {
   authMethod: string | null;
   timedOut: boolean;
   categories: string[];
+  bodies: Map<string, ClipBody>;
 }
 
 interface ClipStoreActions {
@@ -24,6 +30,7 @@ interface ClipStoreActions {
   setCategories: (cats: string[]) => void;
   addCategories: (cats: string[]) => void;
   removeCategory: (key: string) => void;
+  setClipBody: (id: string, body: ClipBody) => void;
 }
 
 const ClipStoreContext = createContext<(ClipStoreState & ClipStoreActions) | null>(null);
@@ -36,6 +43,7 @@ export function ClipStoreProvider({ children }: { children: ReactNode }) {
     authMethod: null,
     timedOut: false,
     categories: [],
+    bodies: new Map(),
   });
 
   const setClips = useCallback((clips: ClipData[]) => {
@@ -106,9 +114,18 @@ export function ClipStoreProvider({ children }: { children: ReactNode }) {
     setState((s) => (s.bridgePresent ? s : { ...s, timedOut: true }));
   }, []);
 
+  const setClipBody = useCallback((id: string, body: ClipBody) => {
+    setState((s) => {
+      if (s.bodies.get(id) === body) return s;
+      const next = new Map(s.bodies);
+      next.set(id, body);
+      return { ...s, bodies: next };
+    });
+  }, []);
+
   return (
     <ClipStoreContext.Provider
-      value={{ ...state, setClips, prependClip, addClips, removeClips, updateClipNote, setBridgePresent, setTimedOut, setCategories, addCategories, removeCategory }}
+      value={{ ...state, setClips, prependClip, addClips, removeClips, updateClipNote, setBridgePresent, setTimedOut, setCategories, addCategories, removeCategory, setClipBody }}
     >
       {children}
     </ClipStoreContext.Provider>

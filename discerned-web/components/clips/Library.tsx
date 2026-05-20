@@ -163,7 +163,7 @@ interface LibraryProps {
 }
 
 export default function Library({ glyphVariant = 'bars', initialClipId, searchQuery }: LibraryProps) {
-  const { bridgePresent, clips, timedOut, categories, removeClips, updateClipNote, addClips, addCategories, removeCategory, focusClipId, clearFocusClipId } = useLibraryBridge();
+  const { bridgePresent, clips, timedOut, categories, bodies, removeClips, updateClipNote, addClips, addCategories, removeCategory, setClipBody, focusClipId, clearFocusClipId } = useLibraryBridge();
   const [importOpen, setImportOpen] = useState(false);
   const [jsonImportOpen, setJsonImportOpen] = useState(false);
 
@@ -408,6 +408,8 @@ export default function Library({ glyphVariant = 'bars', initialClipId, searchQu
             clip={selected}
             onDelete={handleSingleDelete}
             onUpdateNote={updateClipNote}
+            bodies={bodies}
+            onBodyFetched={setClipBody}
           />
         }
         initialSidebarWidth={200}

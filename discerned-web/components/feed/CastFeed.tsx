@@ -261,7 +261,7 @@ export default function CastFeed({ glyphVariant = 'bars', status, clips }: CastF
           />
         }
         feed={feedContent}
-        detail={<DetailPanel clip={selected} onDelete={() => {}} onUpdateNote={() => {}} />}
+        detail={<DetailPanel clip={selected} onDelete={() => {}} onUpdateNote={() => {}} bodies={new Map()} onBodyFetched={() => {}} />}
         initialSidebarWidth={200}
       />
     </div>

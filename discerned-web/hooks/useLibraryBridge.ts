@@ -10,10 +10,10 @@ import { listenForBridge } from '@/lib/bridge/extension-bridge';
 
 export function useLibraryBridge() {
   const store = useClipStore();
-  const { clips, bridgePresent, pubkey, authMethod, timedOut, categories,
+  const { clips, bridgePresent, pubkey, authMethod, timedOut, categories, bodies,
           setClips, prependClip, addClips, setCategories, addCategories, removeCategory,
           setBridgePresent, setTimedOut,
-          removeClips, updateClipNote } = store;
+          removeClips, updateClipNote, setClipBody } = store;
 
   // Clip ID requested by the extension (e.g. "View in Library" after clipping).
   // Library consumes this once via useEffect to set selectedId.
@@ -41,6 +41,9 @@ export function useLibraryBridge() {
         // Bridge sends the authoritative full list — replace, don't merge.
         setCategories(msg.categories);
       }
+      if (msg.type === 'DISCERNED_BRIDGE_CLIP_BODY') {
+        setClipBody(msg.id, { bodyHtml: msg.bodyHtml, thumbnail: msg.thumbnail });
+      }
     }, mountClipCount.current);
 
     const timer = setTimeout(setTimedOut, 2000);
@@ -53,8 +56,9 @@ export function useLibraryBridge() {
   }, []);
 
   return {
-    bridgePresent, pubkey, authMethod, clips, timedOut, categories,
+    bridgePresent, pubkey, authMethod, clips, timedOut, categories, bodies,
     removeClips, updateClipNote, addClips, addCategories, removeCategory,
+    setClipBody,
     focusClipId, clearFocusClipId: () => setFocusClipId(null),
   };
 }

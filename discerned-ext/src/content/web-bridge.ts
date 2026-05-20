@@ -194,6 +194,17 @@ window.addEventListener('message', (e: MessageEvent) => {
   if (msg?.type === 'DISCERNED_UPDATE_CATEGORIES') {
     chrome.runtime.sendMessage({ type: 'UPDATE_CATEGORIES', categories: msg.categories }).catch(() => { /* non-fatal */ });
   }
+  if (msg?.type === 'DISCERNED_REQUEST_CLIP_BODY') {
+    const id = msg.id;
+    chrome.runtime.sendMessage({ type: 'GET_CLIP_BODY', id })
+      .then((res: unknown) => {
+        const r = res as { success: boolean; data?: { bodyHtml?: string; thumbnail?: string | null } };
+        if (r.success && r.data) {
+          post({ type: 'DISCERNED_BRIDGE_CLIP_BODY', id, bodyHtml: r.data.bodyHtml, thumbnail: r.data.thumbnail });
+        }
+      })
+      .catch(() => { /* non-fatal */ });
+  }
 });
 
 log(LL.NORMAL, 'Discerned web-bridge loaded', 'url:', window.location.href);

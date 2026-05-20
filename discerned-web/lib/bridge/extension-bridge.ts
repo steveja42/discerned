@@ -10,7 +10,8 @@ export type BridgeMessage =
   | { type: 'DISCERNED_BRIDGE_CLIPS'; clips: ClipData[] }
   | { type: 'DISCERNED_BRIDGE_NEW_CLIP'; clip: ClipData }
   | { type: 'DISCERNED_BRIDGE_FOCUS_CLIP'; clipId: string }
-  | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] };
+  | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] }
+  | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null };
 
 export function listenForBridge(
   handler: (msg: BridgeMessage) => void,
@@ -43,4 +44,8 @@ export function sendImportClips(clips: ClipData[]): void {
 
 export function sendUpdateCategories(categories: string[]): void {
   window.postMessage({ type: 'DISCERNED_UPDATE_CATEGORIES', categories }, window.location.origin);
+}
+
+export function requestClipBody(id: string): void {
+  window.postMessage({ type: 'DISCERNED_REQUEST_CLIP_BODY', id }, window.location.origin);
 }

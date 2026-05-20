@@ -103,7 +103,8 @@ export type BackgroundMessage =
   | { type: 'GET_CLIP_COUNT' }
   | { type: 'OPEN_LIBRARY'; clipId?: string }
   | { type: 'OPEN_HOME' }
-  | { type: 'REGISTER_LOG_TAB' };
+  | { type: 'REGISTER_LOG_TAB' }
+  | { type: 'GET_CLIP_BODY'; id: string };
 
 export type BackgroundResponse =
   | { success: true; data?: unknown }
@@ -142,14 +143,16 @@ export type WebBridgeOutbound =
   | { type: 'DISCERNED_BRIDGE_CLIPS'; clips: ClipData[] }
   | { type: 'DISCERNED_BRIDGE_NEW_CLIP'; clip: ClipData }
   | { type: 'DISCERNED_BRIDGE_FOCUS_CLIP'; clipId: string }
-  | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] };
+  | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] }
+  | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null };
 
 export type WebBridgeInbound =
   | { type: 'DISCERNED_WEB_READY'; clipCount: number }
   | { type: 'DISCERNED_DELETE_CLIPS'; ids: string[] }
   | { type: 'DISCERNED_UPDATE_NOTE'; id: string; note: string }
   | { type: 'DISCERNED_IMPORT_CLIPS'; clips: ClipData[] }
-  | { type: 'DISCERNED_UPDATE_CATEGORIES'; categories: string[] };
+  | { type: 'DISCERNED_UPDATE_CATEGORIES'; categories: string[] }
+  | { type: 'DISCERNED_REQUEST_CLIP_BODY'; id: string };
 
 // Default relay list
 export const DEFAULT_RELAYS = [

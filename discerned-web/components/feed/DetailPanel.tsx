@@ -5,13 +5,17 @@
 
 import { useState, useEffect } from 'react';
 import type { ClipData } from '@/lib/types';
+import type { ClipBody } from '@/lib/bridge/ClipStoreContext';
 import { CATEGORIES, interestRank, ethicsRank } from '@/lib/constants';
 import Wedge from '@/components/glyph/Wedge';
+import { requestClipBody } from '@/lib/bridge/extension-bridge';
 
 interface DetailPanelProps {
   clip: ClipData | null;
   onDelete: (id: string) => void;
   onUpdateNote: (id: string, note: string) => void;
+  bodies: Map<string, ClipBody>;
+  onBodyFetched: (id: string, body: ClipBody) => void;
 }
 
 function domainOf(url: string): string {
@@ -104,7 +108,22 @@ function NoteEditor({
   );
 }
 
-export default function DetailPanel({ clip, onDelete, onUpdateNote }: DetailPanelProps) {
+export default function DetailPanel({ clip, onDelete, onUpdateNote, bodies, onBodyFetched }: DetailPanelProps) {
+  // Request body from extension when clip changes and it's not cached yet.
+  useEffect(() => {
+    if (!clip) return;
+    const { id, format, bodyHtml } = clip.capture;
+    if (format === 'selection' || format === 'bookmark') return;
+    if (bodyHtml) {
+      // Clip arrived with body inline (e.g. imported JSON) — cache it now.
+      if (!bodies.has(id)) onBodyFetched(id, { bodyHtml, thumbnail: clip.capture.thumbnail });
+      return;
+    }
+    if (bodies.has(id)) return;
+    requestClipBody(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clip?.capture.id]);
+
   if (!clip) {
     return (
       <aside className="detail">
@@ -206,19 +225,28 @@ export default function DetailPanel({ clip, onDelete, onUpdateNote }: DetailPane
         <NoteEditor note={capture.note} clipId={capture.id} onUpdateNote={onUpdateNote} />
       </div>
 
-      {(capture.bodyHtml || capture.selectionText) ? (
-        <div
-          className="clip-body"
-          dangerouslySetInnerHTML={{ __html: capture.bodyHtml ?? capture.selectionText ?? '' }}
-        />
-      ) : capture.bodyText ? (
-        <div className="detail-section">
-          {capture.thumbnail && (
-            <img src={capture.thumbnail} alt="" className="detail-thumb" />
-          )}
-          <blockquote className="detail-excerpt">{capture.bodyText}</blockquote>
-        </div>
-      ) : null}
+      {(() => {
+        const cached = bodies.get(capture.id);
+        const bodyHtml = cached?.bodyHtml ?? capture.bodyHtml;
+        const thumbnail = cached?.thumbnail ?? capture.thumbnail;
+        if (bodyHtml || capture.selectionText) {
+          return (
+            <div
+              className="clip-body"
+              dangerouslySetInnerHTML={{ __html: bodyHtml ?? capture.selectionText ?? '' }}
+            />
+          );
+        }
+        if (capture.bodyText) {
+          return (
+            <div className="detail-section">
+              {thumbnail && <img src={thumbnail} alt="" className="detail-thumb" />}
+              <blockquote className="detail-excerpt">{capture.bodyText}</blockquote>
+            </div>
+          );
+        }
+        return null;
+      })()}
     </aside>
   );
 }

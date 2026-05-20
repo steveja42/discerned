@@ -298,6 +298,9 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'GET_CLIPS':
       return handleGetClips();
 
+    case 'GET_CLIP_BODY':
+      return handleGetClipBody(message.id);
+
     case 'DELETE_CLIPS':
       return handleDeleteClips(message.ids);
 
@@ -542,6 +545,9 @@ async function handleGetClips(): Promise<BackgroundResponse> {
                 try { if (row.id) store.delete(row.id); } catch { /* invalid key — nothing to delete */ }
                 store.put(repairedRow);
               }
+              // Strip large fields — sent on demand via GET_CLIP_BODY to stay under 64MiB limit.
+              delete clip.capture.bodyHtml;
+              delete clip.capture.thumbnail;
               clips.push(clip);
             } catch { /* skip malformed */ }
           }
@@ -560,6 +566,41 @@ async function handleGetClips(): Promise<BackgroundResponse> {
       } catch {
         db.close();
         resolve({ success: true, data: { clips: [] } });
+      }
+    };
+  });
+}
+
+async function handleGetClipBody(id: string): Promise<BackgroundResponse> {
+  return new Promise((resolve) => {
+    const request = indexedDB.open('discerned');
+    request.onerror = () => resolve({ success: false, error: 'IndexedDB open failed' });
+    request.onupgradeneeded = () => { /* read-only probe; no schema changes */ };
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains('clips')) {
+        db.close();
+        resolve({ success: false, error: 'No clips store' });
+        return;
+      }
+      try {
+        const tx = db.transaction(['clips'], 'readonly');
+        const getReq = tx.objectStore('clips').get(id);
+        getReq.onerror = () => { db.close(); resolve({ success: false, error: 'Read failed' }); };
+        getReq.onsuccess = () => {
+          db.close();
+          const row = getReq.result as ClipRow | undefined;
+          if (!row) { resolve({ success: false, error: 'Clip not found' }); return; }
+          try {
+            const clip = JSON.parse(row.encrypted) as ClipData;
+            resolve({ success: true, data: { bodyHtml: clip.capture.bodyHtml, thumbnail: clip.capture.thumbnail } });
+          } catch {
+            resolve({ success: false, error: 'Parse failed' });
+          }
+        };
+      } catch {
+        db.close();
+        resolve({ success: false, error: 'Transaction failed' });
       }
     };
   });
@@ -667,7 +708,11 @@ async function handleClip(data: { capture: Capture; evaluation: Evaluation }): P
       encrypted: JSON.stringify(payload), // NIP-44 encryption pending — stored as plaintext JSON for now
       timestamp: data.capture.timestamp,
     });
-    void pushClipToWebApp({ capture: data.capture, evaluation: data.evaluation, encrypted: '' });
+    // Strip large fields before pushing — bodyHtml/thumbnail are fetched on demand.
+    const captureSlim: typeof data.capture = { ...data.capture };
+    delete captureSlim.bodyHtml;
+    delete captureSlim.thumbnail;
+    void pushClipToWebApp({ capture: captureSlim, evaluation: data.evaluation, encrypted: '' });
     return { success: true, data: { storage: 'local' } };
   } catch (error) {
     log(LL.ERROR, 'Clip error:', error);

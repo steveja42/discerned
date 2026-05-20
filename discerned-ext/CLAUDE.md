@@ -33,6 +33,7 @@ Content Script (src/content/)
   → capture.ts     Smart capture: selected text (quote) or page metadata (resource)
   → overlay.ts     Shadow DOM evaluation UI (DiscernedOverlay custom element)
   → content.ts     Entry; listens for ACTIVATE_DISCERNED messages
+  → web-bridge.ts  Runs on discerned.online/* — bridges extension data to the web app
 
 Background Worker (src/background/)
   → background.ts  Handles context menus, signing, relay publishing, IndexedDB
@@ -43,6 +44,23 @@ Popup (src/popup/)
 ```
 
 Path alias: `@/*` → `src/*`
+
+## Web-bridge protocol (`src/content/web-bridge.ts`)
+
+Runs exclusively on `discerned.online/*` and `localhost:3000/*`. Bridges the extension's IndexedDB and auth state to the companion web app via `window.postMessage`.
+
+**Size constraint:** `chrome.runtime.sendMessage` has a hard 64 MiB limit. Article clips store large base64 images in `bodyHtml` — sending all clips at once can exceed this. The protocol therefore splits clip data into two phases:
+
+**Phase 1 — clip list (on page load):**
+- `GET_CLIPS` response strips `bodyHtml` and `thumbnail` before sending. The web app receives lightweight metadata-only clip objects and can render the clip list, filters, and categories immediately.
+- `PUSH_NEW_CLIP` (background → web bridge) also strips those fields for the same reason.
+
+**Phase 2 — body on demand:**
+- When the user selects a clip in the library, `DetailPanel` posts `DISCERNED_REQUEST_CLIP_BODY` (with the clip `id`) via `window.postMessage`.
+- `web-bridge.ts` forwards this to `background.ts` as `GET_CLIP_BODY`, which reads just that one clip from IndexedDB and returns `{ bodyHtml, thumbnail }`.
+- The result is posted back as `DISCERNED_BRIDGE_CLIP_BODY` and stored in `ClipStoreContext.bodies` — a `Map<id, ClipBody>` that acts as a session-level cache. Subsequent selections of the same clip use the cache; no second fetch.
+
+**Content script origin isolation:** `web-bridge.ts` runs in the web page's isolated world (`localhost:3000` or `discerned.online`), NOT the extension's `chrome-extension://` origin. It cannot directly access the extension's IndexedDB. All IndexedDB access must go through `chrome.runtime.sendMessage` to the background worker.
 
 ## Key Domain Concepts
 

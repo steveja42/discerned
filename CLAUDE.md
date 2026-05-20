@@ -32,7 +32,7 @@ Each sub-project has its own `CLAUDE.md` with full stack, commands, and conventi
 
 - **Shared types** live in `discerned-ext/src/shared/types.ts` and are mirrored (not imported) into `discerned-web/lib/types.ts`. Keep them in sync manually.
 - **Nostr tag conventions** (`online.discerned.interest`, etc.) are defined in `discerned-ext/src/shared/nostr/events.ts` — the web app's parser at `discerned-web/lib/nostr/parse.ts` must match them exactly.
-- **Extension ↔ web bridge** messages (`DISCERNED_BRIDGE_HELLO`, `DISCERNED_BRIDGE_CLIPS`, `DISCERNED_WEB_READY`) are typed in `discerned-ext/src/shared/types.ts` (`WebBridgeOutbound` / `WebBridgeInbound`) and consumed in `discerned-web/lib/bridge/extension-bridge.ts`.
+- **Extension ↔ web bridge** messages are typed in `discerned-ext/src/shared/types.ts` (`WebBridgeOutbound` / `WebBridgeInbound`) and consumed in `discerned-web/lib/bridge/extension-bridge.ts`. Clip bodies (`bodyHtml`, `thumbnail`) are **not** included in the bulk `DISCERNED_BRIDGE_CLIPS` message — they are fetched per-clip on demand via `DISCERNED_REQUEST_CLIP_BODY` / `DISCERNED_BRIDGE_CLIP_BODY` to stay under `chrome.runtime.sendMessage`'s 64 MiB hard limit. See `discerned-ext/CLAUDE.md` → Web-bridge protocol for details.
 - **Default relays** are defined in `discerned-ext/src/shared/types.ts` (`DEFAULT_RELAYS`) and mirrored in `discerned-web/lib/constants.ts` — keep them in sync.
 - **Extension stable ID** is `egocpdhpffaddnhjimclgabdhpbjbhod`, pinned by the `key` field in `discerned-ext/manifest.json`. Don't remove the key — it anchors IndexedDB across rebuilds. The matching private `.pem` lives outside the repo at `~/.discerned-keys/discerned-ext.pem`.
 
