@@ -44,3 +44,4 @@ pnpm-debug.log*
 /discerned-web - Copy/
 /discerned-ext_BACKUP/
 /discerned-web_BACKUP/
+discerned-ext/.claude/settings.json

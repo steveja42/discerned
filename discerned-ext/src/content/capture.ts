@@ -75,6 +75,260 @@ export function stripTrackingParams(rawUrl: string): string {
   return before === parsed.search ? rawUrl : parsed.toString();
 }
 
+// ── Shadow-DOM helpers ───────────────────────────────────────────────────────
+//
+// Some sites (Stansberry's Angular app is the reference case) ship article
+// content via declarative open Shadow DOM (<template shadowrootmode="open">).
+// document.querySelector and window.getSelection do not pierce shadow
+// boundaries, so capture-pipeline sites that look at the live DOM for content
+// discovery or selection retrieval must descend manually. The clone step also
+// has to inline shadow content into the clone, because cloneNode(true) does
+// not clone a host's shadow root.
+//
+// Closed-mode shadow roots are inaccessible to extensions; hasOpenShadow
+// returns false for them and we accept that content is invisible.
+
+function hasOpenShadow(el: Element): el is Element & { shadowRoot: ShadowRoot } {
+  return !!(el as Element & { shadowRoot: ShadowRoot | null }).shadowRoot;
+}
+
+/**
+ * querySelectorAll that pierces OPEN shadow roots. Returns light-DOM matches
+ * AND matches from every reachable open shadowRoot under root. Use on the
+ * LIVE DOM only; on already-cloned subtrees plain querySelectorAll suffices.
+ */
+function querySelectorAllDeep(root: ParentNode, selector: string): Element[] {
+  const out: Element[] = [];
+  const visit = (node: ParentNode) => {
+    out.push(...Array.from(node.querySelectorAll(selector)));
+    node.querySelectorAll('*').forEach(el => {
+      if (hasOpenShadow(el)) visit(el.shadowRoot);
+    });
+  };
+  visit(root);
+  return out;
+}
+
+/** Walk every element under root including those inside open shadow roots. */
+function forEachDeepElement(root: ParentNode, fn: (el: Element) => void): void {
+  root.querySelectorAll('*').forEach(el => {
+    fn(el);
+    if (hasOpenShadow(el)) forEachDeepElement(el.shadowRoot, fn);
+  });
+}
+
+/**
+ * Deep-clone an element, inlining the contents of any OPEN shadow roots as
+ * ordinary children of the host clone (after light-DOM children, matching
+ * approximate composed rendering order for most widgets). Downstream walkers
+ * then see a normal-looking tree. Does NOT resolve <slot> projection; for
+ * widgets that use slots, light children appear before inlined shadow
+ * children — fine for content widgets that render straight into the shadow.
+ */
+function deepCloneWithShadow(src: Element): Element {
+  const clone = src.cloneNode(false) as Element;
+  src.childNodes.forEach(child => {
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      clone.appendChild(deepCloneWithShadow(child as Element));
+    } else {
+      clone.appendChild(child.cloneNode(true));
+    }
+  });
+  if (hasOpenShadow(src)) {
+    src.shadowRoot.childNodes.forEach(child => {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        clone.appendChild(deepCloneWithShadow(child as Element));
+      } else {
+        clone.appendChild(child.cloneNode(true));
+      }
+    });
+  }
+  return clone;
+}
+
+/** Closest open shadow-root host ancestor of `node`, or null. Used for logging. */
+function shadowHostOf(node: Node | null): Element | null {
+  for (let cur = node; cur; cur = (cur as Node).parentNode ?? null) {
+    const root = (cur as Node).getRootNode?.();
+    if (root && root !== document && (root as ShadowRoot).host) {
+      return (root as ShadowRoot).host;
+    }
+  }
+  return null;
+}
+
+/**
+ * Shadow-aware selection getter. Returns the user's active selection
+ * regardless of whether it lives in the light DOM or inside an OPEN shadow
+ * root. Chromium exposes Selection on ShadowRoot via shadowRoot.getSelection();
+ * we walk open hosts looking for one with a non-empty selection.
+ */
+function getActiveSelection(): Selection | null {
+  const winSel = window.getSelection();
+  if (winSel && winSel.toString().trim().length > 0) {
+    log(LL.DEBUG, `Discerned: selection found in light DOM (${winSel.toString().length} chars)`, 'url:', window.location.href);
+    return winSel;
+  }
+  // Spec-correct path for selections that cross shadow boundaries:
+  // Selection.getComposedRanges({ shadowRoots }) returns StaticRange[] with
+  // endpoints inside the supplied open shadow roots. Chromium 134+ supports it.
+  const shadowRoots: ShadowRoot[] = [];
+  forEachDeepElement(document.body, (el) => {
+    if (hasOpenShadow(el)) shadowRoots.push(el.shadowRoot);
+  });
+  if (!winSel) {
+    log(LL.DEBUG, `Discerned: getSelection() returned null; ${shadowRoots.length} open shadow roots on page`, 'url:', window.location.href);
+    return null;
+  }
+  const composedSel = winSel as Selection & {
+    getComposedRanges?: (options?: { shadowRoots?: ShadowRoot[] }) => StaticRange[];
+  };
+  if (typeof composedSel.getComposedRanges !== 'function') {
+    if (shadowRoots.length > 0) {
+      log(LL.WARN, 'Discerned: Selection.getComposedRanges unavailable (Chromium <134?); cannot reach shadow-root selections', 'url:', window.location.href);
+    }
+    return winSel;
+  }
+  const staticRanges = composedSel.getComposedRanges({ shadowRoots });
+  log(LL.DEBUG, `Discerned: getComposedRanges returned ${staticRanges.length} range(s) across ${shadowRoots.length} shadow root(s)`, 'url:', window.location.href);
+  if (staticRanges.length === 0) return winSel;
+  // StaticRange has no cloneContents. Convert to a live Range so downstream
+  // selection.getRangeAt(0) + range.cloneContents() works unchanged with
+  // endpoints inside a shadow root.
+  const sr = staticRanges[0];
+  try {
+    const liveRange = document.createRange();
+    liveRange.setStart(sr.startContainer, sr.startOffset);
+    liveRange.setEnd(sr.endContainer, sr.endOffset);
+    winSel.removeAllRanges();
+    winSel.addRange(liveRange);
+    const host = shadowHostOf(sr.startContainer);
+    log(LL.DEBUG, `Discerned: selection found inside shadow root of <${host?.tagName.toLowerCase() ?? 'unknown'}> (${liveRange.toString().length} chars)`, 'url:', window.location.href);
+    return winSel;
+  } catch (err) {
+    log(LL.WARN, 'Discerned: failed to convert StaticRange to live Range:', err, 'url:', window.location.href);
+    return winSel;
+  }
+}
+
+type ResolvedSelection =
+  | { kind: 'range'; range: Range }
+  | { kind: 'text'; text: string };
+
+/**
+ * Resolve the working selection for capture. Encapsulates four cases in order
+ * of preference:
+ *
+ *   1. **Shadow-tree selection via getComposedRanges (Chromium 134+).** When
+ *      the page has open shadow roots and the selection lives inside one,
+ *      Chromium's `selection.getRangeAt(0)` returns a degenerate collapsed
+ *      range anchored to the shadow host — its `toString()` is empty even
+ *      though `selection.toString()` reports the composed text. The spec API
+ *      `Selection.getComposedRanges({ shadowRoots })` returns a `StaticRange`
+ *      with endpoints in the actual text nodes inside the shadow tree. We
+ *      convert that to a live `Range` so `cloneContents()` works.
+ *
+ *   2. **Light-DOM selection.** `selection.getRangeAt(0)` works directly.
+ *
+ *   3. **Cached snapshot from hasSelection().** Falls back if the live
+ *      selection was cleared between overlay open and Capture click.
+ *
+ *   4. **Plain-text fallback.** If we have a non-empty `selection.toString()`
+ *      but no usable Range from any of the above (e.g. composed API
+ *      unavailable on an older Chromium with a shadow-tree selection), at
+ *      least clip the text the user selected. We lose markup but preserve
+ *      the user's intent.
+ */
+function resolveSelection(selection: Selection | null, url: string): ResolvedSelection | null {
+  if (!selection) return null;
+
+  // (1) Composed-range path for selections in shadow trees.
+  const allShadows: ShadowRoot[] = [];
+  forEachDeepElement(document.body, (el) => { if (hasOpenShadow(el)) allShadows.push(el.shadowRoot); });
+  const composedSel = selection as Selection & {
+    getComposedRanges?: (options?: { shadowRoots?: ShadowRoot[] }) => StaticRange[];
+  };
+  if (allShadows.length > 0 && typeof composedSel.getComposedRanges === 'function') {
+    try {
+      const composed = composedSel.getComposedRanges({ shadowRoots: allShadows });
+      for (const sr of composed) {
+        const live = staticToLiveRange(sr);
+        if (live && live.toString().trim().length > 0) {
+          const host = shadowHostOf(sr.startContainer);
+          log(LL.NORMAL, `Discerned: using composed range from <${host?.tagName.toLowerCase() ?? 'document'}> shadow (${live.toString().length} chars)`, 'url:', url);
+          return { kind: 'range', range: live };
+        }
+      }
+    } catch (err) {
+      log(LL.WARN, 'Discerned: getComposedRanges threw:', err, 'url:', url);
+    }
+  }
+
+  // (2) Light-DOM live range.
+  if (selection.rangeCount > 0) {
+    const live = selection.getRangeAt(0);
+    if (live.toString().trim().length > 0) return { kind: 'range', range: live };
+  }
+
+  // (3) Snapshot fallback.
+  if (isSnapshotUsable(selectionSnapshot)) {
+    log(LL.NORMAL, `Discerned: using cached range from hasSelection (${selectionSnapshot.toString().length} chars)`, 'url:', url);
+    return { kind: 'range', range: selectionSnapshot };
+  }
+
+  // (4) Plain-text last resort — clip selection.toString() even when no
+  // usable range survived. Preserves the user's selected text even if markup
+  // and image position are lost.
+  const text = selection.toString().trim();
+  if (text.length > 0) {
+    log(LL.WARN, `Discerned: no usable Range — clipping selection.toString() as plain text (${text.length} chars)`, 'url:', url);
+    return { kind: 'text', text };
+  }
+
+  return null;
+}
+
+function staticToLiveRange(sr: StaticRange): Range | null {
+  try {
+    const live = document.createRange();
+    live.setStart(sr.startContainer, sr.startOffset);
+    live.setEnd(sr.endContainer, sr.endOffset);
+    return live;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Count open and closed shadow roots on the page. Used to emit a single
+ * diagnostic log line per capture when shadow content is present, so the
+ * console stays quiet on the common (no-shadow) case but informative when
+ * a site's capture is potentially affected.
+ */
+/** Count open shadow roots reachable from `root`. Closed roots are not
+ *  detectable from JavaScript without false positives, so we don't try. */
+function countShadowRoots(root: ParentNode = document.body): { open: number } {
+  let open = 0;
+  const visit = (node: ParentNode) => {
+    node.querySelectorAll('*').forEach(el => {
+      if (hasOpenShadow(el)) {
+        open++;
+        visit(el.shadowRoot);
+      }
+    });
+  };
+  visit(root);
+  return { open };
+}
+
+/** Emit a one-shot diagnostic log when open shadow roots are present. */
+function logShadowPresence(url: string): { open: number } {
+  const counts = countShadowRoots();
+  if (counts.open === 0) return counts;
+  log(LL.NORMAL, `Discerned: ${counts.open} open shadow root(s) detected on page`, 'url:', url);
+  return counts;
+}
+
 function newId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -90,11 +344,40 @@ function getPageThumbnail(): string | null {
 }
 
 /**
- * Returns true when the page has at least one selected character.
+ * Returns true when the page has at least one selected character. Looks inside
+ * open shadow roots too (some sites render content there — see Shadow-DOM
+ * helpers above).
  */
 export function hasSelection(): boolean {
-  const sel = window.getSelection();
-  return !!sel && sel.toString().trim().length > 0;
+  const sel = getActiveSelection();
+  const present = !!sel && sel.toString().trim().length > 0;
+  // Snapshot the live range while the user's selection is still intact. Some
+  // sites (notably those rendering content in a Web Component shadow root,
+  // e.g. Stansberry's Angular widgets) clear the selection as soon as the
+  // overlay shadow-DOM is appended to <body> and steals focus. By the time
+  // extractSelection runs on the Capture click, the live selection is empty.
+  // The snapshot lets extractSelection recover the user's intent.
+  if (present && sel && sel.rangeCount > 0) {
+    try {
+      selectionSnapshot = sel.getRangeAt(0).cloneRange();
+    } catch {
+      selectionSnapshot = null;
+    }
+  }
+  return present;
+}
+
+// Cached at hasSelection() call time, consumed and cleared by extractSelection.
+let selectionSnapshot: Range | null = null;
+
+/** True when the snapshot's endpoints are still attached to the live DOM. */
+function isSnapshotUsable(r: Range | null): r is Range {
+  if (!r) return false;
+  const start = r.startContainer;
+  const end = r.endContainer;
+  return !!(start as Node & { isConnected: boolean }).isConnected &&
+         !!(end as Node & { isConnected: boolean }).isConnected &&
+         r.toString().trim().length > 0;
 }
 
 export interface CaptureOptions {
@@ -129,13 +412,45 @@ function baseFields(): Pick<Capture, 'id' | 'url' | 'title' | 'timestamp'> {
 
 // ── Selection ────────────────────────────────────────────────────────────────
 
+/** Brief fragment summary: text length + HTML length + element count. */
+function fragSummary(frag: DocumentFragment): string {
+  const text = (frag.textContent ?? '').length;
+  const wrap = document.createElement('div');
+  wrap.appendChild(frag.cloneNode(true));
+  const html = wrap.innerHTML.length;
+  const elems = wrap.querySelectorAll('*').length;
+  return `text=${text} html=${html} elems=${elems}`;
+}
+
 async function extractSelection(): Promise<Capture> {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0 || selection.toString().trim().length === 0) {
+  const url = window.location.href;
+  logShadowPresence(url);
+  const selection = getActiveSelection();
+  const resolved = resolveSelection(selection, url);
+  // One-shot: consume the snapshot so a later capture without a fresh
+  // hasSelection() call doesn't accidentally reuse it.
+  selectionSnapshot = null;
+  if (!resolved) {
+    log(LL.DEBUG, 'Discerned: extractSelection — no usable selection, falling back to bookmark', 'url:', url);
     return extractBookmark();
   }
 
-  const range = selection.getRangeAt(0);
+  // Plain-text last-resort path: we don't have a Range so we can't run the
+  // cloneContents/sanitise pipeline. Wrap the text in a <p> and store directly.
+  if (resolved.kind === 'text') {
+    const esc = resolved.text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return {
+      ...baseFields(),
+      format: 'selection',
+      selectionText: `<p>${esc}</p>`,
+      selectionContext: '',
+    };
+  }
+
+  const range = resolved.range;
   const cleanup = markExcluded(document.body);
   // Annotate <img>s under the range's common ancestor before cloneContents
   // runs inside wrapFragmentBoundaries, so the cloned fragment carries
@@ -149,12 +464,15 @@ async function extractSelection(): Promise<Capture> {
   const fragment = wrapFragmentBoundaries(range);
   sizeCleanup();
   cleanup();
+  log(LL.DEBUG, `Discerned: extractSelection — after cloneContents+wrap: ${fragSummary(fragment)}`, 'url:', url);
+  unmarkWrappers(fragment);
   removeMarked(fragment);
   stripSizeMarkers(fragment);
   // Twitter GIFs and videos are <video poster="..."> — convert to <img> so they
   // survive sanitisation (which drops <video> as a non-allowed tag).
   substituteVideosWithPosters(fragment);
   const sanitized = sanitizeFragment(fragment);
+  log(LL.DEBUG, `Discerned: extractSelection — after sanitize: html=${sanitized.length} chars`, 'url:', url);
   const context = extractContext(range);
   const inlined = await inlineAllImages(sanitized);
 
@@ -586,7 +904,7 @@ function looksLikeContainer(el: Element): boolean {
 
 function findArticleElement(smartDetection: boolean): Element | null {
   for (const sel of ARTICLE_SELECTORS) {
-    const el = document.querySelector(sel);
+    const el = querySelectorAllDeep(document.body, sel)[0] ?? null;
     if (!el || (el.textContent ?? '').trim().length < ARTICLE_MIN_CHARS) continue;
     if (smartDetection && looksLikeContainer(el)) {
       log(LL.NORMAL, `Discerned: skipping <${el.tagName.toLowerCase()}> (looks like container) — falling to Readability`, 'url:', window.location.href);
@@ -687,7 +1005,10 @@ function findContentBlockByLayout(): Element | null {
   // "main column" from a single paragraph in body root.
   const probe = document.body.getBoundingClientRect();
   const hasLayout = probe.width > 0 && probe.height > 0;
-  const all = Array.from(document.body.querySelectorAll('*'));
+  // Pierce open shadow roots — some sites (Stansberry) render the article
+  // body inside <template shadowrootmode="open">, which plain querySelectorAll
+  // would miss. See querySelectorAllDeep in the Shadow-DOM helpers section.
+  const all = querySelectorAllDeep(document.body, '*');
   const scored: BlockScore[] = [];
   for (const el of all) {
     const s = scoreContentBlock(el, hasLayout);
@@ -727,6 +1048,10 @@ function findContentBlockByLayout(): Element | null {
   if (chosen.length === 0) return null;
   const best = scored.find(s => chosen.includes(s.el))!;
   log(LL.NORMAL, `Discerned: layout-finder picked <${best.el.tagName.toLowerCase()}> textLen=${best.textLen} ${Math.round(best.width)}×${Math.round(best.height)}`, 'url:', window.location.href);
+  const host = shadowHostOf(best.el);
+  if (host) {
+    log(LL.DEBUG, `Discerned: layout finder winner is inside shadow root of <${host.tagName.toLowerCase()}>`, 'url:', window.location.href);
+  }
   return best.el;
 }
 
@@ -764,9 +1089,30 @@ function maybeExpandToFeed(el: Element): Element {
   return parent;
 }
 
+/**
+ * Derive a clean text summary of the article from its sanitised clone, used
+ * for `bodyText` and downstream excerpts (overlay preview, library row, search).
+ * Walks prose tags only — paragraphs, headings, list items, blockquotes, table
+ * cells, captions — and joins their text with blank lines. Skips chrome wrappers
+ * (divs, buttons, custom-element shells) whose text would otherwise lead the
+ * extracted body. Falls back to the full `textContent` when no prose tags are
+ * present so prose-less pages still get *something*.
+ */
+const PROSE_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, blockquote, dt, dd, pre, td, th, figcaption';
+function proseText(root: Element): string {
+  const parts: string[] = [];
+  root.querySelectorAll(PROSE_SELECTOR).forEach(el => {
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (t.length > 0) parts.push(t);
+  });
+  if (parts.length === 0) return (root.textContent ?? '').trim();
+  return parts.join('\n\n');
+}
+
 async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const base = baseFields();
   log(LL.DEBUG, `Discerned: extractArticle — smartArticleDetection=${opts.smartArticleDetection} stripInlineStyles=${opts.stripInlineStyles}`, 'url:', base.url);
+  logShadowPresence(base.url);
 
   // Apply per-site live-DOM tagger (if registered for this hostname) so the
   // captured HTML carries dx-* markers across sanitisation regardless of
@@ -793,7 +1139,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     log(LL.NORMAL, `Discerned: article captured via semantic element <${articleEl.tagName.toLowerCase()}>`, 'url:', base.url);
     const cleanup = markExcluded(document.body);
     const sizeCleanup = annotateLiveImageSizes(articleEl);
-    const clone = articleEl.cloneNode(true) as Element;
+    const clone = deepCloneWithShadow(articleEl);
     sizeCleanup();
     cleanup();
     clone.querySelector('discerned-overlay')?.remove();
@@ -812,7 +1158,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       ...base,
       format: 'article',
       bodyHtml: inlined,
-      bodyText: clone.textContent?.trim() ?? '',
+      bodyText: proseText(clone),
       thumbnail: inlinedThumbnail,
     };
   }
@@ -830,7 +1176,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     const sizeCleanup = annotateLiveImageSizes(layoutEl);
     // A tagger-supplied root is already the intended scope — don't widen it.
     const expanded = siteTaggerRoot ? layoutEl : maybeExpandToFeed(layoutEl);
-    const clone = expanded.cloneNode(true) as Element;
+    const clone = deepCloneWithShadow(expanded);
     sizeCleanup();
     cleanup();
     clone.querySelector('discerned-overlay')?.remove();
@@ -845,7 +1191,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       ...base,
       format: 'article',
       bodyHtml: inlined,
-      bodyText: clone.textContent?.trim() ?? '',
+      bodyText: proseText(clone),
       thumbnail: inlinedThumbnail,
     };
   }
@@ -883,7 +1229,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     ...base,
     format: 'article',
     bodyHtml: inlined,
-    bodyText: bodyClone.textContent?.trim() ?? '',
+    bodyText: proseText(bodyClone),
     thumbnail: inlinedThumbnail,
   };
 }
@@ -905,7 +1251,7 @@ function parseReadability(): ReturnType<Readability['parse']> | null {
     // class-based sizing and images fall back to intrinsic resolution — making
     // avatars on SPA feed pages (primal, mastodon, etc.) huge.
     const sizeCleanup = annotateLiveImageSizes(document.body);
-    const bodyClone = document.body.cloneNode(true) as HTMLElement;
+    const bodyClone = deepCloneWithShadow(document.body) as HTMLElement;
     sizeCleanup();
     stripSizeMarkers(bodyClone);
     bodyClone.querySelector('discerned-overlay')?.remove();
@@ -959,7 +1305,7 @@ const EXCL_MARKER = 'data-discerned-excl';
  * can be cleaned up with removeMarked() afterward.
  */
 function markExcluded(root: HTMLElement = document.body): () => void {
-  root.querySelectorAll<HTMLElement>('*').forEach(el => {
+  forEachDeepElement(root, el => {
     if (el.tagName.toLowerCase() === 'discerned-overlay') return;
     const s = window.getComputedStyle(el);
     if (s.position === 'fixed' || s.position === 'sticky' ||
@@ -967,12 +1313,31 @@ function markExcluded(root: HTMLElement = document.body): () => void {
       el.setAttribute(EXCL_MARKER, '1');
     }
   });
-  return () => root.querySelectorAll(`[${EXCL_MARKER}]`).forEach(el => el.removeAttribute(EXCL_MARKER));
+  return () => querySelectorAllDeep(root, `[${EXCL_MARKER}]`).forEach(el => el.removeAttribute(EXCL_MARKER));
 }
 
 /** Remove all marked elements from a detached clone or fragment. */
 function removeMarked(root: Element | DocumentFragment): void {
   (root as Element).querySelectorAll(`[${EXCL_MARKER}]`).forEach(el => el.remove());
+}
+
+/**
+ * Strip EXCL_MARKER from elements that are partial-ancestor wrappers around
+ * selected content. cloneContents() on a Range copies attributes of partially
+ * cloned ancestors, so a sticky/fixed/hidden wrapper several levels above the
+ * user's selection rides into the fragment with the marker — and removeMarked
+ * would then delete it, taking the selection with it. The user selected
+ * INSIDE these wrappers, so they aren't chrome to discard; only leaf elements
+ * that were fully inside the selection range and happen to be chrome should
+ * remain marked. Heuristic: an element with non-trivial text or media content
+ * is a wrapper carrying real content, so drop the marker on it.
+ */
+function unmarkWrappers(root: Element | DocumentFragment): void {
+  (root as Element).querySelectorAll(`[${EXCL_MARKER}]`).forEach(el => {
+    const text = (el.textContent ?? '').trim();
+    const hasMedia = !!el.querySelector('img, picture, video, svg');
+    if (text.length > 0 || hasMedia) el.removeAttribute(EXCL_MARKER);
+  });
 }
 
 /**
@@ -984,7 +1349,7 @@ function removeMarked(root: Element | DocumentFragment): void {
 function cloneBodyClean(): HTMLElement {
   const cleanup = markExcluded(document.body);
   const sizeCleanup = annotateLiveImageSizes(document.body);
-  const clone = document.body.cloneNode(true) as HTMLElement;
+  const clone = deepCloneWithShadow(document.body) as HTMLElement;
   sizeCleanup();
   cleanup();
 
@@ -1194,6 +1559,11 @@ const SITE_TAGGERS: Array<{ match: (host: string) => boolean; tag: SiteTagger; n
  * and siteTaggerRoot (the narrowed capture root, when the tagger returns one).
  */
 function applySiteTagger(): boolean {
+  // Reset both before the loop so a non-matching capture doesn't inherit
+  // a prior page's tagger state (the module-level vars persist across
+  // captures in long-lived content-script lifetimes / SPA navigations).
+  siteTaggerActive = false;
+  siteTaggerRoot = null;
   const host = window.location.hostname;
   for (const t of SITE_TAGGERS) {
     if (t.match(host)) {
@@ -1229,7 +1599,7 @@ let siteTaggerRoot: Element | null = null;
 // Stamp our own `dx-*` class markers on detected structures so the web app's
 // CSS can restore the intended layout.
 
-const HEADER_AVATAR_MAX_PX = 72;
+const HEADER_AVATAR_MAX_PX = 128;
 const HEADER_NAME_MAX_CHARS = 80;
 const QUOTE_MIN_TEXT_CHARS = 40;
 const STATS_MIN_ICON_SIBLINGS = 3;
@@ -1242,6 +1612,18 @@ function appendClass(el: Element, token: string): void {
 
 /** True if the element directly contains a small image (avatar-sized). */
 function hasAvatarImage(el: Element): HTMLImageElement | null {
+  // (1) Bare-img child pattern: the element IS an avatar-sized <img>.
+  // Stansberry's author block uses <span><img><a></a></span> — the img is a
+  // direct sibling of the name link, not wrapped in its own container.
+  if (el.tagName.toLowerCase() === 'img') {
+    const w = parseInt(el.getAttribute('width') ?? '0', 10);
+    const h = parseInt(el.getAttribute('height') ?? '0', 10);
+    if (w > 0 && h > 0 && w <= HEADER_AVATAR_MAX_PX && h <= HEADER_AVATAR_MAX_PX) {
+      return el as HTMLImageElement;
+    }
+    return null;
+  }
+  // (2) Wrapped-img pattern: primal/bsky/etc. nest the avatar in a container.
   const imgs = el.querySelectorAll('img');
   for (const img of Array.from(imgs)) {
     const w = parseInt(img.getAttribute('width') ?? '0', 10);
@@ -1334,6 +1716,15 @@ function tagSemanticStructure(root: Element): void {
     }
     if (stop || avatarChildIdx < 0 || nameChildIdx < 0) continue;
     if (el.querySelectorAll('*').length > 40) continue;
+    // When the avatar branch is a bare <img> (Stansberry-style author block),
+    // require the name branch to be or contain an <a> — a byline link. Excludes
+    // the figure/figcaption pattern (img + caption-text sibling) from being
+    // mistagged as a header.
+    const avatarChild = children[avatarChildIdx];
+    if (avatarChild.tagName.toLowerCase() === 'img') {
+      const nameChild = children[nameChildIdx];
+      if (nameChild.tagName.toLowerCase() !== 'a' && !nameChild.querySelector('a')) continue;
+    }
     appendClass(el, 'dx-header');
     headerTagged.push(el);
   }
@@ -1528,7 +1919,10 @@ const SIZE_MARKER = 'data-discerned-sized';
  * (e.g. a sticky-header logo), breaking any index-based pairing on the clone.
  */
 function annotateLiveImageSizes(liveRoot: Element): () => void {
-  const liveImgs = Array.from(liveRoot.querySelectorAll('img'));
+  // Pierce open shadow roots so images inside e.g. <widget-media-content>
+  // get rendered-size annotations too (otherwise they fall back to intrinsic
+  // resolution after sanitisation strips wrapper classes).
+  const liveImgs = querySelectorAllDeep(liveRoot, 'img') as HTMLImageElement[];
   const annotated: Array<{ img: HTMLImageElement; hadWidth: boolean; hadHeight: boolean }> = [];
   liveImgs.forEach(img => {
     const rect = img.getBoundingClientRect();
@@ -1591,6 +1985,38 @@ function substituteVideosWithPosters(root: Element | DocumentFragment): void {
   });
 }
 
+// Elements that render visible content on their own without text descendants.
+// Used by collapseEmpty to decide which elements survive the post-sanitisation
+// emptiness check.
+const VISIBLE_LEAF_TAGS = new Set(['img', 'picture', 'video', 'svg', 'canvas', 'iframe', 'hr', 'input', 'br']);
+
+function hasVisibleContent(node: Node): boolean {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return (node.textContent ?? '').trim().length > 0;
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  if (VISIBLE_LEAF_TAGS.has((node as Element).tagName.toLowerCase())) return true;
+  for (const child of Array.from(node.childNodes)) {
+    if (hasVisibleContent(child)) return true;
+  }
+  return false;
+}
+
+/**
+ * Remove allowed elements whose subtree contains no visible content. Walks
+ * bottom-up so leaves collapse first and their now-empty parents collapse on
+ * the next visit. Catches font-awesome `<i>` empties left after class strip,
+ * unwrapped custom-element shells, and Angular template wrappers that hold
+ * only whitespace text. Preserves anything with text or visible-leaf media.
+ */
+function collapseEmpty(root: Element): void {
+  const walk = (el: Element): void => {
+    Array.from(el.children).forEach(walk);
+    if (!hasVisibleContent(el)) el.remove();
+  };
+  Array.from(root.children).forEach(walk);
+}
+
 function sanitiseTreeInPlace(root: Element, stripStyles = false) {
   // Drop dangerous elements outright before walking. <foreignObject> can host
   // arbitrary HTML inside <svg>; drop it explicitly even though it's not in the
@@ -1603,6 +2029,13 @@ function sanitiseTreeInPlace(root: Element, stripStyles = false) {
     sanitiseElement(node as Element, stripStyles);
   };
   Array.from(root.childNodes).forEach(walk);
+
+  // Collapse elements whose subtree has no visible content. Runs after the
+  // sanitisation walk so unwrapping/attribute-stripping have already produced
+  // the empties (e.g. <i> with stripped fa-* classes, <div> wrappers from
+  // unwrapped custom elements). Before the SVG cap so empty SVG wrappers
+  // don't waste cap budget.
+  collapseEmpty(root);
 
   // Cap inline SVGs per article — pathological pages (icon galleries) could
   // otherwise bloat the stored Nostr event.

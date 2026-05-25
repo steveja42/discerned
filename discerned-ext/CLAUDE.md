@@ -110,6 +110,31 @@ A tagger may optionally **return a capture root** (`Element | void`). When it do
 
 `sanitiseTreeInPlace()` whitelists tags (`ALLOWED_TAGS` — includes `div, span, img, table, svg` glyphs, etc.) and per-tag attributes (`ALLOWED_ATTRS_PER_TAG`). The `class` attribute is allowed but **only tokens with `dx-` or `tweet-` prefixes survive** (`TRUSTED_CLASS_PREFIXES`); source-page hashed classes are stripped. This is how the `dx-*` markers reach the rendered clip while the page's own CSS classes don't.
 
+### Shadow DOM support
+
+Some sites (Stansberry's Angular app is the reference case) ship article content via declarative open Shadow DOM (`<template shadowrootmode="open">`). `document.querySelector` and `window.getSelection` don't pierce shadow boundaries, and `cloneNode(true)` doesn't clone a host's shadow root — so the capture pipeline must descend manually wherever it touches the live DOM.
+
+Five helpers at the top of `capture.ts` handle this:
+
+| Helper | Used by |
+|---|---|
+| `hasOpenShadow(el)` | Type guard for the others. Returns false for closed-mode hosts (unreachable). |
+| `querySelectorAllDeep(root, sel)` | `findArticleElement`, `findContentBlockByLayout`, `annotateLiveImageSizes`, `markExcluded` (cleanup). Live-DOM content discovery. |
+| `forEachDeepElement(root, fn)` | `markExcluded`, `getActiveSelection`. Walks every element including shadow descendants. |
+| `deepCloneWithShadow(src)` | The three clone steps in `extractArticle` (Tier 1 + 1.5), `cloneBodyClean`, `parseReadability`. Inlines open shadow content as ordinary children of the host clone so downstream walkers (`sanitiseTreeInPlace`, `tagSemanticStructure`, per-site taggers) work without modification. |
+| `getActiveSelection()` | `hasSelection`, `extractSelection`. Uses the spec API `Selection.getComposedRanges({ shadowRoots })` (Chromium 134+) to retrieve selections that cross shadow boundaries, then converts the resulting `StaticRange` to a live `Range` so `cloneContents()` works in the existing pipeline. Falls back to `window.getSelection()` when `getComposedRanges` is unavailable, with an `LL.WARN` diagnostic when open shadow roots are present but the API is missing. |
+
+**Closed shadow roots** are inaccessible to extensions. `hasOpenShadow` returns false for them; content there cannot be captured. We don't try to count them — there's no reliable in-page detection (heuristics produce too many false positives on empty placeholder custom elements).
+
+**`<slot>` projection is NOT performed.** `deepCloneWithShadow` places light-DOM children before inlined shadow children, which is approximately right for most widgets and exactly right for widgets that render content straight into the shadow (no slots). If a site uses slots, add a site-specific tagger that handles the composition.
+
+**Selection snapshot.** `hasSelection()` clones the live `Range` into a module-level `selectionSnapshot` when it returns true. `extractSelection()` falls back to that snapshot when the live `Selection` has been cleared between the user triggering the overlay and clicking Capture — a pattern observed on shadow-root content (e.g. Stansberry's Angular widgets) where appending the overlay shadow-DOM steals focus and collapses the selection on the page. The snapshot is consumed (set to `null`) at the start of `extractSelection` whether or not it's used, so a stale snapshot from a prior capture can't bleed in.
+
+**Diagnostic logs** fire only when shadow roots are present (kept quiet on the common no-shadow case):
+- `LL.NORMAL`: `Discerned: N open shadow root(s) detected on page` (once per article/selection capture)
+- `LL.DEBUG`: `Discerned: layout finder winner is inside shadow root of <host-tag>` and `Discerned: selection found inside shadow root of <host-tag>`
+- `LL.DEBUG`: in `extractSelection`, per-stage fragment-size logs (`after cloneContents+wrap`, `after unmarkWrappers`, `after removeMarked`, `after substituteVideos`, `after sanitizeFragment`, `after inlineAllImages`) so when a selection clip comes out empty the page console pinpoints which stage dropped the content.
+
 ## File Naming Conventions
 
 - **No `index.ts` entry points** — name entry files after their directory (e.g., `background.ts`, `content.ts`, `popup.ts`)

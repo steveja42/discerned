@@ -1047,6 +1047,10 @@ a { color: inherit; }
 .clip-body blockquote { border-left: 3px solid var(--rule); padding-left: 12px; margin: 0 0 1em; color: #3a342c; }
 .clip-body pre, .clip-body code { font-family: ui-monospace, monospace; font-size: 13px; background: var(--paper-2); border-radius: 3px; padding: 1px 4px; }
 .clip-body pre { padding: 12px 14px; overflow-x: auto; }
+.clip-body table { border-collapse: collapse; margin: 1em 0; max-width: 100%; }
+.clip-body th, .clip-body td { border: 1px solid var(--rule-soft); padding: 6px 10px; text-align: left; vertical-align: top; }
+.clip-body th { background: var(--paper-2); font-weight: 600; }
+.clip-body thead th { border-bottom: 2px solid var(--rule); }
 
 /* Generic fallbacks for captured articles from arbitrary sites — these run on
    any .clip-body content. The X.com .tweet-* rules above take precedence on
@@ -1094,13 +1098,6 @@ a { color: inherit; }
   font-size: 13px;
   color: var(--ink-3);
   text-decoration: none;
-}
-/* Preserve intentional newlines in any <span> inside .clip-body. pre-line
-   still collapses runs of regular whitespace, so spans that don't contain
-   \n are unaffected. The only behavioural change is making explicit \n
-   characters render as line breaks instead of getting collapsed. */
-.clip-body span {
-  white-space: pre-line;
 }
 /* Sanitised <hr> elements often originate as Chakra/Material vertical
    dividers between action buttons. The default block-level rendering
