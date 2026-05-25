@@ -67,15 +67,19 @@ detectAuthState().then(state => {
 /**
  * Decide which clip format to default to:
  *   1. Selection present → 'selection'
- *   2. Else last-used (if valid) → that
+ *   2. Else last-used (if valid, and not 'selection') → that
  *   3. Else 'article'
+ *
+ * 'selection' is excluded from the last-used fallback: if the previous clip was a
+ * selection and there is no current selection, defaulting back to 'selection' is
+ * useless (nothing to capture). 'article' is the sensible fallback in that case.
  */
 async function pickInitialFormat(selectionPresent: boolean): Promise<ClipFormat> {
   if (selectionPresent) return 'selection';
   try {
     const stored = await chrome.storage.local.get(STORAGE_KEYS.LAST_FORMAT);
     const last = stored[STORAGE_KEYS.LAST_FORMAT];
-    if (typeof last === 'string' && (VALID_FORMATS as string[]).includes(last)) {
+    if (typeof last === 'string' && last !== 'selection' && (VALID_FORMATS as string[]).includes(last)) {
       return last as ClipFormat;
     }
   } catch {
@@ -98,8 +102,16 @@ async function handleActivation() {
     return;
   }
 
+  // Toolbar-icon / context-menu acts as a toggle: if the overlay is currently in
+  // the DOM, the second click closes it instead of recreating a fresh one.
+  if (currentOverlay?.isConnected) {
+    currentOverlay.hide();
+    currentOverlay = null;
+    return;
+  }
   if (currentOverlay) {
     currentOverlay.hide();
+    currentOverlay = null;
   }
 
   const selectionPresent = hasSelection();

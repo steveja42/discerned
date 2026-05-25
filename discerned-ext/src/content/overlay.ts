@@ -708,26 +708,6 @@ export class DiscernedOverlay extends HTMLElement {
 
           <div class="form-block evaluation">
             <div class="form-group">
-              <label id="interest-label">Interest</label>
-              <ul class="eval-listbox" id="interest-list" role="listbox" tabindex="0"
-                  aria-labelledby="interest-label">
-                ${(['Wise','Insightful','Interesting','Neutral','Noise'] as const).map(v =>
-                  `<li role="option" class="eval-option${this.interest === v ? ' selected' : ''}"
-                       data-value="${v}" aria-selected="${this.interest === v}">${v}</li>`
-                ).join('')}
-              </ul>
-            </div>
-            <div class="form-group">
-              <label id="ethics-label">Ethics</label>
-              <ul class="eval-listbox" id="ethics-list" role="listbox" tabindex="0"
-                  aria-labelledby="ethics-label">
-                ${(['Exemplary','Honest','Neutral','Misleading','Malicious'] as const).map(v =>
-                  `<li role="option" class="eval-option${this.ethics === v ? ' selected' : ''}"
-                       data-value="${v}" aria-selected="${this.ethics === v}">${v}</li>`
-                ).join('')}
-              </ul>
-            </div>
-            <div class="form-group">
               <label for="category">Category</label>
               <div class="combobox" id="category-combobox">
                 <input type="text" id="category" value="${this.escapeHtml(this.category)}" autocomplete="off" spellcheck="false" />
@@ -735,6 +715,24 @@ export class DiscernedOverlay extends HTMLElement {
                 <ul class="combobox-list" id="category-list" role="listbox">
                 </ul>
               </div>
+            </div>
+            <div class="form-group">
+              <label id="interest-label">Interest</label>
+              ${this.renderEqSlider({
+                id: 'interest',
+                lowToHigh: ['Noise','Neutral','Interesting','Insightful','Wise'],
+                value: this.interest,
+                labelledBy: 'interest-label',
+              })}
+            </div>
+            <div class="form-group">
+              <label id="ethics-label">Ethics</label>
+              ${this.renderEqSlider({
+                id: 'ethics',
+                lowToHigh: ['Malicious','Misleading','Neutral','Honest','Exemplary'],
+                value: this.ethics,
+                labelledBy: 'ethics-label',
+              })}
             </div>
           </div>
 
@@ -817,62 +815,27 @@ export class DiscernedOverlay extends HTMLElement {
     });
 
     // ── Listbox helpers ───────────────────────────────────────────────────────
-    const updateListbox = (list: Element, value: string) => {
-      list.querySelectorAll<HTMLElement>('[role="option"]').forEach(li => {
-        const sel = li.dataset.value === value;
-        li.classList.toggle('selected', sel);
-        li.setAttribute('aria-selected', String(sel));
-      });
-    };
-
-    const listboxKeydown = (e: KeyboardEvent, list: Element, onSelect: (v: string) => void) => {
-      if (!['ArrowDown','ArrowUp','Home','End'].includes(e.key)) return;
-      e.preventDefault();
-      const opts = Array.from(list.querySelectorAll<HTMLElement>('[role="option"]'));
-      const cur = opts.findIndex(o => o.classList.contains('selected'));
-      let next = cur;
-      if (e.key === 'ArrowDown') next = Math.min(cur + 1, opts.length - 1);
-      if (e.key === 'ArrowUp')   next = Math.max(cur - 1, 0);
-      if (e.key === 'Home')      next = 0;
-      if (e.key === 'End')       next = opts.length - 1;
-      if (next === cur) return;
-      const v = opts[next]!.dataset.value ?? '';
-      onSelect(v);
-      updateListbox(list, v);
-      opts[next]!.scrollIntoView({ block: 'nearest' });
-    };
-
-    // ── Interest listbox ──────────────────────────────────────────────────────
-    const interestList = this.shadow.getElementById('interest-list')!;
-    interestList.addEventListener('click', e => {
-      const t = (e.target as Element).closest<HTMLElement>('[data-value]');
-      if (!t) return;
-      this.interest = t.dataset.value as InterestLevel;
-      updateListbox(interestList, this.interest);
-      void chrome.storage.local.set({ [STORAGE_KEYS.LAST_INTEREST]: this.interest });
-      this.validateForm();
+    // ── EQ sliders (Interest + Ethics) ────────────────────────────────────────
+    this.attachEqSlider({
+      id: 'interest',
+      lowToHigh: ['Noise','Neutral','Interesting','Insightful','Wise'],
+      get: () => this.interest,
+      set: v => {
+        this.interest = v as InterestLevel;
+        void chrome.storage.local.set({ [STORAGE_KEYS.LAST_INTEREST]: this.interest });
+        this.validateForm();
+      },
     });
-    interestList.addEventListener('keydown', e => listboxKeydown(e, interestList, v => {
-      this.interest = v as InterestLevel;
-      void chrome.storage.local.set({ [STORAGE_KEYS.LAST_INTEREST]: this.interest });
-      this.validateForm();
-    }));
-
-    // ── Ethics listbox ────────────────────────────────────────────────────────
-    const ethicsList = this.shadow.getElementById('ethics-list')!;
-    ethicsList.addEventListener('click', e => {
-      const t = (e.target as Element).closest<HTMLElement>('[data-value]');
-      if (!t) return;
-      this.ethics = t.dataset.value as EthicsLevel;
-      updateListbox(ethicsList, this.ethics);
-      void chrome.storage.local.set({ [STORAGE_KEYS.LAST_ETHICS]: this.ethics });
-      this.validateForm();
+    this.attachEqSlider({
+      id: 'ethics',
+      lowToHigh: ['Malicious','Misleading','Neutral','Honest','Exemplary'],
+      get: () => this.ethics,
+      set: v => {
+        this.ethics = v as EthicsLevel;
+        void chrome.storage.local.set({ [STORAGE_KEYS.LAST_ETHICS]: this.ethics });
+        this.validateForm();
+      },
     });
-    ethicsList.addEventListener('keydown', e => listboxKeydown(e, ethicsList, v => {
-      this.ethics = v as EthicsLevel;
-      void chrome.storage.local.set({ [STORAGE_KEYS.LAST_ETHICS]: this.ethics });
-      this.validateForm();
-    }));
 
     // ── Publish-mode slider ───────────────────────────────────────────────────
     const pill = this.shadow.getElementById('slider-pill');
@@ -974,6 +937,138 @@ export class DiscernedOverlay extends HTMLElement {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  /**
+   * Vertical equalizer-style slider for an evaluation axis. `lowToHigh[0]` sits
+   * at the bottom (most negative) and `lowToHigh.at(-1)` at the top (most
+   * positive). Labels render top → bottom (reverse of options).
+   */
+  private renderEqSlider(opts: {
+    id: string;
+    lowToHigh: readonly string[];
+    value: string;
+    labelledBy: string;
+  }): string {
+    const n = opts.lowToHigh.length;
+    const idx = Math.max(0, opts.lowToHigh.indexOf(opts.value));
+    const pct = (idx / (n - 1)) * 100;
+    const ticks = opts.lowToHigh.map((_, i) =>
+      `<div class="pop-eq-tick" style="bottom: calc(${(i / (n - 1)) * 100}% - 0.5px)"></div>`
+    ).join('');
+    const labels = [...opts.lowToHigh].reverse().map(opt =>
+      `<div class="pop-eq-label${opt === opts.value ? ' selected' : ''}" data-value="${this.escapeHtml(opt)}">${this.escapeHtml(opt)}</div>`
+    ).join('');
+    return `
+      <div class="pop-eq" data-eq-id="${opts.id}">
+        <div class="pop-eq-slot" id="eq-${opts.id}-slot"
+             role="slider" tabindex="0"
+             aria-labelledby="${opts.labelledBy}"
+             aria-valuemin="0" aria-valuemax="${n - 1}"
+             aria-valuenow="${idx}" aria-valuetext="${this.escapeHtml(opts.value)}">
+          <div class="pop-eq-ticks">${ticks}</div>
+          <div class="pop-eq-track"></div>
+          <div class="pop-eq-fill" style="top: calc(100% - ${pct}%)"></div>
+          <div class="pop-eq-thumb" style="bottom: ${pct}%"><span class="pop-eq-thumb-groove"></span></div>
+        </div>
+        <div class="pop-eq-labels" id="eq-${opts.id}-labels">${labels}</div>
+      </div>
+    `;
+  }
+
+  /**
+   * Wire up an EQ slider's click / drag / keyboard / label-click behavior.
+   * The slider is rendered by {@link renderEqSlider}; this method finds it by id
+   * inside the shadow root and binds listeners that drive a single getter/setter
+   * pair held by the caller.
+   *
+   * Drag math mirrors the handoff spec: a 10px inset on top/bottom matches the
+   * slot's `top:10px; bottom:10px` ticks/track padding, and the live drag follows
+   * the cursor while a final `round` snaps to the nearest step on release.
+   */
+  private attachEqSlider(opts: {
+    id: string;
+    lowToHigh: readonly string[];
+    get: () => string;
+    set: (v: string) => void;
+  }): void {
+    const slot   = this.shadow.getElementById(`eq-${opts.id}-slot`)   as HTMLElement | null;
+    const labels = this.shadow.getElementById(`eq-${opts.id}-labels`) as HTMLElement | null;
+    if (!slot || !labels) return;
+
+    const fill  = slot.querySelector<HTMLElement>('.pop-eq-fill');
+    const thumb = slot.querySelector<HTMLElement>('.pop-eq-thumb');
+    const n     = opts.lowToHigh.length;
+
+    const SLOT_INSET = 10; // matches top:10px; bottom:10px in .pop-eq-track / .pop-eq-ticks
+
+    const repaint = (idx: number, snap: boolean) => {
+      const clamped = Math.max(0, Math.min(n - 1, snap ? Math.round(idx) : idx));
+      const value = opts.lowToHigh[snap ? clamped : Math.round(clamped)]!;
+      const pct = (clamped / (n - 1)) * 100;
+      if (fill)  fill.style.top    = `calc(100% - ${pct}%)`;
+      if (thumb) thumb.style.bottom = `${pct}%`;
+      slot.setAttribute('aria-valuenow', String(Math.round(clamped)));
+      slot.setAttribute('aria-valuetext', value);
+      labels.querySelectorAll<HTMLElement>('.pop-eq-label').forEach(el => {
+        el.classList.toggle('selected', el.dataset.value === value);
+      });
+      if (snap && value !== opts.get()) opts.set(value);
+    };
+
+    const indexFromClientY = (clientY: number): number => {
+      const r = slot.getBoundingClientRect();
+      const pct = 1 - (clientY - r.top - SLOT_INSET) / (r.height - SLOT_INSET * 2);
+      return Math.max(0, Math.min(n - 1, pct * (n - 1)));
+    };
+
+    // Click / drag on the slot
+    let dragging = false;
+    const onDown = (e: PointerEvent) => {
+      e.preventDefault();
+      dragging = true;
+      slot.setPointerCapture(e.pointerId);
+      repaint(indexFromClientY(e.clientY), false);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!dragging) return;
+      repaint(indexFromClientY(e.clientY), false);
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!dragging) return;
+      dragging = false;
+      try { slot.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+      repaint(indexFromClientY(e.clientY), true);
+    };
+    slot.addEventListener('pointerdown', onDown);
+    slot.addEventListener('pointermove', onMove);
+    slot.addEventListener('pointerup', onUp);
+    slot.addEventListener('pointercancel', onUp);
+
+    // Label clicks → snap to that step
+    labels.addEventListener('click', e => {
+      const t = (e.target as Element).closest<HTMLElement>('.pop-eq-label');
+      if (!t) return;
+      const v = t.dataset.value;
+      if (!v) return;
+      const i = opts.lowToHigh.indexOf(v);
+      if (i >= 0) repaint(i, true);
+    });
+
+    // Keyboard
+    slot.addEventListener('keydown', e => {
+      const cur = opts.lowToHigh.indexOf(opts.get());
+      let next = cur;
+      if (e.key === 'ArrowUp')        next = Math.min(cur + 1, n - 1);
+      else if (e.key === 'ArrowDown') next = Math.max(cur - 1, 0);
+      else if (e.key === 'PageUp')    next = Math.min(cur + 2, n - 1);
+      else if (e.key === 'PageDown')  next = Math.max(cur - 2, 0);
+      else if (e.key === 'Home')      next = n - 1;   // Home → top (most positive)
+      else if (e.key === 'End')       next = 0;       // End  → bottom (most negative)
+      else return;
+      e.preventDefault();
+      if (next !== cur) repaint(next, true);
+    });
   }
 
   private setupCategoryCombobox() {
@@ -1159,19 +1254,47 @@ export class DiscernedOverlay extends HTMLElement {
 
   private getStyles(): string {
     return `
-      :host { display: block; }
+      :host {
+        display: block;
+
+        /* ── Mint Tinted (translucent) — design tokens ──────────────────────── */
+        --p-bg:        rgba(166, 210, 184, 0.55);
+        --p-surface:   rgba(230, 243, 234, 0.65);
+        --p-surface-2: rgba(198, 222, 207, 0.70);
+        --p-ink:       #0f1a14;
+        --p-ink-2:     #243029;
+        --p-ink-3:     #4e5f55;
+        --p-ink-4:     #788a80;
+        --p-rule:      rgba(15, 26, 20, 0.18);
+        --p-rule-soft: rgba(15, 26, 20, 0.10);
+        --p-accent:     oklch(0.45 0.12 165);
+        --p-accent-ink: oklch(0.36 0.10 165);
+        --p-on-accent:  #ecf6f0;
+        --p-cta-bg:     #14201a;
+        --p-cta-ink:    #e6f3ea;
+        --p-cta-shadow: rgba(20, 60, 40, 0.40);
+      }
       * { margin: 0; padding: 0; box-sizing: border-box;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
       .discerned-root.panel {
         position: fixed; top: 0; left: 0; bottom: 0;
         width: 380px; max-width: 90vw;
-        background: #1a1a1a; color: #e8e8e8;
-        border-right: 1px solid #2a2a2a;
-        box-shadow: 6px 0 24px rgba(0,0,0,0.45);
+        background: var(--p-bg);
+        color: var(--p-ink);
+        backdrop-filter: blur(18px) saturate(150%);
+        -webkit-backdrop-filter: blur(18px) saturate(150%);
+        border-right: 1px solid rgba(255, 255, 255, 0.40);
+        box-shadow:
+          24px 0 60px -20px var(--p-cta-shadow),
+          inset 0 1px 0 rgba(255, 255, 255, 0.5);
         z-index: 2147483647;
         display: flex; flex-direction: column;
         animation: slideIn 0.18s ease-out;
+      }
+      /* Opaque fallback for browsers without backdrop-filter (some Firefox forks, older Chromium on Linux). */
+      @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .discerned-root.panel { background: #d8ebe0; }
       }
       @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 
@@ -1179,18 +1302,18 @@ export class DiscernedOverlay extends HTMLElement {
         flex: 0 0 auto;
         display: flex; align-items: center; gap: 10px;
         padding: 14px 16px;
-        border-bottom: 1px solid #2a2a2a;
+        border-bottom: 1px solid var(--p-rule);
       }
-      .panel-header h2 { color: #fff; font-size: 16px; font-weight: 600; flex: 1; }
+      .panel-header h2 { color: var(--p-ink); font-size: 16px; font-weight: 600; flex: 1; }
       .header-actions { display: flex; gap: 4px; }
 
       .icon-btn {
-        background: none; border: none; color: #888;
+        background: none; border: none; color: var(--p-ink-3);
         cursor: pointer; width: 30px; height: 30px;
         display: flex; align-items: center; justify-content: center;
         border-radius: 5px; font-size: 18px; transition: all 0.15s;
       }
-      .icon-btn:hover { background: #2a2a2a; color: #fff; }
+      .icon-btn:hover { background: var(--p-surface-2); color: var(--p-ink); }
       .close-btn { font-size: 24px; }
       .back-btn { font-size: 18px; }
 
@@ -1204,32 +1327,31 @@ export class DiscernedOverlay extends HTMLElement {
       .panel-footer {
         flex: 0 0 auto;
         padding: 14px 16px;
-        border-top: 1px solid #2a2a2a;
+        border-top: 1px solid var(--p-rule);
+        background: transparent;
         display: flex; flex-direction: column; gap: 10px;
       }
 
       /* Format chips */
-      .format-row {
-        display: flex; flex-wrap: wrap; gap: 6px;
-      }
+      .format-row { display: flex; flex-wrap: wrap; gap: 6px; }
       .chip {
-        background: #252525; border: 1px solid #333;
-        color: #ccc; font-size: 12px;
+        background: var(--p-surface); border: 1px solid var(--p-rule);
+        color: var(--p-ink-2); font-size: 12px;
         padding: 6px 10px; border-radius: 999px;
         cursor: pointer; transition: all 0.15s;
         display: inline-flex; align-items: center; gap: 6px;
         font-family: inherit;
       }
-      .chip:hover:not(:disabled) { border-color: #555; color: #fff; }
-      .chip.active { background: #0c4a6e; border-color: #0ea5e9; color: #fff; }
+      .chip:hover:not(:disabled) { border-color: var(--p-accent); color: var(--p-ink); }
+      .chip.active { background: var(--p-accent); border-color: var(--p-accent); color: var(--p-on-accent); }
       .chip:disabled { opacity: 0.4; cursor: not-allowed; }
       .chip-icon { font-size: 13px; }
 
       /* Preview area */
       .preview-area { display: block; }
       .preview-card {
-        background: #232323; border-radius: 8px;
-        border-left: 4px solid #0ea5e9;
+        background: var(--p-surface); border-radius: 8px;
+        border-left: 4px solid var(--p-accent);
         padding: 12px;
         display: flex; flex-direction: column; gap: 6px;
       }
@@ -1237,138 +1359,227 @@ export class DiscernedOverlay extends HTMLElement {
         max-width: 100%; max-height: 120px; width: auto; height: auto;
         object-fit: contain; border-radius: 6px; align-self: flex-start;
       }
-      .preview-title { color: #fff; font-size: 14px; font-weight: 600; }
-      .preview-text { color: #ccc; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
-      .preview-url  { color: #888; font-size: 11px; word-break: break-all; }
-      .preview-hint { color: #0ea5e9; font-size: 11px; }
+      .preview-title { color: var(--p-ink); font-size: 14px; font-weight: 600; }
+      .preview-text  { color: var(--p-ink-2); font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+      .preview-url   { color: var(--p-ink-3); font-size: 11px; word-break: break-all; }
+      .preview-hint  { color: var(--p-accent-ink); font-size: 11px; }
       .preview-placeholder {
-        background: #1a1a1a; border: 1px dashed #444;
+        background: var(--p-surface); border: 1px dashed var(--p-rule);
         border-radius: 6px; padding: 14px;
-        color: #888; font-size: 12px; text-align: center;
+        color: var(--p-ink-3); font-size: 12px; text-align: center;
       }
       .preview-loading {
         display: flex; align-items: center; gap: 8px;
-        color: #888; font-size: 13px; padding: 14px;
+        color: var(--p-ink-3); font-size: 13px; padding: 14px;
       }
-      .preview-empty { color: #666; font-size: 12px; padding: 14px 0; }
+      .preview-empty { color: var(--p-ink-4); font-size: 12px; padding: 14px 0; }
 
       .form-block { display: flex; flex-direction: column; gap: 6px; }
       .block-label {
-        color: #aaa; font-size: 11px; font-weight: 500;
+        color: var(--p-ink-2); font-size: 11px; font-weight: 600;
         text-transform: uppercase; letter-spacing: 0.5px;
       }
-      .form-block.evaluation { display: flex; flex-direction: row; gap: 8px; align-items: flex-start; }
-      .form-group { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+      .form-block.evaluation { display: flex; flex-direction: row; gap: 12px; align-items: flex-start; }
+      .form-group { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
       label {
-        color: #aaa; font-size: 11px; font-weight: 500;
+        color: var(--p-ink-2); font-size: 11px; font-weight: 600;
         text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
       }
 
       textarea#note-input {
         width: 100%; min-height: 56px;
-        background: #252525; border: 1px solid #333;
-        border-radius: 6px; color: #e8e8e8;
+        background: var(--p-surface); border: 1px solid var(--p-rule);
+        border-radius: 6px; color: var(--p-ink);
         font-family: inherit; font-size: 13px;
         padding: 8px 10px; resize: vertical;
-        outline: none; transition: border-color 0.15s;
+        outline: none; transition: border-color 0.15s, box-shadow 0.15s;
       }
-      textarea#note-input:focus { border-color: #0ea5e9; }
+      textarea#note-input::placeholder { color: var(--p-ink-4); }
+      textarea#note-input:focus { border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(42,102,80,0.15); }
 
       select {
-        background: #2a2a2a; border: 1px solid #444; color: #fff;
+        background: var(--p-surface); border: 1px solid var(--p-rule); color: var(--p-ink);
         padding: 8px; border-radius: 6px; font-size: 12px;
         width: 100%; font-family: inherit; cursor: pointer;
         transition: border-color 0.2s;
       }
-      select:hover { border-color: #666; }
-      select:focus { outline: none; border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,0.1); }
+      select:hover { border-color: var(--p-ink-3); }
+      select:focus { outline: none; border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(42,102,80,0.15); }
 
       /* Combobox */
       .combobox { position: relative; display: flex; }
       .combobox input[type="text"] {
-        flex: 1; min-width: 0; background: #2a2a2a;
-        border: 1px solid #444; border-right: none; color: #fff;
+        flex: 1; min-width: 0; background: var(--p-surface);
+        border: 1px solid var(--p-rule); border-right: none; color: var(--p-ink);
         padding: 8px; border-radius: 6px 0 0 6px;
         font-size: 12px; font-family: inherit; transition: border-color 0.2s;
       }
       .combobox-toggle {
-        background: #2a2a2a; border: 1px solid #444; border-left: none;
-        color: #888; padding: 0 8px; border-radius: 0 6px 6px 0;
+        background: var(--p-surface); border: 1px solid var(--p-rule); border-left: none;
+        color: var(--p-ink-3); padding: 0 8px; border-radius: 0 6px 6px 0;
         cursor: pointer; font-size: 11px; transition: border-color 0.2s;
       }
       .combobox:focus-within input[type="text"],
-      .combobox:focus-within .combobox-toggle { border-color: #0ea5e9; }
-      .combobox input[type="text"]:focus { outline: none; box-shadow: 0 0 0 3px rgba(14,165,233,0.1); }
-      .combobox-toggle:hover { color: #fff; }
+      .combobox:focus-within .combobox-toggle { border-color: var(--p-accent); }
+      .combobox input[type="text"]:focus { outline: none; box-shadow: 0 0 0 3px rgba(42,102,80,0.15); }
+      .combobox-toggle:hover { color: var(--p-ink); }
 
       .combobox-list {
         display: none; position: absolute; top: calc(100% + 3px); left: 0; right: 0;
-        background: #222; border: 1px solid #555; border-radius: 6px;
+        background: rgba(230, 243, 234, 0.95);
+        backdrop-filter: blur(12px) saturate(140%);
+        -webkit-backdrop-filter: blur(12px) saturate(140%);
+        border: 1px solid var(--p-rule); border-radius: 6px;
         list-style: none; z-index: 9999;
         max-height: 180px; overflow-y: auto;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+        box-shadow: 0 6px 18px rgba(20,60,40,0.25);
       }
       .combobox-list.open { display: block; }
-      .combobox-list li { padding: 7px 10px; color: #e5e5e5; font-size: 12px; cursor: pointer; font-family: inherit; }
-      .combobox-list li:hover { background: #0ea5e9; color: #fff; }
-      .combobox-list li.custom-entry { color: #aaa; font-style: italic; }
+      .combobox-list li { padding: 7px 10px; color: var(--p-ink); font-size: 12px; cursor: pointer; font-family: inherit; }
+      .combobox-list li:hover { background: var(--p-accent); color: var(--p-on-accent); }
+      .combobox-list li.custom-entry { color: var(--p-ink-3); font-style: italic; }
 
       /* Cast notice */
       .cast-notice { min-height: 0; }
       .notice { font-size: 11px; line-height: 1.4; }
-      .notice.ok   { color: #4ade80; }
-      .notice.warn { color: #f0c040; }
+      .notice.ok   { color: var(--p-accent-ink); }
+      .notice.warn { color: #8a5a00; }
 
       /* Footer meta */
       .footer-meta { display: flex; align-items: center; justify-content: space-between; }
       .nostr-status { display: flex; align-items: center; gap: 6px; }
-      .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; flex-shrink: 0; }
-      .status-dot.connected { background: #22c55e; }
-      .status-text { font-size: 11px; color: #888; }
+      .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p-ink-4); flex-shrink: 0; }
+      .status-dot.connected { background: var(--p-accent); }
+      .status-text { font-size: 11px; color: var(--p-ink-3); }
       .publish-mode-slider { display: flex; align-items: center; }
       .slider-track {
         position: relative; display: grid; grid-template-columns: repeat(3, 1fr);
-        background: #252525; border: 1px solid #3a3a3a; border-radius: 8px;
+        background: var(--p-surface-2); border: 1px solid var(--p-rule); border-radius: 8px;
         overflow: hidden; height: 28px; width: 174px;
       }
       .slider-pill {
         position: absolute; top: 2px; bottom: 2px; left: 2px;
-        width: calc(33.333% - 2px); background: #0ea5e9; border-radius: 6px;
+        width: calc(33.333% - 2px); background: var(--p-accent); border-radius: 6px;
         pointer-events: none;
         transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
         will-change: transform;
       }
       .slider-seg {
         position: relative; z-index: 1; background: none; border: none;
-        color: #888; font-size: 10px; font-weight: 500; cursor: pointer;
+        color: var(--p-ink-3); font-size: 10px; font-weight: 500; cursor: pointer;
         padding: 0 4px; display: flex; align-items: center; justify-content: center;
         gap: 2px; white-space: nowrap; transition: color 0.15s; font-family: inherit;
       }
-      .slider-seg:hover:not(:disabled) { color: #ddd; }
-      .slider-seg.active { color: #fff; font-weight: 600; }
+      .slider-seg:hover:not(:disabled) { color: var(--p-ink); }
+      .slider-seg.active { color: var(--p-on-accent); font-weight: 600; }
       .slider-seg:disabled { opacity: 0.4; cursor: not-allowed; }
       .publish-mode-slider.guest .slider-seg:not(#seg-local) { opacity: 0.4; cursor: not-allowed; }
-      .slider-seg:focus-visible { outline: 2px solid #0ea5e9; outline-offset: -2px; border-radius: 6px; }
+      .slider-seg:focus-visible { outline: 2px solid var(--p-accent); outline-offset: -2px; border-radius: 6px; }
 
-      .eval-listbox {
-        list-style: none; background: #2a2a2a; border: 1px solid #444;
-        border-radius: 6px; overflow-y: auto; max-height: 130px;
-        padding: 2px 0; margin: 0; outline: none;
+      /* ── EQ slider (Interest + Ethics) ─────────────────────────────────── */
+      .pop-eq {
+        display: grid;
+        grid-template-columns: 28px 1fr;
+        gap: 10px;
+        height: 170px;
+        align-items: stretch;
       }
-      .eval-listbox:focus { border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,0.1); }
-      .eval-option {
-        padding: 5px 10px; font-size: 12px; color: #bbb; cursor: pointer;
-        user-select: none; transition: background 0.1s, color 0.1s;
+      .pop-eq-slot {
+        position: relative;
+        width: 28px;
+        border-radius: 6px;
+        background: var(--p-surface);
+        border: 1px solid var(--p-rule);
+        box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.04);
+        outline: none;
+        overflow: hidden;
+        touch-action: none;
+        cursor: pointer;
       }
-      .eval-option:hover { background: #353535; color: #fff; }
-      .eval-option.selected { background: #0c4a6e; color: #7dd3fc; font-weight: 600; }
+      .pop-eq-slot:focus-visible { box-shadow: 0 0 0 3px rgba(42,102,80,0.4); border-color: var(--p-accent); }
+      .pop-eq-track {
+        position: absolute;
+        left: 50%; top: 10px; bottom: 10px;
+        width: 4px;
+        margin-left: -2px;
+        background: var(--p-surface-2);
+        border-radius: 2px;
+        box-shadow: inset 0 0 0 1px var(--p-rule-soft);
+        pointer-events: none;
+      }
+      .pop-eq-fill {
+        position: absolute;
+        left: 50%; bottom: 10px;
+        width: 4px;
+        margin-left: -2px;
+        background: var(--p-accent);
+        border-radius: 2px;
+        opacity: 0.85;
+        pointer-events: none;
+        /* top is set inline so the fill ends at the thumb's center
+           (which sits at bottom: pct%), not pct% above bottom:10px. */
+      }
+      .pop-eq-ticks {
+        position: absolute;
+        left: 4px; right: 4px;
+        top: 10px; bottom: 10px;
+        pointer-events: none;
+      }
+      .pop-eq-tick {
+        position: absolute;
+        left: 0; right: 0;
+        height: 1px;
+        background: var(--p-rule);
+        opacity: 0.7;
+      }
+      .pop-eq-thumb {
+        position: absolute;
+        left: 50%;
+        width: 22px; height: 11px;
+        transform: translate(-50%, 50%);
+        background: var(--p-ink);
+        border-radius: 2px;
+        box-shadow:
+          0 1px 2px rgba(0, 0, 0, 0.35),
+          inset 0 1px 0 rgba(255, 255, 255, 0.18),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+        cursor: grab;
+        z-index: 2;
+        pointer-events: none;
+      }
+      .pop-eq-slot:active .pop-eq-thumb { cursor: grabbing; }
+      .pop-eq-thumb-groove {
+        position: absolute;
+        left: 3px; right: 3px;
+        top: 50%; height: 1px;
+        margin-top: -0.5px;
+        background: var(--p-ink-3);
+        opacity: 0.7;
+      }
+      .pop-eq-labels {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 2px 0;
+        font-size: 11.5px;
+        line-height: 1;
+        color: var(--p-ink-3);
+      }
+      .pop-eq-label {
+        height: 11px;
+        display: flex; align-items: center;
+        cursor: pointer;
+        transition: color .12s, font-weight .12s;
+      }
+      .pop-eq-label:hover { color: var(--p-ink-2); }
+      .pop-eq-label.selected { color: var(--p-ink); font-weight: 600; }
 
       .link-btn {
-        background: none; border: none; color: #0ea5e9;
+        background: none; border: none; color: var(--p-accent-ink);
         font-size: 11px; cursor: pointer; padding: 0 0 0 6px;
         text-decoration: underline; font-family: inherit; line-height: 1;
       }
-      .link-btn:hover { color: #38bdf8; }
+      .link-btn:hover { color: var(--p-accent); }
 
       /* Buttons */
       .btn {
@@ -1378,18 +1589,19 @@ export class DiscernedOverlay extends HTMLElement {
         font-family: inherit;
       }
       .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-      .btn:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-      .btn-secondary { background: #2a2a2a; color: #fff; border: 1px solid #444; }
-      .btn-secondary:not(:disabled):hover { background: #333; }
-      .btn-primary { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); color: #fff; }
-      .btn-primary:not(:disabled):hover { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); }
+      .btn:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--p-cta-shadow); }
+      .btn-secondary { background: var(--p-surface); color: var(--p-ink); border: 1px solid var(--p-rule); }
+      .btn-secondary:not(:disabled):hover { background: var(--p-surface-2); }
+      .btn-primary { background: var(--p-cta-bg); color: var(--p-cta-ink); }
+      .btn-primary:not(:disabled):hover { background: #1d2e25; }
       .btn-clip {
         width: 100%;
-        background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); color: #fff;
+        background: var(--p-cta-bg); color: var(--p-cta-ink);
+        box-shadow: 0 2px 8px var(--p-cta-shadow);
       }
-      .btn-clip:not(:disabled):hover { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); }
-      .btn-ghost { background: #252525; color: #888; border: 1px solid #333; }
-      .btn-ghost:hover { background: #2a2a2a; color: #e8e8e8; }
+      .btn-clip:not(:disabled):hover { background: #1d2e25; }
+      .btn-ghost { background: var(--p-surface); color: var(--p-ink-3); border: 1px solid var(--p-rule); }
+      .btn-ghost:hover { background: var(--p-surface-2); color: var(--p-ink); }
       .btn .icon { font-size: 22px; }
       .btn .label { font-size: 13px; }
       .btn .sublabel { font-size: 11px; opacity: 0.7; font-weight: 400; }
@@ -1400,114 +1612,116 @@ export class DiscernedOverlay extends HTMLElement {
         text-align: center; padding: 28px 20px; gap: 14px;
       }
       .gate-icon { font-size: 40px; }
-      .gate-title { font-size: 15px; font-weight: 600; color: #fff; }
-      .gate-desc { font-size: 12px; color: #888; line-height: 1.6; max-width: 320px; }
-      .gate-btn { width: 100%; max-width: 280px; }
+      .gate-title { font-size: 15px; font-weight: 600; color: var(--p-ink); }
+      .gate-desc  { font-size: 12px; color: var(--p-ink-2); line-height: 1.6; max-width: 320px; }
+      .gate-btn   { width: 100%; max-width: 280px; }
 
       /* Identity */
       .identity-body { display: flex; flex-direction: column; gap: 14px; }
-      .identity-tabs { display: flex; gap: 4px; border-bottom: 1px solid #333; }
+      .identity-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--p-rule); }
       .tab-btn {
         background: none; border: none; border-bottom: 2px solid transparent;
-        color: #888; font-size: 12px; font-weight: 600;
+        color: var(--p-ink-3); font-size: 12px; font-weight: 600;
         padding: 7px 14px; cursor: pointer; margin-bottom: -1px;
         transition: color 0.15s, border-color 0.15s;
       }
-      .tab-btn:hover { color: #e8e8e8; }
-      .tab-btn.active { color: #0ea5e9; border-bottom-color: #0ea5e9; }
+      .tab-btn:hover { color: var(--p-ink); }
+      .tab-btn.active { color: var(--p-accent); border-bottom-color: var(--p-accent); }
       .identity-panel { display: flex; flex-direction: column; gap: 10px; }
-      .panel-desc { font-size: 12px; color: #888; line-height: 1.6; }
-      .panel-desc a { color: #a78bfa; text-decoration: none; }
+      .panel-desc { font-size: 12px; color: var(--p-ink-2); line-height: 1.6; }
+      .panel-desc a { color: var(--p-accent-ink); text-decoration: none; }
       .panel-desc a:hover { text-decoration: underline; }
-      .panel-desc code { background: #252525; border: 1px solid #333; border-radius: 3px; padding: 1px 5px; font-size: 0.9em; color: #a78bfa; }
-      .panel-warning { background: #2a1f00; border: 1px solid #6b4a00; border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #f0c040; line-height: 1.5; }
+      .panel-desc code { background: var(--p-surface); border: 1px solid var(--p-rule); border-radius: 3px; padding: 1px 5px; font-size: 0.9em; color: var(--p-accent-ink); }
+      .panel-warning { background: rgba(240, 192, 64, 0.18); border: 1px solid rgba(180, 130, 0, 0.45); border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #5c3d00; line-height: 1.5; }
       textarea {
-        width: 100%; background: #252525; border: 1px solid #3a3a3a;
-        border-radius: 6px; color: #e8e8e8;
+        width: 100%; background: var(--p-surface); border: 1px solid var(--p-rule);
+        border-radius: 6px; color: var(--p-ink);
         font-family: monospace; font-size: 12px;
         padding: 10px; resize: vertical; min-height: 56px;
         outline: none; transition: border-color 0.15s;
       }
-      textarea:focus { border-color: #555; }
+      textarea:focus { border-color: var(--p-accent); }
       input[type="password"] {
-        width: 100%; background: #252525; border: 1px solid #3a3a3a;
-        border-radius: 6px; color: #e8e8e8;
+        width: 100%; background: var(--p-surface); border: 1px solid var(--p-rule);
+        border-radius: 6px; color: var(--p-ink);
         font-size: 13px; padding: 10px;
         outline: none; transition: border-color 0.15s; font-family: inherit;
       }
-      input[type="password"]:focus { border-color: #555; }
+      input[type="password"]:focus { border-color: var(--p-accent); }
       .identity-status { font-size: 12px; min-height: 16px; display: flex; align-items: center; gap: 6px; }
-      .identity-status.error { color: #f87171; }
-      .identity-status.ok    { color: #4ade80; }
-      .identity-status.spin  { color: #a78bfa; }
+      .identity-status.error { color: #b91c1c; }
+      .identity-status.ok    { color: var(--p-accent-ink); }
+      .identity-status.spin  { color: var(--p-ink-2); }
       .spinner-inline {
         display: inline-block; width: 12px; height: 12px; flex-shrink: 0;
-        border: 2px solid #555; border-top-color: #a78bfa;
+        border: 2px solid var(--p-rule); border-top-color: var(--p-accent);
         border-radius: 50%; animation: spin 0.7s linear infinite;
       }
 
       /* Settings */
       .settings-body { gap: 12px; }
       .settings-card {
-        background: #232323; border: 1px solid #2a2a2a;
+        background: var(--p-surface); border: 1px solid var(--p-rule);
         border-radius: 8px; padding: 12px;
         display: flex; flex-direction: column; gap: 8px;
       }
-      .settings-card.warning { background: #2a1f00; border-color: #6b4a00; }
+      .settings-card.warning { background: rgba(240, 192, 64, 0.18); border-color: rgba(180, 130, 0, 0.45); }
       .card-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-      .card-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-      .card-title { font-size: 13px; font-weight: 600; color: #f0c040; }
-      .card-desc { font-size: 12px; color: #b89040; line-height: 1.5; }
-      .card-value { font-size: 13px; color: #e8e8e8; }
-      .card-value.ok { color: #4ade80; }
-      .profile-id { font-size: 12px; color: #888; font-family: monospace; background: #1a1a1a; border-radius: 4px; padding: 6px 8px; word-break: break-all; }
-      .usage-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #888; }
+      .card-label { font-size: 11px; color: var(--p-ink-3); text-transform: uppercase; letter-spacing: 0.5px; }
+      .card-title { font-size: 13px; font-weight: 600; color: #5c3d00; }
+      .card-desc  { font-size: 12px; color: #6f4b00; line-height: 1.5; }
+      .card-value { font-size: 13px; color: var(--p-ink); }
+      .card-value.ok { color: var(--p-accent-ink); }
+      .profile-id { font-size: 12px; color: var(--p-ink-2); font-family: monospace; background: var(--p-surface-2); border-radius: 4px; padding: 6px 8px; word-break: break-all; }
+      .usage-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--p-ink-2); }
       .usage-row-link { background: none; border: none; width: 100%; cursor: pointer; border-radius: 4px; padding: 2px 4px; margin: -2px -4px; transition: background 0.15s; font-family: inherit; }
-      .usage-row-link:hover { background: #2a2a2a; color: #e8e8e8; }
-      .usage-row-link:hover .usage-value { color: #7dd3fc; }
-      .usage-value { color: #e8e8e8; font-weight: 600; }
-      .pin-unlock summary { font-size: 12px; color: #888; cursor: pointer; }
+      .usage-row-link:hover { background: var(--p-surface-2); color: var(--p-ink); }
+      .usage-row-link:hover .usage-value { color: var(--p-accent-ink); }
+      .usage-value { color: var(--p-ink); font-weight: 600; }
+      .pin-unlock summary { font-size: 12px; color: var(--p-ink-3); cursor: pointer; }
       .pin-row { display: flex; gap: 6px; margin-top: 6px; }
-      .pin-row input { flex: 1; background: #252525; border: 1px solid #3a3a3a; border-radius: 4px; color: #e8e8e8; font-size: 12px; padding: 6px 8px; outline: none; }
+      .pin-row input { flex: 1; background: var(--p-surface); border: 1px solid var(--p-rule); border-radius: 4px; color: var(--p-ink); font-size: 12px; padding: 6px 8px; outline: none; }
       .pin-row .btn { padding: 6px 10px; font-size: 12px; }
-      .pin-error { font-size: 12px; color: #f87171; margin-top: 4px; }
+      .pin-error { font-size: 12px; color: #b91c1c; margin-top: 4px; }
       .toggle-row { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
-      .toggle-row input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; accent-color: #0ea5e9; width: 14px; height: 14px; cursor: pointer; }
+      .toggle-row input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; accent-color: var(--p-accent); width: 14px; height: 14px; cursor: pointer; }
       .toggle-label { display: flex; flex-direction: column; gap: 2px; }
-      .toggle-title { font-size: 12px; color: #e8e8e8; }
-      .toggle-desc  { font-size: 11px; color: #888; line-height: 1.45; }
+      .toggle-title { font-size: 12px; color: var(--p-ink); }
+      .toggle-desc  { font-size: 11px; color: var(--p-ink-3); line-height: 1.45; }
 
       /* Loading overlay */
       .loading {
         position: absolute; inset: 0;
-        background: rgba(26,26,26,0.95);
+        background: rgba(230, 243, 234, 0.92);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 14px;
       }
       .spinner {
         width: 44px; height: 44px;
-        border: 4px solid #333; border-top-color: #0ea5e9;
+        border: 4px solid var(--p-surface-2); border-top-color: var(--p-accent);
         border-radius: 50%; animation: spin 0.8s linear infinite;
       }
       .spinner-small {
         width: 16px; height: 16px;
-        border: 2px solid #333; border-top-color: #0ea5e9;
+        border: 2px solid var(--p-surface-2); border-top-color: var(--p-accent);
         border-radius: 50%; animation: spin 0.8s linear infinite;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
-      .loading p { color: #aaa; font-size: 14px; }
-      .success { color: #22c55e; font-size: 18px; font-weight: 600; }
-      .error   { color: #ef4444; font-size: 18px; font-weight: 600; }
+      .loading p { color: var(--p-ink-2); font-size: 14px; }
+      .success { color: var(--p-accent-ink); font-size: 18px; font-weight: 600; }
+      .error   { color: #b91c1c; font-size: 18px; font-weight: 600; }
       .open-library-btn {
         margin-top: 10px; background: none; border: none; padding: 0;
-        color: #3b82f6; font-size: 13px; cursor: pointer; text-decoration: underline;
+        color: var(--p-accent-ink); font-size: 13px; cursor: pointer; text-decoration: underline;
       }
-      .open-library-btn:hover { color: #60a5fa; }
+      .open-library-btn:hover { color: var(--p-accent); }
       .dismiss-btn {
         margin-top: 8px; background: none; border: none; padding: 0;
-        color: #666; font-size: 12px; cursor: pointer; text-decoration: underline;
+        color: var(--p-ink-3); font-size: 12px; cursor: pointer; text-decoration: underline;
       }
-      .dismiss-btn:hover { color: #aaa; }
+      .dismiss-btn:hover { color: var(--p-ink); }
     `;
   }
 }
