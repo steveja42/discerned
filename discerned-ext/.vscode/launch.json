@@ -39,15 +39,12 @@
       ]
     },
         {
-      "name": "Debug: Brave (default)",
+      "name": "Debug: Brave (main-default)",
       "type": "chrome",
       "request": "launch",
       "url": "https://example.com/",
       "webRoot": "${workspaceFolder}",
-      /* --- Path for Windows --- */
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
-      /* --- Path for macOS (Uncomment if needed) --- */
-      // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
       "userDataDir": "C:\\Users\\steve\\AppData\\Local\\BraveSoftware\\Brave-Browser\\User Data",
       "resolveSourceMapLocations": [
         "${workspaceFolder}/**",
@@ -56,8 +53,8 @@
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
         "--no-first-run",
+        "--remote-debugging-port=9222",
         "--profile-directory=Default",
-        "--remote-debugging-port=9222"
       ]
     },
     {
@@ -66,10 +63,7 @@
       "request": "launch",
       "url": "https://example.com/",
       "webRoot": "${workspaceFolder}",
-      /* --- Path for Windows --- */
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
-      /* --- Path for macOS (Uncomment if needed) --- */
-      // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
       "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave",
       "resolveSourceMapLocations": [
         "${workspaceFolder}/**",
@@ -78,7 +72,8 @@
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
         "--no-first-run",
-        "--remote-debugging-port=9222"
+        "--remote-debugging-port=9222",
+        "--profile-directory=brave-no-nsec",
       ]
     },
     {
@@ -89,8 +84,6 @@
       "webRoot": "${workspaceFolder}",
       /* --- Path for Windows --- */
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
-      /* --- Path for macOS (Uncomment if needed) --- */
-      // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
       "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave_nip07",
       "resolveSourceMapLocations": [
         "${workspaceFolder}/**",
