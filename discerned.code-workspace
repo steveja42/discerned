@@ -23,7 +23,7 @@
       "**/legacy": true,
       "**/marketing": true
     },
-    "typescript.tsdk": "discerned-web/node_modules/typescript/lib",
+    "js/ts.tsdk.path": "discerned-web/node_modules/typescript/lib",
     "eslint.workingDirectories": [
       { "directory": "discerned-ext", "changeProcessCWD": true },
       { "directory": "discerned-web", "changeProcessCWD": true }
@@ -35,7 +35,7 @@
       {
         "name": "🚀 Debug everything (Brave + extension + web)",
         "configurations": [
-          "Debug: Brave (default)",
+          "Debug: Brave (main-default)",
           "Attach to Chrome (shared with extension debugger)"
         ],
         "stopAll": true,
