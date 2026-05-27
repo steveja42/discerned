@@ -62,5 +62,10 @@ export default defineConfig({
       testMatch: /bsky-visual\.spec\.ts/,
       retries: 0,
     },
+    {
+      name: 'goodreads-visual',
+      testMatch: /goodreads-visual\.spec\.ts/,
+      retries: 0,
+    },
   ],
 });

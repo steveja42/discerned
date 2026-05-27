@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pnpm type-check:*)"
+      "Bash(pnpm type-check:*)",
+      "Bash(GOODREADS=1 PWDEBUG_HEADLESS_NEW=1 pnpm exec playwright test -c tests/e2e/playwright.config.ts --project=goodreads-visual)"
     ]
   }
 }

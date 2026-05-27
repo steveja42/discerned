@@ -471,6 +471,7 @@ async function extractSelection(): Promise<Capture> {
   // Twitter GIFs and videos are <video poster="..."> — convert to <img> so they
   // survive sanitisation (which drops <video> as a non-allowed tag).
   substituteVideosWithPosters(fragment);
+  substituteStarRatings(fragment);
   const sanitized = sanitizeFragment(fragment);
   log(LL.DEBUG, `Discerned: extractSelection — after sanitize: html=${sanitized.length} chars`, 'url:', url);
   const context = extractContext(range);
@@ -1146,6 +1147,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     removeMarked(clone);
     stripSizeMarkers(clone);
     substituteVideosWithPosters(clone);
+    substituteStarRatings(clone);
     tagSemanticStructure(clone);
     const imgsBefore = clone.querySelectorAll('img').length;
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
@@ -1176,6 +1178,18 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     const sizeCleanup = annotateLiveImageSizes(layoutEl);
     // A tagger-supplied root is already the intended scope — don't widen it.
     const expanded = siteTaggerRoot ? layoutEl : maybeExpandToFeed(layoutEl);
+    // When a site tagger has scoped the capture root, clear EXCL markers on
+    // elements inside it: the tagger authoritatively said this is content,
+    // so a sticky-positioned cover/sidebar inside that root is content too
+    // (e.g. Goodreads's <div class="Sticky"> wrapping the book cover).
+    if (siteTaggerRoot) {
+      siteTaggerRoot.querySelectorAll(`[${EXCL_MARKER}]`).forEach(el => el.removeAttribute(EXCL_MARKER));
+      // After unmasking, re-promote the tagger's own excludes — elements
+      // stamped with `dx-excl` are interactive widgets we know don't belong
+      // in the captured clip (Goodreads's "Want to Read" / "Rate this book"
+      // BookActions row, mobile-mirror actions, follow buttons, etc.).
+      siteTaggerRoot.querySelectorAll('.dx-excl').forEach(el => el.setAttribute(EXCL_MARKER, '1'));
+    }
     const clone = deepCloneWithShadow(expanded);
     sizeCleanup();
     cleanup();
@@ -1183,6 +1197,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     removeMarked(clone);
     stripSizeMarkers(clone);
     substituteVideosWithPosters(clone);
+    substituteStarRatings(clone);
     tagSemanticStructure(clone);
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
     const inlined = await inlineAllImages(clone.innerHTML.trim());
@@ -1222,6 +1237,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const bodyClone = cloneBodyClean();
   stripSizeMarkers(bodyClone);
   substituteVideosWithPosters(bodyClone);
+  substituteStarRatings(bodyClone);
   tagSemanticStructure(bodyClone);
   sanitiseTreeInPlace(bodyClone);
   const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
@@ -1284,6 +1300,7 @@ async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
   // orphaned text nodes that querySelectorAll('script') can't reach.
   const bodyClone = cloneBodyClean();
   substituteVideosWithPosters(bodyClone);
+  substituteStarRatings(bodyClone);
   sanitiseTreeInPlace(bodyClone, opts.stripInlineStyles);
   const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
   return {
@@ -1544,11 +1561,216 @@ function commonWrapper(a: Element, b: Element, bound: Element): Element | null {
   return null;
 }
 
+/**
+ * Tag goodreads.com book pages. Stable anchors (className prefixes survive
+ * Next.js builds because Goodreads uses BEM-style names like
+ * `BookPageTitleSection__title`, not hashed CSS-modules):
+ *   - `main.BookPage`                              the page root
+ *   - `.BookPage__leftColumn` / `.BookPage__rightColumn`  the two columns
+ *   - `.BookPage__bookCover .BookCard`             the cover image card
+ *   - `.BookPageTitleSection`                      series h3 + title h1
+ *   - `.BookPageMetadataSection__contributor`      author byline
+ *   - `.BookPageMetadataSection__ratingStats`      stars + 3.85 + counts
+ *   - `[data-testid="genresList"]`                 the genres pill list
+ *   - `.AuthorPreview`                             the "About the author" card
+ *
+ * Stamps `dx-book-hero` on a synthesized row holding cover + title block, so
+ * CSS can lay them out side-by-side (Goodreads achieves this via two separate
+ * columns whose layout doesn't survive sanitisation). Stamps `dx-genres` so
+ * the genre pills get inline-block spacing back. Stamps `dx-author-card` on
+ * the AuthorPreview so the avatar + name lay out as a flex row.
+ *
+ * Returns `main.BookPage` (or the gridContainer) as the narrowed capture root
+ * so the clip excludes Goodreads's site header, footer, ads, and the long
+ * reviews list (which the generic layout finder otherwise sucks in — captured
+ * div was 75k chars).
+ */
+function tagGoodreads(root: Document | Element): Element | void {
+  // /review/list/ is the legacy My Books server-rendered table — completely
+  // different layout from the Next.js BookPage. Delegate to a separate path.
+  if (/\/review\/list\//i.test(window.location.pathname)) {
+    return tagGoodreadsList(root);
+  }
+
+  // Exclude interactive widgets that have no value in a static clip — the
+  // "Want to Read" dropdown, "Rate this book" star picker, "Shop this series"
+  // affiliate link, the share / mobile-actions duplicates, follow buttons,
+  // and the right-column mobile-cover mirror. The capture loop honours dx-excl
+  // as an EXCL marker after applying its own sticky/fixed unmask.
+  root.querySelectorAll(
+    '.BookActions, .BookRatingStars, .BookPage__share, ' +
+    '.BookPageMetadataSection__mobileBookActions, .AuthorFollowButton, ' +
+    '.BookPageTitleSection__share, .BookPage__rightCover',
+  ).forEach(el => appendClass(el, 'dx-excl'));
+
+  // Mark cover image: the left-column book-cover holds the primary cover.
+  // (The right-column variant is a mobile-mirror that may not render visibly.)
+  const leftCoverImg = root.querySelector(
+    '.BookPage__leftColumn .BookPage__bookCover img, .BookPage__leftColumn .BookCard img',
+  );
+  if (leftCoverImg) appendClass(leftCoverImg, 'dx-book-cover');
+
+  // The title section sits in the right column. Stamp it so CSS can pair it
+  // with the cover via a parent flex container (.dx-book-hero) — see below.
+  const titleSection = root.querySelector('.BookPageTitleSection');
+  if (titleSection) appendClass(titleSection, 'dx-book-title');
+
+  // Stamp the contributor (author byline) row so the comma and links lay out
+  // inline rather than stacking from default block flow.
+  root.querySelectorAll('.BookPageMetadataSection__contributor').forEach(el => {
+    appendClass(el, 'dx-author');
+  });
+
+  // Stamp the rating stats row — stars on the left, 3.85 in the middle,
+  // ratings/reviews counts on the right. Inline-flex layout.
+  root.querySelectorAll('.BookPageMetadataSection__ratingStats, .RatingStatistics').forEach(el => {
+    appendClass(el, 'dx-stats');
+  });
+
+  // Genres list: stamp the <ul> so its <span> children get inline-block
+  // spacing back (otherwise "GenresScience FictionFiction..." with no gaps).
+  const genresList = root.querySelector(
+    '[data-testid="genresList"] ul, .BookPageMetadataSection__genres ul',
+  );
+  if (genresList) appendClass(genresList, 'dx-genres');
+
+  // AuthorPreview: avatar + (name + follower count) — flex row. The profile
+  // div is the two-column wrapper (avatar | container); stamp dx-author-card
+  // there so its direct children are exactly what CSS needs to flex.
+  root.querySelectorAll('.AuthorPreview .FeaturedPerson__profile').forEach(el => {
+    appendClass(el, 'dx-author-card');
+  });
+
+  // Narrow the capture to a hero block that contains the cover column, the
+  // title block, metadata, genres, and the author preview — but drops site
+  // chrome and the long reviews list. We return main.BookPage rather than
+  // the gridContainer so that the gridContainer is a CHILD of the captured
+  // root (it survives the layout-finder's innerHTML extraction, where the
+  // outermost element is discarded). dx-book-grid on the gridContainer
+  // gives CSS the flex anchor for cover-beside-title layout.
+  const grid = root.querySelector('.BookPage__gridContainer');
+  if (grid) appendClass(grid, 'dx-book-grid');
+  // Tag the left column (cover) and right column (content) so CSS can give
+  // them widths inside the dx-book-grid flex row.
+  const leftCol = root.querySelector('.BookPage__leftColumn');
+  if (leftCol) appendClass(leftCol, 'dx-book-cover-col');
+  const rightCol = root.querySelector('.BookPage__rightColumn');
+  if (rightCol) appendClass(rightCol, 'dx-book-content-col');
+  return root.querySelector('main.BookPage') ?? grid ?? undefined;
+}
+
+/**
+ * Tag the legacy /review/list/ "My Books" page. This is server-rendered Rails
+ * markup with a long-stable shape (the page predates Goodreads's Next.js
+ * rewrite). Anchors:
+ *   - `#columnContainer.myBooksPage`   the two-column body
+ *   - `#leftCol.reviewListLeft`        left navigation (excluded)
+ *   - `#rightCol`                      books table column
+ *   - `table#books`                    the books table
+ *   - `tr.bookalike.review`            each book row
+ *   - `td.field.cover img`             cover thumbnail (URL has _SY75_/_SX50_)
+ *
+ * Strategy: drop the left nav, all interactive admin widgets (batch edit,
+ * shelf settings, review form, ad slots), and hidden table columns. Rewrite
+ * cover thumbnail URLs to a larger size so they render readably. Return the
+ * `mainContent` block so we keep the page header (`<h1>My Books</h1>`).
+ */
+function tagGoodreadsList(root: Document | Element): Element | void {
+  // Drop the left navigation column entirely + interactive/admin widgets +
+  // ad slots + the per-page/sort/pagination footer + pre-hidden table columns.
+  root.querySelectorAll(
+    '#leftCol, #premiumAdTop, #shelfSettings, #batchEdit, #reviewForm, ' +
+    '#shelfChooser0, #controls, #pagestuff, #reorderConfirm, ' +
+    '.googleBannerAd, .responsiveSiteFooter, ' +
+    // Hidden table columns are duplicated in the DOM with inline display:none;
+    // the sanitiser strips inline styles so they'd otherwise become visible.
+    'th[style*="display: none"], td[style*="display: none"], ' +
+    // The cover cell contains a hover tooltip (book-tooltip / wtrButtonContainer)
+    // that's display:none on the live page but leaks visible after sanitisation
+    // — it pushes other columns into narrow strips. Drop them.
+    '.book-tooltip, .js-tooltip, .wtrButtonContainer, .ratingThanks, ' +
+    '.wtrPrompt, .wrongBookKindlePreviewScreen, .kindleCloudReader, ' +
+    '.addBookTipPreview, ' +
+    // Per-row edit/view/remove links column — interactive admin, not content.
+    'td.actions, th.actions, td.field.actions, th.field.actions, ' +
+    // Per-row "[edit]" inline links that punctuate cells (shelves, dates, etc).
+    'a.shelfChooserLink, a.floatingBoxLink, a.editLink, .actionsWrapper, ' +
+    // Phone-link icons that some sandboxed extensions inject into ISBN cells.
+    'a.gv-tel-link',
+  ).forEach(el => appendClass(el, 'dx-excl'));
+
+  // The cover cell wraps the tooltip inside a `.tooltipTrigger` div with
+  // `js-tooltipTrigger`; we want the <img> but not the trigger's tooltip
+  // child. The selector above kills the tooltip section; this is just a
+  // safety net for the wrapper class.
+  root.querySelectorAll('.tooltipTrigger > section').forEach(el => appendClass(el, 'dx-excl'));
+
+  // Goodreads emits a `<label>` inside every `<td>` ("avg rating", "my
+  // rating", "shelves", "review", "date read", "date added", ...) as a
+  // mobile-stacked screen-reader anchor. CSS hides them on desktop; the
+  // sanitiser strips that CSS, leaving the labels visible in every row.
+  // Excluding `<label>` globally would break form-rendering elsewhere, so
+  // restrict to labels inside a `tr.bookalike` table row.
+  root.querySelectorAll('tr.bookalike td > label').forEach(el => appendClass(el, 'dx-excl'));
+
+  // Mark the table + each row so CSS can re-apply table-like layout after
+  // sanitisation (which preserves <table>/<tr>/<td> but strips Goodreads's CSS).
+  const table = root.querySelector('table#books');
+  if (table) appendClass(table, 'dx-book-table');
+  root.querySelectorAll('tr.bookalike').forEach(el => appendClass(el, 'dx-book-row'));
+
+  // Rewrite cover thumbnail URLs to a larger size variant. Goodreads's CDN
+  // serves predictable size-suffixed JPEGs: `..._SY75_.jpg` = 75px tall,
+  // `..._SX50_.jpg` = 50px wide. Bump to ~120-150px for a readable list view.
+  root.querySelectorAll('td.cover img, td.field.cover img').forEach(img => {
+    const src = img.getAttribute('src');
+    if (!src) return;
+    const bigger = src.replace(/_S[XY](\d+)_/i, '_SY150_');
+    if (bigger !== src) img.setAttribute('src', bigger);
+  });
+
+  // Mark cover image + title cell so CSS can size them.
+  root.querySelectorAll('td.cover img, td.field.cover img').forEach(img => {
+    appendClass(img, 'dx-book-cover');
+  });
+
+  // Stamp dx-col-* on each visible column header AND cell so CSS column-width
+  // rules survive sanitisation (which strips Goodreads's `field cover` /
+  // `field title` class names — only `dx-*` and `tweet-*` survive).
+  const colMap: Record<string, string> = {
+    cover: 'dx-col-cover',
+    title: 'dx-col-title',
+    author: 'dx-col-author',
+    avg_rating: 'dx-col-avg-rating',
+    rating: 'dx-col-rating',
+    shelves: 'dx-col-shelves',
+    review: 'dx-col-review',
+    date_read: 'dx-col-date-read',
+    date_added: 'dx-col-date-added',
+  };
+  for (const [field, marker] of Object.entries(colMap)) {
+    root.querySelectorAll(`th.field.${field}, td.field.${field}`).forEach(el => {
+      appendClass(el, marker);
+    });
+  }
+
+  // Return the main content area. `.mainContent` wraps both the header
+  // (#leadercol with <h1>My Books</h1>) and the body (#columnContainer);
+  // returning it keeps the page title visible. The .mainContent class is
+  // discarded (it's the outermost element of innerHTML extraction), so we
+  // also stamp dx-book-list on it for any future targeting via a CHILD
+  // selector — but the columnContainer below it will carry the layout.
+  const columnContainer = root.querySelector('#columnContainer');
+  if (columnContainer) appendClass(columnContainer, 'dx-book-list');
+  return root.querySelector('.mainContent') ?? columnContainer ?? undefined;
+}
+
 type SiteTagger = (root: Document | Element) => Element | void;
 
 const SITE_TAGGERS: Array<{ match: (host: string) => boolean; tag: SiteTagger; name: string }> = [
   { name: 'primal', match: h => /(^|\.)primal\.net$/i.test(h), tag: tagPrimal },
   { name: 'bsky', match: h => /(^|\.)bsky\.app$/i.test(h), tag: tagBsky },
+  { name: 'goodreads', match: h => /(^|\.)goodreads\.com$/i.test(h), tag: tagGoodreads },
 ];
 
 /**
@@ -1785,6 +2007,25 @@ function isSafeImageSrc(src: string): boolean {
   return false;
 }
 
+/**
+ * Return a safe, absolute image src for storage, or null if the src is unsafe.
+ * Site-relative paths (e.g. Next.js's "/_next/image?url=...") are resolved
+ * against the source page's URL so the inliner can fetch them. Rejects
+ * data:* (non-image), javascript:, and other non-fetchable schemes.
+ */
+function resolveImageSrc(src: string): string | null {
+  const trimmed = src.trim();
+  if (!trimmed) return null;
+  if (isSafeImageSrc(trimmed)) return trimmed;
+  if (/^(javascript|vbscript|file|data):/i.test(trimmed)) return null;
+  try {
+    const abs = new URL(trimmed, window.location.href).toString();
+    return isSafeImageSrc(abs) ? abs : null;
+  } catch {
+    return null;
+  }
+}
+
 function isSafeHref(href: string): boolean {
   if (/^https?:\/\//i.test(href)) return true;
   if (href.startsWith('#')) return true;
@@ -1885,7 +2126,9 @@ function sanitiseElement(element: Element, stripStyles = false) {
       if (kept.length > 0) element.setAttribute('class', kept.join(' '));
       else element.removeAttribute('class');
     } else if (tagName === 'img' && name === 'src') {
-      if (!isSafeImageSrc(attr.value)) element.removeAttribute('src');
+      const resolved = resolveImageSrc(attr.value);
+      if (resolved) element.setAttribute('src', resolved);
+      else element.removeAttribute('src');
     } else if (tagName === 'a' && name === 'href') {
       const resolved = resolveHref(attr.value);
       if (resolved) {
@@ -1985,6 +2228,55 @@ function substituteVideosWithPosters(root: Element | DocumentFragment): void {
   });
 }
 
+/**
+ * Replace common CSS-sprite star-rating widgets with ★/☆ glyph runs.
+ *
+ * A widely-copied pattern (Goodreads, older Rails/jQuery sites, some review
+ * plugins) renders a 5-star rating as a container with `data-rating="N"`
+ * holding 5 sibling `<a>` or `<span>` elements with classes like `star on`
+ * and text content "1 of 5 stars". The text is for screen readers; CSS
+ * paints the sprite over it. After sanitisation strips classes and inline
+ * styles, the text leaks as visible "1 of 5 stars2 of 5 stars[ 3 of 5
+ * stars ]4 of 5 stars5 of 5 stars" garbage.
+ *
+ * Detection: any element with a `data-rating` attribute (or `data-stars`)
+ * whose value parses as 0-5, AND that contains text matching the "N of 5
+ * stars" pattern. Both conditions must hold to avoid false positives.
+ *
+ * Replacement: the container's children are replaced by a `<span
+ * class="dx-rating-stars">` holding two child spans (filled / empty) so
+ * the web app's CSS can colour them. Runs on the clone before sanitisation,
+ * so `data-rating` is available; the `dx-*` classes survive sanitisation.
+ */
+function substituteStarRatings(root: Element | DocumentFragment): void {
+  const STARS_TEXT_RE = /\d+\s+of\s+5\s+stars/i;
+  const candidates = (root as Element).querySelectorAll<HTMLElement>(
+    '[data-rating], [data-stars]',
+  );
+  for (const el of Array.from(candidates)) {
+    const raw = el.getAttribute('data-rating') ?? el.getAttribute('data-stars') ?? '';
+    const rating = parseFloat(raw);
+    if (!Number.isFinite(rating) || rating < 0 || rating > 5) continue;
+    // Require the "N of 5 stars" text inside — confirms this is the sprite
+    // widget and not some other use of data-rating (e.g. an analytics tag).
+    if (!STARS_TEXT_RE.test(el.textContent ?? '')) continue;
+    const filled = Math.round(rating);
+    const empty = 5 - filled;
+    while (el.firstChild) el.removeChild(el.firstChild);
+    const wrap = el.ownerDocument!.createElement('span');
+    wrap.className = 'dx-rating-stars';
+    const filledSpan = el.ownerDocument!.createElement('span');
+    filledSpan.className = 'dx-rating-filled';
+    filledSpan.textContent = '★'.repeat(filled);
+    const emptySpan = el.ownerDocument!.createElement('span');
+    emptySpan.className = 'dx-rating-empty';
+    emptySpan.textContent = '☆'.repeat(empty);
+    wrap.appendChild(filledSpan);
+    wrap.appendChild(emptySpan);
+    el.appendChild(wrap);
+  }
+}
+
 // Elements that render visible content on their own without text descendants.
 // Used by collapseEmpty to decide which elements survive the post-sanitisation
 // emptiness check.
@@ -2008,9 +2300,15 @@ function hasVisibleContent(node: Node): boolean {
  * the next visit. Catches font-awesome `<i>` empties left after class strip,
  * unwrapped custom-element shells, and Angular template wrappers that hold
  * only whitespace text. Preserves anything with text or visible-leaf media.
+ *
+ * Treats <svg> subtrees as opaque: <path>/<use>/<g> etc. have no text and
+ * aren't in VISIBLE_LEAF_TAGS, so naive recursion would strip them and leave
+ * empty <svg> shells (e.g. Goodreads's <use href="#...">-based rating stars).
+ * If the <svg> survived sanitisation, keep its children.
  */
 function collapseEmpty(root: Element): void {
   const walk = (el: Element): void => {
+    if (el.tagName.toLowerCase() === 'svg') return;
     Array.from(el.children).forEach(walk);
     if (!hasVisibleContent(el)) el.remove();
   };

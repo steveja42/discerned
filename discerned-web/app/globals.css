@@ -1453,6 +1453,165 @@ a { color: inherit; }
 .clip-body .dx-zaps-row + .dx-stats {
   display: none;
 }
+
+/* ── Goodreads book pages (dx-book-* markers stamped by tagGoodreads) ─────
+   Goodreads uses a two-column desktop grid: cover on the left, title +
+   metadata + genres + author on the right. Sanitisation strips the
+   original grid CSS, so we re-create the layout from the dx-* markers. */
+.clip-body .dx-book-grid {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  margin: 0 0 16px;
+}
+.clip-body .dx-book-cover-col {
+  flex: 0 0 200px;
+  max-width: 200px;
+}
+.clip-body .dx-book-cover-col img.dx-book-cover {
+  width: 100% !important;
+  max-width: 200px !important;
+  height: auto !important;
+  max-height: 320px !important;
+  border-radius: 6px;
+  margin: 0 !important;
+}
+.clip-body .dx-book-content-col {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* Genres pill list: restore inline-block spacing on each <span> child
+   (Genres label + each genre <a>) so they don't run together. */
+.clip-body .dx-genres {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+}
+.clip-body .dx-genres > span,
+.clip-body .dx-genres > li {
+  display: inline-flex;
+  align-items: baseline;
+  margin: 0;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+/* The first child is the "Genres" label span (no anchor inside); style it
+   distinctly from the pill anchors. */
+.clip-body .dx-genres > span:first-child {
+  font-weight: 600;
+  color: var(--ink-3);
+  margin-right: 4px;
+}
+.clip-body .dx-genres a {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--rule-soft);
+  border-radius: 12px;
+  font-size: 13px;
+  text-decoration: none;
+  color: var(--accent-ink);
+  white-space: nowrap;
+}
+.clip-body .dx-genres a span {
+  white-space: nowrap;
+}
+/* Author card under "About the author" — avatar on the left, name + bio
+   on the right (matches Goodreads's own layout). */
+.clip-body .dx-author-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 8px 0;
+}
+.clip-body .dx-author-card > :first-child {
+  flex: 0 0 auto;
+}
+.clip-body .dx-author-card > :first-child img {
+  width: 72px !important;
+  height: 72px !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  margin: 0 !important;
+}
+.clip-body .dx-author-card > :not(:first-child) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* "1,068 books10.7k followers" — Goodreads styles the inner span with a
+   "u-dot-before" pseudo-prefix that sanitisation strips. Re-add separation. */
+.clip-body .dx-author-card span > span {
+  margin-left: 8px;
+}
+/* Rating stars row: keep the 5 SVGs inline at a readable size. The dx-stats
+   rule above already gives the row inline-flex layout; we just need to size
+   the SVGs (sanitisation strips their CSS-driven width/height). */
+.clip-body .dx-stats svg[role="presentation"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* Goodreads /review/list/ "My Books" table view — book covers come from the
+   CDN at small sizes (the URL itself encodes _SY75_ / _SX50_). tagGoodreadsList
+   rewrites the URLs to _SY150_; this rule sizes the rendered image to match
+   so the cell stays compact and the rest of the row aligns. */
+.clip-body .dx-book-table img.dx-book-cover,
+.clip-body .dx-book-row img.dx-book-cover {
+  width: auto !important;
+  max-width: 100px !important;
+  max-height: 150px !important;
+  height: auto !important;
+  margin: 0 !important;
+  border-radius: 3px;
+}
+/* Star-rating glyphs produced by substituteStarRatings (capture.ts) — runs
+   on any element with `data-rating="N"` + "N of 5 stars" text content. The
+   transform inserts ★ for filled and ☆ for empty; CSS colours them. */
+.clip-body .dx-rating-stars {
+  display: inline-flex;
+  gap: 0;
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.clip-body .dx-rating-filled {
+  color: #e0a32f;
+}
+.clip-body .dx-rating-empty {
+  color: #c9c4ba;
+}
+
+/* Column widths for the My Books table. Goodreads's own CSS sets these via
+   class names that sanitisation strips; tagGoodreadsList stamps dx-col-*
+   markers (which survive) on every <th>/<td> so we can re-apply widths.
+   Strategy: fixed widths on predictable-width columns (cover, dates, stars);
+   the variable-width columns (title, author, review) share what's left.
+   `table-layout: auto` lets long titles still claim space while reserving
+   minimums for dates so they never wrap to one-letter-per-line. */
+.clip-body .dx-book-table { table-layout: auto; width: 100%; }
+.clip-body .dx-col-cover { width: 110px; padding: 6px; }
+.clip-body .dx-col-title { min-width: 140px; }
+.clip-body .dx-col-author { min-width: 110px; white-space: normal; }
+.clip-body .dx-col-avg-rating { width: 60px; text-align: center; white-space: nowrap; }
+.clip-body .dx-col-rating { width: 90px; white-space: nowrap; }
+.clip-body .dx-col-shelves { width: 70px; }
+.clip-body .dx-col-review { min-width: 120px; }
+.clip-body .dx-col-date-read { width: 100px; white-space: nowrap; }
+.clip-body .dx-col-date-added { width: 100px; white-space: nowrap; }
+/* Sibling text spans inside a dx-stats subtree butt against each other
+   ("30,550 ratings991 reviews", "1,068 books10.7k followers") because
+   sanitisation strips the Goodreads classes that gave them inline-flex gap.
+   Re-add separation generically: any text span that follows another text
+   span inside a dx-stats wrapper gets left margin. */
+.clip-body .dx-stats span + span:not(:has(svg)) {
+  margin-left: 8px;
+}
+
 .detail-thumb {
   width: 100%;
   max-height: 220px;
