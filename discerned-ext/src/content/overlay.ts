@@ -1697,6 +1697,9 @@ export class DiscernedOverlay extends HTMLElement {
         -webkit-backdrop-filter: blur(8px);
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 14px;
+        /* Sit above the EQ thumbs (z-index:2) and publish-mode slider segs (z-index:1)
+           which would otherwise poke through the saving/success/error veil. */
+        z-index: 10;
       }
       .spinner {
         width: 44px; height: 44px;
