@@ -118,6 +118,27 @@ export function createResourceNoteEvent(
   };
 }
 
+export interface ProfileMetadata {
+  name?: string;
+  nip05?: string;
+  about?: string;
+  picture?: string;
+}
+
+/**
+ * Create a Profile Metadata event (Kind 0). Used to publish the user's
+ * NIP-05 identifier (and display name) so any Nostr client can verify
+ * `name@discerned.online` against their pubkey.
+ */
+export function createProfileEvent(meta: ProfileMetadata): EventTemplate {
+  return {
+    kind: 0,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [['client', 'discerned']],
+    content: JSON.stringify(meta),
+  };
+}
+
 /**
  * Create an encrypted App Data event (Kind 30078) for private clips.
  * Tags are public — keep them minimal (no format/url leaks). The `d` tag matches the

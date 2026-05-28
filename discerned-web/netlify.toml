@@ -13,3 +13,13 @@
   PNPM_VERSION = "11"
   # Node 22 LTS is required by pnpm 11 (uses node:sqlite, introduced in Node 22).
   NODE_VERSION = "22"
+
+# NIP-05 verifier — must allow cross-origin GET so other Nostr clients can
+# verify alice@discerned.online identifiers. Cache 5 min so a new user becomes
+# visible quickly while still amortising lookup traffic.
+[[headers]]
+  for = "/.well-known/nostr.json"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Content-Type = "application/json; charset=utf-8"
+    Cache-Control = "public, max-age=300"

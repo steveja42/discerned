@@ -10,9 +10,17 @@
 
 import {
   CAST_INLINE_BODY_MAX_CHARS,
+  createProfileEvent,
   createQuoteNoteEvent,
   createResourceNoteEvent,
 } from '@/shared/nostr/events';
+import {
+  getCachedNip05,
+  localPartFor,
+  profileFor,
+  refreshNip05Cache,
+  type CachedNip05,
+} from './nip05-fetcher';
 import { prepareClipPayload } from '@/shared/nostr/encryption';
 import { publishWithMinimum, getRelayHealth } from './relay-manager';
 import {
@@ -180,6 +188,69 @@ async function seedCategories(): Promise<void> {
 
 restoreAuthState();
 seedCategories();
+void initNip05();
+
+// ── NIP-05 names map (kind-0 auto-publish) ──────────────────────────────────
+//
+// Source of truth: discerned-web/public/.well-known/nostr.json. The background
+// pulls it on startup and every 6h via chrome.alarms. When the user's hex
+// pubkey first appears in the map (or their local-part changes), republish
+// kind 0 so other Nostr clients display the verified identifier.
+
+const NIP05_ALARM = 'discerned-nip05-refresh';
+const NIP05_REFRESH_PERIOD_MIN = 6 * 60;
+
+function currentUserPubkeyHex(): string | null {
+  if (currentAuthState.type === 'nip46') return currentAuthState.pubkey;
+  if (currentAuthState.type === 'nsec') return currentAuthState.pubkey;
+  if (currentAuthState.type === 'pro') return currentAuthState.pubkey ?? null;
+  return null; // guest — don't bother publishing under an ephemeral key
+}
+
+async function publishKind0ForCurrentUser(cache: CachedNip05 | null): Promise<void> {
+  const pubkey = currentUserPubkeyHex();
+  if (!pubkey) return;
+  const local = localPartFor(cache, pubkey);
+  // local === null means we were just dropped from the map. Publish an empty
+  // nip05 string to explicitly retract the claim.
+  const nip05 = local ? `${local}@discerned.online` : '';
+  const profile = profileFor(cache, pubkey);
+  const template = createProfileEvent({
+    name: local ?? undefined,
+    nip05,
+    about: profile.about,
+    picture: profile.picture,
+  });
+  try {
+    const signed = await signEvent(template);
+    const result = await publishWithMinimum(signed, 2);
+    const health = getRelayHealth(result.results);
+    log(LL.NORMAL, '[nip05] published kind 0', { nip05, relays: `${health.healthy}/${health.total}` }, 'url:', 'background');
+  } catch (err) {
+    log(LL.WARN, '[nip05] kind 0 publish failed', err, 'url:', 'background');
+  }
+}
+
+async function syncNip05AndMaybePublish(): Promise<void> {
+  const result = await refreshNip05Cache(currentUserPubkeyHex());
+  if (result.changedForMe) {
+    log(LL.NORMAL, '[nip05] local-part changed', { from: result.oldLocal, to: result.newLocal }, 'url:', 'background');
+    await publishKind0ForCurrentUser(result.cache);
+  }
+}
+
+async function initNip05(): Promise<void> {
+  try {
+    await chrome.alarms.create(NIP05_ALARM, { periodInMinutes: NIP05_REFRESH_PERIOD_MIN });
+  } catch (err) {
+    log(LL.WARN, '[nip05] alarm create failed', err);
+  }
+  await syncNip05AndMaybePublish();
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === NIP05_ALARM) void syncNip05AndMaybePublish();
+});
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   log(LL.NORMAL, 'Discerned extension installed/updated');
@@ -309,9 +380,14 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
 
     case 'NIP07_DETECTED':
       if (message.hasNIP07 && currentAuthState.type === 'guest') {
-        currentAuthState = { type: 'pro', hasNIP07: true };
+        currentAuthState = { type: 'pro', hasNIP07: true, pubkey: message.pubkey };
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
         log(LL.NORMAL, 'NIP-07 extension detected — switching to pro mode');
+        void syncNip05AndMaybePublish();
+      } else if (message.hasNIP07 && currentAuthState.type === 'pro' && message.pubkey && !currentAuthState.pubkey) {
+        currentAuthState = { ...currentAuthState, pubkey: message.pubkey };
+        await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
+        void syncNip05AndMaybePublish();
       }
       if (message.hasNIP07 && senderTabId !== undefined && canonicalNIP07TabId === null) {
         canonicalNIP07TabId = senderTabId;
@@ -319,6 +395,13 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
         log(LL.DEBUG, `NIP-07 canonical signing tab: ${senderTabId}`);
       }
       return { success: true };
+
+    case 'GET_NIP05_FOR_ME': {
+      const cache = await getCachedNip05();
+      const pubkey = currentUserPubkeyHex();
+      const local = localPartFor(cache, pubkey);
+      return { success: true, data: { nip05: local ? `${local}@discerned.online` : null } };
+    }
 
     case 'CONNECT_NIP46':
       return handleConnectNip46(message.bunkerUri);
@@ -400,6 +483,7 @@ async function handleConnectNip46(bunkerUri: string): Promise<BackgroundResponse
       [STORAGE_KEYS.AUTH_STATE]: newState,
       [STORAGE_KEYS.NIP46_CLIENT_KEY]: result.clientKeyHex,
     });
+    void syncNip05AndMaybePublish();
     return { success: true, data: { pubkey: result.pubkey } };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Connection failed' };
@@ -422,6 +506,7 @@ async function handleConnectNsec(rawNsec: string, pin: string): Promise<Backgrou
       [STORAGE_KEYS.AUTH_STATE]: newState,
       [STORAGE_KEYS.NSEC_ENCRYPTED]: ncryptsec,
     });
+    void syncNip05AndMaybePublish();
     return { success: true, data: { pubkey: pubkeyHex } };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to save account key' };

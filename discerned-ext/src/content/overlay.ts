@@ -13,6 +13,13 @@ import { LL, log } from '@/shared/logger';
 import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
 import { showArticleHighlight, hideArticleHighlight } from './highlighter';
 import { npubEncode } from 'nostr-tools/nip19';
+import { getNIP07PublicKey } from '@/shared/nostr/auth';
+
+// Cached NIP-05 for the current user; populated lazily when the settings drawer
+// opens. Settings re-renders read from here so we don't message the background
+// on every render.
+let cachedNip05: string | null = null;
+let cachedNip05Pubkey: string | null = null;
 
 export interface OverlayShowOptions {
   initialFormat: ClipFormat;
@@ -468,11 +475,64 @@ export class DiscernedOverlay extends HTMLElement {
 
   // ── Settings drawer (auth status, stats, export) ───────────────────────────
 
+  /**
+   * Fetch the user's NIP-05 (and, for pro mode, their pubkey first) on
+   * settings-open. Re-renders settings if the result differs from the current
+   * cached value. Safe to call repeatedly — module-level cache prevents
+   * redundant background round-trips.
+   */
+  private async loadNip05ForSettings(): Promise<void> {
+    const auth = this.authState;
+    if (auth.type === 'guest') return;
+
+    // pro mode: lazy-fetch the NIP-07 pubkey if background doesn't have it yet.
+    // The wallet typically only prompts the first time per origin.
+    if (auth.type === 'pro' && !auth.pubkey) {
+      try {
+        const pk = await getNIP07PublicKey();
+        if (pk) {
+          await chrome.runtime.sendMessage({ type: 'NIP07_DETECTED', hasNIP07: true, pubkey: pk });
+          // Refresh local authState so subsequent renders include the pubkey.
+          const refreshed = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }).catch(() => null);
+          if (refreshed?.success && refreshed.data) {
+            this.authState = refreshed.data as AuthState;
+          }
+        }
+      } catch (err) {
+        log(LL.DEBUG, '[nip05] NIP-07 pubkey fetch failed', err);
+      }
+    }
+
+    const pubkey = this.authState.type === 'pro' ? this.authState.pubkey
+      : this.authState.type === 'nip46' ? this.authState.pubkey
+      : this.authState.type === 'nsec' ? this.authState.pubkey
+      : null;
+    if (!pubkey) return;
+
+    const res = await chrome.runtime.sendMessage({ type: 'GET_NIP05_FOR_ME' }).catch(() => null);
+    const nip05 = (res?.success && res.data && typeof (res.data as { nip05?: unknown }).nip05 === 'string')
+      ? (res.data as { nip05: string }).nip05
+      : null;
+
+    const changed = nip05 !== cachedNip05 || pubkey !== cachedNip05Pubkey;
+    cachedNip05 = nip05;
+    cachedNip05Pubkey = pubkey;
+    if (changed && this.view === 'settings') {
+      this.render();
+    }
+  }
+
   private renderSettings() {
     const ev = this.escapeHtml.bind(this);
     const auth = this.authState;
     const formatPubkey = (pk: string) => {
       try { const npub = npubEncode(pk); return `${npub.slice(0, 16)}…${npub.slice(-8)}`; } catch { return pk; }
+    };
+    const identityBlock = (pk: string): string => {
+      const nip05Line = cachedNip05 && cachedNip05Pubkey === pk
+        ? `<div class="profile-id"><span class="profile-id-label">NIP-05:</span> ${ev(cachedNip05)}</div>`
+        : '';
+      return `${nip05Line}<div class="profile-id"><span class="profile-id-label">npub:</span> ${ev(formatPubkey(pk))}</div>`;
     };
 
     let authBlock = '';
@@ -494,6 +554,7 @@ export class DiscernedOverlay extends HTMLElement {
             </div>
             <button class="link-btn" id="settings-disconnect">Disconnect</button>
           </div>
+          ${auth.pubkey ? identityBlock(auth.pubkey) : ''}
         </div>
       `;
     } else if (auth.type === 'nip46') {
@@ -506,7 +567,7 @@ export class DiscernedOverlay extends HTMLElement {
             </div>
             <button class="link-btn" id="settings-disconnect">Disconnect</button>
           </div>
-          <div class="profile-id">${ev(formatPubkey(auth.pubkey))}</div>
+          ${identityBlock(auth.pubkey)}
         </div>
       `;
     } else {
@@ -519,7 +580,7 @@ export class DiscernedOverlay extends HTMLElement {
             </div>
             <button class="link-btn" id="settings-disconnect">Disconnect</button>
           </div>
-          <div class="profile-id">${ev(formatPubkey(auth.pubkey))}</div>
+          ${identityBlock(auth.pubkey)}
           <details class="pin-unlock">
             <summary>Unlock account key</summary>
             <div class="pin-row">
@@ -531,6 +592,8 @@ export class DiscernedOverlay extends HTMLElement {
         </div>
       `;
     }
+
+    void this.loadNip05ForSettings();
 
     this.shadow.innerHTML = `
       <style>${this.getStyles()}</style>
@@ -1673,6 +1736,8 @@ export class DiscernedOverlay extends HTMLElement {
       .card-value { font-size: 13px; color: var(--p-ink); }
       .card-value.ok { color: var(--p-accent-ink); }
       .profile-id { font-size: 12px; color: var(--p-ink-2); font-family: monospace; background: var(--p-surface-2); border-radius: 4px; padding: 6px 8px; word-break: break-all; }
+      .profile-id + .profile-id { margin-top: 4px; }
+      .profile-id-label { color: var(--p-ink-3); margin-right: 6px; font-family: var(--p-font-sans, inherit); }
       .usage-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--p-ink-2); }
       .usage-row-link { background: none; border: none; width: 100%; cursor: pointer; border-radius: 4px; padding: 2px 4px; margin: -2px -4px; transition: background 0.15s; font-family: inherit; }
       .usage-row-link:hover { background: var(--p-surface-2); color: var(--p-ink); }

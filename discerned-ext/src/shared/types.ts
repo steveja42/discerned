@@ -72,7 +72,7 @@ export interface CastData {
 // Auth states
 export type AuthState =
   | { type: 'guest' }
-  | { type: 'pro'; hasNIP07: true }
+  | { type: 'pro'; hasNIP07: true; pubkey?: string }
   | { type: 'nip46'; pubkey: string; bunkerRelays: string[]; remotePubkey: string }
   | { type: 'nsec'; pubkey: string; ncryptsec: string }; // NIP-49 encrypted blob
 
@@ -88,7 +88,8 @@ export type BackgroundMessage =
   | { type: 'UPDATE_CATEGORIES'; categories: string[] }
   | { type: 'SYNC_CATEGORIES_TO_WEB' }
   | { type: 'PUSH_CATEGORIES'; categories: string[] }
-  | { type: 'NIP07_DETECTED'; hasNIP07: boolean }
+  | { type: 'NIP07_DETECTED'; hasNIP07: boolean; pubkey?: string }
+  | { type: 'GET_NIP05_FOR_ME' }
   | { type: 'CONNECT_NIP46'; bunkerUri: string }
   | { type: 'CONNECT_NSEC'; rawNsec: string; pin: string }
   | { type: 'UNLOCK_NSEC'; pin: string }
@@ -129,6 +130,7 @@ export const STORAGE_KEYS = {
   STRIP_INLINE_STYLES:     'stripInlineStyles',
   CUSTOM_CATEGORIES:       'customCategories', // legacy key — superseded by CATEGORIES
   CATEGORIES:              'categories',
+  NIP05_CACHE:             'nip05Cache',
 } as const;
 
 // Messages posted between the extension's web-bridge content script and the
