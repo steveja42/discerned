@@ -13,10 +13,15 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $here
 New-Item -ItemType Directory -Force -Path (Join-Path $here 'data') | Out-Null
 
-# Log level: show ONLY the per-cast "persisted event" line (nostr_rs_relay::db at info),
-# everything else at warn. This silences the once-a-minute WAL checkpoint lines and the
-# startup pool/connection chatter — the window shows just casts as they land.
-$logLevel = 'warn,nostr_rs_relay::db=info'
+# Log level: show casts + subscription activity, without WAL-checkpoint noise.
+#   ::db=info      -> "persisted event" line per cast (the publish log)
+#   ::server=info  -> client connect/disconnect + the "sent: N events, recv: M events"
+#                     summary that shows a subscription was served
+#   everything else (incl. ::sqlite WAL checkpoints) stays at warn = silent
+# NOTE: per-REQ subscription lines and parse lines only exist at DEBUG in this relay; at
+# any info level you see connection summaries, not individual REQ lines. Use
+# nostr_rs_relay=debug if you ever need the raw REQ/parse detail (also re-adds checkpoints).
+$logLevel = 'warn,nostr_rs_relay::db=info,nostr_rs_relay::server=info'
 
 # Native binary (Linux/macOS; not buildable on Windows).
 $native = Get-Command nostr-rs-relay -ErrorAction SilentlyContinue

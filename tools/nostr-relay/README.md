@@ -13,9 +13,12 @@ pnpm relay:local          # from repo root
 Or directly: `pwsh tools/nostr-relay/run.ps1`. The script tries, in order: a native
 `nostr-rs-relay` binary on PATH → **Podman** → **Docker**. For containers it auto-derives a
 `config.container.toml` (listening on `0.0.0.0:8080`) from `config.toml`, maps host
-`127.0.0.1:7777` → container `8080`, and sets `RUST_LOG=warn,nostr_rs_relay::db=info` so the
-relay window shows just a `persisted event` line per cast (no WAL-checkpoint or startup
-chatter). You don't hand-edit ports for the container path.
+`127.0.0.1:7777` → container `8080`, and sets
+`RUST_LOG=warn,nostr_rs_relay::db=info,nostr_rs_relay::server=info` so the window shows each
+`persisted event` (publish) plus client connect/disconnect with a `sent: N events` summary
+(subscriptions served), without the per-minute WAL-checkpoint noise. Individual `REQ` lines
+only exist at DEBUG — use `RUST_LOG=nostr_rs_relay=debug` if you need raw subscription detail.
+You don't hand-edit ports for the container path.
 
 **On Windows the relay opens in its OWN console window.** podman only flushes container
 stdout to a real TTY — piped through the `pnpm → powershell → podman` chain the relay logs
