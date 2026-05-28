@@ -48,6 +48,7 @@ export class DiscernedOverlay extends HTMLElement {
   private view: View = 'main';
   private identityBackTarget: View = 'main';
   private identityStep: 'choose' | 'existing' | 'create' = 'choose';
+  private initialConnectTab: 'nip07' | 'nip46' | 'nsec' = 'nip07';
   private generatedNsec: string | null = null;
   private generatedNpub: string | null = null;
   private captureGeneration = 0;
@@ -373,6 +374,7 @@ export class DiscernedOverlay extends HTMLElement {
     });
     this.shadow.getElementById('choice-existing')?.addEventListener('click', () => {
       this.identityStep = 'existing';
+      this.initialConnectTab = 'nip07';
       this.render();
     });
     this.shadow.getElementById('choice-create')?.addEventListener('click', () => {
@@ -431,6 +433,32 @@ export class DiscernedOverlay extends HTMLElement {
   private renderConnectExisting() {
     const ev = this.escapeHtml.bind(this);
     const prefillNsec = this.generatedNsec ? ev(this.generatedNsec) : '';
+    const nip07Detected = this.authState.type === 'pro';
+    // Active tab: honour an explicit request (e.g. nsec after key creation),
+    // otherwise default to Extension when NIP-07 is already detected.
+    const activeTab = this.initialConnectTab;
+    const tab = (id: 'nip07' | 'nip46' | 'nsec') => activeTab === id ? ' active' : '';
+    const panelHidden = (id: 'nip07' | 'nip46' | 'nsec') => activeTab === id ? '' : ' style="display:none"';
+
+    const nip07Panel = nip07Detected
+      ? `
+            <p class="identity-status ok"><span class="status-dot ok"></span>Signing extension detected — you're connected.</p>
+            <p class="panel-desc">Discerned will use your browser signing extension to sign casts. No key is stored here.</p>
+            <button class="btn btn-primary" id="btn-use-nip07" type="button">Continue</button>
+            <p class="identity-status" id="nip07-status"></p>
+          `
+      : `
+            <p class="panel-desc">
+              Install a signing extension like
+              <a href="https://chrome.google.com/webstore/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp" target="_blank" rel="noopener noreferrer">nos2x</a> or
+              <a href="https://chromewebstore.google.com/detail/alby-bitcoin-wallet-for-l/iokeahhehimjnekafflcihljlcjccdbe" target="_blank" rel="noopener noreferrer">Alby</a> 
+              to sign with your Nostr identity. After installing, browse any page —
+              Discerned detects it automatically. Or click below to check now.
+            </p>
+            <button class="btn btn-secondary" id="btn-detect-nip07" type="button">Detect extension now</button>
+            <p class="identity-status" id="nip07-status"></p>
+          `;
+
     this.shadow.innerHTML = `
       <style>${this.getStyles()}</style>
       <div class="discerned-root panel">
@@ -443,22 +471,12 @@ export class DiscernedOverlay extends HTMLElement {
         </header>
         <div class="panel-body identity-body">
           <div class="identity-tabs">
-            <button class="tab-btn active" id="tab-nip07" type="button">Extension</button>
-            <button class="tab-btn" id="tab-nip46" type="button">Remote signer</button>
-            <button class="tab-btn" id="tab-nsec"  type="button">Store key</button>
+            <button class="tab-btn${tab('nip07')}" id="tab-nip07" type="button">Extension${nip07Detected ? ' ✓' : ''}</button>
+            <button class="tab-btn${tab('nip46')}" id="tab-nip46" type="button">Remote signer</button>
+            <button class="tab-btn${tab('nsec')}" id="tab-nsec"  type="button">Store key</button>
           </div>
-          <div id="panel-nip07" class="identity-panel">
-            <p class="panel-desc">
-              Install
-              <a href="https://chromewebstore.google.com/detail/alby-bitcoin-wallet-for-l/iokeahhehimjnekafflcihljlcjccdbe" target="_blank" rel="noopener noreferrer">Alby</a> or
-              <a href="https://chrome.google.com/webstore/detail/nos2x/kpgefcfmnafjgpblomihpgmejjdanjjp" target="_blank" rel="noopener noreferrer">nos2x</a>
-              to sign with your Nostr identity. After installing, browse any page —
-              Discerned detects it automatically. Or click below to check now.
-            </p>
-            <button class="btn btn-secondary" id="btn-detect-nip07" type="button">Detect extension now</button>
-            <p class="identity-status" id="nip07-status"></p>
-          </div>
-          <div id="panel-nip46" class="identity-panel" style="display:none">
+          <div id="panel-nip07" class="identity-panel"${panelHidden('nip07')}>${nip07Panel}</div>
+          <div id="panel-nip46" class="identity-panel"${panelHidden('nip46')}>
             <p class="panel-desc">
               Create a free account at
               <a href="https://nstart.me" target="_blank" rel="noopener noreferrer">nstart.me</a>,
@@ -469,7 +487,7 @@ export class DiscernedOverlay extends HTMLElement {
             <button class="btn btn-primary" id="btn-connect-nip46" type="button">Connect account</button>
             <p class="identity-status" id="nip46-status"></p>
           </div>
-          <div id="panel-nsec" class="identity-panel" style="display:none">
+          <div id="panel-nsec" class="identity-panel"${panelHidden('nsec')}>
             <p class="panel-warning">
               ⚠️ Your private key gives full access to your identity.
               It will be encrypted with a PIN before being stored — only you can unlock it.
@@ -517,12 +535,19 @@ export class DiscernedOverlay extends HTMLElement {
       const res = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }).catch(() => null);
       if (btn) btn.disabled = false;
       if (res?.success && res.data?.type === 'pro') {
-        this.setIdentityStatus(status, 'Extension detected — you\'re connected!', 'ok');
         this.authState = res.data;
-        setTimeout(() => { this.view = 'main'; this.render(); void this.refreshCapture(); }, 900);
+        // Re-render so the detected state (✓ + Continue) is reflected.
+        this.render();
       } else {
         this.setIdentityStatus(status, 'No extension found. Install Alby or nos2x, visit any page, then try again.', 'error');
       }
+    });
+
+    // NIP-07 already detected — "Continue" just dismisses to the main view.
+    this.shadow.getElementById('btn-use-nip07')?.addEventListener('click', () => {
+      this.view = 'main';
+      this.render();
+      void this.refreshCapture();
     });
 
     this.shadow.getElementById('btn-connect-nip46')?.addEventListener('click', async () => {
@@ -635,13 +660,15 @@ export class DiscernedOverlay extends HTMLElement {
   }
 
   /**
-   * Return to the connect/create chooser after backup. The generated nsec is kept
-   * in memory so the "Store key" tab can prefill it — it's cleared once stored
-   * (btn-save-nsec) or when the user leaves the identity flow entirely.
+   * After backing up a freshly-created keypair, go straight to "Connect identity"
+   * with the Store key tab open and the new nsec prefilled — the natural next step
+   * is to encrypt and store it. The generated nsec is kept in memory for the
+   * prefill and cleared once stored (btn-save-nsec) or on leaving the flow.
    */
   private finishKeyBackup() {
     this.view = 'identity';
-    this.identityStep = 'choose';
+    this.identityStep = 'existing';
+    this.initialConnectTab = 'nsec';
     this.render();
   }
 
@@ -1922,6 +1949,8 @@ export class DiscernedOverlay extends HTMLElement {
       .identity-status.error { color: #b91c1c; }
       .identity-status.ok    { color: var(--p-accent-ink); }
       .identity-status.spin  { color: var(--p-ink-2); }
+      .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+      .status-dot.ok { background: #16a34a; }
       .identity-divider { display: flex; align-items: center; gap: 8px; color: var(--p-ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin: 4px 0; }
       .identity-divider::before, .identity-divider::after { content: ""; flex: 1; height: 1px; background: var(--p-rule); }
       .key-backup-box { font-family: monospace; font-size: 13px; color: var(--p-ink); background: var(--p-surface-2); border: 1px solid var(--p-rule); border-radius: 6px; padding: 12px; word-break: break-all; user-select: all; line-height: 1.5; }
