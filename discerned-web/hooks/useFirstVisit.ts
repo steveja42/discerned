@@ -4,13 +4,16 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export function useFirstVisit() {
-  const [showPopover, setShowPopover] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try { return !localStorage.getItem('discerned.seenHero'); } catch { return false; }
-  });
+  // Start false so the first client render matches the server (which has no
+  // localStorage). The flag is read after mount to avoid a hydration mismatch.
+  const [showPopover, setShowPopover] = useState(false);
+
+  useEffect(() => {
+    try { setShowPopover(!localStorage.getItem('discerned.seenHero')); } catch {}
+  }, []);
 
   const dismiss = useCallback(() => {
     setShowPopover(false);
