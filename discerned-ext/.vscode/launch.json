@@ -10,12 +10,12 @@
       "request": "launch",
       "url": "https://example.com/",
       "webRoot": "${workspaceFolder}",
-      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/chrome_iso",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/chrome-isolated",
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}/dist",
         "--no-first-run",
         "--no-default-browser-check",
-        "--remote-debugging-port=9222"
+        "--remote-debugging-port=9222",
       ],
       "skipFiles": [
         "<node_internals>/**/*.js"
@@ -38,7 +38,7 @@
         "<node_internals>/**/*.js"
       ]
     },
-        {
+    {
       "name": "Debug: Brave (main-default)",
       "type": "chrome",
       "request": "launch",
@@ -64,7 +64,7 @@
       "url": "https://example.com/",
       "webRoot": "${workspaceFolder}",
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
-      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-no-nsec",
       "resolveSourceMapLocations": [
         "${workspaceFolder}/**",
         "!**/node_modules/**"
@@ -73,7 +73,6 @@
         "--load-extension=${workspaceFolder}\\dist",
         "--no-first-run",
         "--remote-debugging-port=9222",
-        "--profile-directory=brave-no-nsec",
       ]
     },
     {
@@ -84,14 +83,15 @@
       "webRoot": "${workspaceFolder}",
       /* --- Path for Windows --- */
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
-      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave_nip07",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-nip07-nos2x",
       "resolveSourceMapLocations": [
         "${workspaceFolder}/**",
         "!**/node_modules/**"
       ],
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
-        "--no-first-run"
+        "--no-first-run",
+        "--remote-debugging-port=9222",
       ]
     },
     {
@@ -104,14 +104,15 @@
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       /* --- Path for macOS (Uncomment if needed) --- */
       // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave_alby_nip07",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-nip07-alby",
       "resolveSourceMapLocations": [
         "${workspaceFolder}/**",
         "!**/node_modules/**"
       ],
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
-        "--no-first-run"
+        "--no-first-run",
+        "--remote-debugging-port=9222",
       ]
     },
     {
@@ -124,14 +125,15 @@
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       /* --- Path for macOS (Uncomment if needed) --- */
       // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave_stored_key",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-stored-key",
       "resolveSourceMapLocations": [
         "${workspaceFolder}/**",
         "!**/node_modules/**"
       ],
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
-        "--no-first-run"
+        "--no-first-run",
+        "--remote-debugging-port=9222",
       ]
     },
     {
