@@ -164,3 +164,16 @@ export const DEFAULT_RELAYS = [
   'wss://relay.snort.social',
   //not working 'wss://relay.nostr.band',
 ] as const;
+
+// Local relay for dev/test builds only. Tree-shaken out of production.
+export const LOCAL_RELAY = 'ws://localhost:7777';
+
+// Active relay set. Test/dev REPLACES the public relays so test casts never
+// reach the real network; production keeps the wss:// list.
+export const ACTIVE_RELAYS: readonly string[] = __DISCERNED_TEST_BUILD__
+  ? [LOCAL_RELAY]
+  : DEFAULT_RELAYS;
+
+// Min ACKs for publish success — derived from relay count, capped at 2 so
+// production still requires 2 while a single local relay needs only 1.
+export const MIN_PUBLISH_ACKS = Math.min(ACTIVE_RELAYS.length, 2);

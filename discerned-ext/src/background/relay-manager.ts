@@ -1,12 +1,13 @@
 // Role: Background Service Worker — relay publisher
-// Description: Wraps nostr-tools SimplePool to broadcast signed Nostr events to multiple WSS
-//              relays. Requires at least 2 successful ACKs within a 10-second timeout; exposes
+// Description: Wraps nostr-tools SimplePool to broadcast signed Nostr events to the ACTIVE_RELAYS
+//              set. Requires MIN_PUBLISH_ACKS successful ACKs within a 10-second timeout; exposes
 //              health metrics so the background can surface publish failures.
-// Access: WebSocket via nostr-tools/pool (WSS only; no DOM, no Chrome APIs)
+// Access: WebSocket via nostr-tools/pool (wss:// in production; a single ws://localhost relay in
+//         dev/test builds — see ACTIVE_RELAYS in shared/types.ts). No DOM, no Chrome APIs.
 
 import { SimplePool } from 'nostr-tools/pool';
 import type { NostrEvent } from 'nostr-tools/core';
-import { DEFAULT_RELAYS } from '@/shared/types';
+import { ACTIVE_RELAYS, MIN_PUBLISH_ACKS } from '@/shared/types';
 import { LL, log } from '@/shared/logger';
 
 export interface PublishResult {
@@ -27,7 +28,7 @@ class RelayPool {
    * Publish an event to all relays
    */
   async publish(event: NostrEvent): Promise<PublishResult[]> {
-    const relayUrls = Array.from(DEFAULT_RELAYS);
+    const relayUrls = Array.from(ACTIVE_RELAYS);
     
     const results = await Promise.allSettled(
       relayUrls.map(url => this.publishToRelay(url, event))
@@ -80,7 +81,7 @@ class RelayPool {
    * Close all connections
    */
   async close(): Promise<void> {
-    this.pool.close(Array.from(DEFAULT_RELAYS));
+    this.pool.close(Array.from(ACTIVE_RELAYS));
   }
 
   /**
@@ -88,7 +89,7 @@ class RelayPool {
    */
   getStatus(): { relays: string[] } {
     return {
-      relays: Array.from(DEFAULT_RELAYS),
+      relays: Array.from(ACTIVE_RELAYS),
     };
   }
 }
@@ -101,7 +102,7 @@ export const relayPool = new RelayPool();
  */
 export async function publishWithMinimum(
   event: NostrEvent,
-  minimumSuccess: number = 2
+  minimumSuccess: number = MIN_PUBLISH_ACKS
 ): Promise<{ success: boolean; results: PublishResult[] }> {
   const results = await relayPool.publish(event);
   const successCount = results.filter(r => r.success).length;

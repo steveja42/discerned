@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(pnpm type-check:*)",
-      "Bash(GOODREADS=1 PWDEBUG_HEADLESS_NEW=1 pnpm exec playwright test -c tests/e2e/playwright.config.ts --project=goodreads-visual)"
+      "Bash(GOODREADS=1 PWDEBUG_HEADLESS_NEW=1 pnpm exec playwright test -c tests/e2e/playwright.config.ts --project=goodreads-visual)",
+      "Bash(ls tools *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\)\")",
+      "PowerShell(podman stop discerned-local-relay 2>&1 | Out-Null; $here='c:\\\\dev\\\\discerned\\\\tools\\\\nostr-relay'; $cfg=Join-Path $here 'config.container.toml'; podman run -d --rm -e RUST_LOG=info -p '127.0.0.1:7777:8080' -v \"$\\($cfg\\):/usr/src/app/config.toml:ro\" -v \"$\\($here\\)\\\\data:/usr/src/app/db\" --name discerned-local-relay docker.io/scsibug/nostr-rs-relay:latest 2>&1 | Out-Null; Start-Sleep -Seconds 3; Write-Output \"=== relay logs ===\"; podman logs discerned-local-relay 2>&1 | Select-String -Pattern \"config|not found|Default config|listening|Welcome|relay\")"
     ]
   }
 }

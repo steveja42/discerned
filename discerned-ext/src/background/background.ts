@@ -223,7 +223,7 @@ async function publishKind0ForCurrentUser(cache: CachedNip05 | null): Promise<vo
   });
   try {
     const signed = await signEvent(template);
-    const result = await publishWithMinimum(signed, 2);
+    const result = await publishWithMinimum(signed);
     const health = getRelayHealth(result.results);
     log(LL.NORMAL, '[nip05] published kind 0', { nip05, relays: `${health.healthy}/${health.total}` }, 'url:', 'background');
   } catch (err) {
@@ -833,7 +833,7 @@ async function handleCast(
   try {
     const eventTemplate = buildCastTemplate(data.capture, data.evaluation);
     const signedEvent = await signEvent(eventTemplate, senderTabId);
-    const publishResult = await publishWithMinimum(signedEvent, 2);
+    const publishResult = await publishWithMinimum(signedEvent);
 
     if (!publishResult.success) {
       const health = getRelayHealth(publishResult.results);

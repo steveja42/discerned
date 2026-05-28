@@ -1,0 +1,27 @@
+# nostr-rs-relay config for local dev/test. Binds to loopback only so test
+# casts never leave the machine. SQLite persistence under ./data (gitignored)
+# so events survive restarts. Run via `pnpm relay:local` (see root package.json)
+# or tools/nostr-relay/run.ps1.
+
+[info]
+relay_url = "ws://localhost:7777"
+name = "discerned-local"
+description = "Local relay for Discerned dev/test. Loopback only."
+
+[database]
+# Relative to the working directory the relay is launched from (run.ps1 cd's here).
+data_directory = "./data"
+
+[network]
+# Native config (loopback). For Podman/Docker, run.ps1 auto-derives a container
+# variant that listens on 0.0.0.0:8080 — don't hand-edit these for containers.
+address = "127.0.0.1"
+port = 7777
+
+[limits]
+messages_per_sec = 0          # 0 = unlimited (local dev)
+max_event_bytes = 1048576     # 1 MiB — clips can carry inlined base64 images
+
+[verified_users]
+mode = "disabled"             # no NIP-05 verification gate for local testing
+# No [authorization] pubkey_whitelist → accepts events from any key.

@@ -26,3 +26,12 @@ export const DEFAULT_RELAYS = [
   'wss://nos.lol',
   'wss://relay.snort.social',
 ] as const;
+
+// Active relay set. When NEXT_PUBLIC_LOCAL_RELAY is set (dev/test via .env.local)
+// it REPLACES the public relays so the feed reads only local test casts; unset
+// in production → real wss:// relays. Mirrors ACTIVE_RELAYS in the extension's
+// shared/types.ts, but resolved via env var (Next idiom) rather than a build flag.
+const LOCAL_RELAY = process.env.NEXT_PUBLIC_LOCAL_RELAY;
+export const ACTIVE_RELAYS: readonly string[] = LOCAL_RELAY
+  ? [LOCAL_RELAY]
+  : DEFAULT_RELAYS;
