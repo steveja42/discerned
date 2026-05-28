@@ -13,9 +13,10 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $here
 New-Item -ItemType Directory -Force -Path (Join-Path $here 'data') | Out-Null
 
-# Log level: info gives the startup banner + connection lines; nostr_rs_relay=debug
-# adds a line per accepted event so you can watch casts land in real time.
-$logLevel = 'info,nostr_rs_relay=debug'
+# Log level: show ONLY the per-cast "persisted event" line (nostr_rs_relay::db at info),
+# everything else at warn. This silences the once-a-minute WAL checkpoint lines and the
+# startup pool/connection chatter — the window shows just casts as they land.
+$logLevel = 'warn,nostr_rs_relay::db=info'
 
 # Native binary (Linux/macOS; not buildable on Windows).
 $native = Get-Command nostr-rs-relay -ErrorAction SilentlyContinue
