@@ -1,7 +1,8 @@
 {
   "names": {
     "stevo": "561dafca0fbf0e812abd941b45d6214d6f1dc4606843d3f3ecc7b45c874881fe",
-    "discerned_tester1": "0388464c203852aaf52144229bcceb80a99463f07c7751a3e2da10f60cc8bba9"
+    "discerned_tester1": "0388464c203852aaf52144229bcceb80a99463f07c7751a3e2da10f60cc8bba9",
+    "discerned_tester2": "14e9842e21315fc147562ab304e7ebe109d3491d7505e943202e4f7b2ddb16b2"
   },
   "relays": {
     "561dafca0fbf0e812abd941b45d6214d6f1dc4606843d3f3ecc7b45c874881fe": [
@@ -10,6 +11,11 @@
       "wss://relay.snort.social"
     ],
     "0388464c203852aaf52144229bcceb80a99463f07c7751a3e2da10f60cc8bba9": [
+      "wss://relay.damus.io",
+      "wss://nos.lol",
+      "wss://relay.snort.social"
+    ],
+    "14e9842e21315fc147562ab304e7ebe109d3491d7505e943202e4f7b2ddb16b2": [
       "wss://relay.damus.io",
       "wss://nos.lol",
       "wss://relay.snort.social"
@@ -22,6 +28,10 @@
     },
      "0388464c203852aaf52144229bcceb80a99463f07c7751a3e2da10f60cc8bba9": {
       "about": "Test account for Discerned.",
+      "picture": "https://discerned.online/icons/icon128.png"
+    },
+     "14e9842e21315fc147562ab304e7ebe109d3491d7505e943202e4f7b2ddb16b2": {
+      "about": "Test account 2 for Discerned.",
       "picture": "https://discerned.online/icons/icon128.png"
     }
   }
