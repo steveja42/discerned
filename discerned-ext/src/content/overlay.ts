@@ -1553,6 +1553,14 @@ export class DiscernedOverlay extends HTMLElement {
     return `
       :host {
         display: block;
+        /* Reddit ships a global :not(:defined) visibility:hidden rule to hide
+           un-upgraded custom elements. Our discerned-overlay is defined only in
+           the content-script's isolated world, so in Reddit's page world it
+           matches :not(:defined) and gets visibility:hidden directly on the host
+           — which then inherits across the shadow boundary into our panel. That
+           selector's specificity (two :not()s) beats a plain :host, so we need
+           !important to win. */
+        visibility: visible !important;
 
         /* ── Mint Tinted (translucent) — design tokens ──────────────────────── */
         --p-bg:        rgba(166, 210, 184, 0.55);
@@ -1575,6 +1583,7 @@ export class DiscernedOverlay extends HTMLElement {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
       .discerned-root.panel {
+        visibility: visible;
         position: fixed; top: 0; left: 0; bottom: 0;
         width: 380px; max-width: 90vw;
         background: var(--p-bg);
