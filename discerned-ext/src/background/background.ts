@@ -32,7 +32,7 @@ import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluat
 import { STORAGE_KEYS } from '@/shared/types';
 import { LL, log, setLogRelayTabs } from '@/shared/logger';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
-import { decode, nsecEncode } from 'nostr-tools/nip19';
+import { decode, nsecEncode, npubEncode } from 'nostr-tools/nip19';
 import * as nip49 from 'nostr-tools/nip49';
 import type { BunkerPointer } from 'nostr-tools/nip46';
 
@@ -409,8 +409,8 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'CONNECT_NSEC':
       return handleConnectNsec(message.rawNsec, message.pin);
 
-    case 'CREATE_NSEC':
-      return handleCreateNsec(message.pin);
+    case 'GENERATE_NSEC':
+      return handleGenerateNsec();
 
     case 'UNLOCK_NSEC':
       return handleUnlockNsec(message.pin);
@@ -517,26 +517,16 @@ async function handleConnectNsec(rawNsec: string, pin: string): Promise<Backgrou
 }
 
 /**
- * Generate a brand-new Nostr identity, encrypt it with the user's PIN (NIP-49),
- * persist only the encrypted blob, and switch to nsec auth mode. Returns the
- * freshly-generated nsec ONCE so the UI can show it for backup — the secret is
- * never logged and never stored in plaintext.
+ * Generate a brand-new Nostr keypair and return it ONCE for the user to back up.
+ * Does NOT persist, activate, or unlock anything — the key becomes real only when
+ * the user explicitly Stores it (CONNECT_NSEC) with a PIN. The secret is never logged.
  */
-async function handleCreateNsec(pin: string): Promise<BackgroundResponse> {
+function handleGenerateNsec(): BackgroundResponse {
   try {
     const privateKeyBytes = generateSecretKey();
-    const pubkeyHex = getPublicKey(privateKeyBytes);
     const nsec = nsecEncode(privateKeyBytes);
-    const ncryptsec = nip49.encrypt(privateKeyBytes, pin);
-    nsecPrivateKey = privateKeyBytes;
-    const newState: AuthState = { type: 'nsec', pubkey: pubkeyHex, ncryptsec };
-    currentAuthState = newState;
-    await chrome.storage.local.set({
-      [STORAGE_KEYS.AUTH_STATE]: newState,
-      [STORAGE_KEYS.NSEC_ENCRYPTED]: ncryptsec,
-    });
-    void syncNip05AndMaybePublish();
-    return { success: true, data: { pubkey: pubkeyHex, nsec } };
+    const npub = npubEncode(getPublicKey(privateKeyBytes));
+    return { success: true, data: { npub, nsec } };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to generate key' };
   }
@@ -546,9 +536,11 @@ async function handleUnlockNsec(pin: string): Promise<BackgroundResponse> {
   try {
     const stored = await chrome.storage.local.get(STORAGE_KEYS.NSEC_ENCRYPTED);
     const ncryptsec = stored[STORAGE_KEYS.NSEC_ENCRYPTED] as string | undefined;
-    if (!ncryptsec) return { success: false, error: 'No encrypted account key found' };
+    if (!ncryptsec) return { success: false, error: 'No stored key found' };
     nsecPrivateKey = nip49.decrypt(ncryptsec, pin);
-    return { success: true };
+    const nsec = nsecEncode(nsecPrivateKey);
+    const npub = npubEncode(getPublicKey(nsecPrivateKey));
+    return { success: true, data: { npub, nsec } };
   } catch {
     return { success: false, error: 'Incorrect PIN' };
   }
