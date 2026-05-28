@@ -19,8 +19,15 @@ address = "127.0.0.1"
 port = 7777
 
 [limits]
-messages_per_sec = 0          # 0 = unlimited (local dev)
-max_event_bytes = 1048576     # 1 MiB — clips can carry inlined base64 images
+messages_per_sec = 0              # 0 = unlimited (local dev)
+# Article clips carry inlined base64 images, so a single cast can be a few hundred KB.
+# THREE limits must all be raised or the relay rejects the cast — and the WebSocket
+# ones (default 128 KB) reject at the transport layer BEFORE the event is parsed, which
+# is why max_event_bytes alone isn't enough and you see "message too large" with no
+# event-level log line.
+max_event_bytes = 8388608         # 8 MiB — EVENT payload limit
+max_ws_message_bytes = 8388608    # 8 MiB — WebSocket message limit (the "message too large" one)
+max_ws_frame_bytes = 8388608      # 8 MiB — WebSocket frame limit
 
 [verified_users]
 mode = "disabled"             # no NIP-05 verification gate for local testing
