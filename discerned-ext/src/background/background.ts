@@ -32,7 +32,7 @@ import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluat
 import { STORAGE_KEYS } from '@/shared/types';
 import { LL, log, setLogRelayTabs } from '@/shared/logger';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
-import { decode } from 'nostr-tools/nip19';
+import { decode, nsecEncode } from 'nostr-tools/nip19';
 import * as nip49 from 'nostr-tools/nip49';
 import type { BunkerPointer } from 'nostr-tools/nip46';
 
@@ -409,6 +409,9 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'CONNECT_NSEC':
       return handleConnectNsec(message.rawNsec, message.pin);
 
+    case 'CREATE_NSEC':
+      return handleCreateNsec(message.pin);
+
     case 'UNLOCK_NSEC':
       return handleUnlockNsec(message.pin);
 
@@ -510,6 +513,32 @@ async function handleConnectNsec(rawNsec: string, pin: string): Promise<Backgrou
     return { success: true, data: { pubkey: pubkeyHex } };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to save account key' };
+  }
+}
+
+/**
+ * Generate a brand-new Nostr identity, encrypt it with the user's PIN (NIP-49),
+ * persist only the encrypted blob, and switch to nsec auth mode. Returns the
+ * freshly-generated nsec ONCE so the UI can show it for backup — the secret is
+ * never logged and never stored in plaintext.
+ */
+async function handleCreateNsec(pin: string): Promise<BackgroundResponse> {
+  try {
+    const privateKeyBytes = generateSecretKey();
+    const pubkeyHex = getPublicKey(privateKeyBytes);
+    const nsec = nsecEncode(privateKeyBytes);
+    const ncryptsec = nip49.encrypt(privateKeyBytes, pin);
+    nsecPrivateKey = privateKeyBytes;
+    const newState: AuthState = { type: 'nsec', pubkey: pubkeyHex, ncryptsec };
+    currentAuthState = newState;
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.AUTH_STATE]: newState,
+      [STORAGE_KEYS.NSEC_ENCRYPTED]: ncryptsec,
+    });
+    void syncNip05AndMaybePublish();
+    return { success: true, data: { pubkey: pubkeyHex, nsec } };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to generate key' };
   }
 }
 

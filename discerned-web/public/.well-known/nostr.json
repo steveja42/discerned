@@ -16,7 +16,11 @@
     ]
   },
   "profiles": {
-    "0388464c203852aaf52144229bcceb80a99463f07c7751a3e2da10f60cc8bba9": {
+    "561dafca0fbf0e812abd941b45d6214d6f1dc4606843d3f3ecc7b45c874881fe": {
+      "about": "Developer, Grew up in Kansas, worked at Microsoft back in the day. Creating tools for more freedom, and resilience from authoritarianism.",
+      "picture": "https://discerned.online/icons/icon128.png"
+    },
+     "0388464c203852aaf52144229bcceb80a99463f07c7751a3e2da10f60cc8bba9": {
       "about": "Test account for Discerned.",
       "picture": "https://discerned.online/icons/icon128.png"
     }

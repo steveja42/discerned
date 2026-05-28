@@ -31,7 +31,7 @@ export interface OverlayShowOptions {
   nudgeDismissed: boolean;
 }
 
-type View = 'gate' | 'identity' | 'main' | 'settings';
+type View = 'gate' | 'identity' | 'main' | 'settings' | 'keyBackup';
 
 /** Formats that show a floating preview card to the right of the main panel. */
 const PREVIEW_FORMATS: ClipFormat[] = ['selection', 'article', 'bookmark'];
@@ -47,6 +47,7 @@ export class DiscernedOverlay extends HTMLElement {
   private authState: AuthState = { type: 'guest' };
   private view: View = 'main';
   private identityBackTarget: View = 'main';
+  private generatedNsec: string | null = null;
   private captureGeneration = 0;
   private capturing = false;
   private publishMode: PublishMode = 'both';
@@ -257,10 +258,11 @@ export class DiscernedOverlay extends HTMLElement {
 
   private render() {
     switch (this.view) {
-      case 'gate':     this.renderGate();     break;
-      case 'identity': this.renderIdentity(); break;
-      case 'settings': this.renderSettings(); break;
-      case 'main':     this.renderMain();     break;
+      case 'gate':      this.renderGate();      break;
+      case 'identity':  this.renderIdentity();  break;
+      case 'settings':  this.renderSettings();  break;
+      case 'keyBackup': this.renderKeyBackup(); break;
+      case 'main':      this.renderMain();      break;
     }
     this.blockHostPageEvents();
     this.applyHighlightForCurrentFormat();
@@ -371,6 +373,12 @@ export class DiscernedOverlay extends HTMLElement {
             <input type="password" id="pin-input" placeholder="PIN (minimum 6 characters)" />
             <input type="password" id="pin-confirm" placeholder="Confirm PIN" />
             <button class="btn btn-primary" id="btn-save-nsec" type="button">Encrypt and save</button>
+            <div class="identity-divider"><span>or</span></div>
+            <p class="panel-desc">
+              No key yet? Generate a brand-new identity. It's created here, encrypted with the
+              PIN above, and shown to you once so you can back it up.
+            </p>
+            <button class="btn btn-secondary" id="btn-generate-nsec" type="button">Generate a new key</button>
             <p class="identity-status" id="nsec-status"></p>
           </div>
         </div>
@@ -464,6 +472,88 @@ export class DiscernedOverlay extends HTMLElement {
         this.setIdentityStatus(status, res.error ?? 'Failed to save key. Please try again.', 'error');
       }
     });
+
+    this.shadow.getElementById('btn-generate-nsec')?.addEventListener('click', async () => {
+      const pinEl        = this.shadow.getElementById('pin-input')   as HTMLInputElement | null;
+      const pinConfirmEl = this.shadow.getElementById('pin-confirm') as HTMLInputElement | null;
+      const status = this.shadow.getElementById('nsec-status');
+      const btn    = this.shadow.getElementById('btn-generate-nsec') as HTMLButtonElement | null;
+      const pin        = pinEl?.value ?? '';
+      const pinConfirm = pinConfirmEl?.value ?? '';
+      if (pin.length < 6)     { this.setIdentityStatus(status, 'Set a PIN of at least 6 characters first.', 'error'); return; }
+      if (pin !== pinConfirm) { this.setIdentityStatus(status, 'PINs don\'t match.', 'error'); return; }
+      this.setIdentityStatus(status, 'Generating…', 'spin');
+      if (btn) btn.disabled = true;
+      const res = await chrome.runtime.sendMessage({ type: 'CREATE_NSEC', pin });
+      if (btn) btn.disabled = false;
+      if (res.success && typeof res.data?.nsec === 'string') {
+        const refreshed = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }).catch(() => null);
+        if (refreshed?.success && refreshed.data) this.authState = refreshed.data as AuthState;
+        this.generatedNsec = res.data.nsec;
+        this.view = 'keyBackup';
+        this.render();
+      } else {
+        this.setIdentityStatus(status, res.error ?? 'Failed to generate key. Please try again.', 'error');
+      }
+    });
+  }
+
+  private renderKeyBackup() {
+    const ev = this.escapeHtml.bind(this);
+    const nsec = this.generatedNsec ?? '';
+    this.shadow.innerHTML = `
+      <style>${this.getStyles()}</style>
+      <div class="discerned-root panel">
+        <header class="panel-header">
+          <h2>Back up your key</h2>
+          <div class="header-actions">
+            <button class="icon-btn close-btn" id="close" aria-label="Close">×</button>
+          </div>
+        </header>
+        <div class="panel-body identity-body">
+          <p class="panel-warning">
+            ⚠️ This is the only time your private key is shown. Save it somewhere safe
+            (a password manager). Anyone with this key controls your identity, and it
+            can never be recovered if lost.
+          </p>
+          <div class="key-backup-box" id="nsec-backup">${ev(nsec)}</div>
+          <button class="btn btn-secondary" id="btn-copy-nsec" type="button">Copy key</button>
+          <label class="key-ack">
+            <input type="checkbox" id="ack-saved" /> I've saved my key somewhere safe
+          </label>
+          <button class="btn btn-primary" id="btn-backup-done" type="button" disabled>Done</button>
+          <p class="identity-status" id="backup-status"></p>
+        </div>
+      </div>
+    `;
+    this.attachKeyBackupListeners();
+  }
+
+  private attachKeyBackupListeners() {
+    this.shadow.getElementById('close')?.addEventListener('click', () => this.finishKeyBackup());
+
+    this.shadow.getElementById('btn-copy-nsec')?.addEventListener('click', async () => {
+      const status = this.shadow.getElementById('backup-status');
+      try {
+        await navigator.clipboard.writeText(this.generatedNsec ?? '');
+        this.setIdentityStatus(status, 'Copied to clipboard.', 'ok');
+      } catch {
+        this.setIdentityStatus(status, 'Copy failed — select the key and copy manually.', 'error');
+      }
+    });
+
+    const ack  = this.shadow.getElementById('ack-saved')      as HTMLInputElement  | null;
+    const done = this.shadow.getElementById('btn-backup-done') as HTMLButtonElement | null;
+    ack?.addEventListener('change', () => { if (done) done.disabled = !ack.checked; });
+    done?.addEventListener('click', () => this.finishKeyBackup());
+  }
+
+  /** Clear the in-memory nsec and return to the main view. */
+  private finishKeyBackup() {
+    this.generatedNsec = null;
+    this.view = 'main';
+    this.render();
+    void this.refreshCapture();
   }
 
   private setIdentityStatus(el: Element | null, text: string, kind: 'error' | 'ok' | 'spin') {
@@ -1715,6 +1805,11 @@ export class DiscernedOverlay extends HTMLElement {
       .identity-status.error { color: #b91c1c; }
       .identity-status.ok    { color: var(--p-accent-ink); }
       .identity-status.spin  { color: var(--p-ink-2); }
+      .identity-divider { display: flex; align-items: center; gap: 8px; color: var(--p-ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin: 4px 0; }
+      .identity-divider::before, .identity-divider::after { content: ""; flex: 1; height: 1px; background: var(--p-rule); }
+      .key-backup-box { font-family: monospace; font-size: 13px; color: var(--p-ink); background: var(--p-surface-2); border: 1px solid var(--p-rule); border-radius: 6px; padding: 12px; word-break: break-all; user-select: all; line-height: 1.5; }
+      .key-ack { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--p-ink-2); cursor: pointer; }
+      .key-ack input { cursor: pointer; }
       .spinner-inline {
         display: inline-block; width: 12px; height: 12px; flex-shrink: 0;
         border: 2px solid var(--p-rule); border-top-color: var(--p-accent);

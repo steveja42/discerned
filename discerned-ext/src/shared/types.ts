@@ -92,6 +92,7 @@ export type BackgroundMessage =
   | { type: 'GET_NIP05_FOR_ME' }
   | { type: 'CONNECT_NIP46'; bunkerUri: string }
   | { type: 'CONNECT_NSEC'; rawNsec: string; pin: string }
+  | { type: 'CREATE_NSEC'; pin: string }
   | { type: 'UNLOCK_NSEC'; pin: string }
   | { type: 'DISCONNECT_AUTH' }
   | { type: 'OPEN_ONBOARDING' }
