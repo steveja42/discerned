@@ -41,10 +41,14 @@ let currentAuthState: AuthState = { type: 'guest' };
 let guestPrivateKey: Uint8Array | null = null;
 let nsecPrivateKey: Uint8Array | null = null; // session-only; cleared when SW is killed
 
-// The first tab where NIP-07 was detected becomes the canonical signing tab.
-// All casts are routed through this tab so the wallet approves the origin once
-// rather than once per domain. Persisted in session storage to survive SW wakeups.
-let canonicalNIP07TabId: number | null = null;
+// All NIP-07 signing is routed through a single tab on the discerned origin, so
+// the wallet approves that one origin once per session rather than once per
+// website the user casts from. signingTabIsOurs records whether we created the
+// tab (a minimized window) vs. reused one the user already had open — we only
+// ever close/manage a tab we created. Both persist in session storage to
+// survive SW wakeups.
+let signingTabId: number | null = null;
+let signingTabIsOurs = false;
 
 // Ordered list of tab IDs (most-recent first) that have a live content script
 // and have registered as log relay targets. Only logRelayTabIds[0] receives logs.
@@ -163,10 +167,11 @@ async function restoreAuthState(): Promise<void> {
     currentAuthState = saved;
   } else if (saved?.type === 'pro') {
     currentAuthState = saved;
-    const session = await chrome.storage.session.get('canonicalNIP07TabId');
-    const storedTabId = session['canonicalNIP07TabId'];
+    const session = await chrome.storage.session.get(['signingTabId', 'signingTabIsOurs']);
+    const storedTabId = session['signingTabId'];
     if (typeof storedTabId === 'number') {
-      canonicalNIP07TabId = storedTabId;
+      signingTabId = storedTabId;
+      signingTabIsOurs = session['signingTabIsOurs'] === true;
     }
   } else {
     currentAuthState = { type: 'guest' };
@@ -358,7 +363,7 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       return handleClip(message.data);
 
     case 'CAST':
-      return handleCast(message.data, senderTabId);
+      return handleCast(message.data);
 
     case 'GET_AUTH_STATE':
       return { success: true, data: currentAuthState };
@@ -389,11 +394,9 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
         void syncNip05AndMaybePublish();
       }
-      if (message.hasNIP07 && senderTabId !== undefined && canonicalNIP07TabId === null) {
-        canonicalNIP07TabId = senderTabId;
-        chrome.storage.session.set({ canonicalNIP07TabId: senderTabId }).catch(() => {});
-        log(LL.DEBUG, `NIP-07 canonical signing tab: ${senderTabId}`);
-      }
+      // Note: the signing tab is NOT seeded here. NIP-07 signing always routes
+      // through a tab on the discerned origin, resolved on demand in
+      // resolveSigningTab() — not the arbitrary site that reported NIP-07.
       return { success: true };
 
     case 'GET_NIP05_FOR_ME': {
@@ -551,6 +554,7 @@ async function handleDisconnectAuth(): Promise<BackgroundResponse> {
   nsecPrivateKey = null;
   currentAuthState = { type: 'guest' };
   guestPrivateKey = generateSecretKey();
+  await closeOwnSigningTab();
   await chrome.storage.local.remove([
     STORAGE_KEYS.AUTH_STATE,
     STORAGE_KEYS.NIP46_CLIENT_KEY,
@@ -828,11 +832,10 @@ async function handleClip(data: { capture: Capture; evaluation: Evaluation }): P
 
 async function handleCast(
   data: { capture: Capture; evaluation: Evaluation },
-  senderTabId?: number,
 ): Promise<BackgroundResponse> {
   try {
     const eventTemplate = buildCastTemplate(data.capture, data.evaluation);
-    const signedEvent = await signEvent(eventTemplate, senderTabId);
+    const signedEvent = await signEvent(eventTemplate);
     const publishResult = await publishWithMinimum(signedEvent);
 
     if (!publishResult.success) {
@@ -883,49 +886,119 @@ function buildCastTemplate(capture: Capture, evaluation: Evaluation) {
 
 // ── Signing ─────────────────────────────────────────────────────────────────
 
-async function resolveSigningTab(fallbackTabId?: number): Promise<number> {
-  if (canonicalNIP07TabId !== null) {
+function isDiscernedUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return url.startsWith('https://discerned.online/') || url.startsWith('http://localhost:3000/');
+}
+
+function rememberSigningTab(tabId: number, isOurs: boolean): void {
+  signingTabId = tabId;
+  signingTabIsOurs = isOurs;
+  chrome.storage.session.set({ signingTabId: tabId, signingTabIsOurs: isOurs }).catch(() => {});
+}
+
+function forgetSigningTab(): void {
+  signingTabId = null;
+  signingTabIsOurs = false;
+  chrome.storage.session.remove(['signingTabId', 'signingTabIsOurs']).catch(() => {});
+}
+
+// Close the signing tab only if we created it (a minimized window) — never a
+// tab the user opened themselves. Called on logout, when it's no longer needed.
+async function closeOwnSigningTab(): Promise<void> {
+  if (signingTabId !== null && signingTabIsOurs) {
     try {
-      const tab = await chrome.tabs.get(canonicalNIP07TabId);
-      if (tab && !tab.discarded) return canonicalNIP07TabId;
+      await chrome.tabs.remove(signingTabId);
+    } catch {
+      // Already closed.
+    }
+  }
+  forgetSigningTab();
+}
+
+// Poll a freshly opened tab until its content script answers PING (the
+// SIGN_WITH_NIP07 listener is then live), or give up after ~5s.
+async function waitForContentScript(tabId: number, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await chrome.tabs.sendMessage(tabId, { type: 'PING' }) as { ok?: boolean } | undefined;
+      if (res?.ok) return;
+    } catch {
+      // Content script not ready yet — retry.
+    }
+    await new Promise(r => setTimeout(r, 150));
+  }
+  throw new Error('Signing tab did not become ready in time');
+}
+
+// Resolve a tab on the discerned origin to route NIP-07 signing through.
+// Order: (1) reuse our cached signing tab if still valid; (2) reuse any discerned
+// tab the user already has open, leaving it untouched; (3) open our own
+// background tab on the lightweight /about route and wait for its content script.
+//
+// Case 3 opens a normal background TAB in the user's current window (not a
+// separate chrome.windows.create window): NIP-07 wallets render their approval
+// popup parented to the page's window, and a wallet popup parented to a
+// programmatically-opened standalone window comes up blank/broken. A background
+// tab in the user's existing window behaves like the (working) reuse case.
+async function resolveSigningTab(): Promise<number> {
+  // (1) Cached signing tab.
+  if (signingTabId !== null) {
+    try {
+      const tab = await chrome.tabs.get(signingTabId);
+      if (tab && !tab.discarded && isDiscernedUrl(tab.url)) return signingTabId;
     } catch {
       // Tab was closed.
     }
-    canonicalNIP07TabId = null;
-    chrome.storage.session.remove('canonicalNIP07TabId').catch(() => {});
+    forgetSigningTab();
   }
-  if (!fallbackTabId) throw new Error('No tab available for NIP-07 signing');
-  canonicalNIP07TabId = fallbackTabId;
-  chrome.storage.session.set({ canonicalNIP07TabId: fallbackTabId }).catch(() => {});
-  return fallbackTabId;
+
+  // (2) A discerned tab the user already has open — sign there silently.
+  const existing = await chrome.tabs.query({ url: DISCERNED_URL_PATTERNS });
+  const live = existing.find(t => t.id !== undefined && !t.discarded);
+  if (live?.id !== undefined) {
+    rememberSigningTab(live.id, false);
+    return live.id;
+  }
+
+  // (3) Open our own background tab in the user's current window.
+  const base = await resolveBaseUrl();
+  const tab = await chrome.tabs.create({ url: `${base}/about`, active: false });
+  const tabId = tab.id;
+  if (tabId === undefined) throw new Error('Failed to open signing tab');
+  await waitForContentScript(tabId);
+  rememberSigningTab(tabId, true);
+  return tabId;
+}
+
+// Resolve the signing tab and ask it to sign via NIP-07. Returns the signer's
+// response, or null if the tab was unreachable (caller should re-resolve once).
+async function signWithSigningTab(
+  template: Parameters<typeof finalizeEvent>[0],
+): Promise<{ signed?: object; error?: string } | null> {
+  const tabId = await resolveSigningTab();
+  try {
+    return await chrome.tabs.sendMessage(tabId, {
+      type: 'SIGN_WITH_NIP07',
+      event: template,
+    }) as { signed?: object; error?: string };
+  } catch {
+    return null;
+  }
 }
 
 async function signEvent(
   template: Parameters<typeof finalizeEvent>[0],
-  senderTabId?: number,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   if (currentAuthState.type === 'pro') {
-    const tabId = await resolveSigningTab(senderTabId);
-    let response: { signed?: object; error?: string } | null;
-    try {
-      response = await chrome.tabs.sendMessage(tabId, {
-        type: 'SIGN_WITH_NIP07',
-        event: template,
-      }) as typeof response;
-    } catch {
-      if (tabId !== senderTabId && senderTabId) {
-        canonicalNIP07TabId = null;
-        chrome.storage.session.remove('canonicalNIP07TabId').catch(() => {});
-        response = await chrome.tabs.sendMessage(senderTabId, {
-          type: 'SIGN_WITH_NIP07',
-          event: template,
-        }) as typeof response;
-        canonicalNIP07TabId = senderTabId;
-        chrome.storage.session.set({ canonicalNIP07TabId: senderTabId }).catch(() => {});
-      } else {
-        throw new Error('NIP-07 signing failed: content script unreachable');
-      }
+    let response = await signWithSigningTab(template);
+    if (response === null) {
+      // The cached signing tab was unreachable — drop it and resolve a fresh
+      // one (reuse another discerned tab or open a new window).
+      forgetSigningTab();
+      response = await signWithSigningTab(template);
     }
     if (!response) throw new Error('NIP-07 content script did not respond');
     if (response.error) throw new Error(response.error);

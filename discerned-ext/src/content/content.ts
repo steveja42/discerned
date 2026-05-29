@@ -33,6 +33,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'ACTIVATE_DISCERNED') {
     handleActivation();
     sendResponse({ success: true });
+  } else if (message.type === 'PING') {
+    // Readiness probe — background uses this to confirm the SIGN_WITH_NIP07
+    // listener is live in a freshly opened signing tab before sending an event.
+    sendResponse({ ok: true });
   } else if (message.type === 'SIGN_WITH_NIP07') {
     signWithNIP07(message.event as Parameters<typeof signWithNIP07>[0])
       .then(signed => sendResponse({ signed }))

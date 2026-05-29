@@ -98,6 +98,7 @@ export type BackgroundMessage =
   | { type: 'OPEN_ONBOARDING' }
   | { type: 'DISMISS_OVERLAY_NUDGE' }
   | { type: 'SIGN_WITH_NIP07'; event: Record<string, unknown> }
+  | { type: 'PING' }
   | { type: 'INLINE_IMAGE'; src: string }
   | { type: 'PUSH_NEW_CLIP'; clip: ClipData }
   | { type: 'FORCE_BRIDGE_RESYNC' }
