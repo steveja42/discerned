@@ -8,8 +8,10 @@
       "name": "Debug: Chrome (Isolated)",
       "type": "chrome",
       "request": "launch",
-      "url": "https://example.com/",
       "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
       "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/chrome-isolated",
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}/dist",
@@ -25,8 +27,10 @@
       "name": "Debug: Chrome (nos2x)",
       "type": "chrome",
       "request": "launch",
-      "url": "https://example.com/",
       "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
       "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/chrome",
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}/dist",
@@ -42,8 +46,10 @@
       "name": "Debug: Brave (main-default)",
       "type": "chrome",
       "request": "launch",
-      "url": "https://example.com/",
       "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       "userDataDir": "C:\\Users\\steve\\AppData\\Local\\BraveSoftware\\Brave-Browser\\User Data",
       "resolveSourceMapLocations": [
@@ -61,8 +67,10 @@
       "name": "Debug: Brave (no nsec)",
       "type": "chrome",
       "request": "launch",
-      "url": "https://example.com/",
       "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-no-nsec",
       "resolveSourceMapLocations": [
@@ -79,8 +87,10 @@
       "name": "Debug: Brave (nip07-nos2x)",
       "type": "chrome",
       "request": "launch",
-      "url": "https://example.com/",
       "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
       /* --- Path for Windows --- */
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-nip07-nos2x",
@@ -98,8 +108,10 @@
       "name": "Debug: Brave (nip07-alby)",
       "type": "chrome",
       "request": "launch",
-      "url": "https://example.com/",
       "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
       /* --- Path for Windows --- */
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       /* --- Path for macOS (Uncomment if needed) --- */
@@ -119,8 +131,10 @@
       "name": "Debug: Brave (stored key)",
       "type": "chrome",
       "request": "launch",
-      "url": "https://example.com/",
       "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
       /* --- Path for Windows --- */
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       /* --- Path for macOS (Uncomment if needed) --- */
@@ -140,7 +154,9 @@
       "name": "Debug: Chrome (Existing Profile)",
       "type": "chrome",
       "request": "launch",
-      "url": "about:blank",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
       // 1. Point this to the "User Data" folder (NOT the profile folder itself)
       "userDataDir": "C:\\Users\\YourName\\AppData\\Local\\Google\\Chrome\\User Data",
       "resolveSourceMapLocations": [
@@ -152,6 +168,33 @@
         // 2. Specify the folder name of the profile (e.g., "Default" or "Profile 1")
         "--profile-directory=Default",
         "--remote-debugging-port=9222"
+      ]
+    }
+    ,
+    {
+      "type": "chrome",
+      "request": "attach",
+      "name": "Attach to Chrome (shared with extension debugger)",
+      "port": 9222,
+      "urlFilter": "*://{localhost:3000,discerned.online}/*",
+      "webRoot": "${workspaceFolder}/../discerned-web",
+      "sourceMapPathOverrides": {
+        "webpack://_N_E/*": "${workspaceFolder}/../discerned-web/*"
+      },
+      "disableNetworkCache": false,
+      "smartStep": true,
+      "skipFiles": [
+        "chrome-extension://**"
+      ],
+      "cascadeTerminateToConfigurations": [
+        "Debug: Brave (main-default)",
+        "Debug: Brave (no nsec)",
+        "Debug: Brave (nip07-nos2x)",
+        "Debug: Brave (nip07-alby)",
+        "Debug: Brave (stored key)",
+        "Debug: Chrome (Isolated)",
+        "Debug: Chrome (nos2x)",
+        "Debug: Chrome (Existing Profile)"
       ]
     }
   ],
