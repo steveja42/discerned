@@ -33,17 +33,67 @@
     "version": "0.2.0",
     "compounds": [
       {
-        "name": "🚀 Debug everything (Brave + extension + web)",
+        "name": "🚀 Debug both (Brave main-default + web)",
         "configurations": [
           "Debug: Brave (main-default)",
           "Attach to Chrome (shared with extension debugger)"
         ],
         "stopAll": true,
-        "presentation": {
-          "hidden": false,
-          "group": "1_compounds",
-          "order": 1
-        }
+        "presentation": { "hidden": false, "group": "1_compounds", "order": 1 }
+      },
+      {
+        "name": "🚀 Debug both (Brave no nsec + web)",
+        "configurations": [
+          "Debug: Brave (no nsec)",
+          "Attach to Chrome (shared with extension debugger)"
+        ],
+        "stopAll": true,
+        "presentation": { "hidden": false, "group": "1_compounds", "order": 2 }
+      },
+      {
+        "name": "🚀 Debug both (Brave nip07-nos2x + web)",
+        "configurations": [
+          "Debug: Brave (nip07-nos2x)",
+          "Attach to Chrome (shared with extension debugger)"
+        ],
+        "stopAll": true,
+        "presentation": { "hidden": false, "group": "1_compounds", "order": 3 }
+      },
+      {
+        "name": "🚀 Debug both (Brave nip07-alby + web)",
+        "configurations": [
+          "Debug: Brave (nip07-alby)",
+          "Attach to Chrome (shared with extension debugger)"
+        ],
+        "stopAll": true,
+        "presentation": { "hidden": false, "group": "1_compounds", "order": 4 }
+      },
+      {
+        "name": "🚀 Debug both (Brave stored key + web)",
+        "configurations": [
+          "Debug: Brave (stored key)",
+          "Attach to Chrome (shared with extension debugger)"
+        ],
+        "stopAll": true,
+        "presentation": { "hidden": false, "group": "1_compounds", "order": 5 }
+      },
+      {
+        "name": "🚀 Debug both (Chrome Isolated + web)",
+        "configurations": [
+          "Debug: Chrome (Isolated)",
+          "Attach to Chrome (shared with extension debugger)"
+        ],
+        "stopAll": true,
+        "presentation": { "hidden": false, "group": "1_compounds", "order": 6 }
+      },
+      {
+        "name": "🚀 Debug both (Chrome nos2x + web)",
+        "configurations": [
+          "Debug: Chrome (nos2x)",
+          "Attach to Chrome (shared with extension debugger)"
+        ],
+        "stopAll": true,
+        "presentation": { "hidden": false, "group": "1_compounds", "order": 7 }
       }
     ]
   }

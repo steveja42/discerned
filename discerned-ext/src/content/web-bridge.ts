@@ -35,7 +35,9 @@ function post(msg: WebBridgeOutbound): void {
 
 type AuthMethod = Extract<WebBridgeOutbound, { type: 'DISCERNED_BRIDGE_HELLO' }>['authMethod'];
 
-async function getAuthInfo(): Promise<{ pubkey: string | null; authMethod: AuthMethod }> {
+// Returns null if the background couldn't be reached (SW asleep on cold start).
+// Caller should retry rather than treat this as a definitive "no auth" answer.
+async function getAuthInfo(): Promise<{ pubkey: string | null; authMethod: AuthMethod } | null> {
   try {
     const res = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }) as
       | { success: true; data: AuthState }
@@ -51,8 +53,7 @@ async function getAuthInfo(): Promise<{ pubkey: string | null; authMethod: AuthM
       case 'guest':  return { pubkey: null,            authMethod: 'guest' };
     }
   } catch {
-    // Background may be sleeping on first load — non-fatal.
-    return { pubkey: null, authMethod: null };
+    return null;
   }
 }
 
@@ -77,7 +78,8 @@ async function getNip07Pubkey(): Promise<string | null> {
 
 // ── Clips ────────────────────────────────────────────────────────────────────
 
-async function fetchClips(): Promise<ClipData[]> {
+// Returns null if the background couldn't be reached.
+async function fetchClips(): Promise<ClipData[] | null> {
   try {
     const res = await chrome.runtime.sendMessage({ type: 'GET_CLIPS' }) as
       | { success: true; data: { clips: ClipData[] } }
@@ -85,7 +87,7 @@ async function fetchClips(): Promise<ClipData[]> {
     if (!res.success) return [];
     return res.data.clips;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -94,12 +96,14 @@ async function fetchClips(): Promise<ClipData[]> {
 // knownCount: the number of clips the web app already has. If IndexedDB has
 // the same count, skip sending DISCERNED_BRIDGE_CLIPS to avoid redundant transfers.
 // Pass 0 to force a full re-send (used on error recovery and cold load).
-async function sendBridgeData(knownCount = 0): Promise<void> {
-  if (!isContextValid()) return;
+// Returns true only if the background was reachable; caller retries on false.
+async function sendBridgeData(knownCount = 0): Promise<boolean> {
+  if (!isContextValid()) return false;
   // Auth and clips can be fetched in parallel.
   const [authInfo, clips] = await Promise.all([
     (async () => {
       const info = await getAuthInfo();
+      if (info === null) return null;
       // If pro (NIP-07), try to surface the pubkey from storage as a fallback.
       if (info.authMethod === 'nip07' && info.pubkey === null) {
         const stored = await getNip07Pubkey();
@@ -109,6 +113,8 @@ async function sendBridgeData(knownCount = 0): Promise<void> {
     })(),
     fetchClips(),
   ]);
+
+  if (authInfo === null || clips === null) return false;
 
   post({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: authInfo.pubkey, authMethod: authInfo.authMethod });
 
@@ -123,6 +129,7 @@ async function sendBridgeData(knownCount = 0): Promise<void> {
   const catStored = await chrome.storage.local.get(STORAGE_KEYS.CATEGORIES);
   const cats = (catStored[STORAGE_KEYS.CATEGORIES] as string[] | undefined) ?? [];
   post({ type: 'DISCERNED_BRIDGE_CATEGORIES', categories: cats });
+  return true;
 }
 
 // Listen for messages pushed from the background worker.
@@ -137,6 +144,7 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
     sendBridgeData(0).catch((err: unknown) => {
       log(LL.ERROR, 'web-bridge: resync failed', err, 'url:', window.location.href);
     });
+    return;
   }
   if (message.type === 'NAVIGATE_TO_CLIP') {
     // Tell the web page to focus this clip without any URL or React tree change.
@@ -148,28 +156,82 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
   }
 });
 
-// Deferred proactive send — yields to DISCERNED_WEB_READY for 200 ms so that
-// when the content script reloads into an already-mounted page (e.g. after
-// extension reload), the web page's DISCERNED_WEB_READY arrives with the
-// correct clipCount and cancels this send, preventing a duplicate fetch.
-// If no DISCERNED_WEB_READY arrives within 200 ms (script loaded after READY
-// was posted and won't be re-posted), the proactive send fires normally.
-// Deduplication: only one sendBridgeData call fires per content script load.
-// React Strict Mode double-invokes effects, so DISCERNED_WEB_READY can arrive
-// twice within milliseconds. The first arrival wins; subsequent ones are ignored.
-let initialSendDone = false;
+// Two distinct concerns:
+//   1. SW-asleep retry: the proactive cold-load send may fail because the
+//      service worker hasn't woken up yet. Keep retrying until we get real
+//      data from the background.
+//   2. Page-listener race: on browser launch, the extension's content script
+//      can post HELLO before the page's React message listener has attached.
+//      The page then sends DISCERNED_WEB_READY to ask for a fresh send — we
+//      MUST respond to every READY, not gate it on the proactive having
+//      already succeeded. Each READY is the page saying "I'm here now."
+let proactiveDone = false;
+let proactiveInFlight = false;
+let proactiveRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
-function sendOnce(clipCount: number, label: string): void {
-  if (initialSendDone) return;
-  initialSendDone = true;
-  sendBridgeData(clipCount).catch((err: unknown) => {
-    log(LL.ERROR, `web-bridge: ${label} failed`, err, 'url:', window.location.href);
-  });
+function scheduleProactiveRetry(): void {
+  if (proactiveDone) return;
+  if (proactiveRetryTimer !== null) return;
+  proactiveRetryTimer = setTimeout(() => {
+    proactiveRetryTimer = null;
+    runProactive();
+  }, 500);
 }
 
-const proactiveTimer = setTimeout(() => {
-  sendOnce(0, 'initial sendBridgeData');
-}, 200);
+function runProactive(): void {
+  if (proactiveDone || proactiveInFlight) return;
+  proactiveInFlight = true;
+  sendBridgeData(0)
+    .then((ok: boolean) => {
+      proactiveInFlight = false;
+      if (ok) {
+        proactiveDone = true;
+        if (proactiveRetryTimer !== null) {
+          clearTimeout(proactiveRetryTimer);
+          proactiveRetryTimer = null;
+        }
+      } else {
+        log(LL.NORMAL, 'web-bridge: proactive send got no SW response, will retry', 'url:', window.location.href);
+        scheduleProactiveRetry();
+      }
+    })
+    .catch((err: unknown) => {
+      proactiveInFlight = false;
+      log(LL.ERROR, 'web-bridge: proactive send failed', err, 'url:', window.location.href);
+      scheduleProactiveRetry();
+    });
+}
+
+// Handles every DISCERNED_WEB_READY from the page. Unlike runProactive, this
+// does NOT gate on prior success — the page may send READY at any time and
+// always wants a fresh response (it might have just hydrated and missed the
+// proactive send).
+let readyInFlight = false;
+function handleReady(clipCount: number): void {
+  if (readyInFlight) return;
+  readyInFlight = true;
+  sendBridgeData(clipCount)
+    .then((ok: boolean) => {
+      readyInFlight = false;
+      if (ok) {
+        // A successful READY also satisfies the proactive retry loop.
+        proactiveDone = true;
+        if (proactiveRetryTimer !== null) {
+          clearTimeout(proactiveRetryTimer);
+          proactiveRetryTimer = null;
+        }
+      }
+    })
+    .catch((err: unknown) => {
+      readyInFlight = false;
+      log(LL.ERROR, 'web-bridge: READY send failed', err, 'url:', window.location.href);
+    });
+}
+
+// Deferred proactive send — yields to DISCERNED_WEB_READY for 200 ms so the
+// page can supply the correct clipCount before we fetch. If no READY arrives,
+// the proactive send fires anyway.
+const proactiveTimer = setTimeout(runProactive, 200);
 
 // Listen for messages from the web page.
 window.addEventListener('message', (e: MessageEvent) => {
@@ -180,7 +242,7 @@ window.addEventListener('message', (e: MessageEvent) => {
   const msg = e.data as WebBridgeInbound | undefined;
   if (msg?.type === 'DISCERNED_WEB_READY') {
     clearTimeout(proactiveTimer);
-    sendOnce(msg.clipCount, 'sendBridgeData');
+    handleReady(msg.clipCount);
   }
   if (msg?.type === 'DISCERNED_DELETE_CLIPS') {
     chrome.runtime.sendMessage({ type: 'DELETE_CLIPS', ids: msg.ids }).catch(() => { /* non-fatal */ });

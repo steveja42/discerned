@@ -19,7 +19,6 @@ export function listenForBridge(
 ): () => void {
   const onMessage = (e: MessageEvent) => {
     if (e.origin !== window.location.origin) return;
-    if (e.source !== window) return;
     if (!e.data || typeof e.data !== 'object') return;
     if (typeof e.data.type !== 'string') return;
     if (!e.data.type.startsWith('DISCERNED_BRIDGE_')) return;

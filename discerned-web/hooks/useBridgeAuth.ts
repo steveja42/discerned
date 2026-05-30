@@ -13,16 +13,16 @@ export function useBridgeAuth() {
   const { bridgePresent, setBridgePresent, setClips } = useClipStore();
 
   useEffect(() => {
-    // Listen passively — do NOT post DISCERNED_WEB_READY here. That signal is
-    // sent only by useLibraryBridge so the extension knows the clip count and
-    // can skip redundant sends. useBridgeAuth handles HELLO and CLIPS so the
-    // store is populated even when the bridge fires on a non-library page.
+    let gotHello = false;
+
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== window.location.origin) return;
-      if (e.source !== window) return;
       if (!e.data || typeof e.data !== 'object') return;
       const msg = e.data as BridgeMessage;
+      if (typeof msg.type !== 'string') return;
+      if (!msg.type.startsWith('DISCERNED_BRIDGE_')) return;
       if (msg.type === 'DISCERNED_BRIDGE_HELLO') {
+        gotHello = true;
         setBridgePresent(msg.pubkey, msg.authMethod);
         if (msg.pubkey) setBridgeAuth(msg.pubkey);
       }
@@ -31,7 +31,44 @@ export function useBridgeAuth() {
       }
     };
     window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
+
+    // On browser-restored tabs the extension's web-bridge content script
+    // runs at document_idle, which can land well after React hydration —
+    // sometimes 5+ seconds late. We ping DISCERNED_WEB_READY in a backoff
+    // pattern and never give up entirely so even a very late-loading content
+    // script will still hear us. The extension's handleReady is idempotent
+    // (in-flight guard prevents duplicate sends).
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+    const ping = () => {
+      timer = null;
+      if (gotHello) return;
+      window.postMessage({ type: 'DISCERNED_WEB_READY', clipCount: 0 }, window.location.origin);
+      attempts++;
+      // 500ms for the first ~10 tries, then back off to every 2s. Cap at
+      // 30 attempts (~50s) which covers any plausible content-script delay.
+      const delay = attempts < 10 ? 500 : 2000;
+      if (attempts < 30) {
+        timer = setTimeout(ping, delay);
+      }
+    };
+    ping();
+
+    const onVisible = () => {
+      if (gotHello) return;
+      attempts = 0;
+      if (timer !== null) clearTimeout(timer);
+      ping();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onVisible);
+
+    return () => {
+      if (timer !== null) clearTimeout(timer);
+      window.removeEventListener('message', onMessage);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onVisible);
+    };
   }, [setBridgeAuth, setBridgePresent, setClips]);
 
   return { extensionPresent: bridgePresent };

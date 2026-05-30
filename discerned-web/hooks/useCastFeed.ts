@@ -1,18 +1,17 @@
 // Manages the live Nostr Cast feed subscription.
-// Pre-seeds the list with MOCK_CLIPS while the relay connection establishes,
-// then deduplicates and prepends incoming events up to a cap of 200.
-// Feed and parse modules are dynamically imported so they never run server-side.
+// Starts with an empty list and prepends incoming events, deduplicated and
+// capped at 200. Feed and parse modules are dynamically imported so they
+// never run server-side.
 
 'use client';
 
 import { useState, useEffect } from 'react';
 import type { ClipData } from '@/lib/types';
-import { MOCK_CLIPS } from '@/lib/mockData';
 
 type FeedStatus = 'connecting' | 'live' | 'error';
 
 export function useCastFeed() {
-  const [clips, setClips] = useState<ClipData[]>(MOCK_CLIPS);
+  const [clips, setClips] = useState<ClipData[]>([]);
   const [status, setStatus] = useState<FeedStatus>('connecting');
 
   useEffect(() => {

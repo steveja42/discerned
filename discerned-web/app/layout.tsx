@@ -4,6 +4,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { ClipStoreProvider } from '@/lib/bridge/ClipStoreContext';
+import { NostrAuthProvider } from '@/hooks/useNostrAuth';
 
 export const metadata: Metadata = {
   title: 'Discerned — Signal, not noise.',
@@ -14,7 +15,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="style-editorial">
-        <ClipStoreProvider>{children}</ClipStoreProvider>
+        <NostrAuthProvider>
+          <ClipStoreProvider>{children}</ClipStoreProvider>
+        </NostrAuthProvider>
       </body>
     </html>
   );
