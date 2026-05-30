@@ -4,6 +4,7 @@
 // On mount, the page posts DISCERNED_WEB_READY so the extension knows it can send.
 
 import type { ClipData } from '@/lib/types';
+import { LL, log } from '@/lib/logger';
 
 export type BridgeMessage =
   | { type: 'DISCERNED_BRIDGE_HELLO'; pubkey: string | null; authMethod: 'nip07' | 'nip46' | 'nsec' | 'guest' | null }
@@ -17,16 +18,60 @@ export function listenForBridge(
   handler: (msg: BridgeMessage) => void,
   clipCount = 0,
 ): () => void {
+  const t0 = performance.now();
+  const elapsed = () => `+${Math.round(performance.now() - t0)}ms`;
+  log(LL.DEBUG, '[listenForBridge] subscribe', elapsed(), 'clipCount=', clipCount);
+
+  let gotHello = false;
+
   const onMessage = (e: MessageEvent) => {
     if (e.origin !== window.location.origin) return;
     if (!e.data || typeof e.data !== 'object') return;
     if (typeof e.data.type !== 'string') return;
     if (!e.data.type.startsWith('DISCERNED_BRIDGE_')) return;
-    handler(e.data as BridgeMessage);
+    const msg = e.data as BridgeMessage;
+    log(LL.DEBUG, '[listenForBridge] received', msg.type, elapsed());
+    if (msg.type === 'DISCERNED_BRIDGE_HELLO') gotHello = true;
+    handler(msg);
   };
   window.addEventListener('message', onMessage);
-  window.postMessage({ type: 'DISCERNED_WEB_READY', clipCount }, window.location.origin);
-  return () => window.removeEventListener('message', onMessage);
+
+  // Retry DISCERNED_WEB_READY until HELLO arrives. On browser-restored tabs
+  // the extension's web-bridge content script can attach its own message
+  // listener well after this page hydrates, so a single READY can be lost.
+  // The extension's handleReady is idempotent, so retries are safe.
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let attempts = 0;
+  const ping = () => {
+    timer = null;
+    if (gotHello) return;
+    window.postMessage({ type: 'DISCERNED_WEB_READY', clipCount }, window.location.origin);
+    attempts++;
+    log(LL.DEBUG, '[listenForBridge] ping #', attempts, elapsed());
+    const delay = attempts < 10 ? 500 : 2000;
+    if (attempts < 30) {
+      timer = setTimeout(ping, delay);
+    } else {
+      log(LL.WARN, '[listenForBridge] gave up after', attempts, 'pings without HELLO', elapsed());
+    }
+  };
+  ping();
+
+  const onVisible = () => {
+    if (gotHello) return;
+    attempts = 0;
+    if (timer !== null) clearTimeout(timer);
+    ping();
+  };
+  document.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('pageshow', onVisible);
+
+  return () => {
+    if (timer !== null) clearTimeout(timer);
+    window.removeEventListener('message', onMessage);
+    document.removeEventListener('visibilitychange', onVisible);
+    window.removeEventListener('pageshow', onVisible);
+  };
 }
 
 export function sendDeleteClips(ids: string[]): void {

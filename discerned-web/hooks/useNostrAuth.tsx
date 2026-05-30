@@ -15,6 +15,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { AuthState } from '@/lib/types';
 import { loadStoredPubkey, storePubkey, clearStoredAuth, hasNip07, nip07GetPubkey } from '@/lib/nostr/auth';
+import { LL, log } from '@/lib/logger';
 
 interface NostrAuthValue {
   auth: AuthState;
@@ -32,10 +33,17 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
   const [nip07Available, setNip07Available] = useState(false);
 
   useEffect(() => {
+    const t0 = performance.now();
+    const elapsed = () => `+${Math.round(performance.now() - t0)}ms`;
+    log(LL.DEBUG, '[useNostrAuth] effect mounted', elapsed(),
+        'readyState=', document.readyState,
+        'hasNip07=', hasNip07());
+
     // Restore any persisted pubkey immediately so the UI doesn't flicker as
     // 'guest' during the deferred wallet probe.
     const stored = loadStoredPubkey();
     if (stored) {
+      log(LL.DEBUG, '[useNostrAuth] restored stored pubkey from localStorage', elapsed());
       setAuth({ status: 'readonly', pubkey: stored, source: 'manual' });
     }
 
@@ -48,15 +56,17 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
     const probe = async () => {
       if (cancelled || signedIn) return;
       if (!hasNip07()) return;
+      log(LL.DEBUG, '[useNostrAuth] probe: window.nostr present, calling getPublicKey()', elapsed());
       setNip07Available(true);
       try {
         const pubkey = await nip07GetPubkey();
         if (cancelled) return;
         signedIn = true;
+        log(LL.DEBUG, '[useNostrAuth] getPublicKey resolved → connected', elapsed());
         storePubkey(pubkey);
         setAuth({ status: 'connected', pubkey, source: 'nip07' });
-      } catch {
-        // Wallet declined or errored — leave readonly/guest as-is.
+      } catch (err) {
+        log(LL.WARN, '[useNostrAuth] getPublicKey rejected', err, elapsed());
       }
     };
 
@@ -70,16 +80,23 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
 
     const poll = () => {
       if (cancelled || signedIn) return;
-      if (hasNip07()) {
+      const present = hasNip07();
+      if (attempts === 0 || attempts % 5 === 0) {
+        log(LL.DEBUG, '[useNostrAuth] poll #', attempts, 'hasNip07=', present, elapsed());
+      }
+      if (present) {
         probe();
         return;
       }
       if (++attempts < MAX_ATTEMPTS) {
         setTimeout(poll, 300);
+      } else {
+        log(LL.WARN, '[useNostrAuth] gave up polling for window.nostr', elapsed());
       }
     };
 
     const startProbing = () => {
+      log(LL.DEBUG, '[useNostrAuth] startProbing scheduled', elapsed());
       // requestIdleCallback gives the browser a chance to flush layout and
       // wallet init before we touch window.nostr. Falls back to setTimeout
       // for browsers without it.
@@ -93,8 +110,10 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
     };
 
     if (document.readyState === 'complete') {
+      log(LL.DEBUG, '[useNostrAuth] readyState already complete; probing immediately', elapsed());
       startProbing();
     } else {
+      log(LL.DEBUG, '[useNostrAuth] waiting for load event before probing', elapsed());
       window.addEventListener('load', startProbing, { once: true });
     }
 
@@ -128,9 +147,14 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
 
   const setBridgeAuth = useCallback((pubkey: string | null) => {
     if (!pubkey) return;
-    setAuth((prev) =>
-      prev.status === 'connected' ? prev : { status: 'readonly', pubkey, source: 'bridge' },
-    );
+    setAuth((prev) => {
+      if (prev.status === 'connected') {
+        log(LL.DEBUG, '[useNostrAuth] setBridgeAuth ignored — already connected');
+        return prev;
+      }
+      log(LL.DEBUG, '[useNostrAuth] setBridgeAuth → readonly/bridge');
+      return { status: 'readonly', pubkey, source: 'bridge' };
+    });
   }, []);
 
   return (

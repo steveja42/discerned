@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import type { BridgeMessage } from '@/lib/bridge/extension-bridge';
 import { useNostrAuth } from '@/hooks/useNostrAuth';
 import { useClipStore } from '@/lib/bridge/ClipStoreContext';
+import { LL, log } from '@/lib/logger';
 
 export function useBridgeAuth() {
   const { setBridgeAuth } = useNostrAuth();
@@ -13,6 +14,12 @@ export function useBridgeAuth() {
   const { bridgePresent, setBridgePresent, setClips } = useClipStore();
 
   useEffect(() => {
+    const t0 = performance.now();
+    const elapsed = () => `+${Math.round(performance.now() - t0)}ms`;
+    log(LL.DEBUG, '[useBridgeAuth] effect mounted', elapsed(),
+        'document.readyState=', document.readyState,
+        'visibilityState=', document.visibilityState);
+
     let gotHello = false;
 
     const onMessage = (e: MessageEvent) => {
@@ -21,8 +28,10 @@ export function useBridgeAuth() {
       const msg = e.data as BridgeMessage;
       if (typeof msg.type !== 'string') return;
       if (!msg.type.startsWith('DISCERNED_BRIDGE_')) return;
+      log(LL.DEBUG, '[useBridgeAuth] received', msg.type, elapsed());
       if (msg.type === 'DISCERNED_BRIDGE_HELLO') {
         gotHello = true;
+        log(LL.DEBUG, '[useBridgeAuth] HELLO authMethod=', msg.authMethod, 'pubkey?=', !!msg.pubkey, elapsed());
         setBridgePresent(msg.pubkey, msg.authMethod);
         if (msg.pubkey) setBridgeAuth(msg.pubkey);
       }
@@ -45,11 +54,14 @@ export function useBridgeAuth() {
       if (gotHello) return;
       window.postMessage({ type: 'DISCERNED_WEB_READY', clipCount: 0 }, window.location.origin);
       attempts++;
+      log(LL.DEBUG, '[useBridgeAuth] ping #', attempts, elapsed());
       // 500ms for the first ~10 tries, then back off to every 2s. Cap at
       // 30 attempts (~50s) which covers any plausible content-script delay.
       const delay = attempts < 10 ? 500 : 2000;
       if (attempts < 30) {
         timer = setTimeout(ping, delay);
+      } else {
+        log(LL.WARN, '[useBridgeAuth] gave up after', attempts, 'pings without HELLO', elapsed());
       }
     };
     ping();

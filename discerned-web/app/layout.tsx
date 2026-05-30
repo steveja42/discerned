@@ -36,6 +36,9 @@ export const metadata: Metadata = {
 const hydrationReload =
   process.env.NODE_ENV === 'development'
     ? `(function(){
+  function ts(){return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+  function L(){var a=['[web] '+ts(),'[hydration-watchdog]'];for(var i=0;i<arguments.length;i++)a.push(arguments[i]);console.debug.apply(console,a);}
+  L('script ran. nav.type=',(performance.getEntriesByType('navigation')[0]||{}).type);
   function isHydrated(){
     var nodes=document.querySelectorAll('button,a,input');
     for(var i=0;i<nodes.length;i++){
@@ -47,22 +50,24 @@ const hydrationReload =
     return false;
   }
   function check(){
-    if(isHydrated())return;
+    var hydrated=isHydrated();
+    L('check after 400ms. hydrated=',hydrated);
+    if(hydrated)return;
     try{
       var k='__discernedHydrationReload';
-      if(sessionStorage.getItem(k))return;
+      if(sessionStorage.getItem(k)){L('already reloaded once this session — giving up');return;}
       sessionStorage.setItem(k,'1');
     }catch(e){}
+    L('hydration failed — reloading');
     location.reload();
   }
   addEventListener('load',function(){
-    if(isHydrated()){
+    var hydrated=isHydrated();
+    L('load fired. hydrated=',hydrated);
+    if(hydrated){
       try{sessionStorage.removeItem('__discernedHydrationReload');}catch(e){}
       return;
     }
-    // Hydration in dev typically completes within ~100-300ms of load. 400ms
-    // gives enough headroom to avoid a false-positive reload while keeping
-    // the failure-recovery snappy.
     setTimeout(check,400);
   });
 })();`
