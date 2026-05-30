@@ -32,7 +32,11 @@ export function useCastFeed() {
             const clip = parseEvent(e);
             setClips((prev) => {
               if (prev.some((c) => c.capture.id === clip.capture.id)) return prev;
-              return [clip, ...prev].slice(0, 200);
+              // Sort by timestamp descending so newest is always on top,
+              // regardless of the order in which relays deliver events.
+              return [clip, ...prev]
+                .sort((a, b) => b.capture.timestamp - a.capture.timestamp)
+                .slice(0, 200);
             });
           },
           () => { if (!cancelled) setStatus('live'); },

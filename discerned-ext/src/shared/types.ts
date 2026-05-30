@@ -55,6 +55,8 @@ export interface Capture {
   bodyText?: string;          // plain text (Readability textContent or stripped)
   // bookmark / article
   thumbnail?: string | null;
+  // cast feed only — author of the published Nostr event (set by the web app's parseEvent)
+  authorPubkey?: string;
 }
 
 export interface ClipData {
@@ -105,7 +107,7 @@ export type BackgroundMessage =
   | { type: 'NAVIGATE_TO_CLIP'; clipId: string }
   | { type: 'GET_CLIP_COUNT' }
   | { type: 'OPEN_LIBRARY'; clipId?: string }
-  | { type: 'OPEN_HOME' }
+  | { type: 'OPEN_HOME'; eventId?: string }
   | { type: 'REGISTER_LOG_TAB' }
   | { type: 'GET_CLIP_BODY'; id: string };
 

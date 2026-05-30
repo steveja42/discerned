@@ -14,6 +14,8 @@ import { useNostrAuth } from '@/hooks/useNostrAuth';
 import { useFirstVisit } from '@/hooks/useFirstVisit';
 import { useCastFeed } from '@/hooks/useCastFeed';
 import { useBridgeAuth } from '@/hooks/useBridgeAuth';
+import { useFollowList } from '@/hooks/useFollowList';
+import { useReadCasts } from '@/hooks/useReadCasts';
 
 export default function HomeClient() {
   const router = useRouter();
@@ -21,7 +23,10 @@ export default function HomeClient() {
   const { showPopover, dismiss: dismissPopover } = useFirstVisit();
   const { clips, status } = useCastFeed();
   const { extensionPresent } = useBridgeAuth();
+  const follows = useFollowList(auth.pubkey);
+  const { read, markRead } = useReadCasts();
   const [signInOpen, setSignInOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleBrandClick = () => {
     dismissPopover();
@@ -41,6 +46,9 @@ export default function HomeClient() {
         brandHasPopover={showPopover}
         onBrandClick={handleBrandClick}
         extensionPresent={extensionPresent}
+        searchPlaceholder="Search casts, casters, sources…"
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
       {showPopover && (
@@ -50,7 +58,15 @@ export default function HomeClient() {
         />
       )}
 
-      <CastFeed clips={clips} status={status} />
+      <CastFeed
+        clips={clips}
+        status={status}
+        searchQuery={searchQuery}
+        follows={follows}
+        isSignedIn={auth.status !== 'guest'}
+        read={read}
+        markRead={markRead}
+      />
 
       {signInOpen && (
         <SignInModal

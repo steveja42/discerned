@@ -87,6 +87,9 @@ describe('Nostr event factory', () => {
             expect(extractTagValue(ev, 'context')).toBe(fx.capture.selectionContext);
           }
         } else {
+          if (fx.capture.title && fx.capture.title.trim().length > 0) {
+            expect(extractTagValue(ev, 'title')).toBe(fx.capture.title);
+          }
           if (fx.capture.thumbnail) {
             expect(extractTagValue(ev, 'image')).toBe(fx.capture.thumbnail);
           }

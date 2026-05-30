@@ -168,8 +168,9 @@ async function handleActivation() {
       void rememberFormat(capture.format);
     },
     onCast: async (capture: Capture, evaluation: Evaluation) => {
-      await handleCast(capture, evaluation);
+      const eventId = await handleCast(capture, evaluation);
       void rememberFormat(capture.format);
+      return eventId;
     },
     authState: freshAuthState,
     nudgeDismissed,
@@ -206,11 +207,12 @@ async function handleClip(capture: Capture, evaluation: Evaluation) {
   }
 }
 
-async function handleCast(capture: Capture, evaluation: Evaluation) {
+async function handleCast(capture: Capture, evaluation: Evaluation): Promise<string | undefined> {
   try {
     const response = await sendToBackground({ type: 'CAST', data: { capture, evaluation } });
     if (!response.success) throw new Error(response.error);
     log(LL.NORMAL, 'Discerned: Successfully cast', 'url:', window.location.href);
+    return (response.data as { eventId?: string } | undefined)?.eventId;
   } catch (error) {
     log(LL.ERROR, 'Discerned: Cast failed', error, 'url:', window.location.href);
     showCastErrorToast(error instanceof Error ? error.message : 'Broadcast failed');

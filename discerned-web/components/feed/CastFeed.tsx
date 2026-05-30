@@ -6,8 +6,8 @@
 
 import { useState, useMemo } from 'react';
 import { CATEGORIES, INTEREST_LEVELS, ETHICS_LEVELS, interestRank, ethicsRank } from '@/lib/constants';
-import { FOLLOWS } from '@/lib/mockData';
 import type { ClipData } from '@/lib/types';
+import type { FollowProfile } from '@/lib/nostr/follows';
 import type { GlyphVariant } from '@/components/glyph/Glyph';
 import ClipRow from './ClipRow';
 import DetailPanel from './DetailPanel';
@@ -25,6 +25,13 @@ interface SidebarProps {
   activeFollow: string;
   setActiveFollow: (f: string) => void;
   count: number;
+  unreadCount: number;
+  follows: FollowProfile[];
+  isSignedIn: boolean;
+}
+
+function followInitial(f: FollowProfile): string {
+  return (f.name?.trim()?.[0] ?? f.pubkey[0] ?? '·').toUpperCase();
 }
 
 function Sidebar({
@@ -33,6 +40,9 @@ function Sidebar({
   ethicsMin, setEthicsMin,
   activeFollow, setActiveFollow,
   count,
+  unreadCount,
+  follows,
+  isSignedIn,
 }: SidebarProps) {
   return (
     <aside className="sidebar">
@@ -47,36 +57,37 @@ function Sidebar({
           </li>
           <li
             className={`nav-item ${activeFollow === 'unread' ? 'active' : ''}`}
-            onClick={() => setActiveFollow('unread')}
+            onClick={() => setActiveFollow(activeFollow === 'unread' ? 'all' : 'unread')}
           >
-            Unread <span className="nav-count">7</span>
-          </li>
-          <li
-            className={`nav-item ${activeFollow === 'saved' ? 'active' : ''}`}
-            onClick={() => setActiveFollow('saved')}
-          >
-            Saved later <span className="nav-count">12</span>
+            Unread <span className="nav-count">{unreadCount}</span>
           </li>
         </ul>
       </div>
 
       <div>
         <div className="side-section-label">
-          Following <span className="count">{FOLLOWS.length}</span>
+          Following <span className="count">{follows.length}</span>
         </div>
-        <div className="follows">
-          {FOLLOWS.map((f) => (
-            <div
-              key={f.handle}
-              className={`follow ${activeFollow === f.handle ? 'active' : ''}`}
-              onClick={() => setActiveFollow(f.handle)}
-            >
-              <span className="av">{f.avatar}</span>
-              <span className="name">{f.name}</span>
-              <span className="handle">{f.count}</span>
-            </div>
-          ))}
-        </div>
+        {!isSignedIn ? (
+          <div className="follows-empty">Sign in to see who you follow.</div>
+        ) : follows.length === 0 ? (
+          <div className="follows-empty">No follows yet.</div>
+        ) : (
+          <div className="follows">
+            {follows.map((f) => (
+              <div
+                key={f.pubkey}
+                className={`follow ${activeFollow === f.pubkey ? 'active' : ''}`}
+                onClick={() => setActiveFollow(activeFollow === f.pubkey ? 'all' : f.pubkey)}
+              >
+                {f.picture
+                  ? <img className="av av-img" src={f.picture} alt="" />
+                  : <span className="av">{followInitial(f)}</span>}
+                <span className="name">{f.name || `${f.pubkey.slice(0, 8)}…`}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="filters">
@@ -170,22 +181,59 @@ interface CastFeedProps {
   glyphVariant?: GlyphVariant;
   status: 'connecting' | 'live' | 'error';
   clips: ClipData[];
+  searchQuery?: string;
+  follows?: FollowProfile[];
+  isSignedIn?: boolean;
+  read?: Set<string>;
+  markRead?: (id: string) => void;
 }
 
-export default function CastFeed({ glyphVariant = 'bars', status, clips }: CastFeedProps) {
+// A 64-char hex pubkey marks an author filter; the other activeFollow values
+// ('all' / 'unread') are view sentinels.
+const isPubkey = (v: string) => /^[0-9a-f]{64}$/.test(v);
+const EMPTY_READ: Set<string> = new Set();
+
+export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQuery, follows = [], isSignedIn = false, read, markRead }: CastFeedProps) {
+  const readSet = read ?? EMPTY_READ;
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [interestMin, setInterestMin] = useState(0);
   const [ethicsMin, setEthicsMin] = useState(0);
   const [activeFollow, setActiveFollow] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => clips.filter((c) =>
-    (!activeCat || c.evaluation.category === activeCat) &&
-    interestRank(c.evaluation.interest) + 1 >= interestMin &&
-    ethicsRank(c.evaluation.ethics) + 1 >= ethicsMin,
-  ), [clips, activeCat, interestMin, ethicsMin]);
+  const q = searchQuery?.trim().toLowerCase() ?? '';
+
+  const unreadCount = useMemo(
+    () => clips.reduce((n, c) => (readSet.has(c.capture.id) ? n : n + 1), 0),
+    [clips, readSet],
+  );
+
+  const filtered = useMemo(() => clips.filter((c) => {
+    if (activeCat && c.evaluation.category !== activeCat) return false;
+    if (interestRank(c.evaluation.interest) + 1 < interestMin) return false;
+    if (ethicsRank(c.evaluation.ethics) + 1 < ethicsMin) return false;
+    if (activeFollow === 'unread' && readSet.has(c.capture.id)) return false;
+    if (isPubkey(activeFollow) && c.capture.authorPubkey !== activeFollow) return false;
+    if (q) {
+      const hay = [
+        c.capture.title,
+        c.capture.selectionText,
+        c.capture.selectionContext,
+        c.capture.bodyText,
+        c.capture.note,
+        c.capture.url,
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }), [clips, activeCat, interestMin, ethicsMin, activeFollow, q, readSet]);
 
   const selected = filtered.find((c) => c.capture.id === selectedId) ?? filtered[0] ?? null;
+
+  const handleSelectClip = (id: string) => {
+    setSelectedId(id);
+    markRead?.(id);
+  };
 
   const feedContent = (
     <main className="feed-col">
@@ -219,20 +267,24 @@ export default function CastFeed({ glyphVariant = 'bars', status, clips }: CastF
         onClearAll={() => { setInterestMin(0); setEthicsMin(0); setActiveCat(null); setActiveFollow('all'); }}
       />
 
-      <div className="feed-list">
-        {filtered.length === 0 ? (
-          <div className="feed-empty">No clips match these filters.</div>
-        ) : (
-          filtered.map((clip) => (
-            <ClipRow
-              key={clip.capture.id}
-              clip={clip}
-              selected={selected?.capture.id === clip.capture.id}
-              onClick={() => setSelectedId(clip.capture.id)}
-              glyphVariant={glyphVariant}
-            />
-          ))
-        )}
+      <div className="feed-scroll">
+        <div className="feed-list">
+          {filtered.length === 0 ? (
+            <div className="feed-empty">
+              {q ? `No casts match "${searchQuery}".` : 'No clips match these filters.'}
+            </div>
+          ) : (
+            filtered.map((clip) => (
+              <ClipRow
+                key={clip.capture.id}
+                clip={clip}
+                selected={selected?.capture.id === clip.capture.id}
+                onClick={() => handleSelectClip(clip.capture.id)}
+                glyphVariant={glyphVariant}
+              />
+            ))
+          )}
+        </div>
       </div>
 
       <div className="sov-strip">
@@ -258,6 +310,9 @@ export default function CastFeed({ glyphVariant = 'bars', status, clips }: CastF
             ethicsMin={ethicsMin} setEthicsMin={setEthicsMin}
             activeFollow={activeFollow} setActiveFollow={setActiveFollow}
             count={clips.length}
+            unreadCount={unreadCount}
+            follows={follows}
+            isSignedIn={isSignedIn}
           />
         }
         feed={feedContent}

@@ -103,6 +103,9 @@ export function createResourceNoteEvent(
   }
 
   const tags = baseEvaluationTags(capture, evaluation);
+  if (capture.title && capture.title.trim().length > 0) {
+    tags.push(['title', capture.title]);
+  }
   if (capture.thumbnail) {
     tags.push(['image', capture.thumbnail]);
   }

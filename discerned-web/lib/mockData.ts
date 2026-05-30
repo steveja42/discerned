@@ -1,5 +1,5 @@
 // Seed data shown in the Cast feed while the Nostr relay connection is establishing.
-// Also used as placeholder follows in the sidebar. Not persisted anywhere.
+// Not persisted anywhere.
 
 import type { ClipData } from '@/lib/types';
 
@@ -52,12 +52,4 @@ export const MOCK_CLIPS: ClipData[] = [
     evaluation: { interest: 'Insightful', ethics: 'Neutral', category: 'Science' },
     encrypted: '',
   },
-];
-
-export const FOLLOWS = [
-  { name: 'Maria Popova', handle: 'mariap', avatar: 'M', count: 142 },
-  { name: 'Robin Sloan',  handle: 'robin',  avatar: 'R', count: 87 },
-  { name: 'Simon Willison', handle: 'simonw', avatar: 'S', count: 211 },
-  { name: 'Tyler Austen', handle: 'tausten', avatar: 'T', count: 56 },
-  { name: 'Lin-Manuel A.', handle: 'lina',  avatar: 'L', count: 33 },
 ];

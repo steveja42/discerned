@@ -128,6 +128,30 @@ async function resolveBaseUrl(): Promise<string> {
   return localTabs.length > 0 ? DISCERNED_BASE_URLS[1] : DISCERNED_BASE_URLS[0];
 }
 
+// Discernments home — match the bare base URL with optional trailing slash and
+// query/hash, but NOT subpaths like /library or /about.
+const DISCERNMENTS_URL_PATTERNS = [
+  'https://discerned.online/',
+  'https://discerned.online/?*',
+  'https://discerned.online/#*',
+  'http://localhost:3000/',
+  'http://localhost:3000/?*',
+  'http://localhost:3000/#*',
+];
+
+async function openDiscernmentsTab(): Promise<void> {
+  const base = await resolveBaseUrl();
+  const [existing] = await chrome.tabs.query({ url: DISCERNMENTS_URL_PATTERNS });
+  if (existing?.id !== undefined) {
+    await chrome.tabs.update(existing.id, { active: true });
+    if (existing.windowId !== undefined) {
+      chrome.windows.update(existing.windowId, { focused: true }).catch(() => {});
+    }
+  } else {
+    await chrome.tabs.create({ url: base });
+  }
+}
+
 async function openLibraryTab(clipId?: string): Promise<void> {
   const base = await resolveBaseUrl();
   const url = clipId ? `${base}/library?clip=${encodeURIComponent(clipId)}` : `${base}/library`;
@@ -430,7 +454,10 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       return { success: true };
 
     case 'OPEN_HOME':
-      resolveBaseUrl().then(base => chrome.tabs.create({ url: base })).catch(() => {});
+      // message.eventId is accepted for a future deep-link to the cast; for now we
+      // open the bare discernments feed (the just-cast event may not have propagated
+      // to the subscribed relays yet, so deep-linking would risk a transient miss).
+      openDiscernmentsTab().catch(() => {});
       return { success: true };
 
     case 'DISMISS_OVERLAY_NUDGE':

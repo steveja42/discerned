@@ -44,6 +44,7 @@ function buildTemplate(capture: Capture, evaluation: Evaluation): EventTemplate 
       capture.url,
     ].join('\n');
   } else {
+    if (capture.title && capture.title.trim().length > 0) tags.push(['title', capture.title]);
     if (capture.thumbnail) tags.push(['image', capture.thumbnail]);
     if (capture.bodyText) tags.push(['body', capture.bodyText]);
     content = [
@@ -97,9 +98,21 @@ describe('parseEvent (web)', () => {
 
       if (fx.capture.format === 'selection') {
         expect(clip.capture.selectionText).toBe(fx.capture.selectionText);
+        // Selection casts carry no title tag — parseEvent falls back to the URL.
+        expect(clip.capture.title).toBe(fx.capture.url);
+        if (fx.capture.selectionContext) {
+          expect(clip.capture.selectionContext).toBe(fx.capture.selectionContext);
+        }
+      } else {
+        // Resource casts emit an explicit `title` tag that round-trips exactly.
+        expect(clip.capture.title).toBe(fx.capture.title);
+        if (fx.capture.bodyText) expect(clip.capture.bodyText).toBe(fx.capture.bodyText);
+        if (fx.capture.thumbnail) expect(clip.capture.thumbnail).toBe(fx.capture.thumbnail);
       }
 
-      expect(clip.capture.title).toMatch(/^Discerned:/);
+      if (fx.capture.note) expect(clip.capture.note).toBe(fx.capture.note);
+      expect(clip.capture.authorPubkey).toBe(ev.pubkey);
+      expect(clip.capture.title).not.toMatch(/^Discerned:/);
       expect(clip.capture.timestamp).toBe(ev.created_at * 1000);
     });
   }

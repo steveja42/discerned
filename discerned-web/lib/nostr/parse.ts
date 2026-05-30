@@ -23,8 +23,16 @@ export function parseEvent(event: Event): ClipData {
   const category = getTag(event, 'l', 'online.discerned.category') ?? 'General';
   const format = (getTag(event, 'format') ?? 'bookmark') as ClipFormat;
   const selectionText = getTag(event, 'quote') ?? undefined;
+  const selectionContext = getTag(event, 'context') ?? undefined;
+  const note = getTag(event, 'note') ?? undefined;
+  const bodyText = getTag(event, 'body') ?? undefined;
+  const thumbnail = getTag(event, 'image') ?? undefined;
 
-  const title = event.content.split('\n')[0]?.slice(0, 120) || url || 'Untitled';
+  // Prefer the explicit `title` tag; fall back for legacy casts that lack it.
+  // Resource-cast content is "Discerned: …\n\n<title>\n<url>", so line index 2
+  // is the title. Selection casts have no title — fall back to the URL.
+  const contentTitle = format !== 'selection' ? event.content.split('\n')[2]?.trim() : undefined;
+  const title = getTag(event, 'title') ?? contentTitle ?? (url || 'Untitled');
 
   return {
     capture: {
@@ -34,7 +42,11 @@ export function parseEvent(event: Event): ClipData {
       title,
       timestamp: event.created_at * 1000,
       selectionText,
-      note: event.content.includes('\n') ? event.content.split('\n').slice(1).join('\n').trim() || undefined : undefined,
+      selectionContext,
+      bodyText,
+      thumbnail,
+      note,
+      authorPubkey: event.pubkey,
     },
     evaluation: { interest, ethics, category },
     encrypted: '',

@@ -19,6 +19,8 @@ export interface Capture {
   bodyHtml?: string;
   bodyText?: string;
   thumbnail?: string | null;
+  // cast feed only — author of the published Nostr event (set by parseEvent)
+  authorPubkey?: string;
 }
 
 export interface Evaluation {
