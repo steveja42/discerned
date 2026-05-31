@@ -3,7 +3,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { ClipData } from '@/lib/types';
 import type { ClipBody } from '@/lib/bridge/ClipStoreContext';
 import { CATEGORIES, interestRank, ethicsRank } from '@/lib/constants';
@@ -106,6 +106,19 @@ function NoteEditor({
       Add a note…
     </span>
   );
+}
+
+function renderTextWithBreaks(text: string): React.ReactNode {
+  return text.split(/\n{2,}/).map((para, i) => (
+    <p key={i}>
+      {para.split('\n').map((line, j, arr) => (
+        <React.Fragment key={j}>
+          {line}
+          {j < arr.length - 1 && <br />}
+        </React.Fragment>
+      ))}
+    </p>
+  ));
 }
 
 export default function DetailPanel({ clip, onDelete, onUpdateNote, bodies, onBodyFetched }: DetailPanelProps) {
@@ -229,19 +242,24 @@ export default function DetailPanel({ clip, onDelete, onUpdateNote, bodies, onBo
         const cached = bodies.get(capture.id);
         const bodyHtml = cached?.bodyHtml ?? capture.bodyHtml;
         const thumbnail = cached?.thumbnail ?? capture.thumbnail;
-        if (bodyHtml || capture.selectionText) {
+        if (bodyHtml) {
           return (
             <div
               className="clip-body"
-              dangerouslySetInnerHTML={{ __html: bodyHtml ?? capture.selectionText ?? '' }}
+              dangerouslySetInnerHTML={{ __html: bodyHtml }}
             />
           );
         }
-        if (capture.bodyText) {
+        if (capture.selectionText || capture.bodyText || thumbnail) {
           return (
-            <div className="detail-section">
-              {thumbnail && <img src={thumbnail} alt="" className="detail-thumb" />}
-              <blockquote className="detail-excerpt">{capture.bodyText}</blockquote>
+            <div className="clip-body">
+              {thumbnail && <img src={thumbnail} alt="" />}
+              {capture.selectionText && (
+                <blockquote className="detail-excerpt">
+                  {renderTextWithBreaks(capture.selectionText)}
+                </blockquote>
+              )}
+              {capture.bodyText && renderTextWithBreaks(capture.bodyText)}
             </div>
           );
         }
