@@ -144,6 +144,18 @@ test('embedded-tweet: capture article with widgets.js tweets, render in library,
       await allCards.nth(i).screenshot({ path: out(`embed-card-${i}.png`) });
     }
 
+    // Screenshot the dx-stats--end row (engagement footer) if present.
+    const statsRow = clipBody.locator('.dx-stats--end').first();
+    if (await statsRow.count() > 0) {
+      const rowBox = await statsRow.boundingBox();
+      if (rowBox) {
+        await libPage.screenshot({
+          path: out('embed-stats-row.png'),
+          clip: { x: Math.max(0, rowBox.x - 20), y: Math.max(0, rowBox.y - 20), width: Math.min(1280, rowBox.width + 40), height: rowBox.height + 40 },
+        });
+      }
+    }
+
     // eslint-disable-next-line no-console
     console.log('[probe] Artifacts written:');
     console.log('  test-output/embed-source.png        (source article screenshot)');

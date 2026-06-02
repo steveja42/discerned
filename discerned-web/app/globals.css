@@ -1461,6 +1461,14 @@ a { color: inherit; }
 .clip-body .dx-stats > .dx-stats {
   display: contents;
 }
+/* dx-stats--end is the right-aligned variant used by article footers on news
+   sites (ZeroHedge, etc.) where engagement counters live in the bottom-right
+   of the article body, not inline with action buttons. Add extra gap so the
+   numbers breathe. */
+.clip-body .dx-stats--end {
+  justify-content: flex-end;
+  gap: 4px 24px;
+}
 /* Compact zap rows (reply-level _zapHighlightsCompact_) already show the
    zap total inline. The _footer_ stats row immediately after repeats the same
    number, creating a visible duplicate. Hide the stats row when it follows a

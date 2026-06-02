@@ -2243,6 +2243,29 @@ function tagSemanticStructure(root: Element): void {
     }
   });
 
+  // Engagement-counter footer rows (ZeroHedge, Substack, Medium, etc.). The
+  // canonical shape is 2+ sibling spans whose class names include "footerStat"
+  // or "engagement" — each wraps an icon-font glyph + a number. Class names
+  // get stripped by sanitisation, so we tag the parent now and right-align
+  // it in CSS. The pattern is more permissive than dx-stats above because
+  // these don't carry svg/button children — they use icon fonts (<i>) which
+  // the sanitiser drops.
+  root.querySelectorAll('*').forEach(parent => {
+    const children = Array.from(parent.children);
+    if (children.length < 2) return;
+    const counters = children.filter(c => {
+      const cls = (c as Element).className?.toString() ?? '';
+      return /footerStat|engagement[A-Z_]|node[-_]?stat/i.test(cls);
+    });
+    // Require ALL/most children to be counters AND the parent not yet tagged.
+    if (counters.length >= 2 &&
+        counters.length / children.length >= 0.6 &&
+        !parent.classList.contains('dx-stats')) {
+      appendClass(parent, 'dx-stats');
+      appendClass(parent, 'dx-stats--end');
+    }
+  });
+
   // Headers — find the DEEPEST element whose direct children are an avatar
   // branch (img, no significant text) and a name branch (short text, no
   // avatar). Walking the all-elements list in reverse hits deeper children
@@ -2434,6 +2457,28 @@ function sanitiseElement(element: Element, stripStyles = false) {
   const tagName = element.tagName.toLowerCase();
 
   if (!ALLOWED_TAGS.has(tagName)) {
+    // If an unwrap target carries a trusted dx-*/tweet-* class (stamped by
+    // tagSemanticStructure or a site tagger), the class encodes layout intent
+    // we don't want to lose. Promote the element to a <div> instead of
+    // unwrapping, so the class survives sanitisation and the layout CSS
+    // applies. Examples: <footer dx-stats dx-stats--end> on news-site
+    // engagement rows, <header dx-header> if a tagger ever picks one up.
+    const cls = element.className?.toString() ?? '';
+    const hasTrustedClass = cls.split(/\s+/).some(t =>
+      t && TRUSTED_CLASS_PREFIXES.some(p => t.startsWith(p))
+    );
+    if (hasTrustedClass) {
+      const div = document.createElement('div');
+      for (const a of Array.from(element.attributes)) {
+        try { div.setAttribute(a.name, a.value); } catch { /* ignore invalid */ }
+      }
+      while (element.firstChild) div.appendChild(element.firstChild);
+      element.replaceWith(div);
+      // Re-run sanitisation on the new <div> so its attributes get the
+      // standard treatment (class-token filter, style scrub, etc.).
+      sanitiseElement(div, stripStyles);
+      return;
+    }
     const children = Array.from(element.childNodes);
     const replacements: Node[] = SPACE_ON_UNWRAP.has(tagName)
       ? [document.createTextNode(' '), ...children, document.createTextNode(' ')]

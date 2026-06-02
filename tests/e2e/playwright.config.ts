@@ -82,5 +82,10 @@ export default defineConfig({
       testMatch: /twitter-clip-modes\.spec\.ts/,
       retries: 0,
     },
+    {
+      name: 'zh-counters-probe',
+      testMatch: /zh-counters-probe\.spec\.ts/,
+      retries: 0,
+    },
   ],
 });
