@@ -8,7 +8,7 @@
 //         chrome.runtime.sendMessage (for INLINE_IMAGE round-trip)
 
 import { Readability } from '@mozilla/readability';
-import type { Capture, ClipFormat } from '@/shared/types';
+import type { Capture, ClipFormat, EmbeddedTweetData } from '@/shared/types';
 import { LL, log } from '@/shared/logger';
 
 
@@ -451,7 +451,6 @@ async function extractSelection(): Promise<Capture> {
   }
 
   const range = resolved.range;
-  const cleanup = markExcluded(document.body);
   // Annotate <img>s under the range's common ancestor before cloneContents
   // runs inside wrapFragmentBoundaries, so the cloned fragment carries
   // rendered width/height attributes. Over-annotating outside the range is
@@ -460,6 +459,27 @@ async function extractSelection(): Promise<Capture> {
   const ancestor = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
     ? range.commonAncestorContainer as Element
     : range.commonAncestorContainer.parentElement;
+
+  // On twitter.com / x.com, if the selection lives inside an <article
+  // data-testid="tweet">, capture that whole tweet as a tweet-card rather
+  // than the bare selected text. Users selecting on x.com almost always
+  // want the tweet, not a 12-char span.
+  if (ancestor && /^https?:\/\/(www\.)?(twitter|x)\.com\//i.test(url)) {
+    const tweetArticle = ancestor.closest('article[data-testid="tweet"]')
+      ?? ancestor.closest('article');
+    if (tweetArticle) {
+      const tweet = await extractTweet(baseFields(), 'selection', tweetArticle);
+      if (tweet) {
+        log(LL.NORMAL, 'Discerned: selection on x.com — captured whole tweet as tweet-card', 'url:', url);
+        return tweet;
+      }
+      log(LL.DEBUG, 'Discerned: selection on x.com — Tier 0 yielded nothing, falling through', 'url:', url);
+    }
+  }
+  // Pre-harvest embedded tweets within the selection's scope BEFORE markExcluded
+  // hides display:none blockquotes (widgets.js leaves them around).
+  const harvestedTweets = await harvestEmbeddedTweets(ancestor ?? document);
+  const cleanup = markExcluded(document.body);
   const sizeCleanup = ancestor ? annotateLiveImageSizes(ancestor) : () => {};
   const fragment = wrapFragmentBoundaries(range);
   sizeCleanup();
@@ -472,6 +492,7 @@ async function extractSelection(): Promise<Capture> {
   // survive sanitisation (which drops <video> as a non-allowed tag).
   substituteVideosWithPosters(fragment);
   substituteStarRatings(fragment);
+  await substituteEmbeddedTweets(fragment, harvestedTweets);
   const sanitized = sanitizeFragment(fragment);
   log(LL.DEBUG, `Discerned: extractSelection — after sanitize: html=${sanitized.length} chars`, 'url:', url);
   const context = extractContext(range);
@@ -671,9 +692,43 @@ function buildVideoHtml(inlinedVideos: Array<{ poster: string; duration: string 
   return `<div class="tweet-video-grid">${items.join('')}</div>`;
 }
 
-async function extractTweet(base: Pick<Capture, 'id' | 'url' | 'title' | 'timestamp'>): Promise<Capture | null> {
-  const article = document.querySelector('article[data-testid="tweet"]') ??
-                  document.querySelector('article');
+/**
+ * Build the photo block for a tweet. X uses count-specific layouts in its
+ * embed iframes (1 = single image; 2 = 1×2 row; 3 = 1 tall + 2 stacked;
+ * 4 = 2×2). We emit a tweet-photo-grid wrapper with a tweet-photo-grid-N
+ * variant so CSS can apply the right layout.
+ *
+ * Each photo gets the same <div class="tweet-photo"><img></div> shell as
+ * before, so single-photo behaviour is unchanged.
+ */
+function buildPhotosHtml(srcs: string[]): string {
+  const valid = srcs.filter(Boolean);
+  if (valid.length === 0) return '';
+  const safe = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  const items = valid.map(src => `<div class="tweet-photo"><img src="${safe(src)}" alt="Image"></div>`);
+  if (items.length === 1) return items[0];
+  const n = Math.min(items.length, 4);
+  return `<div class="tweet-photo-grid tweet-photo-grid-${n}">${items.join('')}</div>`;
+}
+
+/**
+ * Build a tweet-card capture from the primary <article data-testid="tweet">
+ * on the current twitter.com / x.com page. `format` controls how the rendered
+ * card is plumbed into the Capture shape:
+ *   - 'article' / 'full-page' → bodyHtml + bodyText
+ *   - 'selection'             → selectionText (selectionContext left empty)
+ * `articleOverride` lets selection callers pin a specific tweet article
+ * (the one the user's selection lives in), instead of letting the function
+ * pick the first one on the page.
+ */
+async function extractTweet(
+  base: Pick<Capture, 'id' | 'url' | 'title' | 'timestamp'>,
+  format: 'article' | 'full-page' | 'selection' = 'article',
+  articleOverride?: Element,
+): Promise<Capture | null> {
+  const article = articleOverride
+    ?? document.querySelector('article[data-testid="tweet"]')
+    ?? document.querySelector('article');
   if (!article) return null;
 
   // Reposter header — [data-testid="socialContext"] lives inside the article's first
@@ -723,8 +778,7 @@ async function extractTweet(base: Pick<Capture, 'id' | 'url' | 'title' | 'timest
     const qSafeName = qb.displayName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const qSafeHandle = qb.handle.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const qSafeTime = qb.quoteTime.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const qPhotosHtml = qPhotos.filter(Boolean).map(src =>
-      `<div class="tweet-photo"><img src="${src}" alt="Image"></div>`).join('');
+    const qPhotosHtml = buildPhotosHtml(qPhotos);
     const qInlinedVideoInfos = qb.videoInfos
       .map((v, i) => ({ poster: qInlinedVideoPosters[i] || v.poster, duration: v.duration, aspectPct: v.aspectPct }))
       .filter(v => v.poster);
@@ -818,9 +872,7 @@ async function extractTweet(base: Pick<Capture, 'id' | 'url' | 'title' | 'timest
     .filter(v => v.poster);
   const videoHtml = buildVideoHtml(inlinedVideoInfos, base.url);
 
-  const photosHtml = [
-    ...inlinedPhotos.filter(Boolean).map(src => `<div class="tweet-photo"><img src="${src}" alt="Image"></div>`),
-  ].join('');
+  const photosHtml = buildPhotosHtml(inlinedPhotos);
 
   // Footer: date link + stat buttons (SVG icon + count lifted from Twitter's DOM)
   const safeDate = dateText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -837,7 +889,7 @@ async function extractTweet(base: Pick<Capture, 'id' | 'url' | 'title' | 'timest
     ? `<div class="tweet-footer">${dateHtml}${statsHtml ? `<span class="tweet-stats">${statsHtml}</span>` : ''}</div>`
     : '';
 
-  const bodyHtml = `<div class="tweet-card">
+  const bodyHtml = `<div class="tweet-card tweet-card--native">
   ${reposterHtml}
   <div class="tweet-header">
     ${avatarHtml}
@@ -861,14 +913,279 @@ async function extractTweet(base: Pick<Capture, 'id' | 'url' | 'title' | 'timest
     .replace(/["\s]+\/\s*X\s*$/i, '')          // strip closing `" / X`
     .trim() || base.title;
 
+  const plainText = `${displayName} @${handle}\n\n${outerBlock.plainText}`;
+  if (format === 'selection') {
+    return {
+      ...base,
+      title: tweetTitle,
+      format: 'selection',
+      selectionText: bodyHtml,
+      selectionContext: '',
+    };
+  }
   return {
     ...base,
     title: tweetTitle,
-    format: 'article',
+    format,
     bodyHtml,
-    bodyText: `${displayName} @${handle}\n\n${outerBlock.plainText}`,
+    bodyText: plainText,
     thumbnail: null,
   };
+}
+
+// ── Embedded tweets on third-party pages ────────────────────────────────────
+//
+// Third-party pages (news sites, blogs) embed tweets in two shapes:
+//   1. <blockquote class="twitter-tweet"> — the static fallback with text +
+//      author + link. Present even when widgets.js doesn't load.
+//   2. <iframe id="twitter-widget-N" src="platform.twitter.com/embed/...">
+//      injected by widgets.js after page load. Cross-origin to the host page.
+//
+// Both shapes are otherwise lost: bare <blockquote> renders as ugly fallback
+// text, and <iframe> is removed by the sanitiser's blanket strip. We harvest
+// each tweet's data from the LIVE DOM up front (the cross-origin iframe is
+// reached via chrome.scripting.executeScript from the background), keyed by
+// tweet ID, then replace both shapes in the cloned subtree with a synthesised
+// tweet-card div. Photos, avatars, and tweet text from the rendered iframe
+// match a Tier 0 (on-twitter.com) capture; the blockquote fallback yields a
+// text-only card.
+
+/**
+ * Parse a <blockquote class="twitter-tweet"> in the live DOM. Returns null if
+ * the element doesn't carry the canonical embed markup. Photos / avatar /
+ * video are not present in the blockquote source — those come from the iframe
+ * round-trip only.
+ */
+function parseEmbeddedTweetBlockquote(bq: Element): EmbeddedTweetData | null {
+  // Status URL: the LAST <a> whose href points to a tweet status page.
+  const statusLinks = Array.from(bq.querySelectorAll<HTMLAnchorElement>('a')).filter(a => {
+    const h = a.getAttribute('href') ?? '';
+    return /^https?:\/\/(twitter|x)\.com\/[^/]+\/status\/\d+/i.test(h);
+  });
+  const statusAnchor = statusLinks[statusLinks.length - 1];
+  if (!statusAnchor) return null;
+  const statusUrl = (statusAnchor.getAttribute('href') ?? '').split('?')[0];
+  const tweetIdMatch = statusUrl.match(/\/status\/(\d+)/);
+  const tweetId = tweetIdMatch ? tweetIdMatch[1] : '';
+  if (!tweetId) return null;
+
+  const dateText = statusAnchor.textContent?.trim() ?? '';
+
+  // Tweet body: the <p> inside the blockquote. Keep inline <a> links.
+  const p = bq.querySelector('p');
+  const tweetTextHtml = p ? p.innerHTML : '';
+
+  // Author: parse the trailing text node — the canonical embed format is
+  //   "— Display Name (@handle) " (with em-dash, hyphen, or en-dash).
+  // Collect text nodes that are direct siblings between </p> and <a status>.
+  const trailing = (bq.textContent ?? '').replace(/\s+/g, ' ');
+  const authorMatch = trailing.match(/[—–-]\s*(.+?)\s+\(@([A-Za-z0-9_]+)\)/);
+  let displayName = authorMatch ? authorMatch[1].trim() : '';
+  let handle = authorMatch ? authorMatch[2] : '';
+
+  // Fallback: derive handle from the status URL path /{handle}/status/{id}.
+  if (!handle) {
+    const handleFromUrl = statusUrl.match(/\/(?:twitter|x)\.com\/([^/]+)\/status\//i);
+    if (handleFromUrl) handle = handleFromUrl[1];
+  }
+  if (!displayName && handle) displayName = handle;
+
+  return {
+    tweetId,
+    statusUrl,
+    displayName,
+    handle,
+    badgesHtml: '',
+    tweetTextHtml,
+    photoSrcs: [],
+    videoInfos: [],
+    avatarSrc: '',
+    dateText,
+    source: 'blockquote',
+  };
+}
+
+/**
+ * Find every <blockquote class="twitter-tweet"> under `scope` (including
+ * hidden ones widgets.js leaves behind with display:none) and ask the
+ * background to extract rich data from each platform.twitter.com iframe in
+ * this tab. Returns a Map keyed by tweet ID with the BEST data we have for
+ * each: iframe data wins over blockquote data when both are available.
+ */
+async function harvestEmbeddedTweets(scope: Document | Element): Promise<Map<string, EmbeddedTweetData>> {
+  const merged = new Map<string, EmbeddedTweetData>();
+
+  // Blockquote pass — always runs synchronously on the live DOM so we have a
+  // fallback even if the iframe round-trip fails or times out.
+  const blockquotes = scope.querySelectorAll<HTMLElement>('blockquote.twitter-tweet');
+  blockquotes.forEach(bq => {
+    const data = parseEmbeddedTweetBlockquote(bq);
+    if (data) merged.set(data.tweetId, data);
+  });
+
+  // Iframe pass — round-trip through the background, race against a 1s
+  // budget. The background enumerates platform.twitter.com frames in this
+  // tab and runs an extractor inside each via chrome.scripting.executeScript.
+  try {
+    const res = await Promise.race([
+      chrome.runtime.sendMessage({ type: 'EXTRACT_EMBEDDED_TWEETS' }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 1000)),
+    ]);
+    if (res?.success && Array.isArray(res.data)) {
+      (res.data as EmbeddedTweetData[]).forEach(d => {
+        if (d?.tweetId) merged.set(d.tweetId, d);
+      });
+    }
+  } catch (err) {
+    log(LL.DEBUG, `harvestEmbeddedTweets: iframe extraction unavailable (${err instanceof Error ? err.message : err}) — using blockquote fallback`, 'url:', window.location.href);
+  }
+
+  if (merged.size > 0) {
+    const counts = { iframe: 0, blockquote: 0 };
+    merged.forEach(d => { counts[d.source]++; });
+    log(LL.NORMAL, `harvestEmbeddedTweets: ${merged.size} tweet(s) — iframe=${counts.iframe} blockquote=${counts.blockquote}`, 'url:', window.location.href);
+  }
+
+  return merged;
+}
+
+function buildStubCard(statusUrl: string): HTMLElement {
+  const card = document.createElement('div');
+  card.className = 'tweet-card tweet-card--embed';
+  const footer = document.createElement('div');
+  footer.className = 'tweet-footer';
+  const link = document.createElement('a');
+  link.className = 'tweet-date';
+  link.href = statusUrl;
+  link.textContent = 'View on X';
+  footer.appendChild(link);
+  card.appendChild(footer);
+  return card;
+}
+
+/**
+ * Build a tweet-card element from harvested EmbeddedTweetData. Mirrors the
+ * Tier 0 card structure ([tweet-card > tweet-header > tweet-avatar + tweet-author;
+ * tweet-text; tweet-video; tweet-photo*; tweet-footer]) but with only the
+ * fields present in embed sources (no reposter, no quoted tweet, no stats).
+ * Photos, avatar, and video posters are inlined to base64 in parallel.
+ */
+async function buildEmbeddedTweetCard(data: EmbeddedTweetData): Promise<HTMLElement> {
+  const safe = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const safeAttr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+
+  // Inline avatar + all photos + video posters in parallel through the
+  // background's privileged fetch. inlineImage falls back to the raw URL on
+  // timeout/failure so a single slow image never hangs the capture.
+  const [inlinedAvatar, ...inlinedRest] = await Promise.all([
+    data.avatarSrc && isSafeImageSrc(data.avatarSrc) ? inlineImage(data.avatarSrc) : Promise.resolve(''),
+    ...data.videoInfos.map(v => inlineImage(v.poster)),
+    ...data.photoSrcs.map(src => inlineImage(src)),
+  ]);
+  const inlinedVideoPosters = inlinedRest.slice(0, data.videoInfos.length);
+  const inlinedPhotos = inlinedRest.slice(data.videoInfos.length);
+
+  const avatarHtml = inlinedAvatar
+    ? `<img class="tweet-avatar" src="${safeAttr(inlinedAvatar)}" alt="${safeAttr(data.displayName)}" width="48" height="48">`
+    : '';
+
+  const inlinedVideoInfos = data.videoInfos
+    .map((v, i) => ({ poster: inlinedVideoPosters[i] || v.poster, duration: v.duration, aspectPct: v.aspectPct }))
+    .filter(v => v.poster);
+  const videoHtml = buildVideoHtml(inlinedVideoInfos, data.statusUrl);
+
+  const photosHtml = buildPhotosHtml(inlinedPhotos);
+
+  // Sanitise the embed-iframe's tweetText HTML through the existing
+  // sanitiser before injecting it as a string. The card itself is built as
+  // a real element (so the rest of the pipeline sees it as a div tree); the
+  // tweetText portion is the only string-inserted slice.
+  const sanitisedText = sanitizeHtmlString(data.tweetTextHtml);
+
+  const dateHtml = data.dateText
+    ? `<a class="tweet-date" href="${safeAttr(data.statusUrl)}">${safe(data.dateText)}</a>`
+    : (data.statusUrl ? `<a class="tweet-date" href="${safeAttr(data.statusUrl)}">View on X</a>` : '');
+
+  const html = `<div class="tweet-card tweet-card--embed">
+  <div class="tweet-header">
+    ${avatarHtml}
+    <div class="tweet-author">
+      <span class="tweet-name">${safe(data.displayName)}${data.badgesHtml}</span>
+      <span class="tweet-handle">@${safe(data.handle)}</span>
+    </div>
+  </div>
+  <div class="tweet-text">${sanitisedText}</div>
+  ${videoHtml}
+  ${photosHtml}
+  ${dateHtml ? `<div class="tweet-footer">${dateHtml}</div>` : ''}
+</div>`;
+
+  // Parse the synthesised HTML into a real element so the caller can call
+  // replaceWith() on the iframe/blockquote it's substituting.
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html.trim();
+  return wrap.firstElementChild as HTMLElement;
+}
+
+/**
+ * Replace every embedded-tweet shape (iframe + blockquote) in the cloned
+ * subtree with a tweet-card div. Dedupes by tweet ID so a hidden blockquote
+ * + visible iframe for the same tweet produces ONE card. Iframes whose ID
+ * has no harvested data fall back to a stub "View on X" card so the embed
+ * doesn't silently vanish.
+ *
+ * Must run BEFORE sanitiseTreeInPlace() (which strips iframes outright) and
+ * AFTER cloning (we mutate the clone, not the live DOM).
+ */
+async function substituteEmbeddedTweets(
+  root: Element | DocumentFragment,
+  harvested: Map<string, EmbeddedTweetData>,
+): Promise<void> {
+  const seen = new Set<string>();
+
+  // Pass A — iframes first so an iframe-only embed renders even if the
+  // blockquote was already stripped by markExcluded (display:none) before
+  // cloning.
+  const iframes = Array.from(root.querySelectorAll('iframe')) as HTMLIFrameElement[];
+  for (const iframe of iframes) {
+    const id = iframe.getAttribute('id') ?? '';
+    const src = iframe.getAttribute('src') ?? '';
+    const dataTweetId = iframe.getAttribute('data-tweet-id') ?? '';
+    const isTweetEmbed = /^twitter-widget/i.test(id)
+      || /platform\.twitter\.com\/embed/i.test(src)
+      || dataTweetId.length > 0;
+    if (!isTweetEmbed) continue;
+
+    let tweetId = dataTweetId;
+    if (!tweetId && src) {
+      const qIdx = src.indexOf('?');
+      if (qIdx >= 0) {
+        const idParam = new URLSearchParams(src.slice(qIdx + 1)).get('id');
+        if (idParam) tweetId = idParam;
+      }
+    }
+    if (!tweetId) { iframe.remove(); continue; }
+
+    const data = harvested.get(tweetId);
+    const card = data
+      ? await buildEmbeddedTweetCard(data)
+      : buildStubCard(`https://x.com/i/status/${tweetId}`);
+    iframe.replaceWith(card);
+    seen.add(tweetId);
+  }
+
+  // Pass B — blockquotes. Dedupe against Pass A.
+  const blockquotes = Array.from(root.querySelectorAll('blockquote.twitter-tweet')) as HTMLElement[];
+  for (const bq of blockquotes) {
+    // Resolve to a tweet ID first so the dedupe check works regardless of
+    // whether we have harvested data for it.
+    const inlineParsed = parseEmbeddedTweetBlockquote(bq);
+    if (!inlineParsed) { bq.remove(); continue; }
+    if (seen.has(inlineParsed.tweetId)) { bq.remove(); continue; }
+    const data = harvested.get(inlineParsed.tweetId) ?? inlineParsed;
+    bq.replaceWith(await buildEmbeddedTweetCard(data));
+    seen.add(inlineParsed.tweetId);
+  }
 }
 
 // ── Article (Readability) ────────────────────────────────────────────────────
@@ -1115,6 +1432,11 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   log(LL.DEBUG, `Discerned: extractArticle — smartArticleDetection=${opts.smartArticleDetection} stripInlineStyles=${opts.stripInlineStyles}`, 'url:', base.url);
   logShadowPresence(base.url);
 
+  // Pre-harvest embedded tweets from the LIVE DOM before any clone/markExcluded
+  // pass can lose hidden blockquotes (widgets.js leaves the source blockquote
+  // behind with display:none, which markExcluded would otherwise drop).
+  const harvestedTweets = await harvestEmbeddedTweets(document);
+
   // Apply per-site live-DOM tagger (if registered for this hostname) so the
   // captured HTML carries dx-* markers across sanitisation regardless of
   // which extraction tier wins below. When a site tagger runs, the generic
@@ -1148,6 +1470,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     stripSizeMarkers(clone);
     substituteVideosWithPosters(clone);
     substituteStarRatings(clone);
+    await substituteEmbeddedTweets(clone, harvestedTweets);
     tagSemanticStructure(clone);
     const imgsBefore = clone.querySelectorAll('img').length;
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
@@ -1198,6 +1521,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     stripSizeMarkers(clone);
     substituteVideosWithPosters(clone);
     substituteStarRatings(clone);
+    await substituteEmbeddedTweets(clone, harvestedTweets);
     tagSemanticStructure(clone);
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
     const inlined = await inlineAllImages(clone.innerHTML.trim());
@@ -1238,6 +1562,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   stripSizeMarkers(bodyClone);
   substituteVideosWithPosters(bodyClone);
   substituteStarRatings(bodyClone);
+  await substituteEmbeddedTweets(bodyClone, harvestedTweets);
   tagSemanticStructure(bodyClone);
   sanitiseTreeInPlace(bodyClone);
   const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
@@ -1295,12 +1620,25 @@ function parseReadability(): ReturnType<Readability['parse']> | null {
 // ── Full page ────────────────────────────────────────────────────────────────
 
 async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
+  // On twitter.com / x.com the user almost certainly wants the tweet card,
+  // not the full SPA shell. Route through the same Tier 0 extractor as
+  // article-format and preserve format='full-page' on the returned Capture.
+  if (/^https?:\/\/(www\.)?(twitter|x)\.com\//i.test(window.location.href)) {
+    const tweet = await extractTweet(baseFields(), 'full-page');
+    if (tweet) return tweet;
+    log(LL.DEBUG, 'Discerned: full-page Twitter extractor yielded nothing, falling through to generic', 'url:', window.location.href);
+  }
+
+  // Pre-harvest embedded tweets from the LIVE DOM before cloning (the iframe
+  // round-trip + hidden-blockquote data only exists pre-clone).
+  const harvestedTweets = await harvestEmbeddedTweets(document);
   // Clone the body only — using outerHTML (which includes <html>/<head>) causes
   // DOMParser to restructure the document in ways that leave <script> content as
   // orphaned text nodes that querySelectorAll('script') can't reach.
   const bodyClone = cloneBodyClean();
   substituteVideosWithPosters(bodyClone);
   substituteStarRatings(bodyClone);
+  await substituteEmbeddedTweets(bodyClone, harvestedTweets);
   sanitiseTreeInPlace(bodyClone, opts.stripInlineStyles);
   const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
   return {

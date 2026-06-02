@@ -9,6 +9,8 @@
     "storage",
     "activeTab",
     "tabs",
+    "scripting",
+    "webNavigation",
     "alarms"
   ],
   "host_permissions": [

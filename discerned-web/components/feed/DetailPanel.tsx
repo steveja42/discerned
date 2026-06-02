@@ -255,9 +255,10 @@ export default function DetailPanel({ clip, onDelete, onUpdateNote, bodies, onBo
             <div className="clip-body">
               {thumbnail && <img src={thumbnail} alt="" />}
               {capture.selectionText && (
-                <blockquote className="detail-excerpt">
-                  {renderTextWithBreaks(capture.selectionText)}
-                </blockquote>
+                <blockquote
+                  className="detail-excerpt"
+                  dangerouslySetInnerHTML={{ __html: capture.selectionText }}
+                />
               )}
               {capture.bodyText && renderTextWithBreaks(capture.bodyText)}
             </div>

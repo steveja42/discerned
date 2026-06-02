@@ -28,7 +28,7 @@ import {
   getOrCreateBunkerSigner,
   invalidateBunkerSigner,
 } from '@/shared/nostr/nip46-manager';
-import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation, ClipData } from '@/shared/types';
+import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation, ClipData, EmbeddedTweetData } from '@/shared/types';
 import { STORAGE_KEYS } from '@/shared/types';
 import { LL, log, setLogRelayTabs } from '@/shared/logger';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
@@ -470,6 +470,9 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'INLINE_IMAGE':
       return handleInlineImage(message.src);
 
+    case 'EXTRACT_EMBEDDED_TWEETS':
+      return handleExtractEmbeddedTweets(senderTabId);
+
     case 'REGISTER_LOG_TAB':
       if (senderTabId !== undefined) registerLogTab(senderTabId);
       return { success: true };
@@ -588,6 +591,158 @@ async function handleDisconnectAuth(): Promise<BackgroundResponse> {
     STORAGE_KEYS.NSEC_ENCRYPTED,
   ]);
   return { success: true };
+}
+
+// ── Embedded-tweet iframe extraction (cross-origin via executeScript) ───────
+
+/**
+ * Enumerate platform.twitter.com tweet embed iframes in the sender's tab,
+ * inject `extractFromTweetEmbed` into each, and return the harvested data.
+ * The injected function runs inside the embed iframe's origin (X's), reading
+ * the rendered tweet DOM. Returned image URLs are raw https; the page-side
+ * substituter inlines them via the existing INLINE_IMAGE path.
+ */
+async function handleExtractEmbeddedTweets(tabId?: number): Promise<BackgroundResponse> {
+  if (tabId === undefined) return { success: false, error: 'no tab id' };
+  let frames: chrome.webNavigation.GetAllFrameResultDetails[];
+  try {
+    frames = (await chrome.webNavigation.getAllFrames({ tabId })) ?? [];
+  } catch (err) {
+    log(LL.WARN, 'EXTRACT_EMBEDDED_TWEETS: getAllFrames failed', err);
+    return { success: true, data: [] as EmbeddedTweetData[] };
+  }
+  const tweetFrames = frames.filter(f =>
+    /^https:\/\/platform\.twitter\.com\/embed\/Tweet\.html/i.test(f.url)
+  );
+  if (tweetFrames.length === 0) return { success: true, data: [] as EmbeddedTweetData[] };
+
+  log(LL.DEBUG, `EXTRACT_EMBEDDED_TWEETS: found ${tweetFrames.length} tweet embed frame(s) in tab ${tabId}`);
+
+  const results = await Promise.all(tweetFrames.map(async (frame) => {
+    try {
+      const injected = await chrome.scripting.executeScript({
+        target: { tabId, frameIds: [frame.frameId] },
+        func: extractFromTweetEmbed,
+      });
+      return injected?.[0]?.result ?? null;
+    } catch (err) {
+      log(LL.WARN, `EXTRACT_EMBEDDED_TWEETS: executeScript failed for frame ${frame.frameId}`, err);
+      return null;
+    }
+  }));
+
+  return { success: true, data: results.filter((d): d is EmbeddedTweetData => d !== null) };
+}
+
+/**
+ * Runs INSIDE the platform.twitter.com/embed/Tweet.html iframe via
+ * chrome.scripting.executeScript. Must be self-contained — no imports, no
+ * closures over the background module. References only standard DOM globals.
+ *
+ * Selectors are verified against the live embed-page DOM (see the
+ * embedded-tweet-probe spec). The embed page uses a subset of twitter.com's
+ * testIds: [data-testid="UserAvatar-Container-{handle}"], [data-testid="tweetText"],
+ * [data-testid="icon-verified"], [data-testid="tweet-text-show-more-link"].
+ * Handle and avatar come from the container's testId + child img.
+ *
+ * Returns raw https URLs; the page-side substituter inlines them via
+ * INLINE_IMAGE (the background's privileged fetch).
+ *
+ * Returns null on extraction failure so the page falls back to blockquote data.
+ */
+function extractFromTweetEmbed(): unknown {
+  try {
+    const article = document.querySelector('article');
+    if (!article) return null;
+
+    // Handle: from UserAvatar-Container-{handle} testId.
+    const avatarContainer = article.querySelector('[data-testid^="UserAvatar-Container-"]');
+    const handle = (avatarContainer?.getAttribute('data-testid') ?? '')
+      .replace(/^UserAvatar-Container-/, '');
+    if (!handle) return null;
+
+    // Avatar img inside the container.
+    const avatarImg = avatarContainer?.querySelector('img');
+    const avatarSrc = avatarImg?.getAttribute('src') ?? '';
+
+    // Display name: first profile-link anchor with non-empty visible text.
+    // Excludes /status/ (the visit/share link) and /hashtag/ (links in tweet body).
+    const profileLinks = Array.from(article.querySelectorAll('a')) as HTMLAnchorElement[];
+    let displayName = '';
+    for (const a of profileLinks) {
+      const href = a.getAttribute('href') ?? '';
+      if (!/\/\/(twitter|x)\.com\//.test(href)) continue;
+      if (/\/status\//.test(href)) continue;
+      if (/\/hashtag\//.test(href)) continue;
+      if (/\/intent\//.test(href)) continue;
+      const t = (a.textContent ?? '').trim();
+      if (t.length > 0) { displayName = t; break; }
+    }
+
+    // Status URL: the "Visit this post on X" link is the canonical one and
+    // points at https://x.com/{handle}/status/{id}. Strip query string.
+    const statusAnchor = article.querySelector('a[aria-label="Visit this post on X"]') as HTMLAnchorElement | null;
+    const rawStatus = statusAnchor?.getAttribute('href') ?? '';
+    const statusUrl = rawStatus.split('?')[0] ?? '';
+    const tweetIdMatch = statusUrl.match(/\/status\/(\d+)/);
+    const tweetId = tweetIdMatch ? tweetIdMatch[1] : '';
+    if (!tweetId) return null;
+
+    // Tweet text HTML — copy innerHTML, strip the "Show more" anchor first so
+    // it doesn't appear in the rendered card. Clone to avoid mutating the live DOM.
+    const tweetTextEl = article.querySelector('[data-testid="tweetText"]');
+    let tweetTextHtml = '';
+    if (tweetTextEl) {
+      const clone = tweetTextEl.cloneNode(true) as Element;
+      clone.querySelectorAll('[data-testid="tweet-text-show-more-link"]').forEach(n => n.remove());
+      tweetTextHtml = clone.innerHTML;
+    }
+
+    // Date text: prefer the human-readable form ("2:26 PM · May 29, 2026").
+    const time = article.querySelector('time[datetime]');
+    const dateText = time?.textContent?.trim() ?? '';
+
+    // Photos: <img> tags inside any link whose href contains /photo/. May
+    // include duplicates if widgets.js renders multiple sizes; dedupe by URL.
+    const photoSrcsRaw = (Array.from(article.querySelectorAll('a[href*="/photo/"] img')) as HTMLImageElement[])
+      .map(img => img.getAttribute('src') ?? '')
+      .filter(s => s.length > 0);
+    const photoSrcs = Array.from(new Set(photoSrcsRaw));
+
+    // Videos in the embed page render as <video> with a poster, OR (more
+    // commonly) as a still poster image inside a link. Embed iframes typically
+    // don't have <video> elements. Leave empty if neither is found.
+    const videoEls = Array.from(article.querySelectorAll('video[poster]')) as HTMLVideoElement[];
+    const videoInfos = videoEls.map(v => ({
+      poster: v.getAttribute('poster') ?? '',
+      duration: null as string | null,
+      aspectPct: null as number | null,
+    })).filter(v => v.poster);
+
+    // Badges: when the verified-account svg is present, emit the same inline
+    // SVG Tier 0 uses on twitter.com so the card matches visually. The SVG
+    // path data is the standard X verified glyph.
+    const isVerified = !!article.querySelector('[data-testid="icon-verified"]');
+    const badgesHtml = isVerified
+      ? '<svg class="tweet-badge-verified" viewBox="0 0 22 22" aria-label="Verified" width="16" height="16"><path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"/></svg>'
+      : '';
+
+    return {
+      tweetId,
+      statusUrl,
+      displayName,
+      handle,
+      badgesHtml,
+      tweetTextHtml,
+      photoSrcs,
+      videoInfos,
+      avatarSrc,
+      dateText,
+      source: 'iframe',
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ── Image inlining (privileged fetch) ───────────────────────────────────────

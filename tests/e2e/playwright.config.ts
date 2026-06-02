@@ -67,5 +67,20 @@ export default defineConfig({
       testMatch: /goodreads-visual\.spec\.ts/,
       retries: 0,
     },
+    {
+      name: 'embedded-tweet-probe',
+      testMatch: /embedded-tweet-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'embedded-tweet-visual',
+      testMatch: /embedded-tweet-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'twitter-clip-modes',
+      testMatch: /twitter-clip-modes\.spec\.ts/,
+      retries: 0,
+    },
   ],
 });

@@ -1009,7 +1009,12 @@ a { color: inherit; }
 }
 .clip-body * { max-width: 100%; box-sizing: border-box; }
 .clip-body img { display: block !important; position: static !important; float: none !important; max-width: 100% !important; height: auto !important; max-height: 420px !important; object-fit: contain !important; object-position: left top !important; border-radius: 4px; margin: 12px 0; }
-.clip-body .tweet-card { display: flex; flex-direction: column; gap: 10px; }
+.clip-body .tweet-card { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--rule-soft); padding: 12px 16px; }
+/* Match each source: native x.com captures use square corners (the page itself
+   shows tweets as square cards); platform.twitter.com embed iframes use a
+   pill-rounded 16px radius. */
+.clip-body .tweet-card--native { border-radius: 0; }
+.clip-body .tweet-card--embed { border-radius: 16px; }
 .clip-body .tweet-header { display: flex; align-items: center; gap: 10px; }
 .clip-body .tweet-avatar { width: 48px !important; height: 48px !important; border-radius: 50% !important; flex-shrink: 0; margin: 0 !important; }
 .clip-body .tweet-avatar--sm { width: 24px !important; height: 24px !important; }
@@ -1025,6 +1030,15 @@ a { color: inherit; }
 .clip-body .tweet-text { font-family: var(--sans); font-size: 15px; line-height: 1.55; color: var(--ink); white-space: pre-wrap; }
 .clip-body .tweet-photo { margin-top: 10px; }
 .clip-body .tweet-photo img { max-width: 100% !important; width: auto !important; height: auto; border-radius: 12px !important; margin: 0 !important; }
+/* Multi-photo grid — matches X's embed iframe layouts:
+   2 = 1×2 row; 3 = 1 tall left + 2 stacked right; 4 = 2×2 grid. */
+.clip-body .tweet-photo-grid { display: grid; gap: 4px; margin-top: 10px; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; }
+.clip-body .tweet-photo-grid .tweet-photo { margin: 0; min-width: 0; min-height: 0; }
+.clip-body .tweet-photo-grid .tweet-photo img { width: 100% !important; height: 100% !important; object-fit: cover; border-radius: 0 !important; }
+.clip-body .tweet-photo-grid-2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+.clip-body .tweet-photo-grid-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.clip-body .tweet-photo-grid-3 .tweet-photo:nth-child(1) { grid-row: 1 / span 2; }
+.clip-body .tweet-photo-grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 .clip-body .tweet-footer { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rule-soft); }
 .clip-body .tweet-date { font-size: 14px; color: var(--ink-3); font-family: var(--sans); text-decoration: none; }
 .clip-body .tweet-date:hover { text-decoration: underline; }

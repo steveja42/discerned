@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Article with embedded tweets — Fixture</title>
+<meta property="og:image" content="https://example.com/og/embedded-tweet.png">
+</head>
+<body>
+<article>
+  <h1 id="title">A News Article That Embeds Tweets</h1>
+  <p class="meta">By Test Reporter · January 15, 2026 · 4 minute read</p>
+
+  <p id="lede">News articles routinely cite social posts. Here are several embed
+    shapes a third-party page might ship.</p>
+
+  <h2>Case 1 — bare blockquote (no widgets.js)</h2>
+  <p>This is the canonical static fallback that any site can paste. It works
+    without widgets.js, so the markup is fully present:</p>
+  <blockquote class="twitter-tweet" data-lang="en">
+    <p lang="en" dir="ltr">Just shipped v2.0 with full <a href="https://twitter.com/hashtag/typescript">#typescript</a> support and a brand-new plugin API. Check it out at <a href="https://t.co/example">example.com</a> — feedback welcome!</p>
+    &mdash; Jane Developer (@janedev)
+    <a href="https://twitter.com/janedev/status/1111111111111111111">January 10, 2026</a>
+  </blockquote>
+
+  <p>Some interstitial article text between embeds so the layout finder doesn't
+    treat the embeds as the entire content.</p>
+
+  <h2>Case 2 — hidden blockquote + rendered iframe (widgets.js ran)</h2>
+  <p>When widgets.js loads, it hides the source blockquote and inserts a
+    cross-origin iframe sibling. Our extractor must dedupe and produce ONE card.</p>
+  <blockquote class="twitter-tweet" data-lang="en" style="display:none">
+    <p lang="en" dir="ltr">A second tweet with no embedded link, just text content.</p>
+    &mdash; Sam Tester (@samtester)
+    <a href="https://twitter.com/samtester/status/2222222222222222222">January 12, 2026</a>
+  </blockquote>
+  <iframe id="twitter-widget-0" data-tweet-id="2222222222222222222"
+    src="https://platform.twitter.com/embed/Tweet.html?id=2222222222222222222"
+    title="X Post" frameborder="0" allowtransparency="true" allowfullscreen="true"
+    scrolling="no"></iframe>
+
+  <p>More body text between embeds to keep the article from being purely a
+    sequence of tweet cards.</p>
+
+  <h2>Case 3 — iframe only (no source blockquote)</h2>
+  <p>Some pages strip the source blockquote after widgets.js renders, leaving
+    only the iframe. In this case we render a stub card pointing at x.com.</p>
+  <iframe id="twitter-widget-1" data-tweet-id="9999"
+    src="https://platform.twitter.com/embed/Tweet.html?id=9999"
+    title="X Post" frameborder="0"></iframe>
+
+  <p class="footnote">— end of fixture</p>
+</article>
+</body>
+</html>

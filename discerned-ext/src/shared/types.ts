@@ -78,6 +78,27 @@ export type AuthState =
   | { type: 'nip46'; pubkey: string; bunkerRelays: string[]; remotePubkey: string }
   | { type: 'nsec'; pubkey: string; ncryptsec: string }; // NIP-49 encrypted blob
 
+/**
+ * Embedded-tweet data harvested from a third-party page that embeds a tweet.
+ * Sourced either from the rendered platform.twitter.com iframe (rich, with
+ * media) or from the static <blockquote class="twitter-tweet"> fallback markup
+ * (author + text + link only). Photo and avatar `src`s are raw https URLs; the
+ * page-side substituter calls `inlineImage()` on them to round-trip to base64.
+ */
+export interface EmbeddedTweetData {
+  tweetId: string;
+  statusUrl: string;
+  displayName: string;
+  handle: string;
+  badgesHtml: string;
+  tweetTextHtml: string;
+  photoSrcs: string[];
+  videoInfos: { poster: string; duration: string | null; aspectPct: number | null }[];
+  avatarSrc: string;
+  dateText: string;
+  source: 'iframe' | 'blockquote';
+}
+
 // Messages between content script and background
 export type BackgroundMessage =
   | { type: 'CLIP'; data: { capture: Capture; evaluation: Evaluation } }
@@ -109,6 +130,7 @@ export type BackgroundMessage =
   | { type: 'OPEN_LIBRARY'; clipId?: string }
   | { type: 'OPEN_HOME'; eventId?: string }
   | { type: 'REGISTER_LOG_TAB' }
+  | { type: 'EXTRACT_EMBEDDED_TWEETS' }
   | { type: 'GET_CLIP_BODY'; id: string };
 
 export type BackgroundResponse =

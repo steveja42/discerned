@@ -1,0 +1,13 @@
+{
+  "format": "article",
+  "title": { "contains": "embedded" },
+  "url": "http://127.0.0.1:4173/article-with-embedded-tweet.html",
+  "bodyText": {
+    "minLength": 200,
+    "contains": ["News articles routinely", "fallback"]
+  },
+  "bodyHtml": {
+    "noScripts": true,
+    "containsClasses": ["tweet-card", "tweet-text", "tweet-handle", "tweet-date"]
+  }
+}
