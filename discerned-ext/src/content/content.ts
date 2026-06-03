@@ -7,7 +7,7 @@
 import { captureContext, isCapturablePage, hasSelection } from './capture';
 import type { CaptureOptions } from './capture';
 import { DiscernedOverlay } from './overlay';
-import { detectAuthState, signWithNIP07 } from '@/shared/nostr/auth';
+import { detectAuthState, signWithNIP07, getNIP07PublicKey } from '@/shared/nostr/auth';
 import type { AuthState, BackgroundMessage, Capture, ClipFormat, Evaluation } from '@/shared/types';
 import { STORAGE_KEYS } from '@/shared/types';
 import { LL, log, relayLog } from '@/shared/logger';
@@ -55,15 +55,29 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 /**
  * Detect NIP-07 on page load and notify the background so it can update
- * currentAuthState. Runs once per content-script lifecycle.
+ * currentAuthState. Only pull the user's pubkey from the wallet when the
+ * background still needs it for the kind-0 NIP-05 publish — otherwise the
+ * read can trigger a per-origin permission prompt on arbitrary sites (nos2x
+ * renders a blank/stuck approval popup in that case).
+ *
+ * Runs once per content-script lifecycle.
  */
-detectAuthState().then(state => {
+detectAuthState().then(async state => {
   cachedAuthState = state;
-  if (state.type === 'pro' && isContextValid()) {
-    chrome.runtime.sendMessage({ type: 'NIP07_DETECTED', hasNIP07: true }).catch(() => {
-      // Background may not be ready on the very first load — that's fine.
-    });
-  }
+  if (state.type !== 'pro' || !isContextValid()) return;
+  const needsPubkey = await chrome.runtime
+    .sendMessage({ type: 'NEEDS_NIP07_PUBKEY' })
+    .then((r: { data?: { needs?: boolean } } | undefined) => r?.data?.needs === true)
+    .catch(() => false);
+  const pubkey = needsPubkey ? await getNIP07PublicKey().catch(() => null) : null;
+  if (!isContextValid()) return;
+  chrome.runtime.sendMessage({
+    type: 'NIP07_DETECTED',
+    hasNIP07: true,
+    ...(pubkey ? { pubkey } : {}),
+  }).catch(() => {
+    // Background may not be ready on the very first load — that's fine.
+  });
 }).catch(() => {
   // Detection failure is non-fatal; extension stays in guest mode.
 });

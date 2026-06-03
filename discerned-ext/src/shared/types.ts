@@ -112,6 +112,7 @@ export type BackgroundMessage =
   | { type: 'SYNC_CATEGORIES_TO_WEB' }
   | { type: 'PUSH_CATEGORIES'; categories: string[] }
   | { type: 'NIP07_DETECTED'; hasNIP07: boolean; pubkey?: string }
+  | { type: 'NEEDS_NIP07_PUBKEY' }
   | { type: 'GET_NIP05_FOR_ME' }
   | { type: 'CONNECT_NIP46'; bunkerUri: string }
   | { type: 'CONNECT_NSEC'; rawNsec: string; pin: string }
@@ -157,6 +158,12 @@ export const STORAGE_KEYS = {
   CUSTOM_CATEGORIES:       'customCategories', // legacy key — superseded by CATEGORIES
   CATEGORIES:              'categories',
   NIP05_CACHE:             'nip05Cache',
+  /**
+   * Per-pubkey record of the last nip05 string published in our kind 0.
+   * Shape: Record<pubkeyHex, nip05String>.
+   * Used by the cast-time profile sync to decide whether to (re)publish kind 0.
+   */
+  PUBLISHED_NIP05_BY_PUBKEY: 'publishedNip05ByPubkey',
 } as const;
 
 // Messages posted between the extension's web-bridge content script and the
