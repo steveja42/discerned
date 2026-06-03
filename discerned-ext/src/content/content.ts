@@ -108,7 +108,7 @@ async function handleActivation() {
 
   // Toolbar-icon / context-menu acts as a toggle: if the overlay is currently in
   // the DOM, the second click closes it instead of recreating a fresh one.
-  if (currentOverlay?.isConnected) {
+  if (currentOverlay?.host.isConnected) {
     currentOverlay.hide();
     currentOverlay = null;
     return;
@@ -141,7 +141,7 @@ async function handleActivation() {
   }
 
   currentOverlay = new DiscernedOverlay();
-  document.body.appendChild(currentOverlay);
+  document.body.appendChild(currentOverlay.host);
 
   await currentOverlay.show({
     initialFormat,

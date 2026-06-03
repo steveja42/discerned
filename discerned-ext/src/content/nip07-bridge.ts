@@ -13,7 +13,7 @@ export {}; // Makes this a module so declare global is valid
 // any page script runs) we prevent tabs from opening while our overlay is active.
 const _origOpen = window.open.bind(window);
 window.open = (url?: string | URL, target?: string, features?: string): WindowProxy | null => {
-  if (document.querySelector('discerned-overlay')) return null;
+  if (document.querySelector('#discerned-overlay')) return null;
   return _origOpen(url, target, features);
 };
 

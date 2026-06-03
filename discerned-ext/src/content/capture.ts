@@ -1490,7 +1490,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     const clone = deepCloneWithShadow(articleEl);
     sizeCleanup();
     cleanup();
-    clone.querySelector('discerned-overlay')?.remove();
+    clone.querySelector('#discerned-overlay')?.remove();
     removeMarked(clone);
     stripSizeMarkers(clone);
     substituteVideosWithPosters(clone);
@@ -1541,7 +1541,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     const clone = deepCloneWithShadow(expanded);
     sizeCleanup();
     cleanup();
-    clone.querySelector('discerned-overlay')?.remove();
+    clone.querySelector('#discerned-overlay')?.remove();
     removeMarked(clone);
     stripSizeMarkers(clone);
     substituteVideosWithPosters(clone);
@@ -1620,7 +1620,7 @@ function parseReadability(): ReturnType<Readability['parse']> | null {
     const bodyClone = deepCloneWithShadow(document.body) as HTMLElement;
     sizeCleanup();
     stripSizeMarkers(bodyClone);
-    bodyClone.querySelector('discerned-overlay')?.remove();
+    bodyClone.querySelector('#discerned-overlay')?.remove();
     // Remove nodes whose text is dominated by known anti-adblock phrases — these
     // score well with Readability (clean short prose) but are not article content.
     const ADBLOCK_SIGNAL = 'ad or script blocking software';
@@ -1686,7 +1686,7 @@ const EXCL_MARKER = 'data-discerned-excl';
  */
 function markExcluded(root: HTMLElement = document.body): () => void {
   forEachDeepElement(root, el => {
-    if (el.tagName.toLowerCase() === 'discerned-overlay') return;
+    if (el.id === 'discerned-overlay') return;
     const s = window.getComputedStyle(el);
     if (s.position === 'fixed' || s.position === 'sticky' ||
         s.display === 'none' || s.visibility === 'hidden') {
@@ -1733,7 +1733,7 @@ function cloneBodyClean(): HTMLElement {
   sizeCleanup();
   cleanup();
 
-  clone.querySelector('discerned-overlay')?.remove();
+  clone.querySelector('#discerned-overlay')?.remove();
   removeMarked(clone);
 
   return clone;

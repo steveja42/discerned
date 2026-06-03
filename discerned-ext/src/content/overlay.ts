@@ -36,7 +36,20 @@ type View = 'gate' | 'identity' | 'main' | 'settings' | 'keyBackup';
 /** Formats that show a floating preview card to the right of the main panel. */
 const PREVIEW_FORMATS: ClipFormat[] = ['selection', 'article', 'bookmark'];
 
-export class DiscernedOverlay extends HTMLElement {
+/** ID stamped on the host <div> so capture.ts and nip07-bridge.ts can find/skip the overlay. */
+export const OVERLAY_HOST_ID = 'discerned-overlay';
+
+/**
+ * The overlay was originally a Custom Element (`<discerned-overlay>`) but
+ * `window.customElements` is null in content-script isolated worlds on at
+ * least Chromium and Brave for some pages, which makes `customElements.define`
+ * throw and `new (X extends HTMLElement)` fail with "Illegal constructor."
+ *
+ * We host the shadow root on a plain `<div id="discerned-overlay">` instead.
+ * Same shadow DOM, same panel UI; no registry dependency.
+ */
+export class DiscernedOverlay {
+  readonly host: HTMLDivElement;
   private shadow: ShadowRoot;
   private opts: OverlayShowOptions | null = null;
   private capture: Capture | null = null;
@@ -60,31 +73,41 @@ export class DiscernedOverlay extends HTMLElement {
   private previewHost: HTMLElement | null = null;
   private previewShadow: ShadowRoot | null = null;
   private outsideClickHandler: ((e: PointerEvent) => void) | null = null;
+  private mountObserver: MutationObserver | null = null;
 
   constructor() {
-    super();
-    this.shadow = this.attachShadow({ mode: 'closed' });
-  }
+    this.host = document.createElement('div');
+    this.host.id = OVERLAY_HOST_ID;
+    this.shadow = this.host.attachShadow({ mode: 'closed' });
 
-  /**
-   * Stop pointer/keyboard events propagating from the panel into the host page so
-   * sites with document-level event delegation don't intercept clicks inside us.
-   */
-  connectedCallback() {
+    // Stop pointer/keyboard events propagating from the panel into the host page
+    // so sites with document-level event delegation don't intercept clicks inside us.
     const stop = (e: Event) => e.stopPropagation();
     for (const type of ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'keydown', 'keyup', 'keypress']) {
-      this.addEventListener(type, stop);
+      this.host.addEventListener(type, stop);
     }
+
     this.outsideClickHandler = (e: PointerEvent) => {
-      if (!e.composedPath().includes(this) && !this.previewHost?.contains(e.target as Node)) this.hide();
+      if (!e.composedPath().includes(this.host) && !this.previewHost?.contains(e.target as Node)) this.hide();
     };
     document.addEventListener('pointerdown', this.outsideClickHandler);
+
+    // Mirror the old disconnectedCallback: if the host gets removed by anything
+    // other than our hide(), tear down the document-level listener and chrome.
+    this.mountObserver = new MutationObserver(() => {
+      if (!this.host.isConnected) this.teardown();
+    });
+    this.mountObserver.observe(document.body, { childList: true, subtree: true });
   }
 
-  disconnectedCallback() {
+  private teardown(): void {
     if (this.outsideClickHandler) {
       document.removeEventListener('pointerdown', this.outsideClickHandler);
       this.outsideClickHandler = null;
+    }
+    if (this.mountObserver) {
+      this.mountObserver.disconnect();
+      this.mountObserver = null;
     }
     hideArticleHighlight();
     this.removePreview();
@@ -146,9 +169,8 @@ export class DiscernedOverlay extends HTMLElement {
   hide() {
     this.generatedNsec = null;
     this.generatedNpub = null;
-    hideArticleHighlight();
-    this.removePreview();
-    this.remove();
+    this.teardown();
+    this.host.remove();
   }
 
   private removePreview() {
@@ -1563,13 +1585,8 @@ export class DiscernedOverlay extends HTMLElement {
     return `
       :host {
         display: block;
-        /* Reddit ships a global :not(:defined) visibility:hidden rule to hide
-           un-upgraded custom elements. Our discerned-overlay is defined only in
-           the content-script's isolated world, so in Reddit's page world it
-           matches :not(:defined) and gets visibility:hidden directly on the host
-           — which then inherits across the shadow boundary into our panel. That
-           selector's specificity (two :not()s) beats a plain :host, so we need
-           !important to win. */
+        /* Page CSS can target our host <div> with cascade-winning selectors;
+           force visibility so we're never accidentally hidden. */
         visibility: visible !important;
 
         /* ── Mint Tinted (translucent) — design tokens ──────────────────────── */
@@ -2060,9 +2077,3 @@ export class DiscernedOverlay extends HTMLElement {
   }
 }
 
-// Register the custom element (guard against double-registration on re-injection)
-try {
-  if (!customElements.get('discerned-overlay')) {
-    customElements.define('discerned-overlay', DiscernedOverlay);
-  }
-} catch { /* not a standard browsing context (iframe, worker, etc.) — skip registration */ }
