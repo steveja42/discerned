@@ -1,0 +1,13 @@
+{
+  "format": "article",
+  "title": { "contains": "truncation" },
+  "url": "http://127.0.0.1:4173/tweet-with-show-more.html",
+  "bodyText": {
+    "minLength": 50,
+    "contains": ["Some intro text"]
+  },
+  "bodyHtml": {
+    "noScripts": true,
+    "containsClasses": ["tweet-card", "tweet-text"]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "format": "article",
+  "title": { "contains": "Introducing Cube" },
+  "url": "http://127.0.0.1:4173/medium-article.html",
+  "bodyText": {
+    "minLength": 400,
+    "contains": ["Cube is a virtual machine", "BitVM", "trustless"]
+  },
+  "bodyHtml": {
+    "noScripts": true,
+    "containsClasses": ["dx-header", "dx-byline-meta", "dx-stats"]
+  }
+}

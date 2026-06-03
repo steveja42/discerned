@@ -87,5 +87,55 @@ export default defineConfig({
       testMatch: /zh-counters-probe\.spec\.ts/,
       retries: 0,
     },
+    {
+      name: 'medium-probe',
+      testMatch: /medium-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'medium-capture',
+      testMatch: /medium-capture\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'medium-visual',
+      testMatch: /medium-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'medium-fixture-visual',
+      testMatch: /medium-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'breitbart-probe',
+      testMatch: /breitbart-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'breitbart-fixture-visual',
+      testMatch: /breitbart-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'breitbart-visual',
+      testMatch: /breitbart-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'tweet-video-probe',
+      testMatch: /tweet-video-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'extractor-frame0-probe',
+      testMatch: /extractor-frame0-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'extractor-full-probe',
+      testMatch: /extractor-full-probe\.spec\.ts/,
+      retries: 0,
+    },
   ],
 });

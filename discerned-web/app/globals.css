@@ -1245,10 +1245,80 @@ a { color: inherit; }
 /* The name branch (everything else) stacks name on top, handle below. */
 .clip-body .dx-header > :not(:first-child) {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  row-gap: 2px;
   min-width: 0;
   line-height: 1.25;
+}
+/* Pull the first text/span in the name column to the exact top — when an
+   <a> wraps the avatar, the next sibling sometimes carries top padding from
+   the Georgia line-box. Set padding-top: 0 explicitly. */
+.clip-body .dx-header > :not(:first-child) > :first-child {
+  padding-top: 0;
+  margin-top: 0;
+}
+/* Within the name column, flow all descendants inline so pieces like
+   "Burak" + "Follow", or a verified badge + handle + timestamp, sit on one
+   line. Sites wrap them in <span>/<div>/<a> nests; making everything inline
+   collapses the chain visually. */
+.clip-body .dx-header > :not(:first-child) * {
+  display: inline;
+}
+.clip-body .dx-header > :not(:first-child) > * > * + *,
+.clip-body .dx-header > :not(:first-child) > * > * > * + * {
+  margin-left: 6px;
+}
+/* dx-byline — avatar-less author/date/count strip on news sites (Breitbart,
+   NYT, WaPo, etc.). One short flex row that flows inline with gentle spacing
+   between author links, the date <time>, and counter spans. */
+.clip-body .dx-byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 2px;
+  margin: 8px 0;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+.clip-body .dx-byline a {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.clip-body .dx-byline a:hover {
+  text-decoration: underline;
+}
+.clip-body .dx-byline address {
+  font-style: normal;
+  display: inline;
+}
+.clip-body .dx-byline time {
+  font-variant-numeric: tabular-nums;
+}
+.clip-body .dx-byline > * > * {
+  display: inline;
+}
+
+/* dx-byline-meta — a meta strip like "25 min read · May 26, 2026" that the
+   tagger relocates INTO the dx-header's name column so it sits inline next
+   to the author name. Small + muted, with a leading separator space. */
+.clip-body .dx-byline-meta {
+  font-size: 13px;
+  color: var(--ink-3);
+  margin-left: 8px;
+}
+/* Inner descendants flow inline so the multi-piece meta strip reads as one
+   line. */
+.clip-body .dx-byline-meta,
+.clip-body .dx-byline-meta * {
+  display: inline;
+}
+.clip-body .dx-byline-meta > * + *,
+.clip-body .dx-byline-meta > * > * + * {
+  margin-left: 4px;
 }
 /* Pull the first text/span in the name column to the exact top — when an
    <a> wraps the avatar, the next sibling sometimes carries top padding from

@@ -1145,14 +1145,24 @@ async function substituteEmbeddedTweets(
 
   // Pass A — iframes first so an iframe-only embed renders even if the
   // blockquote was already stripped by markExcluded (display:none) before
-  // cloning.
+  // cloning. Matches three shapes:
+  //   1. <iframe id="twitter-widget-N"> (widgets.js standard render)
+  //   2. <iframe src="https://platform.twitter.com/embed/Tweet.html?...id=ID">
+  //   3. Host-page wrappers like Breitbart's tweet-5.html#ID (and similar
+  //      sites that re-wrap the standard widget) — tweet ID lives in the
+  //      URL fragment.
   const iframes = Array.from(root.querySelectorAll('iframe')) as HTMLIFrameElement[];
   for (const iframe of iframes) {
     const id = iframe.getAttribute('id') ?? '';
     const src = iframe.getAttribute('src') ?? '';
     const dataTweetId = iframe.getAttribute('data-tweet-id') ?? '';
+    // Host-page wrappers expose the tweet ID in the URL fragment. Common
+    // shapes: "/tweet-5.html#2061814497598169130" or
+    // "/tweet-5.html#2061814497598169130-onlyvideo".
+    const wrapperHostPattern = /\/(tweet|status|x-embed)[^\/]*\.html#/i;
     const isTweetEmbed = /^twitter-widget/i.test(id)
       || /platform\.twitter\.com\/embed/i.test(src)
+      || wrapperHostPattern.test(src)
       || dataTweetId.length > 0;
     if (!isTweetEmbed) continue;
 
@@ -1162,6 +1172,14 @@ async function substituteEmbeddedTweets(
       if (qIdx >= 0) {
         const idParam = new URLSearchParams(src.slice(qIdx + 1)).get('id');
         if (idParam) tweetId = idParam;
+      }
+      // Fragment fallback (Breitbart-style): "...#ID" or "...#ID-onlyvideo".
+      if (!tweetId) {
+        const hashIdx = src.indexOf('#');
+        if (hashIdx >= 0) {
+          const fragMatch = src.slice(hashIdx + 1).match(/^(\d{6,})/);
+          if (fragMatch) tweetId = fragMatch[1];
+        }
       }
     }
     if (!tweetId) { iframe.remove(); continue; }
@@ -1214,7 +1232,14 @@ const ARTICLE_MIN_CHARS = 200;
 function looksLikeContainer(el: Element): boolean {
   if (el.querySelector('article')) return true;
   if (el.querySelector('nav')) return true;
-  if (el.querySelector(':scope > header, :scope > footer')) return true;
+  // <article> itself often wraps a semantic <header>/<footer> (title + byline +
+  // figure on top; share buttons + categories on bottom). News sites and
+  // generic WordPress themes (Breitbart, NYT, WaPo) all use this pattern.
+  // Only treat header/footer as a container signal when the element ITSELF
+  // is not <article> — for a <main> or <div> with a sibling header/footer,
+  // the structural sections are page chrome.
+  if (el.tagName.toLowerCase() !== 'article' &&
+      el.querySelector(':scope > header, :scope > footer')) return true;
   const directSections = Array.from(el.children).filter(c => c.tagName.toLowerCase() === 'section');
   if (directSections.length >= 3) return true;
   return false;
@@ -2213,6 +2238,20 @@ function tagSemanticStructure(root: Element): void {
   // Skip the generic pass entirely when a site-specific tagger has already
   // marked the page authoritatively.
   if (siteTaggerActive) return;
+
+  // Drop chrome-link icons that survive sanitisation. Pattern: <a> with a
+  // known chrome destination AND no real text content (icon-only buttons:
+  // Google "preferred source" stars, share-to-X icons, RSS icons, etc.).
+  // Removed first so subsequent passes don't see them as siblings to
+  // structural elements.
+  const CHROME_HREF_RE = /\b(google\.com\/preferences|facebook\.com\/share|x\.com\/share|twitter\.com\/share|truthsocial\.com\/intent|threads\.net\/intent|mailto:\?|whatsapp:|tg:\/\/|linkedin\.com\/share)/i;
+  root.querySelectorAll('a').forEach(a => {
+    const href = a.getAttribute('href') ?? '';
+    if (!CHROME_HREF_RE.test(href)) return;
+    const linkText = (a.textContent ?? '').replace(/\s+/g, '').trim();
+    if (linkText.length === 0) a.remove();
+  });
+
   // Quotes first — an <a> with substantial nested content. Pre-sanitisation,
   // before <button>/<svg> children are unwrapped, so the structure is intact.
   root.querySelectorAll('a').forEach(a => {
@@ -2239,6 +2278,34 @@ function tagSemanticStructure(root: Element): void {
     );
     if (actionChildren.length >= STATS_MIN_ICON_SIBLINGS &&
         actionChildren.length / children.length >= 0.6) {
+      appendClass(parent, 'dx-stats');
+    }
+  });
+
+  // Second pass — sites like Medium split the engagement glyph row into two
+  // visual groups (e.g. [clap | responses | repost] and [bookmark | listen |
+  // share]) separated by a spacer. Each group's siblings count < 3 individually
+  // so the heuristic above misses one or both. Catch them by looking for
+  // elements whose direct children are mostly action-shaped (svg/button OR an
+  // <a>/<div> whose only element descendants are svg/button-shaped). When a
+  // parent has ≥ 3 such children OR contains a dx-stats AND has multiple
+  // action-shaped siblings, tag the parent too.
+  const isActionShaped = (el: Element): boolean => {
+    if (el.classList.contains('dx-stats')) return true;
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'button' || tag === 'svg') return true;
+    // An <a> or <div> that wraps a single svg/button (no real text content) is
+    // effectively a clickable icon.
+    const text = (el.textContent ?? '').replace(/\s+/g, '').trim();
+    const hasIcon = !!el.querySelector('svg, button');
+    return hasIcon && text.length <= 6;  // counts like "6" or "1.3K" allowed
+  };
+  root.querySelectorAll('*').forEach(parent => {
+    if (parent.classList.contains('dx-stats')) return;
+    const children = Array.from(parent.children);
+    if (children.length < 2) return;
+    const actionLike = children.filter(isActionShaped);
+    if (actionLike.length >= 2 && actionLike.length / children.length >= 0.6) {
       appendClass(parent, 'dx-stats');
     }
   });
@@ -2310,6 +2377,96 @@ function tagSemanticStructure(root: Element): void {
     }
     appendClass(el, 'dx-header');
     headerTagged.push(el);
+  }
+
+  // Header-meta sibling — when the dx-header tagged above only contains
+  // [avatar + name] but a NEARBY sibling/uncle holds the meta strip (e.g.
+  // Medium's "25 min read · May 26, 2026" sits in a div next to the byline
+  // group), tag it as dx-byline-meta so CSS can pull it flush under the
+  // header in the name column. Look in:
+  //   1. dx-header's next-sibling subtree
+  //   2. dx-header's parent's next-sibling subtree
+  // Both are searched for the first element whose direct text matches the
+  // meta regex AND whose total text is short (<= 80 chars).
+  const META_RE = /\b\d+\s*min\s*(read)?\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}\b/i;
+  const findMetaIn = (scope: Element | null | undefined): Element | null => {
+    if (!scope) return null;
+    // Skip if scope itself or any ancestor is a tweet-card — tweet cards have
+    // their own footer with date that we don't want repurposed as the
+    // article byline meta.
+    if (scope.closest && scope.closest('.tweet-card')) return null;
+    const all = Array.from(scope.querySelectorAll('*'));
+    for (const candidate of all) {
+      if (candidate.classList.contains('dx-stats')) continue;
+      if (candidate.classList.contains('dx-header')) continue;
+      // Don't pull meta from inside a tweet-card.
+      if (candidate.closest('.tweet-card')) continue;
+      const t = (candidate.textContent ?? '').replace(/\s+/g, ' ').trim();
+      if (t.length === 0 || t.length > 80) continue;
+      if (META_RE.test(t)) return candidate;
+    }
+    return null;
+  };
+  for (const el of headerTagged) {
+    if (META_RE.test(el.textContent ?? '')) continue;  // already includes meta
+    // Search the dx-header's immediate sibling subtree first, then its parent's
+    // next-sibling subtree. Stop at the first element matching the meta regex.
+    let meta = findMetaIn(el.nextElementSibling);
+    if (!meta && el.parentElement) {
+      meta = findMetaIn(el.parentElement.nextElementSibling);
+    }
+    if (meta) {
+      appendClass(meta, 'dx-byline-meta');
+      // Move the meta element INTO the dx-header's name column so it flows on
+      // the same row as the author name. The name column is the second direct
+      // child of dx-header (or the first non-first child if heuristics picked
+      // a multi-child header). We append the meta as its last child.
+      const children = Array.from(el.children);
+      const nameColumn = children.length >= 2
+        ? children.find((c, i) => i > 0 && !hasAvatarImage(c)) ?? children[1]
+        : null;
+      if (nameColumn && !nameColumn.contains(meta)) {
+        nameColumn.appendChild(meta);
+      }
+    }
+  }
+
+  // Article-chrome widgets that survive sanitisation but aren't content:
+  //   - <input type="range"> audio scrubbers (Amplitude.js, Polly TTS)
+  //   - elements with data-mp3u (Polly TTS audio URL)
+  // Remove them outright.
+  root.querySelectorAll('[data-mp3u], input[type="range"]').forEach(el => {
+    // Walk up to the closest container that's clearly the widget wrapper —
+    // typically the parent of an <input type="range"> with sibling time/play.
+    const widget = el.closest('[data-mp3u], [class*="amplitude" i], [id*="Polly" i]') ?? el;
+    widget.remove();
+  });
+
+  // Avatar-less bylines (news sites: Breitbart, NYT, WaPo, etc.) — these
+  // look like "Author Name and Author Name | Date | Counter" all on one line.
+  // Detect: an element whose direct text/structure contains an <address> OR
+  // an author-link <a> alongside a <time> element, total text < 200 chars,
+  // no img descendants. Stamp dx-byline so CSS lays it as a single muted row.
+  // Walk in reverse so we encounter deepest elements first; if a descendant
+  // already has dx-byline, skip the ancestor (we want the tightest wrapper).
+  const allEls = Array.from(root.querySelectorAll('*')).reverse();
+  for (const parent of allEls) {
+    if (parent.classList.contains('dx-byline')) continue;
+    if (parent.classList.contains('dx-header')) continue;
+    if (parent.classList.contains('dx-stats')) continue;
+    if (parent.querySelector('.dx-byline')) continue;  // descendant already tagged
+    const text = (parent.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (text.length === 0 || text.length > 200) continue;
+    if (parent.querySelector('img')) continue;  // has avatar → handled by dx-header
+    const hasAddress = !!parent.querySelector('address');
+    const authorLinks = Array.from(parent.querySelectorAll('a')).filter(a => {
+      const href = a.getAttribute('href') ?? '';
+      return /\/author\/|\/by\/|\/profile\/|\/people\/|\/u\//i.test(href);
+    });
+    const hasTime = !!parent.querySelector('time');
+    const looksByline = (hasAddress || authorLinks.length >= 1) && hasTime;
+    if (!looksByline) continue;
+    appendClass(parent, 'dx-byline');
   }
 }
 

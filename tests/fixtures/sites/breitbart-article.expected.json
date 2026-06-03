@@ -1,0 +1,13 @@
+{
+  "format": "article",
+  "title": { "contains": "Mexican President" },
+  "url": "http://127.0.0.1:4173/breitbart-article.html",
+  "bodyText": {
+    "minLength": 800,
+    "contains": ["Mexican President", "Sheinbaum", "ambassador"]
+  },
+  "bodyHtml": {
+    "noScripts": true,
+    "containsClasses": ["tweet-card"]
+  }
+}

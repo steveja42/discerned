@@ -652,16 +652,33 @@ async function handleExtractEmbeddedTweets(tabId?: number): Promise<BackgroundRe
  */
 function extractFromTweetEmbed(): unknown {
   try {
-    const article = document.querySelector('article');
+    const article = document.querySelector('article') ?? document.body;
     if (!article) return null;
 
-    // Handle: from UserAvatar-Container-{handle} testId.
-    const avatarContainer = article.querySelector('[data-testid^="UserAvatar-Container-"]');
-    const handle = (avatarContainer?.getAttribute('data-testid') ?? '')
-      .replace(/^UserAvatar-Container-/, '');
-    if (!handle) return null;
+    // Status URL: the "Visit this post on X" link is the canonical one and
+    // points at https://x.com/{handle}/status/{id}. Strip query string.
+    // Resolved first because in `-onlyvideo` mode the rest of the tweet UI
+    // may not render (no avatar container, no profile link, no text), and
+    // statusUrl alone is enough to give us a valid tweetId + handle.
+    const statusAnchor = article.querySelector('a[aria-label="Visit this post on X"]') as HTMLAnchorElement | null
+      ?? (article.querySelector('a[href*="/status/"]') as HTMLAnchorElement | null);
+    const rawStatus = statusAnchor?.getAttribute('href') ?? '';
+    const statusUrl = rawStatus.split('?')[0] ?? '';
+    const tweetIdMatch = statusUrl.match(/\/status\/(\d+)/);
+    const tweetId = tweetIdMatch ? tweetIdMatch[1] : '';
+    if (!tweetId) return null;
 
-    // Avatar img inside the container.
+    // Handle: from UserAvatar-Container-{handle} testId, or fall back to the
+    // status URL path /{handle}/status/{id}.
+    const avatarContainer = article.querySelector('[data-testid^="UserAvatar-Container-"]');
+    let handle = (avatarContainer?.getAttribute('data-testid') ?? '')
+      .replace(/^UserAvatar-Container-/, '');
+    if (!handle) {
+      const handleFromUrl = statusUrl.match(/\/\/(?:twitter|x)\.com\/([^/]+)\/status\//i);
+      if (handleFromUrl) handle = handleFromUrl[1];
+    }
+
+    // Avatar img inside the container (may be absent in -onlyvideo mode).
     const avatarImg = avatarContainer?.querySelector('img');
     const avatarSrc = avatarImg?.getAttribute('src') ?? '';
 
@@ -678,23 +695,26 @@ function extractFromTweetEmbed(): unknown {
       const t = (a.textContent ?? '').trim();
       if (t.length > 0) { displayName = t; break; }
     }
+    // Fallback display name when -onlyvideo mode strips the byline.
+    if (!displayName && handle) displayName = handle;
 
-    // Status URL: the "Visit this post on X" link is the canonical one and
-    // points at https://x.com/{handle}/status/{id}. Strip query string.
-    const statusAnchor = article.querySelector('a[aria-label="Visit this post on X"]') as HTMLAnchorElement | null;
-    const rawStatus = statusAnchor?.getAttribute('href') ?? '';
-    const statusUrl = rawStatus.split('?')[0] ?? '';
-    const tweetIdMatch = statusUrl.match(/\/status\/(\d+)/);
-    const tweetId = tweetIdMatch ? tweetIdMatch[1] : '';
-    if (!tweetId) return null;
-
-    // Tweet text HTML — copy innerHTML, strip the "Show more" anchor first so
-    // it doesn't appear in the rendered card. Clone to avoid mutating the live DOM.
+    // Tweet text HTML — copy innerHTML. For long tweets X appends a "Show more"
+    // anchor whose href points to a signin redirect chain. Keep the anchor (so
+    // the user can click through to the full tweet) but rewrite the href to
+    // the canonical https://x.com/.../status/... URL. Also prepend a leading
+    // space text node to the anchor — X's own DOM separates "Show more" from
+    // the tweet body with a <span>&nbsp;</span> sibling, but the &nbsp;
+    // collapses during sanitization (trim() drops U+00A0), so without an
+    // explicit space the rendered text reads "challengeShow more".
     const tweetTextEl = article.querySelector('[data-testid="tweetText"]');
     let tweetTextHtml = '';
     if (tweetTextEl) {
       const clone = tweetTextEl.cloneNode(true) as Element;
-      clone.querySelectorAll('[data-testid="tweet-text-show-more-link"]').forEach(n => n.remove());
+      clone.querySelectorAll('[data-testid="tweet-text-show-more-link"]').forEach(showMore => {
+        if (statusUrl) showMore.setAttribute('href', statusUrl);
+        const ownerDoc = showMore.ownerDocument ?? document;
+        showMore.parentNode?.insertBefore(ownerDoc.createTextNode(' '), showMore);
+      });
       tweetTextHtml = clone.innerHTML;
     }
 

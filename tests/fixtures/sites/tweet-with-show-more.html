@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Tweet with truncation</title></head>
+<body>
+<main>
+<article>
+<h1>Article title</h1>
+<p>Some intro text before the tweet.</p>
+<!-- Simulate a Breitbart-style wrapper that holds a platform.twitter.com iframe.
+     For unit testing purposes the inner iframe isn't reachable (it's headless),
+     so the substitute path falls back to extracting from the wrapper iframe
+     attributes. We mimic the post-substitution markup directly. -->
+<div class="tweet-card tweet-card--embed">
+  <div class="tweet-header">
+    <div class="tweet-author">
+      <span class="tweet-name">Embajador Ronald Johnson</span>
+      <span class="tweet-handle">@USAmbMex</span>
+    </div>
+  </div>
+  <div class="tweet-text"><span>The fight against cartels should unite us, not divide us. Every moment spent turning this shared security challenge</span><a href="https://x.com/USAmbMex/status/2061587848659120484"><span>&nbsp;</span><span>Show more</span></a></div>
+  <div class="tweet-footer"><a class="tweet-date" href="https://x.com/USAmbMex/status/2061587848659120484">4:17 PM · Jun 1, 2026</a></div>
+</div>
+<p>Article body continues after the tweet.</p>
+</article>
+</main>
+</body>
+</html>
