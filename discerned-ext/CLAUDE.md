@@ -75,7 +75,7 @@ Runs exclusively on `discerned.online/*` and `localhost:3000/*`. Bridges the ext
 
 `captureContext(format)` branches by `ClipFormat`. For `'article'` (the rich-content path), extraction runs in tiers, first match wins:
 
-- **Tier 0 — Twitter/X**: `extractTweet()` builds a clean tweet card from `data-testid` selectors.
+- **Tier 0 — Twitter/X**: `extractTweet()` builds a clean tweet card from `data-testid` selectors. The same function is reused by `full-page` and `selection` formats on twitter.com / x.com (a `format` parameter controls how the resulting card is plumbed into the Capture shape — `bodyHtml` for article/full-page, `selectionText` for selection).
 - **Site taggers** (`applySiteTagger()`): before the tiers below, a per-site live-DOM tagger (if one matches the hostname) stamps `dx-*` class markers on the page so the captured HTML carries layout hints across sanitisation. When a site tagger runs, the generic semantic tagger is skipped (`siteTaggerActive`).
 - **Tier 1 — semantic element**: `findArticleElement()` picks `<article>`/`<main>`/`[role=...]` when present.
 - **Tier 1.5 — layout finder**: `findContentBlockByLayout()` scores every block by visual area + text density − link/button density, then `maybeExpandToFeed()` widens to a feed/thread parent. This is what makes div-soup SPAs (Nostr clients, Mastodon, Bluesky, Reddit) capture the right content.
@@ -95,16 +95,56 @@ All tiers clone the live DOM, run `tagSemanticStructure()` (generic) or rely on 
 | `dx-reply-row` | a reply's avatar + (name/body) split (flex row) |
 | `dx-header` | avatar + name row |
 | `dx-author` | inline username + verification + handle + time |
+| `dx-byline` | avatar-LESS byline strip (news sites): `<address>` or author-link `<a>` + `<time>` + short text |
+| `dx-byline-meta` | meta strip like "25 min read · May 26, 2026"; tagger MOVES it into dx-header's name column |
 | `dx-quote` | a quoted/embedded note card (bordered) |
 | `dx-quote-frag` | one `<a>` fragment of a quote (sites split a quote across sibling `<a>`s) |
 | `dx-zaps-row` | horizontal zappers row |
 | `dx-stats` | reply/like/repost icon row |
+| `dx-stats--end` | right-aligned stats variant for footer engagement counters (footerStat-class siblings) |
 
 The matching layout CSS lives in `discerned-web/app/globals.css` under `.clip-body .dx-*`. **To add a site**: copy `tagPrimal`, swap the selectors, register it in `SITE_TAGGERS`. No web-app change needed unless the site has a new layout quirk.
 
 A tagger may optionally **return a capture root** (`Element | void`). When it does, `extractArticle` captures that subtree instead of running the generic article/layout finders — use this to scope the clip to the content column and exclude page chrome (sidebars, search, banners). Returning nothing leaves root selection to the pipeline (still stamping markers).
 
 `tagPrimal` (primal.net) is the reference implementation. `tagBsky` (bsky.app) is a second example: it tags each `[data-testid^="feedItem-by-"]` post (`dx-post` + `dx-header` + `dx-stats`) and returns the `profileScreen` column as the capture root. Bluesky positions content with inline `transform`/`position`/`aspect-ratio` that survive sanitisation (only `<img>` styles get scrubbed); `globals.css` neutralises those inside `.clip-body` so the dx-* layout takes over.
+
+### Generic byline + chrome detection
+
+`tagSemanticStructure()` has several **generic** passes that handle news + blog sites without needing per-site code. Most modern news sites and WordPress blog layouts work out of the box.
+
+- **Chrome-link removal** — drops empty `<a>` elements pointing at `google.com/preferences`, `facebook.com/share`, `x.com/share`, `mailto:?`, `whatsapp:`, etc. Removes the gray-oval "Make this site a preferred Google source" buttons and bare share icons that survived sanitisation.
+- **Audio widget removal** — drops `[data-mp3u]`, `input[type="range"]`, and walks up to `[class*="amplitude" i]` / `[id*="Polly" i]` wrappers. Removes Polly TTS / Amplitude.js article-narration scrubbers.
+- **`dx-byline`** — avatar-less byline detection: an element with `<address>` OR author-link `<a>` + `<time>` + short total text (< 200 chars), no img descendants. Walks elements in reverse so the deepest (tightest) match wins. CSS lays it out as a single muted flex row.
+- **`dx-byline-meta`** — meta strip matching `\d+ min read` or month-name+day pattern, found in dx-header's next-sibling subtree. The tagger MOVES it into dx-header's name column so it shares row with the author name. Skipped inside `.tweet-card` so tweet-card footers aren't repurposed as byline meta.
+- **`dx-stats--end`** — right-aligned variant for footer engagement counters: 2+ siblings whose class names match `/footerStat\|engagement[A-Z_]\|node[-_]?stat/i`.
+- **dx-class preservation on unwrap** — `sanitiseElement` promotes non-allowed tags (`<footer>`, `<header>`, `<address>`, etc.) to `<div>` when they carry trusted `dx-*` / `tweet-*` classes, instead of unwrapping them. Without this, stamping `dx-stats` on a `<footer>` would lose the class when sanitisation deleted the `<footer>`.
+
+Container heuristic relaxed: `looksLikeContainer()` no longer rejects an `<article>` element just because it contains a direct `<header>` or `<footer>` child — news sites legitimately use that semantic pattern.
+
+### Embedded tweets on third-party sites
+
+Article captures detect and render embedded tweets from third-party pages (ZeroHedge, Breitbart, news blogs) as rich `tweet-card` blocks matching Tier 0's output.
+
+**Pipeline** — `harvestEmbeddedTweets()` runs on the live DOM **before any clone**, returning `Map<tweetId, EmbeddedTweetData>`:
+1. Parse every `<blockquote class="twitter-tweet">` (including hidden ones widgets.js leaves behind) for the static fallback data.
+2. Round-trip through the background: `chrome.webNavigation.getAllFrames({ tabId })` enumerates ALL frames in the tab (including nested ones), filtered to `platform.twitter.com/embed/Tweet.html`. `chrome.scripting.executeScript({ target: { tabId, frameIds }, func: extractFromTweetEmbed })` injects an extractor that reads the rendered tweet DOM (avatar, author, text, photos, video poster, date, verified badge, "Show more" anchor). Iframe data wins over blockquote data when both are available.
+3. 1-second timeout budget so a stuck iframe doesn't hang the capture.
+
+**Substitution** — `substituteEmbeddedTweets(clone, harvested)` walks the cloned subtree and replaces:
+- `iframe[id^="twitter-widget"]` — standard widgets.js render
+- `iframe[src*="platform.twitter.com/embed"]` — direct platform embed
+- `iframe[data-tweet-id]` — pre-tagged
+- **Host-page wrapper iframes** — Breitbart pattern: `iframe[src*="/tweet-N.html#TWEET_ID"]` where the tweet ID is in the URL **fragment** (and may have a `-onlyvideo` suffix for video-only mode). Detection regex: `\/(tweet|status|x-embed)[^\/]*\.html#`.
+- `blockquote.twitter-tweet` — static fallback
+
+For each match: extract tweet ID, look up `harvested.get(id)`, `replaceWith()` a full `tweet-card--embed` div or a stub "View on X" card. Dedupes by tweet ID so a hidden blockquote + visible iframe for the same tweet produces ONE card.
+
+**Required permissions** in `manifest.json`: `scripting`, `webNavigation`, `host_permissions: ["<all_urls>"]`.
+
+**`-onlyvideo` mode** — Breitbart's wrapper iframes can request video-only rendering with `#TWEET_ID-onlyvideo`. In that mode the platform.twitter.com iframe has no avatar container, no `tweetText`, no profile link. `extractFromTweetEmbed` resolves `statusUrl` and `tweetId` FIRST, then derives `handle` from the URL path `/{handle}/status/` when the avatar container is absent. Display name falls back to handle. The video poster from `<video poster=>` flows through `videoInfos[].poster` → `buildVideoHtml` and renders as a `tweet-video` link card with play overlay.
+
+**"Show more" link** — long tweets append `<a data-testid="tweet-text-show-more-link">` inside `tweetText`. The extractor preserves the anchor but rewrites its href from the Twitter signin-redirect chain to the canonical `https://x.com/.../status/...` URL, and prepends a regular-space text node (X's `<span>&nbsp;</span>` separator gets dropped during sanitisation because `trim()` strips U+00A0).
 
 ### Sanitisation
 
