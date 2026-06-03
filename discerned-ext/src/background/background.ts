@@ -217,7 +217,6 @@ async function seedCategories(): Promise<void> {
 
 restoreAuthState();
 seedCategories();
-void initNip05();
 
 // ── NIP-05 names map (kind-0 auto-publish) ──────────────────────────────────
 //
@@ -280,6 +279,8 @@ async function initNip05(): Promise<void> {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === NIP05_ALARM) void syncNip05AndMaybePublish();
 });
+
+void initNip05();
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   log(LL.NORMAL, 'Discerned extension installed/updated');

@@ -137,5 +137,30 @@ export default defineConfig({
       testMatch: /extractor-full-probe\.spec\.ts/,
       retries: 0,
     },
+    {
+      name: 'youtube-visual',
+      testMatch: /youtube-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'wikipedia-visual',
+      testMatch: /wikipedia-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'reddit-visual',
+      testMatch: /reddit-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'bbc-visual',
+      testMatch: /bbc-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'stackoverflow-visual',
+      testMatch: /stackoverflow-visual\.spec\.ts/,
+      retries: 0,
+    },
   ],
 });
