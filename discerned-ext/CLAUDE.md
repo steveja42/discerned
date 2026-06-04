@@ -20,9 +20,19 @@ Discerned is a Chrome Extension (Manifest V3) that acts as a value attribution l
 ```bash
 pnpm dev          # Vite watch mode
 pnpm build        # tsc + Vite production build
+pnpm build:test   # development-mode build → dist-test/ (for Playwright)
 pnpm type-check   # tsc --noEmit (strict)
 pnpm lint         # ESLint on src/**/*.ts
 ```
+
+## Dev environment — IMPORTANT for AI assistants
+
+**Assume `pnpm dev` is already running in `discerned-ext/` and `discerned-web/`.** The user keeps both watchers up; they hot-reload `dist/` and the Next.js app on every save. This has two consequences for any work in this repo:
+
+- **Never run `pnpm build`.** It writes production-minified chunks with different hashes into the same `dist/` that `pnpm dev` is watching, leaving the user's loaded Chrome extension with a mismatched `manifest.json` + content-script set. The overlay silently fails to launch until the user kills/restarts `pnpm dev`. To verify TypeScript compiles, use `pnpm type-check`. To pick up your source edits in the user's loaded extension, do nothing — `pnpm dev` writes `dist/` on save, the user reloads the extension + page.
+- **Playwright reads `dist-test/`, NOT `dist/`.** When you need to validate via a Playwright spec, run `pnpm build:test` first (it writes only to `dist-test/`, doesn't touch the dev `dist/`). The `tests/e2e/*` specs all load `dist-test/`.
+
+If you ever see an "extension is broken" symptom (overlay missing, bookmark-style 2-line clips when full content was expected), the user accidentally has stale `dist/` — the fix is to **restart `pnpm dev`**, NOT another `pnpm build`. Do not try to "fix" it with a production build.
 
 ## Architecture
 
@@ -152,6 +162,8 @@ The tagger function runs on `document` (the **live** page). It should only **rea
 For any destructive change (rebuilding the byline column, swapping `#player` for a `<figure>` poster, hoisting an avatar out of a soon-to-be-excluded `<a>` wrapper), register a `postClone(clone: Element)` callback in `SITE_TAGGERS`. It runs on the **detached clone** that `extractArticle` builds, before `removeMarked`/sanitisation — so it can lift content out of `dx-excl`'d wrappers before they're pruned. See `postCloneReddit` and `postCloneYoutube` for the pattern.
 
 Order matters: `extractArticle` does `deepCloneWithShadow → siteTaggerPostClone → removeMarked → sanitiseTreeInPlace → inlineAllImages`. Anything you want to use that's normally dropped (e.g. an avatar inside a dx-excl'd anchor) needs to be hoisted out *during* `postClone`, before `removeMarked` runs.
+
+**The site tagger runs for ALL three article-like formats** — `article`, `selection`, AND `full-page`. The shared helper `applyTaggerToClone(cloneOrFragment)` is called from each of those extractors: it promotes `dx-excl` classes to `EXCL_MARKER` on the clone, runs the site-tagger's `postClone` hook (if any), then calls `removeMarked` to drop excluded subtrees. Selection and full-page also share `tagSemanticStructure` and `dedupAdjacentImages` (for the dx-byline / chrome-link / triple-image patterns). When you write or fix a site tagger, expect it to apply to all three formats — write selectors that locate semantic landmarks (`shreddit-post`, `ytd-video-owner-renderer`) rather than ones that assume the user captured the whole page.
 
 When defining `postClone` for a site, ALSO keep important elements off the `dx-excl` list inside the live tagger — otherwise they're dropped from the clone before `postClone` can transform them. Example: `tagYoutube` skips `#player`, `#player-container`, `ytd-player` in its `excludeNonKept` pass so `postCloneYoutube` can swap the player for the poster figure.
 

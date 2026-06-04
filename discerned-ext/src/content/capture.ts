@@ -425,6 +425,10 @@ function fragSummary(frag: DocumentFragment): string {
 async function extractSelection(): Promise<Capture> {
   const url = window.location.href;
   logShadowPresence(url);
+  // Apply per-site live-DOM tagger so dx-* markers and dx-excl flags land
+  // on the live nodes before we clone the selection fragment. The fragment
+  // will inherit them via cloneContents().
+  siteTaggerActive = applySiteTagger();
   const selection = getActiveSelection();
   const resolved = resolveSelection(selection, url);
   // One-shot: consume the snapshot so a later capture without a fresh
@@ -486,7 +490,11 @@ async function extractSelection(): Promise<Capture> {
   cleanup();
   log(LL.DEBUG, `Discerned: extractSelection — after cloneContents+wrap: ${fragSummary(fragment)}`, 'url:', url);
   unmarkWrappers(fragment);
-  removeMarked(fragment);
+  // Promote dx-excl → EXCL_MARKER on the clone, run the site tagger's
+  // postClone hook (e.g. Reddit avatar hoist / YT poster swap), then
+  // removeMarked. Shared with extractArticle + extractFullPage so all
+  // three formats produce the same site-tagger-aware structure.
+  applyTaggerToClone(fragment);
   stripSizeMarkers(fragment);
   // Twitter GIFs and videos are <video poster="..."> — convert to <img> so they
   // survive sanitisation (which drops <video> as a non-allowed tag).
@@ -1678,6 +1686,10 @@ async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
     log(LL.DEBUG, 'Discerned: full-page Twitter extractor yielded nothing, falling through to generic', 'url:', window.location.href);
   }
 
+  // Apply per-site live-DOM tagger so dx-* markers + dx-excl flags land on
+  // live nodes before clone. The cloned body inherits them via cloneNode.
+  siteTaggerActive = applySiteTagger();
+
   // Pre-harvest embedded tweets from the LIVE DOM before cloning (the iframe
   // round-trip + hidden-blockquote data only exists pre-clone).
   const harvestedTweets = await harvestEmbeddedTweets(document);
@@ -1685,9 +1697,18 @@ async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
   // DOMParser to restructure the document in ways that leave <script> content as
   // orphaned text nodes that querySelectorAll('script') can't reach.
   const bodyClone = cloneBodyClean();
+  // Site tagger post-clone work (dx-excl promotion + postClone hook + removeMarked).
+  // Shared with extractArticle + extractSelection so all three formats produce
+  // the same site-tagger-aware structure.
+  applyTaggerToClone(bodyClone);
+  stripPageChrome(bodyClone);
   substituteVideosWithPosters(bodyClone);
   substituteStarRatings(bodyClone);
   await substituteEmbeddedTweets(bodyClone, harvestedTweets);
+  // Generic semantic tagging (skipped automatically when a site tagger was
+  // active). Stamps dx-byline / dx-stats / dx-header on news + blog markup
+  // so the captured HTML carries layout hints across sanitisation.
+  tagSemanticStructure(bodyClone);
   sanitiseTreeInPlace(bodyClone, opts.stripInlineStyles);
   const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
   return {
@@ -2448,6 +2469,44 @@ const SITE_TAGGERS: Array<{ match: (host: string) => boolean; tag: SiteTagger; p
  * Sets siteTaggerActive (so the generic semantic-structure pass is skipped)
  * and siteTaggerRoot (the narrowed capture root, when the tagger returns one).
  */
+/**
+ * Apply the active site-tagger's clone-side transforms to a detached clone /
+ * fragment. Shared by extractArticle (Tier 1, 1.5), extractSelection, and
+ * extractFullPage so all three formats benefit from site tagger work.
+ *
+ * Order matters — postClone must run BEFORE removeMarked so it can lift
+ * content (e.g. the Reddit subreddit avatar) out of `dx-excl`'d wrappers
+ * before those wrappers are pruned.
+ *
+ * Steps:
+ *   1. Promote `.dx-excl` classes to `EXCL_MARKER` attrs on the clone. The
+ *      site tagger ran on the LIVE DOM and may have stamped `dx-excl` on
+ *      elements inside the soon-to-be-cloned subtree; promoting them now
+ *      lets `removeMarked` (step 3) drop them as a unit.
+ *   2. Run the site tagger's `postClone` callback (if any) on the clone.
+ *   3. Drop EXCL_MARKER'd elements.
+ *
+ * Caller is responsible for: `markExcluded` on the live DOM (for hidden /
+ * fixed-positioned chrome), `annotateLiveImageSizes` cleanup, sanitisation,
+ * and downstream image inlining. This helper only handles the site-tagger
+ * portion of the clone pipeline.
+ */
+function applyTaggerToClone(cloneRoot: Element | DocumentFragment): void {
+  if (siteTaggerActive) {
+    cloneRoot.querySelectorAll('.dx-excl').forEach(el => el.setAttribute(EXCL_MARKER, '1'));
+  }
+  if (siteTaggerPostClone) {
+    try {
+      // postClone signatures take Element, but DocumentFragment shares the
+      // querySelectorAll surface our hooks use. Cast through.
+      siteTaggerPostClone(cloneRoot as Element);
+    } catch (err) {
+      log(LL.WARN, 'Discerned: site tagger postClone failed:', err);
+    }
+  }
+  removeMarked(cloneRoot);
+}
+
 function applySiteTagger(): boolean {
   // Reset all before the loop so a non-matching capture doesn't inherit
   // a prior page's tagger state (the module-level vars persist across

@@ -153,6 +153,11 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'reddit-formats-visual',
+      testMatch: /reddit-formats-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
       name: 'bbc-visual',
       testMatch: /bbc-visual\.spec\.ts/,
       retries: 0,
