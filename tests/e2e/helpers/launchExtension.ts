@@ -53,6 +53,9 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
       '--no-sandbox',
       '--no-first-run',
       '--disable-features=DialMediaRouteProvider',
+      // Mute all tab audio so headed runs against YouTube / streaming sites
+      // don't blast the user's speakers.
+      '--mute-audio',
       // Anti-detection: strip the Blink flag that exposes automation, drop
       // the "Chrome is being controlled by automated test software" infobar
       // fingerprint, and silence the testing-mode badge. Cloudflare's

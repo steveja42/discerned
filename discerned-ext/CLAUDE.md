@@ -84,9 +84,41 @@ Runs exclusively on `discerned.online/*` and `localhost:3000/*`. Bridges the ext
 
 All tiers clone the live DOM, run `tagSemanticStructure()` (generic) or rely on the site tagger's markers, then `sanitiseTreeInPlace()`, then `inlineAllImages()` (round-trips images through the background's privileged fetch → base64).
 
+### Capture quality philosophy
+
+**The captured clip should visually match what the user saw on the source site** — not a generic reformatted version. Title, byline, avatar, hero image, body paragraphs, engagement counts should land in roughly the same positions and proportions as on the live page. Pixel-perfect isn't the goal; **recognisable shape** is.
+
+When working on capture quality:
+
+1. **General solutions take precedence over per-site ones.** A new heuristic in `tagSemanticStructure()` or the pipeline (e.g. `dedupAdjacentImages`, `stripPageChrome`, the avatar-min-px guard) that fixes class N sites is worth more than a single tagger that fixes one. Before reaching for a per-site tagger, ask: is the problem a *pattern* (gallery-looks-like-avatar, blur-up-preview-image triplet, sidebar-without-aside) or *truly* unique to one site? Generic fixes go in `capture.ts` outside `SITE_TAGGERS`. Per-site taggers exist for irreducibly bespoke layouts (Reddit's `shreddit-comment` slot model, YouTube's player widget).
+2. **Don't break previously-working sites.** Run the pixel-baseline fixture specs (`medium-fixture-visual`, `breitbart-fixture-visual`) after any change to shared CSS, sanitiser logic, or generic taggers. They live in `tests/e2e/*-fixture-visual.spec.ts-snapshots/` and fail on visual diff. Update baselines (`--update-snapshots`) only when the change is *intentionally* visual. Also re-run the live visual specs for any site you've previously optimized (table below) and human-eyeball the screenshot.
+3. **Always visually verify after structural changes.** Type-check + unit tests catch syntax / behaviour bugs but miss "wrong selector picked the avatar-wrapping anchor instead of the channel-name anchor" and "element got dropped before postClone could see it." After any pipeline change, run the relevant `*-visual` Playwright spec and `Read` the rendered PNG before reporting done. See [memory: feedback_visually_verify_after_refactor].
+
+### Optimized sites — visual reference points
+
+The clip should approximate the **content** column of the source site (title, byline, hero, body, comments). Side rails, action toolbars, sponsored chrome, and engagement panels are dropped.
+
+| Site | Tagger | postClone | Visual target | Test spec |
+|---|---|---|---|---|
+| **primal.net** | `tagPrimal` | — | Single note OR thread with avatar + author header + zaps + stats per post. Quote-notes render as bordered cards. | `primal-visual` (live) |
+| **bsky.app** | `tagBsky` | — | Profile feed or thread with 44px round avatar pin + name/handle row + body + reply/repost/like row per post. | `bsky-visual` (live) |
+| **goodreads.com** | `tagGoodreads` / `tagGoodreadsList` | — | Book hero (cover + title + author + 5-star rating + genres pills + "About the author" card). List pages render as a 2-col grid. | `goodreads-visual` (live) |
+| **twitter.com / x.com** | (Tier 0 `extractTweet`) | — | Single tweet card with avatar + author + body + photos/video poster + footer. Embedded tweets on news pages also use this. | `twitter-clip-modes` (live), `embedded-tweet-visual` (live) |
+| **medium.com** | (generic byline) | — | Title + author avatar header + "N min read · date" meta + body. Engagement glyph rows preserved. | `medium-fixture-visual` (fixture, **pixel baseline**), `medium-visual` (live, behind Cloudflare) |
+| **breitbart.com** | (generic byline + chrome strip) | — | Title + byline + hero image + body + embedded tweets rendered as tweet-cards (wrapper-iframe pattern). | `breitbart-fixture-visual` (fixture, **pixel baseline**), `breitbart-visual` (live) |
+| **zerohedge.com** | (generic byline + engagement-row tagger) | — | Title + byline + body + right-aligned footer engagement counters. Embedded tweet iframes harvested into tweet-cards. | `embedded-tweet-visual` (live) |
+| **stansberryresearch.com** | (generic, with shadow DOM piercing) | — | Author block (avatar + name) + article body, captured across declarative open shadow roots. | covered by `shadow-dom.test.ts` unit tests |
+| **wikipedia.org** | (generic + `stripPageChrome`) | — | Article title + `<p>` body + infobox table + section headings. TOC sidebar and references-box pruned via `stripPageChrome`. | `wikipedia-visual` (live) |
+| **bbc.com/news** | (Tier 1 `<article>`) | — | Title + byline + date + hero image + body paragraphs. No tagger needed; `<article>` semantics suffice. | `bbc-visual` (live) |
+| **reddit.com** | `tagReddit` | `postCloneReddit` | Subreddit avatar (round, left) + 2-row column right of it (subreddit · time on row 1, author on row 2) + title + post body or image + comments with avatar / dx-byline / action row each. Sidebar rails, "Back" button, ads dropped. | `reddit-visual` (live) |
+| **youtube.com** | `tagYoutube` | `postCloneYoutube` | Channel avatar (round, left) + 2-row column right of it (channel name on row 1, "N subscribers" on row 2) + poster image (from `i.ytimg.com/.../hqdefault.jpg` or live `<video poster>`) + title + views/date + description + comments. Up-Next sidebar, action strip, chapter shelves dropped. | `youtube-visual` (live) |
+| **stackoverflow.com** | `tagStackOverflow` | — | Question + each answer as separate dx-post, code blocks preserved, user-info cards as dx-byline, post-menu as dx-stats. Cloudflare-walled — use the `test` persistent profile. | `stackoverflow-visual` (live, persistent profile) |
+
+When adding a new site, **add a row here** and a visual spec under `tests/e2e/{site}-visual.spec.ts`. For sites that have a deterministic fixture (a saved HTML file under `tests/fixtures/sites/`), also add a `{site}-fixture-visual.spec.ts` with a `toHaveScreenshot()` pixel baseline — those guard against shared-CSS / generic-tagger regressions for free.
+
 ### Per-site taggers + `dx-*` markers
 
-`SITE_TAGGERS` is a registry of `{ match: (host) => bool, tag: (root) => void }`. Each tagger walks the **live** DOM with selectors stable for that site (data attributes or class-name *prefixes* like `[class*="_primaryNote_"]`, since SPA class hashes change between builds) and stamps `dx-*` classes:
+`SITE_TAGGERS` is a registry of `{ match: (host) => bool, tag: (root) => void, postClone?: (clone) => void }`. Each tagger walks the **live** DOM with selectors stable for that site (data attributes or class-name *prefixes* like `[class*="_primaryNote_"]`, since SPA class hashes change between builds) and stamps `dx-*` classes:
 
 | Marker | Meaning |
 |---|---|
@@ -102,12 +134,26 @@ All tiers clone the live DOM, run `tagSemanticStructure()` (generic) or rely on 
 | `dx-zaps-row` | horizontal zappers row |
 | `dx-stats` | reply/like/repost icon row |
 | `dx-stats--end` | right-aligned stats variant for footer engagement counters (footerStat-class siblings) |
+| `dx-avatar` | round 44px pin on a small image (subreddit icon, channel avatar, comment avatar). CSS clips to circle. |
+| `dx-byline-col` | column holding two stacked byline rows (subreddit/channel on top, author/subscribers below). Built by `postClone` on Reddit / YouTube. |
+| `dx-byline-row` | one row inside a `dx-byline-col`. Variants `--sub` (bold, primary) and `--author` (muted, secondary). |
+| `dx-excl` | element to remove during capture. Promoted to `EXCL_MARKER` by the pipeline, dropped by `removeMarked` before sanitisation. |
 
 The matching layout CSS lives in `discerned-web/app/globals.css` under `.clip-body .dx-*`. **To add a site**: copy `tagPrimal`, swap the selectors, register it in `SITE_TAGGERS`. No web-app change needed unless the site has a new layout quirk.
 
 A tagger may optionally **return a capture root** (`Element | void`). When it does, `extractArticle` captures that subtree instead of running the generic article/layout finders — use this to scope the clip to the content column and exclude page chrome (sidebars, search, banners). Returning nothing leaves root selection to the pipeline (still stamping markers).
 
 `tagPrimal` (primal.net) is the reference implementation. `tagBsky` (bsky.app) is a second example: it tags each `[data-testid^="feedItem-by-"]` post (`dx-post` + `dx-header` + `dx-stats`) and returns the `profileScreen` column as the capture root. Bluesky positions content with inline `transform`/`position`/`aspect-ratio` that survive sanitisation (only `<img>` styles get scrubbed); `globals.css` neutralises those inside `.clip-body` so the dx-* layout takes over.
+
+#### Live tagger MUST be non-destructive — use `postClone` for mutations
+
+The tagger function runs on `document` (the **live** page). It should only **read** structure and **stamp classes** — never call `replaceWith()`, `remove()`, `insertBefore()`, or otherwise reparent nodes on the live DOM. Doing so leaks into the user's actual session: YouTube's player will stop responding to navigation, Reddit's SPA loses sync with framework state, Goodreads's lazy-loaded sections may not render.
+
+For any destructive change (rebuilding the byline column, swapping `#player` for a `<figure>` poster, hoisting an avatar out of a soon-to-be-excluded `<a>` wrapper), register a `postClone(clone: Element)` callback in `SITE_TAGGERS`. It runs on the **detached clone** that `extractArticle` builds, before `removeMarked`/sanitisation — so it can lift content out of `dx-excl`'d wrappers before they're pruned. See `postCloneReddit` and `postCloneYoutube` for the pattern.
+
+Order matters: `extractArticle` does `deepCloneWithShadow → siteTaggerPostClone → removeMarked → sanitiseTreeInPlace → inlineAllImages`. Anything you want to use that's normally dropped (e.g. an avatar inside a dx-excl'd anchor) needs to be hoisted out *during* `postClone`, before `removeMarked` runs.
+
+When defining `postClone` for a site, ALSO keep important elements off the `dx-excl` list inside the live tagger — otherwise they're dropped from the clone before `postClone` can transform them. Example: `tagYoutube` skips `#player`, `#player-container`, `ytd-player` in its `excludeNonKept` pass so `postCloneYoutube` can swap the player for the poster figure.
 
 ### Generic byline + chrome detection
 

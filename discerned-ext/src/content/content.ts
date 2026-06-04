@@ -293,7 +293,7 @@ if (__DISCERNED_TEST_BUILD__) {
       try {
         const cap = await captureContext(
           data.format ?? 'article',
-          data.opts ?? { smartArticleDetection: true, stripInlineStyles: false },
+          data.opts ?? { smartArticleDetection: false, stripInlineStyles: false },
         );
         window.postMessage(
           { type: '__DISCERNED_TEST_CAPTURE_RESULT', capture: cap },

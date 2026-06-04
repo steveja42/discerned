@@ -15,14 +15,20 @@ test.describe.configure({ mode: 'serial' });
 
 test('stackoverflow-visual: capture Q+A, render in /library, screenshot', async () => {
   test.skip(!process.env.SO, 'set SO=1 to run this');
-  test.setTimeout(180_000);
+  test.setTimeout(360_000);
 
   const outDir = resolve(__dirname, '..', '..', 'test-output');
   mkdirSync(outDir, { recursive: true });
   const out = (name: string) => resolve(outDir, name);
 
-  const profile = process.env.PROFILE ?? 'stackoverflow';
-  const { ctx } = await launchWithExtension({ profile, headed: !!process.env.PWDEBUG_HEADED });
+  // Reuse the warmed-up 'test' profile by default (medium/breitbart established
+  // it past Cloudflare). Override with PROFILE=foo for an isolated profile.
+  const profile = process.env.PROFILE ?? 'test';
+  // Default to HEADED so a Cloudflare challenge can be solved by the human;
+  // the persistent profile then keeps you past it on subsequent runs.
+  // Override with PWDEBUG_HEADED=0 to force headless.
+  const headed = process.env.PWDEBUG_HEADED === '0' ? false : true;
+  const { ctx } = await launchWithExtension({ profile, headed });
   try {
     const page = await ctx.newPage();
     page.on('console', (msg) => {
@@ -33,7 +39,27 @@ test('stackoverflow-visual: capture Q+A, render in /library, screenshot', async 
       }
     });
     await page.goto(SO_URL, { waitUntil: 'load', timeout: 60_000 });
-    await page.waitForSelector('#question, .question, #answers', { timeout: 30_000 }).catch(() => undefined);
+    // Cloudflare warm-up: poll up to 60s for the real question to load. If
+    // a verification page is shown, the human can click through during this
+    // window (only needed once per profile).
+    await page.mouse.move(400, 300);
+    await page.mouse.move(500, 400, { steps: 8 });
+    // Wait up to 3 minutes — long enough for a human to click the Cloudflare
+    // "Verify you are human" checkbox in the visible window.
+    let cleared = false;
+    for (let i = 0; i < 180; i++) {
+      const ready = await page.evaluate(() => !!document.querySelector('#question'));
+      if (ready) { cleared = true; break; }
+      if (i % 15 === 0) {
+        // eslint-disable-next-line no-console
+        console.log(`[probe] waiting for SO content past Cloudflare (${i}s)… click "Verify you are human" if it's showing.`);
+      }
+      await page.waitForTimeout(1_000);
+    }
+    if (!cleared) {
+      // eslint-disable-next-line no-console
+      console.warn('[probe] #question not detected after 180s — Cloudflare still blocking.');
+    }
     await page.waitForTimeout(2_000);
     await page.screenshot({ path: out('stackoverflow-source.png'), fullPage: false });
 

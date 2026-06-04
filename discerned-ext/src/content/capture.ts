@@ -1491,6 +1491,13 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     sizeCleanup();
     cleanup();
     clone.querySelector('#discerned-overlay')?.remove();
+    // Site-tagger post-clone hook — runs BEFORE removeMarked so the hook can
+    // lift content out of soon-to-be-excluded wrappers (Reddit subreddit
+    // avatar inside the "Go to" anchor, YT player → poster figure).
+    if (siteTaggerPostClone) {
+      try { siteTaggerPostClone(clone); }
+      catch (err) { log(LL.WARN, 'Discerned: site tagger postClone failed:', err); }
+    }
     removeMarked(clone);
     stripSizeMarkers(clone);
     stripPageChrome(clone);
@@ -1543,6 +1550,18 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     sizeCleanup();
     cleanup();
     clone.querySelector('#discerned-overlay')?.remove();
+    // Site-tagger post-clone hook: runs only on the detached clone so any
+    // destructive mutations (replaceWith, restructuring) never leak into
+    // the live page. Used by YouTube (player → poster) and Reddit
+    // (avatar hoist + 2-row byline column rebuild).
+    //
+    // Runs BEFORE removeMarked so the hook can lift content (e.g. Reddit's
+    // subreddit avatar) out of an EXCL_MARKER'd wrapper before that
+    // wrapper is dropped.
+    if (siteTaggerPostClone) {
+      try { siteTaggerPostClone(clone); }
+      catch (err) { log(LL.WARN, 'Discerned: site tagger postClone failed:', err); }
+    }
     removeMarked(clone);
     stripSizeMarkers(clone);
     // Skip chrome-strip when a site tagger authoritatively scoped this root —
@@ -2133,12 +2152,293 @@ function tagGoodreadsList(root: Document | Element): Element | void {
   return root.querySelector('.mainContent') ?? columnContainer ?? undefined;
 }
 
-type SiteTagger = (root: Document | Element) => Element | void;
+/**
+ * Tag reddit.com comment threads. New Reddit's SPA uses lit-html custom elements
+ * (`shreddit-post`, `shreddit-comment`, `shreddit-comment-tree`) with slotted
+ * light-DOM children carrying stable `slot="..."` names. The slots survive
+ * regardless of the heavily-hashed inner classes.
+ *
+ * Stamps:
+ *   - `dx-post` on `shreddit-post` and each `shreddit-comment` (visual separation)
+ *   - `dx-header` on `[slot="credit-bar"]` (post) and `[slot="commentMeta"]` (comments)
+ *   - `dx-stats` on `[slot="post-footer"]` (post) and `[slot="actionRow"]` (comments)
+ *   - `dx-avatar` on the avatar img inside `[slot="commentAvatar"]`
+ *   - `dx-excl` on chrome links/widgets that survive sanitisation as noise:
+ *     "Back" link, "Share" buttons, "Open comment sort options", "Search Comments"
+ *
+ * Returns `main#main-content` as the narrowed capture root, dropping Reddit's
+ * left signup rail and right "Related posts" rail.
+ */
+function tagReddit(root: Document | Element): Element | void {
+  // The post itself. The credit-bar holds a horizontal strip (back arrow,
+  // "Go to <subreddit>" link, subreddit avatar, subreddit name, age, author,
+  // lock/sticky badges). Drop the back arrow + "Go to" link + badges first
+  // so dx-byline gives us a tight "r/sub · 4h ago · author" row.
+  const post = root.querySelector('shreddit-post');
+  if (post) {
+    appendClass(post, 'dx-post');
+    const credit = post.querySelector('[slot="credit-bar"]');
+    if (credit) {
+      appendClass(credit, 'dx-byline');
+      // Tag the "Go to mildlyinfuriating" chrome anchor for exclusion. The
+      // subreddit avatar img inside it gets dx-avatar so postCloneReddit
+      // can hoist it out before sanitisation drops the anchor.
+      credit.querySelectorAll('a').forEach(a => {
+        const txt = (a.textContent ?? '').replace(/\s+/g, ' ').trim();
+        if (!/^go to /i.test(txt)) return;
+        const subredditImg = a.querySelector('img');
+        if (subredditImg) appendClass(subredditImg, 'dx-avatar');
+        appendClass(a, 'dx-excl');
+      });
+      // Drop the standalone back-arrow link/button. Reddit wraps it as a
+      // shreddit-async-loader > a/button with an SVG child + text "Back".
+      // Walk all descendants and tag the highest container whose entire
+      // textContent matches a known chrome label.
+      const CHROME_TEXT = /^(back|locked|stickied|pinned|archived|nsfw|spoiler|join|joined)$/i;
+      credit.querySelectorAll('*').forEach(el => {
+        const txt = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+        if (txt.length > 0 && txt.length < 30 && CHROME_TEXT.test(txt) && el.querySelector('svg')) {
+          appendClass(el, 'dx-excl');
+        }
+      });
+      // Drop aria-label-only badge SVGs (Locked / Stickied / Pinned post).
+      credit.querySelectorAll('svg[aria-label]').forEach(svg => {
+        const label = (svg.getAttribute('aria-label') ?? '').toLowerCase();
+        if (/locked|stickied|pinned|archived|nsfw|spoiler/.test(label)) {
+          appendClass(svg, 'dx-excl');
+        }
+      });
+    }
+    const footer = post.querySelector('[slot="post-footer"]');
+    if (footer) appendClass(footer, 'dx-stats');
 
-const SITE_TAGGERS: Array<{ match: (host: string) => boolean; tag: SiteTagger; name: string }> = [
+    // Reddit ships image posts as `<post-media-image>` containing 2-3 <img>
+    // tags (blur-preview + main + hidden lightbox source). Tag the empty-alt
+    // blur preview as dx-excl so only the user-facing image survives. The
+    // generic dedupAdjacentImages pass in sanitiseTreeInPlace also handles
+    // this, but tagging here is more precise — it catches the right img by
+    // semantic role (empty alt = decorative blur), not by URL guessing.
+    post.querySelectorAll('post-media-image img[alt=""], shreddit-aspect-ratio img[alt=""], picture img[alt=""]').forEach(img => {
+      appendClass(img, 'dx-excl');
+    });
+  }
+
+  // Each comment. Avatar lives in its own [slot="commentAvatar"] sibling, not
+  // inside commentMeta — so dx-header (which expects avatar+name as direct
+  // children of one wrapper) doesn't apply. Use dx-byline for the meta strip.
+  root.querySelectorAll('shreddit-comment').forEach(cmt => {
+    appendClass(cmt, 'dx-post');
+    const meta = cmt.querySelector('[slot="commentMeta"]');
+    if (meta) appendClass(meta, 'dx-byline');
+    const action = cmt.querySelector('[slot="actionRow"]');
+    if (action) appendClass(action, 'dx-stats');
+    const avatarImg = cmt.querySelector('[slot="commentAvatar"] img');
+    if (avatarImg) appendClass(avatarImg, 'dx-avatar');
+  });
+
+  // Drop noisy SPA chrome that sits inside <main>: sort dropdown, search box,
+  // "Reply" / "Share" / "Report" comment-action buttons, the floating bottom
+  // "Back to top" pill. Reddit names each via `aria-label` or `name=` attrs.
+  const CHROME_LABELS = /^(back|share|report|open comment sort options|search comments|sort by|moderation|view more comments|join|continue with)/i;
+  root.querySelectorAll('a, button, faceplate-dropdown-menu, faceplate-search-input, [role="button"]').forEach(el => {
+    const label = (el.getAttribute('aria-label') ?? el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (label && CHROME_LABELS.test(label)) appendClass(el, 'dx-excl');
+  });
+
+  // Drop the back-arrow chrome that sits at the top of <main> on comment
+  // pages. Reddit renders it via a custom element with its OWN shadow root
+  // (`<shreddit-back-button>` / `<shreddit-async-loader>`), so the "Back"
+  // text isn't visible on the live light DOM — it only materializes after
+  // deepCloneWithShadow inlines the shadow children. Tagging the host with
+  // dx-excl drops the whole subtree including its shadow children in the
+  // clone (the EXCL_MARKER attr is set on the host, removeMarked drops it).
+  const mainRoot = root.querySelector('main#main-content') ?? root.querySelector('main');
+  if (mainRoot) {
+    // Reddit's known back-arrow custom elements + plain anchors with aria-label="Back".
+    // `pdp-back-button` is the current Reddit shadow-DOM host (the "Back"
+    // button isn't visible in light DOM, only after deepCloneWithShadow
+    // inlines its shadow children — tagging the host with dx-excl drops the
+    // whole subtree, shadow included).
+    mainRoot.querySelectorAll('pdp-back-button, shreddit-back-button, shreddit-async-loader[bundlename*="back" i]').forEach(el => appendClass(el, 'dx-excl'));
+    // Drop ads + ad chrome that sit inside <main> alongside the post and
+    // comments (sponsored shelves, promoted-link cards). All of these render
+    // as custom elements with "ad" in the tag name.
+    mainRoot.querySelectorAll('shreddit-comments-page-ad, shreddit-ad-post, shreddit-promoted-communities, shreddit-related-posts, shreddit-recommended-posts').forEach(el => appendClass(el, 'dx-excl'));
+    mainRoot.querySelectorAll('a[aria-label], button[aria-label], [aria-label]').forEach(el => {
+      const label = (el.getAttribute('aria-label') ?? '').trim().toLowerCase();
+      if (label === 'back') appendClass(el, 'dx-excl');
+    });
+    // Fallback: anything that sits BEFORE shreddit-post in <main> and is not
+    // shreddit-post itself is page chrome (Reddit's comments page only has
+    // the post + comment tree as content; the back-link sits above).
+    const sPost = mainRoot.querySelector('shreddit-post');
+    if (sPost) {
+      Array.from(mainRoot.children).forEach(child => {
+        if (child === sPost) return;
+        // Stop once we reach the post — anything before is chrome.
+        if (child.compareDocumentPosition(sPost) & Node.DOCUMENT_POSITION_FOLLOWING) {
+          appendClass(child, 'dx-excl');
+        }
+      });
+    }
+  }
+
+  return mainRoot ?? undefined;
+}
+
+/**
+ * Tag youtube.com watch pages. YT's content lives in `<ytd-watch-flexy>` with
+ * `<div id="primary-inner">` as the actual content column (title, description,
+ * comments) and `<div id="secondary">` as the "Up next" sidebar — the latter is
+ * what we want to drop. YT uses Polymer custom elements, no `<aside>` or ARIA
+ * role on the rail.
+ *
+ * Stamps:
+ *   - `dx-post` on the title block (`#above-the-fold`) and description block
+ *   - `dx-post` on each top-level `<ytd-comment-thread-renderer>`
+ *   - `dx-header` on the comment avatar + author header inside each comment
+ *   - `dx-stats` on the comment action row
+ *
+ * Returns `#primary-inner` as the narrowed root so the entire `#secondary`
+ * sidebar is excluded.
+ */
+function tagYoutube(root: Document | Element): Element | void {
+  const primaryInner = root.querySelector('#primary-inner');
+  if (!primaryInner) return undefined;
+
+  // Read the live player's poster URL so postCloneYoutube can use it
+  // when synthesising the hero <figure> on the clone. We do NOT mutate
+  // the live player here — `player.replaceWith(...)` on the live document
+  // breaks YouTube's SPA (the player stops responding to navigation
+  // between videos until the page is reloaded).
+  const player = primaryInner.querySelector('#player, #player-container, ytd-player');
+  ytLivePosterUrl = player?.querySelector('video[poster]')?.getAttribute('poster') ?? null;
+
+  // YT's content column is a busy stack of widgets: title, action strip,
+  // description, chapters chips, "Shorts remixing this video", merch,
+  // transcript pull-out, channel videos, then comments. Most are interactive
+  // engagement panels that sanitise into huge SVG icons with no useful text.
+  // Build an allowlist of slots we DO want, then exclude every direct child
+  // of #primary-inner / #below not in that allowlist. The synthetic <figure>
+  // we just inserted in place of the player is allowed by being a <figure>.
+  // Keep IDs: title, description, comments, AND #player (we'll swap it with
+  // a synthetic poster <figure> in postCloneYoutube — must survive the
+  // dx-excl pass that drops everything else).
+  const KEEP_IDS = new Set(['above-the-fold', 'title', 'description-inline-expander', 'description', 'comments', 'player', 'player-container']);
+  const KEEP_TAGS = new Set(['ytd-comments', 'ytd-player', 'figure']);
+  const isKept = (el: Element) => KEEP_IDS.has(el.id) || KEEP_TAGS.has(el.tagName.toLowerCase());
+
+  const excludeNonKept = (parent: Element) => {
+    Array.from(parent.children).forEach(child => {
+      if (!isKept(child) && !child.querySelector('#above-the-fold, ytd-comments, #player, ytd-player')) {
+        appendClass(child, 'dx-excl');
+      }
+    });
+  };
+  excludeNonKept(primaryInner);
+  const below = primaryInner.querySelector('#below');
+  if (below) excludeNonKept(below);
+
+  const atf = primaryInner.querySelector('#above-the-fold');
+  if (atf) appendClass(atf, 'dx-post');
+  const desc = primaryInner.querySelector('#description-inline-expander, #description');
+  if (desc) appendClass(desc, 'dx-post');
+
+  // Mark the channel-row avatar so postCloneYoutube can find/lift it onto
+  // the rebuilt 2-row column. (The actual restructure happens on the clone.)
+  const ownerImg = primaryInner.querySelector('ytd-video-owner-renderer img');
+  if (ownerImg) appendClass(ownerImg, 'dx-avatar');
+
+  // Top-level comment threads. Stamp dx-post for visual separation, dx-header
+  // for the author/avatar row, dx-stats for the like/reply action row.
+  primaryInner.querySelectorAll('ytd-comment-thread-renderer').forEach(cmt => {
+    appendClass(cmt, 'dx-post');
+    const header = cmt.querySelector('#header, #header-author');
+    if (header) appendClass(header, 'dx-header');
+    const avatarImg = cmt.querySelector('#author-thumbnail img, yt-img-shadow img');
+    if (avatarImg) appendClass(avatarImg, 'dx-avatar');
+    const action = cmt.querySelector('#toolbar, ytd-comment-action-buttons-renderer');
+    if (action) appendClass(action, 'dx-stats');
+  });
+
+  // Drop the action strip (Like / Dislike / Share / Save / Download / Clip /
+  // Subscribe). It sanitises into huge SVG icons with one-word labels.
+  primaryInner.querySelectorAll('#actions, #actions-inner, #subscribe-button, ytd-menu-renderer').forEach(el => appendClass(el, 'dx-excl'));
+
+  // Drop YT's tooltip/badge shells — they duplicate visible text (channel
+  // name appears as <a>jawed</a> + <tp-yt-paper-tooltip>jawed</tp-yt-paper-tooltip>)
+  // or render large no-context glyphs. tp-yt-paper-tooltip is an a11y
+  // duplicate; ytd-badge-supported-renderer wraps the verified checkmark.
+  primaryInner.querySelectorAll('tp-yt-paper-tooltip').forEach(el => appendClass(el, 'dx-excl'));
+
+  // Drop the rich-card widgets that sit inside the description expander or
+  // alongside it: Chapters, "Shorts remixing this video", Channel Videos,
+  // Transcript pull-out, Merch, Live Chat, Engagement Panels. These render as
+  // wide horizontal lists with huge chevron / thumbnail SVGs and have no
+  // useful text content for a static clip.
+  primaryInner.querySelectorAll(
+    'ytd-horizontal-card-list-renderer, ytd-rich-list-header-renderer, ytd-horizontal-list-renderer, ytd-reel-shelf-renderer, ytd-shelf-renderer, ytd-video-description-transcript-section-renderer, ytd-video-description-music-section-renderer, ytd-video-description-infocards-section-renderer, ytd-structured-description-content-renderer, ytd-clip-creation-renderer, ytd-location-description-renderer, ytd-engagement-panel-section-list-renderer, ytd-video-primary-info-renderer, ytd-video-secondary-info-renderer'
+  ).forEach(el => appendClass(el, 'dx-excl'));
+
+  return primaryInner;
+}
+
+/**
+ * Tag stackoverflow.com question pages. SO uses stable BEM-ish class names that
+ * survive across builds (not hashed CSS-modules):
+ *   - `#question` / `.answer`                  question + each answer post
+ *   - `.s-prose`                               the post body prose
+ *   - `.user-info`                             avatar + name + rep card
+ *   - `.js-vote-count` / `.js-voting-container` vote arrows + count column
+ *   - `.post-menu`                             "share / edit / follow" footer
+ *
+ * Stamps `dx-post` on the question and each answer for visual separation,
+ * `dx-header` on each user-info card (avatar + name layout), `dx-stats` on the
+ * post-menu footer. Returns `#mainbar` as the narrowed root so the left nav,
+ * "Related Questions" rail, and StackExchange chrome are dropped.
+ */
+function tagStackOverflow(root: Document | Element): Element | void {
+  const mainbar = root.querySelector('#mainbar');
+  if (!mainbar) return undefined;
+
+  // Question + each answer become a dx-post.
+  mainbar.querySelectorAll('#question, .answer').forEach(post => {
+    appendClass(post, 'dx-post');
+    // The .user-info card has 4+ siblings (edit-link + avatar + name + rep +
+    // badges). dx-header expects a 2-child avatar/name split and would squash
+    // the first sibling into the 44px avatar column. dx-byline lays the whole
+    // strip inline with gentle gaps, which matches SO's actual presentation.
+    // Mark the avatar img directly so it still renders as a round 44px pin.
+    post.querySelectorAll('.user-info, .post-signature').forEach(info => {
+      appendClass(info, 'dx-byline');
+      const avatar = info.querySelector('.user-gravatar32 img, .gravatar-wrapper-32 img, .user-gravatar64 img, img.gravatar, .avatar img');
+      if (avatar) appendClass(avatar, 'dx-avatar');
+    });
+    post.querySelectorAll('.post-menu, .js-post-menu').forEach(menu => appendClass(menu, 'dx-stats'));
+  });
+
+  // Exclude SPA chrome and prompts that aren't content.
+  mainbar.querySelectorAll('.js-post-issue, .js-post-notice, .suggested-edit, .s-notice, .js-vote-count, .js-voting-container').forEach(el => appendClass(el, 'dx-excl'));
+
+  return mainbar;
+}
+
+type SiteTagger = (root: Document | Element) => Element | void;
+// Optional post-clone transformer. Runs AFTER deepCloneWithShadow has built
+// the detached clone but BEFORE sanitisation/inlining. Receives the cloned
+// capture root. Use this for destructive mutations (replaceWith / restructure)
+// that must not touch the live page — without this hook, mutating the live
+// DOM in a tagger leaks into the user's actual session (e.g. swapping out
+// YouTube's #player breaks playback).
+type SitePostClone = (clone: Element) => void;
+
+const SITE_TAGGERS: Array<{ match: (host: string) => boolean; tag: SiteTagger; postClone?: SitePostClone; name: string }> = [
   { name: 'primal', match: h => /(^|\.)primal\.net$/i.test(h), tag: tagPrimal },
   { name: 'bsky', match: h => /(^|\.)bsky\.app$/i.test(h), tag: tagBsky },
   { name: 'goodreads', match: h => /(^|\.)goodreads\.com$/i.test(h), tag: tagGoodreads },
+  { name: 'reddit', match: h => /(^|\.)reddit\.com$/i.test(h), tag: tagReddit, postClone: postCloneReddit },
+  { name: 'youtube', match: h => /(^|\.)youtube\.com$/i.test(h), tag: tagYoutube, postClone: postCloneYoutube },
+  { name: 'stackoverflow', match: h => /(^|\.)stackoverflow\.com$/i.test(h), tag: tagStackOverflow },
 ];
 
 /**
@@ -2149,11 +2449,12 @@ const SITE_TAGGERS: Array<{ match: (host: string) => boolean; tag: SiteTagger; n
  * and siteTaggerRoot (the narrowed capture root, when the tagger returns one).
  */
 function applySiteTagger(): boolean {
-  // Reset both before the loop so a non-matching capture doesn't inherit
+  // Reset all before the loop so a non-matching capture doesn't inherit
   // a prior page's tagger state (the module-level vars persist across
   // captures in long-lived content-script lifetimes / SPA navigations).
   siteTaggerActive = false;
   siteTaggerRoot = null;
+  siteTaggerPostClone = null;
   const host = window.location.hostname;
   for (const t of SITE_TAGGERS) {
     if (t.match(host)) {
@@ -2161,6 +2462,7 @@ function applySiteTagger(): boolean {
       try {
         const root = t.tag(document);
         siteTaggerRoot = root ?? null;
+        siteTaggerPostClone = t.postClone ?? null;
         if (root) log(LL.NORMAL, `Discerned: ${t.name} tagger returned narrowed root <${root.tagName.toLowerCase()}>`, 'url:', window.location.href);
         return true;
       } catch (err) {
@@ -2181,6 +2483,175 @@ let siteTaggerActive = false;
 // root. extractArticle uses it in preference to the generic layout finder.
 let siteTaggerRoot: Element | null = null;
 
+// Set by applySiteTagger when the matching tagger registered a postClone
+// callback. extractArticle runs it on the cloned capture root after
+// deepCloneWithShadow + removeMarked but before sanitisation. Use for
+// destructive mutations that must not leak into the live page (YT player
+// replacement, Reddit byline column rebuild).
+let siteTaggerPostClone: SitePostClone | null = null;
+
+// Captured by tagYoutube on the LIVE page and consumed by postCloneYoutube
+// on the clone. The live <video> element's `poster` attribute is the
+// highest-resolution thumbnail YT has cached for the current video; the
+// clone tree no longer has the live <video>, so we have to read it before
+// the clone is built.
+let ytLivePosterUrl: string | null = null;
+
+/**
+ * Post-clone transformer for Reddit. Runs on the detached clone after
+ * removeMarked has dropped chrome but BEFORE sanitisation. Restructures the
+ * dx-byline strip into avatar + two-row column (subreddit row on top,
+ * author row below) to match Reddit's native visual.
+ *
+ * Why on the clone, not live DOM: Reddit's SPA reacts to subtree mutations
+ * inside <shreddit-post>, so reparenting nodes on the live page can desync
+ * the framework. The clone is detached and safe to mutate freely.
+ */
+function postCloneReddit(clone: Element): void {
+  const credit = clone.querySelector('.dx-byline');
+  if (!credit) return;
+
+  // Hoist subreddit avatar (.dx-avatar nested inside the soon-to-be-dropped
+  // "Go to" link) to be a direct child of dx-byline. Runs BEFORE removeMarked
+  // so the avatar img is still reachable inside its dx-excl'd <a> wrapper.
+  let subredditImg = credit.querySelector(':scope > img.dx-avatar');
+  if (!subredditImg) subredditImg = credit.querySelector('img.dx-avatar');
+  if (subredditImg && subredditImg.parentElement !== credit) {
+    credit.insertBefore(subredditImg, credit.firstChild);
+  }
+
+  // Locate the surviving subreddit-link <a> (text starts with "r/") and the
+  // author-link <a> (href contains /user/). Build a clean two-row column.
+  const subredditAnchor = Array.from(credit.querySelectorAll('a')).find(a => {
+    const href = a.getAttribute('href') ?? '';
+    const text = (a.textContent ?? '').replace(/\s+/g, ' ').trim();
+    return /^\/r\/[^/]+\/?$/i.test(href.replace(/^https?:\/\/[^/]+/, '')) &&
+           /^r\//i.test(text) && !a.querySelector('img');
+  });
+  const authorAnchor = Array.from(credit.querySelectorAll('a')).find(a => {
+    const href = a.getAttribute('href') ?? '';
+    return /\/user\/[^/]+\/?$/i.test(href.replace(/^https?:\/\/[^/]+/, ''));
+  });
+  if (!subredditAnchor && !authorAnchor) return;
+
+  const col = clone.ownerDocument!.createElement('div');
+  col.className = 'dx-byline-col';
+  const row1 = clone.ownerDocument!.createElement('div');
+  row1.className = 'dx-byline-row dx-byline-row--sub';
+  const row2 = clone.ownerDocument!.createElement('div');
+  row2.className = 'dx-byline-row dx-byline-row--author';
+  if (subredditAnchor) {
+    // Pull subreddit anchor + its trailing "• Nh ago" sibling text into row1.
+    const ageSpan = subredditAnchor.closest('span')?.parentElement;
+    if (ageSpan && ageSpan.tagName === 'SPAN') {
+      row1.appendChild(ageSpan.cloneNode(true));
+    } else {
+      row1.appendChild(subredditAnchor.cloneNode(true));
+    }
+  }
+  if (authorAnchor) {
+    row2.appendChild(authorAnchor.cloneNode(true));
+  }
+  col.appendChild(row1);
+  col.appendChild(row2);
+
+  const avatarEl = credit.querySelector(':scope > img.dx-avatar');
+  if (avatarEl && avatarEl.nextSibling) {
+    credit.insertBefore(col, avatarEl.nextSibling);
+  } else {
+    credit.appendChild(col);
+  }
+  // Drop every remaining direct child of credit that isn't avatar/col.
+  Array.from(credit.children).forEach(child => {
+    if (child !== avatarEl && child !== col) child.remove();
+  });
+}
+
+/**
+ * Post-clone transformer for YouTube. Runs on the detached clone after
+ * removeMarked. Replaces the (still-present) #player subtree with a
+ * synthetic <figure><a><img></a></figure> hero, using the live player's
+ * <video poster=...> URL captured at tag time (falling back to YT's
+ * hqdefault.jpg derivation).
+ *
+ * Why on the clone, not live DOM: `player.replaceWith(...)` on the live
+ * page breaks YouTube's SPA — the player stops responding to navigation
+ * between videos. The clone is detached and safe to mutate.
+ */
+function postCloneYoutube(clone: Element): void {
+  const player = clone.querySelector('#player, #player-container, ytd-player');
+  if (!player) return;
+  const videoId = new URL(window.location.href).searchParams.get('v');
+  if (!videoId) {
+    player.remove();
+    return;
+  }
+  const posterUrl = ytLivePosterUrl && /^https?:\/\//.test(ytLivePosterUrl)
+    ? ytLivePosterUrl
+    : `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  const doc = clone.ownerDocument!;
+  const figure = doc.createElement('figure');
+  const link = doc.createElement('a');
+  link.setAttribute('href', `https://www.youtube.com/watch?v=${videoId}`);
+  const img = doc.createElement('img');
+  img.setAttribute('src', posterUrl);
+  img.setAttribute('alt', 'Video thumbnail');
+  img.setAttribute('width', '1280');
+  img.setAttribute('height', '720');
+  link.appendChild(img);
+  figure.appendChild(link);
+  player.replaceWith(figure);
+
+  // Restructure the channel header into avatar + 2-row column (channel
+  // name on top, subscriber count below). Same shape as Reddit's credit-bar.
+  const owner = clone.querySelector('ytd-video-owner-renderer');
+  if (owner) {
+    const avatarImg = owner.querySelector('img');
+    if (avatarImg) avatarImg.classList.add('dx-avatar');
+    // Pick the channel-name anchor: an <a href="/@channel"> with VISIBLE TEXT
+    // (not the avatar-wrapping anchor whose only child is the <img>).
+    const channelAnchor = Array.from(owner.querySelectorAll('a[href*="/@"], ytd-channel-name a, #channel-name a')).find(a => {
+      const text = (a.textContent ?? '').replace(/\s+/g, ' ').trim();
+      return text.length > 0 && !a.querySelector('img');
+    });
+    const subscriberSpan = Array.from(owner.querySelectorAll('*')).find(el => {
+      const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+      return /subscribers?$/i.test(t) && t.length < 30 && el.children.length === 0;
+    });
+    if (channelAnchor || subscriberSpan) {
+      const col = doc.createElement('div');
+      col.className = 'dx-byline-col';
+      const row1 = doc.createElement('div');
+      row1.className = 'dx-byline-row dx-byline-row--sub';
+      const row2 = doc.createElement('div');
+      row2.className = 'dx-byline-row dx-byline-row--author';
+      if (channelAnchor) row1.appendChild(channelAnchor.cloneNode(true));
+      if (subscriberSpan) row2.appendChild(subscriberSpan.cloneNode(true));
+      col.appendChild(row1);
+      col.appendChild(row2);
+
+      // Wrap owner content as dx-byline (its own classList) + avatar + col.
+      owner.classList.add('dx-byline');
+      // Drop everything currently in owner except the avatar image.
+      Array.from(owner.children).forEach(child => {
+        if (!child.contains(avatarImg as Node)) child.remove();
+      });
+      // If avatarImg is nested, hoist it to be a direct child.
+      if (avatarImg && avatarImg.parentElement !== owner) {
+        // Drop avatar's wrapping anchor/etc. first.
+        let cur = avatarImg.parentElement;
+        owner.insertBefore(avatarImg, owner.firstChild);
+        while (cur && cur !== owner && cur.children.length === 0) {
+          const parent = cur.parentElement;
+          cur.remove();
+          cur = parent;
+        }
+      }
+      owner.appendChild(col);
+    }
+  }
+}
+
 // ── Semantic structure tagging (generic fallback) ────────────────────────────
 //
 // Live pages use flexbox + class-scoped CSS to lay out headers (avatar | name)
@@ -2189,6 +2660,7 @@ let siteTaggerRoot: Element | null = null;
 // Stamp our own `dx-*` class markers on detected structures so the web app's
 // CSS can restore the intended layout.
 
+const HEADER_AVATAR_MIN_PX = 24;
 const HEADER_AVATAR_MAX_PX = 128;
 const HEADER_NAME_MAX_CHARS = 80;
 const QUOTE_MIN_TEXT_CHARS = 40;
@@ -2200,27 +2672,38 @@ function appendClass(el: Element, token: string): void {
   el.setAttribute('class', existing ? `${existing} ${token}` : token);
 }
 
-/** True if the element directly contains a small image (avatar-sized). */
+/** True when img's authored width AND height fall in the avatar size band. */
+function isAvatarSizedImg(img: Element): boolean {
+  const w = parseInt(img.getAttribute('width') ?? '0', 10);
+  const h = parseInt(img.getAttribute('height') ?? '0', 10);
+  return w >= HEADER_AVATAR_MIN_PX && w <= HEADER_AVATAR_MAX_PX &&
+         h >= HEADER_AVATAR_MIN_PX && h <= HEADER_AVATAR_MAX_PX;
+}
+
+/**
+ * True if the element directly contains a small image (avatar-sized). Also
+ * guards against treating a content gallery as an "avatar branch": when the
+ * element holds 2+ images of similar size, it's a sequence of content tiles
+ * (Wikipedia's "Bitcoin logos in 2009 and 2010" pair, Goodreads cover sliders,
+ * etc.), not an avatar slot. Returns the first avatar-shaped image, or null.
+ */
 function hasAvatarImage(el: Element): HTMLImageElement | null {
   // (1) Bare-img child pattern: the element IS an avatar-sized <img>.
   // Stansberry's author block uses <span><img><a></a></span> — the img is a
   // direct sibling of the name link, not wrapped in its own container.
   if (el.tagName.toLowerCase() === 'img') {
-    const w = parseInt(el.getAttribute('width') ?? '0', 10);
-    const h = parseInt(el.getAttribute('height') ?? '0', 10);
-    if (w > 0 && h > 0 && w <= HEADER_AVATAR_MAX_PX && h <= HEADER_AVATAR_MAX_PX) {
-      return el as HTMLImageElement;
-    }
-    return null;
+    return isAvatarSizedImg(el) ? (el as HTMLImageElement) : null;
   }
   // (2) Wrapped-img pattern: primal/bsky/etc. nest the avatar in a container.
-  const imgs = el.querySelectorAll('img');
-  for (const img of Array.from(imgs)) {
+  // Reject branches with multiple sized images — that's a gallery, not an avatar.
+  const sized = Array.from(el.querySelectorAll('img')).filter(img => {
     const w = parseInt(img.getAttribute('width') ?? '0', 10);
     const h = parseInt(img.getAttribute('height') ?? '0', 10);
-    if (w > 0 && h > 0 && w <= HEADER_AVATAR_MAX_PX && h <= HEADER_AVATAR_MAX_PX) {
-      return img;
-    }
+    return w > 0 && h > 0;
+  });
+  if (sized.length > 1) return null;
+  for (const img of sized) {
+    if (isAvatarSizedImg(img)) return img as HTMLImageElement;
   }
   return null;
 }
@@ -2388,12 +2871,14 @@ function tagSemanticStructure(root: Element): void {
     let avatarChildIdx = -1;
     let nameChildIdx = -1;
     let stop = false;
+    let avatarBranchCount = 0;
     for (let i = 0; i < children.length; i++) {
       const c = children[i];
       // A stats child means this is not a header.
       if (c.classList.contains('dx-stats')) { stop = true; break; }
       const hasAvatar = !!hasAvatarImage(c);
       const text = (c.textContent ?? '').trim();
+      if (hasAvatar) avatarBranchCount++;
       if (hasAvatar && text.length < 4) {
         if (avatarChildIdx === -1) avatarChildIdx = i;
       } else if (!hasAvatar && text.length > 0 && text.length <= HEADER_NAME_MAX_CHARS * 2) {
@@ -2401,6 +2886,10 @@ function tagSemanticStructure(root: Element): void {
       }
     }
     if (stop || avatarChildIdx < 0 || nameChildIdx < 0) continue;
+    // Reject when multiple branches hold avatar-shaped images — that's a banner
+    // or gallery (Wikipedia CentralNotice with twin side-banners, multi-author
+    // bylines on news sites with each author's photo), not a single header row.
+    if (avatarBranchCount > 1) continue;
     if (el.querySelectorAll('*').length > 40) continue;
     // When the avatar branch is a bare <img> (Stansberry-style author block),
     // require the name branch to be or contain an <a> — a byline link. Excludes
@@ -2891,6 +3380,94 @@ function collapseEmpty(root: Element): void {
   Array.from(root.children).forEach(walk);
 }
 
+/**
+ * De-duplicate `<img>` elements that share the same media within a tight
+ * neighbourhood. Source pages frequently render 2–3 copies of the same image
+ * for blur-up loading (Reddit's `cf.preview.redd.it` preview + main img +
+ * lightbox-source img), `<picture>` with explicit `<source>` siblings (when
+ * sanitisation strips `<picture>`/`<source>` wrappers), or AMP fallback twins.
+ *
+ * Strategy: group `<img>`s by a stable key derived from (a) the URL's last
+ * path segment + final query token, falling back to (b) the alt text. Within
+ * a single shared ancestor 3 levels up, drop all but the first non-empty-alt
+ * (or first when none have alt). Conservative — won't dedupe across distant
+ * regions like multiple comments in a thread that legitimately share an avatar.
+ */
+function dedupAdjacentImages(root: Element): void {
+  const imgs = Array.from(root.querySelectorAll('img'));
+  if (imgs.length < 2) return;
+
+  // Key: prefer alt-text (it's most stable across blur-preview + main + lightbox
+  // triplets), else a stable filename token from the URL. For data: URIs the
+  // src is base64 garbage that varies per byte — alt is the only useful key.
+  const keyOf = (img: Element): string => {
+    const alt = (img.getAttribute('alt') ?? '').trim();
+    if (alt.length > 10) return `alt:${alt.slice(0, 80).toLowerCase()}`;
+    const src = img.getAttribute('src') ?? '';
+    if (src.startsWith('data:')) return ''; // data + no alt = no reliable key
+    // Pull the last path segment minus any extension/query for a stable id.
+    // For "cf.preview.redd.it/this-car-...jpg?width=640" → "this-car-".
+    const stem = src.match(/([^/?#]+?)(?:\.[a-z]{2,5})?(?:\?|#|$)/i);
+    if (stem && stem[1].length > 8) return `src:${stem[1].toLowerCase()}`;
+    return '';
+  };
+
+  // Group by key alone, then within each key check that the imgs share an
+  // ancestor within 6 levels (catches Reddit's nested div soup where the
+  // <picture> / <post-media-image> wrappers have been sanitised away). Two
+  // avatars in distant comments share a much deeper ancestor (`<main>`),
+  // so the 6-level cap protects them from being treated as duplicates.
+  const groups = new Map<string, Element[]>();
+  imgs.forEach(img => {
+    const k = keyOf(img);
+    if (!k) return;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(img);
+  });
+
+  // Two elements share an ancestor within N levels iff the closer-to-root one
+  // is at most 2N levels above the shared ancestor.
+  const sharesAncestorWithin = (a: Element, b: Element, maxDepth: number): boolean => {
+    const ancestorsA = new Set<Element>();
+    let cur: Element | null = a;
+    for (let i = 0; i < maxDepth && cur; i++) { ancestorsA.add(cur); cur = cur.parentElement; }
+    cur = b;
+    for (let i = 0; i < maxDepth && cur; i++) {
+      if (ancestorsA.has(cur)) return true;
+      cur = cur.parentElement;
+    }
+    return false;
+  };
+
+  let removed = 0;
+  groups.forEach(group => {
+    if (group.length < 2) return;
+    // Cluster group members by ancestor-proximity. Greedy: walk through the
+    // group, assigning each img to the first existing cluster it shares an
+    // ancestor with, or starting a new cluster.
+    const clusters: Element[][] = [];
+    for (const img of group) {
+      const cluster = clusters.find(c => sharesAncestorWithin(c[0], img, 6));
+      if (cluster) cluster.push(img); else clusters.push([img]);
+    }
+    clusters.forEach(cluster => {
+      if (cluster.length < 2) return;
+      // Prefer the img with a non-empty alt as the keeper; among those, prefer
+      // an inlined data: src (already round-tripped) over an external URL.
+      const keeper = cluster.find(img => (img.getAttribute('src') ?? '').startsWith('data:'))
+        ?? cluster.find(img => (img.getAttribute('alt') ?? '').trim().length > 0)
+        ?? cluster[0];
+      cluster.forEach(img => {
+        if (img !== keeper) { img.remove(); removed++; }
+      });
+    });
+  });
+
+  if (removed > 0) {
+    log(LL.DEBUG, `Discerned: dedupAdjacentImages removed ${removed} duplicate img(s)`, 'url:', window.location.href);
+  }
+}
+
 function sanitiseTreeInPlace(root: Element, stripStyles = false) {
   // Drop dangerous elements outright before walking. <foreignObject> can host
   // arbitrary HTML inside <svg>; drop it explicitly even though it's not in the
@@ -2903,6 +3480,12 @@ function sanitiseTreeInPlace(root: Element, stripStyles = false) {
     sanitiseElement(node as Element, stripStyles);
   };
   Array.from(root.childNodes).forEach(walk);
+
+  // De-duplicate <img>s that the source rendered as multiple copies of the
+  // same media (Reddit's blur-preview + main + lightbox-source pattern, news
+  // sites' AMP <amp-img fallback> + <img> twins, <picture> with explicit
+  // <source> + <img> when the sanitiser strips <picture>/<source> wrappers).
+  dedupAdjacentImages(root);
 
   // Collapse elements whose subtree has no visible content. Runs after the
   // sanitisation walk so unwrapping/attribute-stripping have already produced

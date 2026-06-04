@@ -82,6 +82,11 @@ test('breitbart-fixture-visual', async () => {
     // eslint-disable-next-line no-console
     console.log('[probe] markers:', JSON.stringify(dx, null, 2));
     expect(dx.length, 'at least one dx/tweet marker').toBeGreaterThan(0);
+
+    // Pixel-diff baseline. Regenerate with `--update-snapshots` after
+    // intentional visual changes; otherwise this fails on accidental layout
+    // regressions to shared CSS or generic taggers.
+    await expect(clipBody).toHaveScreenshot('breitbart-fixture-clipbody.png', { maxDiffPixelRatio: 0.02 });
   } finally {
     await ctx.close();
   }

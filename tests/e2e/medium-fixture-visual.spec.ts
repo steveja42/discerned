@@ -87,6 +87,12 @@ test('medium-fixture-visual: capture local Medium fixture + render in /library',
     // eslint-disable-next-line no-console
     console.log('\n[probe] dx markers:', JSON.stringify(dxInfo, null, 2));
     expect(dxInfo.length, 'at least one dx marker should be stamped').toBeGreaterThan(0);
+
+    // Pixel-diff baseline of the rendered clip body. Regenerate with
+    // `--update-snapshots` after intentional visual changes. Snapshot files
+    // live next to this spec in tests/e2e/medium-fixture-visual.spec.ts-snapshots/.
+    // maxDiffPixelRatio tolerates tiny font-rendering / anti-aliasing wobble.
+    await expect(clipBody).toHaveScreenshot('medium-fixture-clipbody.png', { maxDiffPixelRatio: 0.02 });
   } finally {
     await ctx.close();
   }

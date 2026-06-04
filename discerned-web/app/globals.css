@@ -1284,6 +1284,42 @@ a { color: inherit; }
   font-size: 14px;
   color: var(--ink-3);
 }
+/* When a dx-byline carries an avatar img (e.g. Reddit credit-bar with the
+   subreddit icon hoisted in), lay the avatar to the LEFT and stack the
+   subreddit/time row on top of the author row to its RIGHT. Reddit's
+   natural light DOM nests these as a wrapping <span><div><span>(subreddit
+   · time)</span><div>(author)</div></div></span> next to the avatar — let
+   each level render as natural block flow so the two text rows stack. */
+.clip-body .dx-byline:has(> .dx-avatar) {
+  align-items: center;
+  flex-wrap: nowrap;
+  column-gap: 0;
+  row-gap: 0;
+}
+.clip-body .dx-byline > .dx-avatar {
+  flex-shrink: 0;
+  margin-right: 14px !important;
+}
+/* The wrapping non-avatar children become a flex column holding two rows. */
+.clip-body .dx-byline:has(> .dx-avatar) > :not(.dx-avatar) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+  line-height: 1.25;
+}
+.clip-body .dx-byline:has(> .dx-avatar) > :not(.dx-avatar) > * {
+  display: block;
+}
+.clip-body .dx-byline:has(> .dx-avatar) > :not(.dx-avatar) > * > * {
+  display: inline;
+}
+/* Subreddit name row (first row): slightly bolder/darker like Reddit's UI. */
+.clip-body .dx-byline:has(> .dx-avatar) > :not(.dx-avatar) > :first-child a {
+  font-weight: 600;
+  color: var(--ink-2);
+}
 .clip-body .dx-byline a {
   color: var(--ink-2);
   text-decoration: none;
