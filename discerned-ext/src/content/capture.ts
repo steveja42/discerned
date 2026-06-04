@@ -1493,6 +1493,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     clone.querySelector('#discerned-overlay')?.remove();
     removeMarked(clone);
     stripSizeMarkers(clone);
+    stripPageChrome(clone);
     substituteVideosWithPosters(clone);
     substituteStarRatings(clone);
     await substituteEmbeddedTweets(clone, harvestedTweets);
@@ -1544,6 +1545,9 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     clone.querySelector('#discerned-overlay')?.remove();
     removeMarked(clone);
     stripSizeMarkers(clone);
+    // Skip chrome-strip when a site tagger authoritatively scoped this root —
+    // the tagger may have intentionally retained landmark elements.
+    if (!siteTaggerRoot) stripPageChrome(clone);
     substituteVideosWithPosters(clone);
     substituteStarRatings(clone);
     await substituteEmbeddedTweets(clone, harvestedTweets);
@@ -1585,6 +1589,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   log(LL.WARN, 'Discerned: article falling back to full body', 'url:', base.url);
   const bodyClone = cloneBodyClean();
   stripSizeMarkers(bodyClone);
+  stripPageChrome(bodyClone);
   substituteVideosWithPosters(bodyClone);
   substituteStarRatings(bodyClone);
   await substituteEmbeddedTweets(bodyClone, harvestedTweets);
@@ -2218,6 +2223,37 @@ function hasAvatarImage(el: Element): HTMLImageElement | null {
     }
   }
   return null;
+}
+
+/**
+ * Generic page-chrome stripper. Removes (not unwraps) navigation/aside/landmark
+ * regions from the captured clone BEFORE sanitisation gets a chance to unwrap
+ * them and promote their text content into the article. Without this, the
+ * Wikipedia TOC, Reddit's left/right rails, Stack Overflow's right sidebar,
+ * and YouTube's "Up next" all leak in as plain-text rows after sanitisation.
+ *
+ * Conservative on which tags get dropped:
+ *
+ *   - `<nav>`, `<aside>` — unambiguous chrome.
+ *   - `[role="navigation"|"complementary"|"banner"|"search"|"contentinfo"]` —
+ *     ARIA landmarks for chrome regions.
+ *
+ * Deliberately NOT stripped:
+ *
+ *   - `<header>` / `<footer>` — these legitimately contain article byline +
+ *     engagement counters (ZeroHedge, Substack, Medium). The sanitiser knows
+ *     how to promote them to `<div>` when they carry trusted `dx-*` classes.
+ *   - Anything inside a site-tagger-supplied root (already authoritatively
+ *     scoped to content).
+ */
+function stripPageChrome(root: Element): void {
+  const STRIP_SELECTOR =
+    'nav, aside, [role="navigation"], [role="complementary"], [role="banner"], [role="search"], [role="contentinfo"]';
+  const dropped = Array.from(root.querySelectorAll(STRIP_SELECTOR));
+  dropped.forEach(el => el.remove());
+  if (dropped.length > 0) {
+    log(LL.NORMAL, `Discerned: stripPageChrome removed ${dropped.length} landmark element(s)`, 'url:', window.location.href);
+  }
 }
 
 /**
