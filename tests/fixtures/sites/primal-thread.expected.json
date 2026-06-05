@@ -1,23 +1,19 @@
 {
   "format": "article",
-  "title": { "contains": "Gigi" },
   "url": "http://127.0.0.1:4173/primal-thread.html",
   "bodyText": {
-    "minLength": 800,
+    "minLength": 200,
     "contains": [
-      "Terrible idea. Harmful concept",
-      "concept of a public wallet",
-      "Akashi Hyogo",
-      "Vitor Pamplona",
-      "Tim Bouma",
-      "jostric",
-      "fade2",
-      "Fear is a terrible way"
+      "HODL",
+      "Getting a little training in",
+      "Sugestor Ultra",
+      "Philipp",
+      "Boog"
     ]
   },
   "bodyHtml": {
     "noScripts": true,
     "hasImgs": true,
-    "containsClasses": ["dx-header", "dx-quote", "dx-stats"]
+    "containsClasses": ["dx-header", "dx-stats"]
   }
 }

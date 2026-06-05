@@ -167,5 +167,100 @@ export default defineConfig({
       testMatch: /stackoverflow-visual\.spec\.ts/,
       retries: 0,
     },
+    {
+      name: 'wikipedia-fixture-visual',
+      testMatch: /wikipedia-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'hn-thread-fixture-visual',
+      testMatch: /hn-thread-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'news-article-fixture-visual',
+      testMatch: /news-article-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'blog-post-fixture-visual',
+      testMatch: /blog-post-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'substack-essay-fixture-visual',
+      testMatch: /substack-essay-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'github-readme-fixture-visual',
+      testMatch: /github-readme-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'twitter-thread-fixture-visual',
+      testMatch: /twitter-thread-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'article-with-embedded-tweet-fixture-visual',
+      testMatch: /article-with-embedded-tweet-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'tweet-with-show-more-fixture-visual',
+      testMatch: /tweet-with-show-more-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'primal-thread-fixture-visual',
+      testMatch: /primal-thread-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'bsky-thread-fixture-visual',
+      testMatch: /bsky-thread-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'snapshot-fixtures',
+      testMatch: /tools\/snapshot-fixtures\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'fetch-avatars',
+      testMatch: /tools\/fetch-avatars\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'snapshot-primal-note',
+      testMatch: /tools\/snapshot-primal-note\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'snapshot-bsky-post',
+      testMatch: /tools\/snapshot-bsky-post\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'reddit-thread-fixture-visual',
+      testMatch: /reddit-thread-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'youtube-watch-fixture-visual',
+      testMatch: /youtube-watch-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'goodreads-book-fixture-visual',
+      testMatch: /goodreads-book-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'stackoverflow-question-fixture-visual',
+      testMatch: /stackoverflow-question-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
   ],
 });

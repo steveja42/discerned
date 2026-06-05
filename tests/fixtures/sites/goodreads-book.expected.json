@@ -1,0 +1,11 @@
+{
+  "format": "article",
+  "url": "http://127.0.0.1:4173/goodreads-book.html",
+  "bodyText": {
+    "minLength": 100,
+    "contains": ["Gatsby"]
+  },
+  "bodyHtml": {
+    "noScripts": true
+  }
+}

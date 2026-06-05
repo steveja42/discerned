@@ -1,0 +1,11 @@
+{
+  "format": "article",
+  "url": "http://127.0.0.1:4173/youtube-watch.html",
+  "bodyText": {
+    "minLength": 50
+  },
+  "bodyHtml": {
+    "noScripts": true,
+    "containsClasses": ["dx-post"]
+  }
+}

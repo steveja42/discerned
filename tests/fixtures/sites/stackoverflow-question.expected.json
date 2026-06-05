@@ -1,0 +1,13 @@
+{
+  "format": "article",
+  "title": { "contains": "yield" },
+  "url": "http://127.0.0.1:4173/stackoverflow-question.html",
+  "bodyText": {
+    "minLength": 500,
+    "contains": ["yield", "generator", "iterable"]
+  },
+  "bodyHtml": {
+    "noScripts": true,
+    "containsClasses": ["dx-post", "dx-byline", "dx-stats"]
+  }
+}

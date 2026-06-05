@@ -2507,6 +2507,17 @@ function applyTaggerToClone(cloneRoot: Element | DocumentFragment): void {
   removeMarked(cloneRoot);
 }
 
+// Test-only host override. Set by the test bridge in content.ts so fixture
+// pages served from 127.0.0.1 can exercise the matching site tagger (which
+// otherwise gates on the live hostname). Tree-shaken in production: the
+// `__DISCERNED_TEST_BUILD__` guard around the setter in content.ts means the
+// var is only ever written under the test build, and `?? window.location.hostname`
+// keeps the production path identical.
+let testHostOverride: string | null = null;
+export function __setTestHostOverride(host: string | null): void {
+  if (__DISCERNED_TEST_BUILD__) testHostOverride = host;
+}
+
 function applySiteTagger(): boolean {
   // Reset all before the loop so a non-matching capture doesn't inherit
   // a prior page's tagger state (the module-level vars persist across
@@ -2514,7 +2525,7 @@ function applySiteTagger(): boolean {
   siteTaggerActive = false;
   siteTaggerRoot = null;
   siteTaggerPostClone = null;
-  const host = window.location.hostname;
+  const host = testHostOverride ?? window.location.hostname;
   for (const t of SITE_TAGGERS) {
     if (t.match(host)) {
       log(LL.NORMAL, `Discerned: applying ${t.name} site tagger`, 'url:', window.location.href);

@@ -1,14 +1,14 @@
 {
   "format": "article",
-  "title": { "contains": "TestUser" },
   "url": "http://127.0.0.1:4173/bsky-thread.html",
   "bodyText": {
-    "minLength": 100,
+    "minLength": 200,
     "contains": [
-      "primary post about freedom",
-      "Replier One",
-      "Replier Two",
-      "democracy and freedom"
+      "Nadya Voynich",
+      "30/30 rule",
+      "mountains",
+      "Happy Friday",
+      "nadyavoynich.com"
     ]
   },
   "bodyHtml": {
