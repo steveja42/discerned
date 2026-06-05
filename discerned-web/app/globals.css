@@ -1057,6 +1057,7 @@ a { color: inherit; }
 .clip-body .tweet-video-grid .tweet-video { flex: 1 1 calc(50% - 3px); margin-top: 0; min-width: 0; }
 .clip-body .tweet-text img { width: 1.2em !important; height: 1.2em !important; vertical-align: middle; display: inline !important; margin: 0 !important; border-radius: 0 !important; }
 .clip-body div:empty { display: none; }
+.clip-body .dx-video-link { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--rule-soft); border-radius: 8px; font-family: var(--sans); font-size: 14px; text-decoration: none !important; color: var(--ink-2) !important; margin: 8px 0; }
 .clip-body p { margin: 0 0 1em; }
 .clip-body h1, .clip-body h2, .clip-body h3, .clip-body h4 { margin: 1.2em 0 0.4em; line-height: 1.25; font-weight: 600; }
 .clip-body a { color: var(--accent-ink); text-decoration: underline; }

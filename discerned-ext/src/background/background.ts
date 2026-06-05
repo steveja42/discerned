@@ -560,6 +560,9 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'INLINE_IMAGE':
       return handleInlineImage(message.src);
 
+    case 'FETCH_VIDEO_BLOB':
+      return handleFetchVideoBlob(message.src);
+
     case 'EXTRACT_EMBEDDED_TWEETS':
       return handleExtractEmbeddedTweets(senderTabId);
 
@@ -880,6 +883,35 @@ async function handleInlineImage(src: string): Promise<BackgroundResponse> {
     if (blob.size > MAX_IMAGE_BYTES) {
       return { success: false, error: 'Image too large' };
     }
+    const dataUri = await blobToDataUri(blob);
+    return { success: true, data: { dataUri } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'fetch failed' };
+  }
+}
+
+/**
+ * Fetch the first 512 KB of a video URL (enough for the first keyframe of
+ * most H.264 MP4s) and return it as a data URI. Used by captureVideoFrames
+ * in capture.ts to work around the cross-origin canvas SecurityError.
+ */
+async function handleFetchVideoBlob(src: string): Promise<BackgroundResponse> {
+  try {
+    if (!/^https:/i.test(src)) return { success: false, error: 'Unsupported scheme' };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    let res: Response;
+    try {
+      res = await fetch(src, {
+        signal: controller.signal,
+        headers: { Range: 'bytes=0-524287' },
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    // 200 or 206 (partial content) both OK.
+    if (!res.ok && res.status !== 206) return { success: false, error: `HTTP ${res.status}` };
+    const blob = await res.blob();
     const dataUri = await blobToDataUri(blob);
     return { success: true, data: { dataUri } };
   } catch (err) {

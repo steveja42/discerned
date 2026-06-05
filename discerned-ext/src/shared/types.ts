@@ -124,6 +124,7 @@ export type BackgroundMessage =
   | { type: 'SIGN_WITH_NIP07'; event: Record<string, unknown> }
   | { type: 'PING' }
   | { type: 'INLINE_IMAGE'; src: string }
+  | { type: 'FETCH_VIDEO_BLOB'; src: string }
   | { type: 'PUSH_NEW_CLIP'; clip: ClipData }
   | { type: 'FORCE_BRIDGE_RESYNC' }
   | { type: 'NAVIGATE_TO_CLIP'; clipId: string }

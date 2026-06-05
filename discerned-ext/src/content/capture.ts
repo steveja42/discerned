@@ -1477,6 +1477,14 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   // same elements with conflicting markers.
   siteTaggerActive = applySiteTagger();
 
+  // Capture live video frames BEFORE any clone step. Media Chrome and similar
+  // custom players never set the <video poster> attribute — the thumbnail is
+  // managed inside their shadow DOM. Canvas-capture the current frame from
+  // every playing <video> while we still have live media, then pass the map
+  // to every substituteVideosWithPosters call below so posterless videos get
+  // a real image instead of the ▶ Video fallback link.
+  const liveVideoFrames = await captureVideoFrames(document.body);
+
   // Tier 0: Twitter/X — extract clean tweet card from data-testid selectors.
   if (/^https?:\/\/(www\.)?(twitter|x)\.com\//i.test(window.location.href)) {
     const tweet = await extractTweet(base);
@@ -1509,7 +1517,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     removeMarked(clone);
     stripSizeMarkers(clone);
     stripPageChrome(clone);
-    substituteVideosWithPosters(clone);
+    substituteVideosWithPosters(clone, liveVideoFrames);
     substituteStarRatings(clone);
     await substituteEmbeddedTweets(clone, harvestedTweets);
     tagSemanticStructure(clone);
@@ -1575,7 +1583,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     // Skip chrome-strip when a site tagger authoritatively scoped this root —
     // the tagger may have intentionally retained landmark elements.
     if (!siteTaggerRoot) stripPageChrome(clone);
-    substituteVideosWithPosters(clone);
+    substituteVideosWithPosters(clone, liveVideoFrames);
     substituteStarRatings(clone);
     await substituteEmbeddedTweets(clone, harvestedTweets);
     tagSemanticStructure(clone);
@@ -1617,7 +1625,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const bodyClone = cloneBodyClean();
   stripSizeMarkers(bodyClone);
   stripPageChrome(bodyClone);
-  substituteVideosWithPosters(bodyClone);
+  substituteVideosWithPosters(bodyClone, liveVideoFrames);
   substituteStarRatings(bodyClone);
   await substituteEmbeddedTweets(bodyClone, harvestedTweets);
   tagSemanticStructure(bodyClone);
@@ -1693,6 +1701,7 @@ async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
   // Pre-harvest embedded tweets from the LIVE DOM before cloning (the iframe
   // round-trip + hidden-blockquote data only exists pre-clone).
   const harvestedTweets = await harvestEmbeddedTweets(document);
+  const fpLiveVideoFrames = await captureVideoFrames(document.body);
   // Clone the body only — using outerHTML (which includes <html>/<head>) causes
   // DOMParser to restructure the document in ways that leave <script> content as
   // orphaned text nodes that querySelectorAll('script') can't reach.
@@ -1702,7 +1711,7 @@ async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
   // the same site-tagger-aware structure.
   applyTaggerToClone(bodyClone);
   stripPageChrome(bodyClone);
-  substituteVideosWithPosters(bodyClone);
+  substituteVideosWithPosters(bodyClone, fpLiveVideoFrames);
   substituteStarRatings(bodyClone);
   await substituteEmbeddedTweets(bodyClone, harvestedTweets);
   // Generic semantic tagging (skipped automatically when a site tagger was
@@ -3329,21 +3338,161 @@ function stripSizeMarkers(root: Element | DocumentFragment): void {
 }
 
 /**
+ * Try to draw the current frame of a cross-origin <video> by:
+ * 1. Fetching the video src through the background worker (has <all_urls>),
+ *    which returns the bytes as a data URI.
+ * 2. Converting the data URI to a same-origin blob URL.
+ * 3. Creating a scratch <video>, seeking to the same currentTime, and
+ *    canvas-capturing from the blob-URL video (no SecurityError).
+ * Times out after 8 s to avoid blocking capture on a slow/large video.
+ */
+async function captureVideoFrameViaBackground(
+  srcUrl: string,
+  currentTime: number,
+  width: number,
+  height: number,
+): Promise<string | null> {
+  try {
+    const res = await Promise.race([
+      chrome.runtime.sendMessage({ type: 'FETCH_VIDEO_BLOB', src: srcUrl }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
+    ]) as { success: boolean; data?: { dataUri: string } };
+    if (!res?.success || !res.data?.dataUri) return null;
+
+    // Convert the data URI to a blob URL so the scratch <video> is same-origin.
+    const dataUri = res.data.dataUri;
+    const fetchRes = await fetch(dataUri);
+    const blob = await fetchRes.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    try {
+      const dataUriOut = await new Promise<string | null>((resolve) => {
+        const v = document.createElement('video');
+        v.muted = true;
+        v.preload = 'auto';
+        v.src = blobUrl;
+        const abort = setTimeout(() => resolve(null), 5_000);
+        v.onseeked = () => {
+          clearTimeout(abort);
+          try {
+            const c = document.createElement('canvas');
+            c.width = width;
+            c.height = height;
+            c.getContext('2d')?.drawImage(v, 0, 0);
+            const uri = c.toDataURL('image/jpeg', 0.85);
+            resolve(uri && uri !== 'data:,' ? uri : null);
+          } catch {
+            resolve(null);
+          }
+        };
+        v.onerror = () => { clearTimeout(abort); resolve(null); };
+        v.addEventListener('loadedmetadata', () => { v.currentTime = currentTime; }, { once: true });
+        v.load();
+      });
+      return dataUriOut;
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Capture the current frame of every playing <video> in the live DOM as a
+ * canvas data URI. Stamps a temporary `data-uuid` on each video so the result
+ * survives cloning (the clone carries the attribute; the live element is the key
+ * in the live DOM but the clone has no .readyState). Returns Map<uuid, dataUri>.
+ * Must be called BEFORE deepCloneWithShadow — the clone has no active media.
+ */
+async function captureVideoFrames(root: Element | Document): Promise<Map<string, string>> {
+  const frames = new Map<string, string>();
+  let idx = 0;
+  const videos = querySelectorAllDeep(root as Element, 'video') as HTMLVideoElement[];
+  for (const video of videos) {
+    if (video.readyState < 2 || video.videoWidth === 0) continue;
+
+    // Stamp a stable uuid on the live element so the clone carries it.
+    let uuid = video.getAttribute('data-uuid');
+    if (!uuid) {
+      uuid = `dcv-${Date.now()}-${idx++}`;
+      video.setAttribute('data-uuid', uuid);
+    }
+
+    // Try direct canvas capture first (works for same-origin videos).
+    let dataUri: string | null = null;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d')?.drawImage(video, 0, 0);
+      const uri = canvas.toDataURL('image/jpeg', 0.85);
+      if (uri && uri !== 'data:,') dataUri = uri;
+    } catch {
+      // SecurityError for cross-origin video — fall through to background fetch.
+    }
+
+    // For cross-origin videos, fetch through background worker then canvas-capture
+    // the blob URL (same-origin, no SecurityError).
+    if (!dataUri) {
+      const srcUrl = video.getAttribute('src') ?? video.querySelector('source')?.getAttribute('src') ?? '';
+      if (srcUrl && /^https:/i.test(srcUrl)) {
+        dataUri = await captureVideoFrameViaBackground(
+          srcUrl, video.currentTime, video.videoWidth, video.videoHeight,
+        );
+      }
+    }
+
+    if (dataUri) frames.set(uuid, dataUri);
+  }
+  return frames;
+}
+
+/**
  * Replace Twitter's video player structure with a plain <img src="poster"> so that
  * GIFs and video thumbnails survive sanitisation. Replaces the nearest
  * [data-testid="tweetPhoto"] ancestor when present (which removes Twitter's aspect-ratio
  * sizer divs that would otherwise constrain the image size), otherwise replaces the
  * <video> element directly.
+ *
+ * liveFrames: canvas-captured frames from the live DOM (keyed on the live
+ * <video> element via data-uuid or index). Pass the result of captureVideoFrames()
+ * called before cloning.
  */
-function substituteVideosWithPosters(root: Element | DocumentFragment): void {
-  (root as Element).querySelectorAll('video[poster]').forEach(video => {
-    const poster = video.getAttribute('poster');
-    if (!poster || !isSafeImageSrc(poster)) { const container = video.closest('[data-testid="tweetPhoto"]'); if (container) { container.remove(); } else { video.remove(); } return; }
-    const img = document.createElement('img');
-    img.src = poster;
-    img.alt = video.getAttribute('aria-label') ?? 'Video';
-    const container = video.closest('[data-testid="tweetPhoto"]');
-    (container ?? video).replaceWith(img);
+function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrames?: Map<string, string>): void {
+  Array.from((root as Element).querySelectorAll('video')).forEach(video => {
+    // Prefer the HTML poster attribute, then a canvas frame captured from the
+    // live video before cloning (keyed by data-uuid stamped on the live element).
+    const uuid = video.getAttribute('data-uuid') ?? '';
+    const framePoster = uuid ? liveFrames?.get(uuid) : undefined;
+    const poster = video.getAttribute('poster') ?? framePoster ?? null;
+    const tweetPhoto = video.closest('[data-testid="tweetPhoto"]');
+    // Media Chrome player wrapper (<media-controller>) — replace the whole
+    // wrapper so the inlined shadow-DOM controls (Media Chrome's "Pause" /
+    // "Unmute" text nodes from its button shadow roots) don't leak into the
+    // captured clip as visible text.
+    const mediaController = video.closest('media-controller');
+    const wrapper = tweetPhoto ?? mediaController ?? null;
+    if (poster && isSafeImageSrc(poster)) {
+      // Has a poster: swap the whole wrapper for a plain <img>.
+      const img = document.createElement('img');
+      img.src = poster;
+      img.alt = 'Video';
+      (wrapper ?? video).replaceWith(img);
+      return;
+    }
+    // No usable poster. Try to produce a "▶ Video" link from the first <source>.
+    const srcUrl = video.getAttribute('src') ??
+      video.querySelector('source')?.getAttribute('src') ?? null;
+    if (srcUrl && /^https:/i.test(srcUrl)) {
+      const a = document.createElement('a');
+      a.href = srcUrl;
+      a.className = 'dx-video-link';
+      a.textContent = '▶ Video';
+      (wrapper ?? video).replaceWith(a);
+    } else {
+      if (wrapper) { wrapper.remove(); } else { video.remove(); }
+    }
   });
 
   // Background-image video posters. Bluesky (and similar players) render a video
