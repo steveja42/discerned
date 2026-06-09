@@ -12,7 +12,7 @@
 
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useLayoutEffect, useCallback, type ReactNode } from 'react';
 import type { AuthState } from '@/lib/types';
 import { loadStoredPubkey, storePubkey, clearStoredAuth, hasNip07, nip07GetPubkey } from '@/lib/nostr/auth';
 import { sendPubkeyToExtension } from '@/lib/bridge/extension-bridge';
@@ -30,13 +30,13 @@ interface NostrAuthValue {
 const NostrAuthContext = createContext<NostrAuthValue | null>(null);
 
 export function NostrAuthProvider({ children }: { children: ReactNode }) {
-  const [auth, setAuth] = useState<AuthState>(() => {
-    const stored = loadStoredPubkey();
-    return stored
-      ? { status: 'readonly', pubkey: stored, source: 'manual' }
-      : { status: 'guest', pubkey: null };
-  });
+  const [auth, setAuth] = useState<AuthState>({ status: 'guest', pubkey: null });
   const [nip07Available, setNip07Available] = useState(false);
+
+  useLayoutEffect(() => {
+    const stored = loadStoredPubkey();
+    if (stored) setAuth({ status: 'readonly', pubkey: stored, source: 'manual' });
+  }, []);
 
   useEffect(() => {
     const t0 = performance.now();
