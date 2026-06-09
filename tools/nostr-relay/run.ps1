@@ -90,6 +90,24 @@ Write-Host 'Discerned local relay - ws://localhost:7777 (Ctrl+C to stop)'
 # Podman (lighter than Docker Desktop; pulls from Docker Hub).
 $podman = Get-Command podman -ErrorAction SilentlyContinue
 if ($podman) {
+  # Ensure at least one machine is running. If all machines are stopped, start the first one.
+  $machines = & $podman.Source machine list --format '{{.Name}}|{{.Running}}' 2>$null
+  $anyRunning = $machines | Where-Object { $_ -match '\|true$' }
+  if (-not $anyRunning) {
+    $stopped = $machines | Where-Object { $_ -match '\|false$' } | Select-Object -First 1
+    if ($stopped) {
+      $machineName = ($stopped -split '\|')[0].TrimEnd('*').Trim()
+      Write-Host "Podman machine '$machineName' is not running - starting it (this may take a few seconds)..."
+      & $podman.Source machine start $machineName
+      if ($LASTEXITCODE -ne 0) { Write-Error "Failed to start Podman machine '$machineName'."; exit 1 }
+    } else {
+      Write-Host "No Podman machine found - creating and starting one (one-time setup, takes ~1 min)..."
+      & $podman.Source machine init
+      if ($LASTEXITCODE -ne 0) { Write-Error "Failed to init Podman machine."; exit 1 }
+      & $podman.Source machine start
+      if ($LASTEXITCODE -ne 0) { Write-Error "Failed to start Podman machine."; exit 1 }
+    }
+  }
   $code = Invoke-Container $podman.Source 'docker.io/scsibug/nostr-rs-relay:latest'
   exit $code
 }
