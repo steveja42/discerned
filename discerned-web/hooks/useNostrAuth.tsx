@@ -30,7 +30,12 @@ interface NostrAuthValue {
 const NostrAuthContext = createContext<NostrAuthValue | null>(null);
 
 export function NostrAuthProvider({ children }: { children: ReactNode }) {
-  const [auth, setAuth] = useState<AuthState>({ status: 'guest', pubkey: null });
+  const [auth, setAuth] = useState<AuthState>(() => {
+    const stored = loadStoredPubkey();
+    return stored
+      ? { status: 'readonly', pubkey: stored, source: 'manual' }
+      : { status: 'guest', pubkey: null };
+  });
   const [nip07Available, setNip07Available] = useState(false);
 
   useEffect(() => {
@@ -39,14 +44,6 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
     log(LL.DEBUG, '[useNostrAuth] effect mounted', elapsed(),
         'readyState=', document.readyState,
         'hasNip07=', hasNip07());
-
-    // Restore any persisted pubkey immediately so the UI doesn't flicker as
-    // 'guest' during the deferred wallet probe.
-    const stored = loadStoredPubkey();
-    if (stored) {
-      log(LL.DEBUG, '[useNostrAuth] restored stored pubkey from localStorage', elapsed());
-      setAuth({ status: 'readonly', pubkey: stored, source: 'manual' });
-    }
 
     let cancelled = false;
     let signedIn = false;
