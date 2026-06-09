@@ -81,6 +81,16 @@ Runs exclusively on `discerned.online/*` and `localhost:3000/*`. Bridges the ext
 - **Evaluation axes**: Interest (5 levels) · Ethics (5 levels) · Category (7 options)
 - **Auth modes**: NIP-07 (browser extension wallet), Local (no cast), NIP-46
 
+## NIP-07 signing architecture
+
+**Kind-1 (cast) must always be signed via the discerned web app**, not from the current tab's origin. The reason: NIP-07 wallets (Alby, nos2x) maintain per-origin approval lists. If a cast is signed on `example.com`, the wallet prompts the user to approve `example.com` — a different approval from `discerned.online`. By routing kind-1 through the web app, the user only ever approves `discerned.online` once and all subsequent casts from any site sign without additional prompts.
+
+**Kind-0 (NIP-05 profile)** can be signed directly via `signWithSigningTab` — it's triggered post-cast when a discerned tab is already open and the wallet has just approved it.
+
+**Implementation**: `handleCast` in `background.ts` calls `signEventViaWebApp()` for NIP-07 (pro) casts. This opens/focuses a discerned tab, posts a `DISCERNED_BRIDGE_PENDING_SIGN` message through the web-bridge, and waits for the user to click Confirm in `PendingSignModal` (mounted in `discerned-web/app/layout.tsx`). `signEvent()` is used for kind-0 and for nip46/nsec casts.
+
+**Do not remove the web-app routing for kind-1 casts.** The `sendToBackground` timeout for CAST in `content.ts` is 150s (not 30s) so the user has time to confirm the modal.
+
 ## Capture pipeline (`src/content/capture.ts`)
 
 `captureContext(format)` branches by `ClipFormat`. For `'article'` (the rich-content path), extraction runs in tiers, first match wins:

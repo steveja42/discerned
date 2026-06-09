@@ -50,6 +50,17 @@ let nsecPrivateKey: Uint8Array | null = null; // session-only; cleared when SW i
 let signingTabId: number | null = null;
 let signingTabIsOurs = false;
 
+// Pending NIP-07 kind-1 cast sign requests routed through the web app.
+// NIP-07 casts always go through the web app Confirm button so the wallet only
+// ever needs to approve discerned.online, not every site the overlay opens on.
+// In-memory only — if the SW dies mid-cast the user retries.
+interface PendingSignEntry {
+  resolve: (signed: Record<string, unknown>) => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+const pendingSigns = new Map<string, PendingSignEntry>();
+
 // Ordered list of tab IDs (most-recent first) that have a live content script
 // and have registered as log relay targets. Only logRelayTabIds[0] receives logs.
 let logRelayTabIds: number[] = [];
@@ -139,16 +150,17 @@ const DISCERNMENTS_URL_PATTERNS = [
   'http://localhost:3000/#*',
 ];
 
-async function openDiscernmentsTab(): Promise<void> {
+async function openDiscernmentsTab(autoSignin?: boolean): Promise<void> {
   const base = await resolveBaseUrl();
+  const url = autoSignin ? `${base}/?signin=1` : base;
   const [existing] = await chrome.tabs.query({ url: DISCERNMENTS_URL_PATTERNS });
   if (existing?.id !== undefined) {
-    await chrome.tabs.update(existing.id, { active: true });
+    await chrome.tabs.update(existing.id, { active: true, url: autoSignin ? url : undefined });
     if (existing.windowId !== undefined) {
       chrome.windows.update(existing.windowId, { focused: true }).catch(() => {});
     }
   } else {
-    await chrome.tabs.create({ url: base });
+    await chrome.tabs.create({ url });
   }
 }
 
@@ -302,14 +314,22 @@ async function recordPublishedNip05(pubkey: string, nip05: string): Promise<void
  * Safe to call from multiple triggers — the PUBLISHED_NIP05_BY_PUBKEY guard
  * suppresses redundant publishes.
  */
-async function maybeSyncProfile(reason: string): Promise<void> {
+async function maybeSyncProfile(reason: string, userGesture = false): Promise<void> {
   try {
     const pubkey = currentUserPubkeyHex();
     log(LL.NORMAL, '[nip05] maybeSyncProfile called',
-      { reason, authType: currentAuthState.type, pubkey: pubkey ?? '(none)' },
+      { reason, authType: currentAuthState.type, pubkey: pubkey ?? '(none)', userGesture },
       'url:', 'background');
     if (!pubkey) {
       log(LL.NORMAL, '[nip05] skipping: no current user pubkey (auth not ready or guest)', 'url:', 'background');
+      return;
+    }
+    // NIP-07 wallets must sign in response to a user gesture — calling
+    // signEvent from a background alarm, install hook, or page-load trigger
+    // opens a blank unresponsive wallet popup (Alby, nos2x). Defer to the
+    // next user-driven path (overlay open, web Sign In, post-cast learn).
+    if (currentAuthState.type === 'pro' && !userGesture) {
+      log(LL.NORMAL, '[nip05] skipping NIP-07 kind 0: no user gesture', 'url:', 'background');
       return;
     }
     const refreshed = await refreshNip05Cache(pubkey);
@@ -344,7 +364,10 @@ async function initNip05(): Promise<void> {
   } catch (err) {
     log(LL.WARN, '[nip05] alarm create failed', err);
   }
-  await maybeSyncProfile('init-after-authRestored');
+  // If a pubkey is already restored from storage the wallet has approved this
+  // origin in a prior session — safe to publish kind-0 immediately.
+  const alreadyHasPubkey = currentUserPubkeyHex() !== null;
+  await maybeSyncProfile('init-after-authRestored', alreadyHasPubkey);
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -506,11 +529,22 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       } else if (message.hasNIP07 && currentAuthState.type === 'pro' && message.pubkey && !currentAuthState.pubkey) {
         currentAuthState = { ...currentAuthState, pubkey: message.pubkey };
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
-        void maybeSyncProfile('nip07-detected-pubkey-fill');
+        // A pubkey on NIP07_DETECTED only ever arrives from a user-gesture path:
+        // web-app Sign In click (via web-bridge → DISCERNED_SET_NIP07_PUBKEY).
+        // Safe to publish kind 0 immediately.
+        void maybeSyncProfile('nip07-detected-pubkey-fill', true);
       }
       // Note: the signing tab is NOT seeded here. NIP-07 signing always routes
       // through a tab on the discerned origin, resolved on demand in
       // resolveSigningTab() — not the arbitrary site that reported NIP-07.
+      return { success: true };
+
+    case 'RESOLVE_PENDING_SIGN':
+      resolvePendingSign(message.id, message.signed);
+      return { success: true };
+
+    case 'REJECT_PENDING_SIGN':
+      rejectPendingSign(message.id, message.error);
       return { success: true };
 
     case 'GET_NIP05_FOR_ME': {
@@ -547,7 +581,7 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       // message.eventId is accepted for a future deep-link to the cast; for now we
       // open the bare discernments feed (the just-cast event may not have propagated
       // to the subscribed relays yet, so deep-linking would risk a transient miss).
-      openDiscernmentsTab().catch(() => {});
+      openDiscernmentsTab(message.autoSignin).catch(() => {});
       return { success: true };
 
     case 'DISMISS_OVERLAY_NUDGE':
@@ -588,7 +622,9 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'FORCE_BRIDGE_RESYNC':
     case 'NAVIGATE_TO_CLIP':
     case 'PUSH_CATEGORIES':
+    case 'PUSH_PENDING_SIGN':
       // These are background→content messages; the background never receives them.
+      // (PUSH_PENDING_SIGN is sent TO the web-bridge content script, not received here.)
       return { success: false, error: 'Not handled by background' };
 
     default:
@@ -1159,7 +1195,15 @@ async function handleCast(
 ): Promise<BackgroundResponse> {
   try {
     const eventTemplate = buildCastTemplate(data.capture, data.evaluation);
-    const signedEvent = await signEvent(eventTemplate);
+    // NIP-07 kind-1: always sign via the discerned web app so the wallet only
+    // ever approves discerned.online, not each site the overlay is used on.
+    // The web app signs silently (no modal) — window.nostr.signEvent is called
+    // automatically when DISCERNED_BRIDGE_PENDING_SIGN arrives.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const signedEvent: any = currentAuthState.type === 'pro'
+      ? await signEventViaWebApp(eventTemplate)
+      : await signEvent(eventTemplate);
+    if (currentAuthState.type === 'pro') await learnPubkeyIfMissing(signedEvent);
     const publishResult = await publishWithMinimum(signedEvent);
 
     if (!publishResult.success) {
@@ -1339,6 +1383,74 @@ async function signWithSigningTab(
   }
 }
 
+// ── Web-app confirmation flow for NIP-07 kind-1 casts ───────────────────────
+//
+// Kind-1 casts always route through the web app so the wallet (Alby, nos2x)
+// only ever needs to approve discerned.online once, not every arbitrary site
+// the user opens the overlay on. The web app shows a Confirm button; the user
+// click is the gesture window.nostr.signEvent needs to surface its prompt.
+
+const PENDING_SIGN_TIMEOUT_MS = 120_000; // 2 min — user may not be at the keyboard
+
+async function pushPendingSignToWebApp(id: string, event: Record<string, unknown>, tabId: number): Promise<void> {
+  const msg: BackgroundMessage = { type: 'PUSH_PENDING_SIGN', id, event };
+  await chrome.tabs.sendMessage(tabId, msg).catch(() => { /* non-fatal */ });
+}
+
+/**
+ * Sign a cast event by handing it off to the discerned web app for explicit
+ * user confirmation. Opens (or focuses) a discerned tab, posts the pending
+ * event through the bridge, and waits for the signed event to come back.
+ * Throws on timeout or rejection.
+ */
+async function signEventViaWebApp(
+  template: Parameters<typeof finalizeEvent>[0],
+): Promise<Record<string, unknown>> {
+  // Reuse an open discerned tab if there is one (so we don't yank focus
+  // unexpectedly); otherwise open and focus a new one so the user can see
+  // the confirm prompt.
+  const existing = await chrome.tabs.query({ url: DISCERNED_URL_PATTERNS });
+  const live = existing.find(t => t.id !== undefined && !t.discarded);
+  let tabId: number;
+  if (live?.id !== undefined) {
+    tabId = live.id;
+    await focusTab(tabId);
+  } else {
+    const base = await resolveBaseUrl();
+    const tab = await chrome.tabs.create({ url: `${base}/`, active: true });
+    if (tab.id === undefined) throw new Error('Failed to open discerned tab');
+    tabId = tab.id;
+    await waitForContentScript(tabId);
+  }
+
+  const id = `sign_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const signed = await new Promise<Record<string, unknown>>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingSigns.delete(id);
+      reject(new Error('User did not confirm the cast within 2 minutes'));
+    }, PENDING_SIGN_TIMEOUT_MS);
+    pendingSigns.set(id, { resolve, reject, timer });
+    void pushPendingSignToWebApp(id, template as unknown as Record<string, unknown>, tabId);
+  });
+  return signed;
+}
+
+function resolvePendingSign(id: string, signed: Record<string, unknown>): void {
+  const entry = pendingSigns.get(id);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  pendingSigns.delete(id);
+  entry.resolve(signed);
+}
+
+function rejectPendingSign(id: string, error: string): void {
+  const entry = pendingSigns.get(id);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  pendingSigns.delete(id);
+  entry.reject(new Error(error));
+}
+
 /**
  * When NIP-07 signs an event, the signed payload contains the user's pubkey.
  * `currentAuthState.pubkey` may not have been populated yet (e.g. older
@@ -1362,7 +1474,9 @@ async function learnPubkeyIfMissing(signed: unknown): Promise<void> {
   } catch (err) {
     log(LL.WARN, '[auth] failed to persist learned pubkey', err, 'url:', 'background');
   }
-  void maybeSyncProfile('pubkey-learned');
+  // Triggered immediately after a successful NIP-07 sign — the wallet just
+  // approved a sign request, so kind-0 piggybacks while the approval is hot.
+  void maybeSyncProfile('pubkey-learned', true);
 }
 
 /**

@@ -7,7 +7,7 @@
 import { captureContext, isCapturablePage, hasSelection, __setTestHostOverride } from './capture';
 import type { CaptureOptions } from './capture';
 import { DiscernedOverlay } from './overlay';
-import { detectAuthState, signWithNIP07, getNIP07PublicKey } from '@/shared/nostr/auth';
+import { detectAuthState, signWithNIP07 } from '@/shared/nostr/auth';
 import type { AuthState, BackgroundMessage, Capture, ClipFormat, Evaluation } from '@/shared/types';
 import { STORAGE_KEYS } from '@/shared/types';
 import { LL, log, relayLog } from '@/shared/logger';
@@ -54,27 +54,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 /**
- * Detect NIP-07 on page load and notify the background so it can update
- * currentAuthState. Only pull the user's pubkey from the wallet when the
- * background still needs it for the kind-0 NIP-05 publish — otherwise the
- * read can trigger a per-origin permission prompt on arbitrary sites (nos2x
- * renders a blank/stuck approval popup in that case).
- *
- * Runs once per content-script lifecycle.
+ * Detect NIP-07 wallet presence on page load and notify the background.
+ * Does NOT read the pubkey here — pubkey acquisition happens via the web app
+ * Sign In flow (discerned.online only). Runs once per content-script lifecycle.
  */
-detectAuthState().then(async state => {
+detectAuthState().then(state => {
   cachedAuthState = state;
   if (state.type !== 'pro' || !isContextValid()) return;
-  const needsPubkey = await chrome.runtime
-    .sendMessage({ type: 'NEEDS_NIP07_PUBKEY' })
-    .then((r: { data?: { needs?: boolean } } | undefined) => r?.data?.needs === true)
-    .catch(() => false);
-  const pubkey = needsPubkey ? await getNIP07PublicKey().catch(() => null) : null;
-  if (!isContextValid()) return;
   chrome.runtime.sendMessage({
     type: 'NIP07_DETECTED',
     hasNIP07: true,
-    ...(pubkey ? { pubkey } : {}),
   }).catch(() => {
     // Background may not be ready on the very first load — that's fine.
   });
@@ -196,16 +185,20 @@ async function handleActivation() {
  * In Chrome MV3, chrome.runtime.sendMessage can hang indefinitely when the
  * service worker is slow to wake after being killed.
  *
- * CAST uses 30 s: relay-manager's per-relay timeout is 10 s, so the outer guard
- * must be larger to avoid racing the relay ACK wait. CLIP only needs ~1 s for
- * an IndexedDB write, but 30 s is a safe uniform limit.
+ * CAST uses 150 s — the background's web-app confirm flow allows up to 2 min
+ * for the user to click Confirm on first cast; this guard must exceed that so
+ * the background can return a real error rather than "did not respond".
+ * CLIP only needs ~1 s for an IndexedDB write but uses 30 s as a safe default.
  */
-function sendToBackground(message: BackgroundMessage): Promise<{ success: boolean; error?: string; data?: unknown }> {
+function sendToBackground(
+  message: BackgroundMessage,
+  timeoutMs = 30000,
+): Promise<{ success: boolean; error?: string; data?: unknown }> {
   if (!isContextValid()) return Promise.reject(new Error('Extension context invalidated'));
   return Promise.race([
     chrome.runtime.sendMessage(message) as Promise<{ success: boolean; error?: string; data?: unknown }>,
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Background service worker did not respond')), 30000),
+      setTimeout(() => reject(new Error('Background service worker did not respond')), timeoutMs),
     ),
   ]);
 }
@@ -223,7 +216,7 @@ async function handleClip(capture: Capture, evaluation: Evaluation) {
 
 async function handleCast(capture: Capture, evaluation: Evaluation): Promise<string | undefined> {
   try {
-    const response = await sendToBackground({ type: 'CAST', data: { capture, evaluation } });
+    const response = await sendToBackground({ type: 'CAST', data: { capture, evaluation } }, 150_000);
     if (!response.success) throw new Error(response.error);
     log(LL.NORMAL, 'Discerned: Successfully cast', 'url:', window.location.href);
     return (response.data as { eventId?: string } | undefined)?.eventId;

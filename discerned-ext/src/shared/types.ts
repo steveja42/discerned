@@ -130,10 +130,13 @@ export type BackgroundMessage =
   | { type: 'NAVIGATE_TO_CLIP'; clipId: string }
   | { type: 'GET_CLIP_COUNT' }
   | { type: 'OPEN_LIBRARY'; clipId?: string }
-  | { type: 'OPEN_HOME'; eventId?: string }
+  | { type: 'OPEN_HOME'; eventId?: string; autoSignin?: boolean }
   | { type: 'REGISTER_LOG_TAB' }
   | { type: 'EXTRACT_EMBEDDED_TWEETS' }
-  | { type: 'GET_CLIP_BODY'; id: string };
+  | { type: 'GET_CLIP_BODY'; id: string }
+  | { type: 'PUSH_PENDING_SIGN'; id: string; event: Record<string, unknown> }
+  | { type: 'RESOLVE_PENDING_SIGN'; id: string; signed: Record<string, unknown> }
+  | { type: 'REJECT_PENDING_SIGN'; id: string; error: string };
 
 export type BackgroundResponse =
   | { success: true; data?: unknown }
@@ -180,7 +183,8 @@ export type WebBridgeOutbound =
   | { type: 'DISCERNED_BRIDGE_NEW_CLIP'; clip: ClipData }
   | { type: 'DISCERNED_BRIDGE_FOCUS_CLIP'; clipId: string }
   | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] }
-  | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null };
+  | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null }
+  | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown> };
 
 export type WebBridgeInbound =
   | { type: 'DISCERNED_WEB_READY'; clipCount: number }
@@ -188,7 +192,10 @@ export type WebBridgeInbound =
   | { type: 'DISCERNED_UPDATE_NOTE'; id: string; note: string }
   | { type: 'DISCERNED_IMPORT_CLIPS'; clips: ClipData[] }
   | { type: 'DISCERNED_UPDATE_CATEGORIES'; categories: string[] }
-  | { type: 'DISCERNED_REQUEST_CLIP_BODY'; id: string };
+  | { type: 'DISCERNED_REQUEST_CLIP_BODY'; id: string }
+  | { type: 'DISCERNED_SET_NIP07_PUBKEY'; pubkey: string }
+  | { type: 'DISCERNED_SIGNED'; id: string; signed: Record<string, unknown> }
+  | { type: 'DISCERNED_SIGN_REJECTED'; id: string; error: string };
 
 // Default relay list
 export const DEFAULT_RELAYS = [

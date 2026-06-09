@@ -54,9 +54,29 @@ async function checkForNIP07(): Promise<boolean> {
 }
 
 /**
- * Get public key from NIP-07 extension
+ * Wait until the MAIN-world bridge reports window.nostr is present.
+ * Used on freshly opened signing tabs where the wallet's content script may
+ * inject window.nostr after our content script attaches. Returns true if
+ * window.nostr appears within the timeout, false otherwise.
  */
-export async function getNIP07PublicKey(): Promise<string | null> {
+export async function waitForNIP07(timeoutMs = 5000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await checkForNIP07()) return true;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return false;
+}
+
+/**
+ * Get public key from NIP-07 extension.
+ *
+ * Default timeout is 15s — Alby (and similar wallets) wake their service
+ * worker on the first getPublicKey call of a session, which can take several
+ * seconds before the approval prompt renders. A 3s timeout was the original
+ * value but masked legitimate cold-start responses as failures.
+ */
+export async function getNIP07PublicKey(timeoutMs = 15000): Promise<string | null> {
   return new Promise((resolve) => {
     const handler = (event: MessageEvent) => {
       if (event.data?.type === 'DISCERNED_NIP07_PUBKEY_RESPONSE') {
@@ -70,14 +90,18 @@ export async function getNIP07PublicKey(): Promise<string | null> {
     const timer = setTimeout(() => {
       window.removeEventListener('message', handler);
       resolve(null);
-    }, 3000);
+    }, timeoutMs);
   });
 }
 
 /**
- * Sign event using NIP-07
+ * Sign event using NIP-07.
+ *
+ * Default timeout 30s — leaves headroom for the wallet to wake its SW,
+ * render the approval prompt, and wait on the user. The earlier 10s value
+ * was too tight for cold-start Alby (often ~5–10s just to render).
  */
-export async function signWithNIP07(event: object): Promise<object> {
+export async function signWithNIP07(event: object, timeoutMs = 30000): Promise<object> {
   return new Promise((resolve, reject) => {
     const messageId = `sign_${Date.now()}`;
     const handler = (msgEvent: MessageEvent) => {
@@ -99,7 +123,7 @@ export async function signWithNIP07(event: object): Promise<object> {
     const timer = setTimeout(() => {
       window.removeEventListener('message', handler);
       reject(new Error('NIP-07 signing timeout'));
-    }, 10000);
+    }, timeoutMs);
   });
 }
 

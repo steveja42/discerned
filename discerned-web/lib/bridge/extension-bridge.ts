@@ -12,7 +12,8 @@ export type BridgeMessage =
   | { type: 'DISCERNED_BRIDGE_NEW_CLIP'; clip: ClipData }
   | { type: 'DISCERNED_BRIDGE_FOCUS_CLIP'; clipId: string }
   | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] }
-  | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null };
+  | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null }
+  | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown> };
 
 export function listenForBridge(
   handler: (msg: BridgeMessage) => void,
@@ -74,6 +75,22 @@ export function listenForBridge(
   };
 }
 
+// Like listenForBridge but does NOT send DISCERNED_WEB_READY pings — just
+// attaches a message listener. Use this for globally-mounted listeners (e.g.
+// the PendingSignModal in the root layout) that piggyback on the page-level
+// listenForBridge's ping/HELLO handshake rather than triggering their own.
+export function subscribeBridge(handler: (msg: BridgeMessage) => void): () => void {
+  const onMessage = (e: MessageEvent) => {
+    if (e.origin !== window.location.origin) return;
+    if (!e.data || typeof e.data !== 'object') return;
+    if (typeof e.data.type !== 'string') return;
+    if (!e.data.type.startsWith('DISCERNED_BRIDGE_')) return;
+    handler(e.data as BridgeMessage);
+  };
+  window.addEventListener('message', onMessage);
+  return () => window.removeEventListener('message', onMessage);
+}
+
 export function sendDeleteClips(ids: string[]): void {
   window.postMessage({ type: 'DISCERNED_DELETE_CLIPS', ids }, window.location.origin);
 }
@@ -92,4 +109,25 @@ export function sendUpdateCategories(categories: string[]): void {
 
 export function requestClipBody(id: string): void {
   window.postMessage({ type: 'DISCERNED_REQUEST_CLIP_BODY', id }, window.location.origin);
+}
+
+// Forward a freshly-acquired NIP-07 pubkey to the extension after the user
+// signs in on the web app. Best-effort: no-op when the extension isn't
+// installed, since postMessage to the same origin will simply find no
+// matching content-script listener. The user's gesture (Sign In click) on a
+// discerned origin is what makes the kind-0 publish that follows safe.
+export function sendPubkeyToExtension(pubkey: string): void {
+  window.postMessage({ type: 'DISCERNED_SET_NIP07_PUBKEY', pubkey }, window.location.origin);
+}
+
+// Send the signed event back to the extension after the user confirms a
+// pending cast in the web app. The id matches the one delivered in
+// DISCERNED_BRIDGE_PENDING_SIGN.
+export function sendSignedToExtension(id: string, signed: Record<string, unknown>): void {
+  window.postMessage({ type: 'DISCERNED_SIGNED', id, signed }, window.location.origin);
+}
+
+// Tell the extension the user declined or the wallet rejected the sign.
+export function sendSignRejectedToExtension(id: string, error: string): void {
+  window.postMessage({ type: 'DISCERNED_SIGN_REJECTED', id, error }, window.location.origin);
 }

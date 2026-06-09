@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { ClipStoreProvider } from '@/lib/bridge/ClipStoreContext';
 import { NostrAuthProvider } from '@/hooks/useNostrAuth';
+import PendingSignModal from '@/components/auth/PendingSignModal';
 
 export const metadata: Metadata = {
   title: 'Discerned — Signal, not noise.',
@@ -80,6 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {hydrationReload && <script dangerouslySetInnerHTML={{ __html: hydrationReload }} />}
         <NostrAuthProvider>
           <ClipStoreProvider>{children}</ClipStoreProvider>
+          <PendingSignModal />
         </NostrAuthProvider>
       </body>
     </html>

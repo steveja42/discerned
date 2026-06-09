@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { generateSecretKey, getPublicKey } from 'nostr-tools';
 import { decode as nip19Decode } from 'nostr-tools/nip19';
 import { hasNip07, nip07GetPubkey, storePubkey } from '@/lib/nostr/auth';
+import { sendPubkeyToExtension } from '@/lib/bridge/extension-bridge';
 
 interface SignInModalProps {
   onClose: () => void;
@@ -28,6 +29,9 @@ export default function SignInModal({ onClose, onSignedIn }: SignInModalProps) {
     try {
       const pubkey = await nip07GetPubkey();
       storePubkey(pubkey);
+      // Share with the extension (if installed) so it can sign casts without
+      // a second wallet approval. No-op when the extension isn't there.
+      sendPubkeyToExtension(pubkey);
       onSignedIn?.(pubkey);
       onClose();
     } catch (e) {

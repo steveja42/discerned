@@ -154,6 +154,11 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
   if (message.type === 'PUSH_CATEGORIES') {
     post({ type: 'DISCERNED_BRIDGE_CATEGORIES', categories: message.categories });
   }
+  if (message.type === 'PUSH_PENDING_SIGN') {
+    // First-cast handoff from the background: surface a confirm UI in the
+    // web app so the user provides a per-origin gesture for window.nostr.
+    post({ type: 'DISCERNED_BRIDGE_PENDING_SIGN', id: message.id, event: message.event });
+  }
 });
 
 // Two distinct concerns:
@@ -255,6 +260,31 @@ window.addEventListener('message', (e: MessageEvent) => {
   }
   if (msg?.type === 'DISCERNED_UPDATE_CATEGORIES') {
     chrome.runtime.sendMessage({ type: 'UPDATE_CATEGORIES', categories: msg.categories }).catch(() => { /* non-fatal */ });
+  }
+  if (msg?.type === 'DISCERNED_SIGNED') {
+    chrome.runtime.sendMessage({
+      type: 'RESOLVE_PENDING_SIGN',
+      id: msg.id,
+      signed: msg.signed,
+    }).catch(() => { /* non-fatal */ });
+  }
+  if (msg?.type === 'DISCERNED_SIGN_REJECTED') {
+    chrome.runtime.sendMessage({
+      type: 'REJECT_PENDING_SIGN',
+      id: msg.id,
+      error: msg.error,
+    }).catch(() => { /* non-fatal */ });
+  }
+  if (msg?.type === 'DISCERNED_SET_NIP07_PUBKEY') {
+    // Web app signed in with NIP-07 — forward the pubkey to background.
+    // The background's NIP07_DETECTED handler treats this as a user-gesture
+    // path (the user just clicked Sign In on the discerned origin) and
+    // triggers the kind-0 profile publish.
+    chrome.runtime.sendMessage({
+      type: 'NIP07_DETECTED',
+      hasNIP07: true,
+      pubkey: msg.pubkey,
+    }).catch(() => { /* non-fatal */ });
   }
   if (msg?.type === 'DISCERNED_REQUEST_CLIP_BODY') {
     const id = msg.id;

@@ -15,6 +15,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { AuthState } from '@/lib/types';
 import { loadStoredPubkey, storePubkey, clearStoredAuth, hasNip07, nip07GetPubkey } from '@/lib/nostr/auth';
+import { sendPubkeyToExtension } from '@/lib/bridge/extension-bridge';
 import { LL, log } from '@/lib/logger';
 
 interface NostrAuthValue {
@@ -50,23 +51,33 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     let signedIn = false;
 
-    // Probes window.nostr without prompting. If present, calls getPublicKey()
-    // (which most wallets cache silently for an already-approved origin) and
-    // upgrades the auth state. Idempotent — safe to call multiple times.
-    const probe = async () => {
+    const autoSigninRequested = new URLSearchParams(window.location.search).get('signin') === '1';
+
+    // Probes window.nostr without prompting. Just marks the wallet as available
+    // so the Sign In button appears — does NOT call getPublicKey() automatically.
+    // Wallets like Alby open a blank unresponsive popup when getPublicKey() is
+    // called programmatically on a not-yet-approved origin. The user must click
+    // Sign In first; after that first approval the wallet caches the permission
+    // and all future auto-probes on this origin are silent.
+    // Exception: when ?signin=1 is in the URL (set by the extension's "Open web app"
+    // button), we automatically call signInNip07() — the user's explicit click on
+    // the extension button is the gesture that justifies the auto-sign.
+    const probe = () => {
       if (cancelled || signedIn) return;
       if (!hasNip07()) return;
-      log(LL.DEBUG, '[useNostrAuth] probe: window.nostr present, calling getPublicKey()', elapsed());
+      log(LL.DEBUG, '[useNostrAuth] probe: window.nostr present', elapsed());
       setNip07Available(true);
-      try {
-        const pubkey = await nip07GetPubkey();
-        if (cancelled) return;
+      if (autoSigninRequested) {
+        log(LL.DEBUG, '[useNostrAuth] ?signin=1 detected — auto-calling signInNip07', elapsed());
         signedIn = true;
-        log(LL.DEBUG, '[useNostrAuth] getPublicKey resolved → connected', elapsed());
-        storePubkey(pubkey);
-        setAuth({ status: 'connected', pubkey, source: 'nip07' });
-      } catch (err) {
-        log(LL.WARN, '[useNostrAuth] getPublicKey rejected', err, elapsed());
+        nip07GetPubkey().then((pubkey) => {
+          if (cancelled) return;
+          storePubkey(pubkey);
+          setAuth({ status: 'connected', pubkey, source: 'nip07' });
+          sendPubkeyToExtension(pubkey);
+        }).catch((err: unknown) => {
+          log(LL.WARN, '[useNostrAuth] auto-signin failed:', err instanceof Error ? err.message : String(err));
+        });
       }
     };
 
@@ -133,6 +144,9 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
     const pubkey = await nip07GetPubkey();
     storePubkey(pubkey);
     setAuth({ status: 'connected', pubkey, source: 'nip07' });
+    // Share the pubkey with the extension (if installed) so it can sign
+    // future casts without reprompting. No-op when the extension isn't there.
+    sendPubkeyToExtension(pubkey);
   }, []);
 
   const signInPubkey = useCallback((pubkey: string) => {

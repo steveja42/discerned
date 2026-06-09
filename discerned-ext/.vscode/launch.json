@@ -128,6 +128,57 @@
       ]
     },
     {
+  "name": "Debug: Brave (nip07-alby)2",
+  "type": "chrome",
+  "request": "launch",
+  "webRoot": "${workspaceFolder}",
+  "cascadeTerminateToConfigurations": [
+    "Attach to Chrome (shared with extension debugger)"
+  ],
+  "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+  "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-nip07-alby",
+  "forceCleanSession": true, // 👈 Encourages graceful CDP shutdown over hard process killing
+  "resolveSourceMapLocations": [
+    "${workspaceFolder}/**",
+    "!**/node_modules/**"
+  ],
+  "runtimeArgs": [
+    "--load-extension=${workspaceFolder}\\dist",
+    "--no-first-run",
+    "--remote-debugging-port=9222",
+    "--disable-background-networking",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-features=BackForwardCache,CalculateNativeWinOcclusion"
+  ]
+},
+{
+  "name": "Debug: Brave (nip07-alby)3",
+  "type": "chrome",
+  "request": "launch",
+  "webRoot": "${workspaceFolder}",
+  // 👇 Comment this out or remove it so VS Code handles this as a single session
+  // "cascadeTerminateToConfigurations": [
+  //   "Attach to Chrome (shared with extension debugger)"
+  // ],
+  "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+  "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-nip07-alby",
+  "resolveSourceMapLocations": [
+    "${workspaceFolder}/**",
+    "!**/node_modules/**"
+  ],
+  "runtimeArgs": [
+    "--load-extension=${workspaceFolder}\\dist",
+    "--no-first-run",
+    "--remote-debugging-port=9222",
+    "--disable-background-networking",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-hang-monitor",
+    "--disable-features=BackForwardCache,CalculateNativeWinOcclusion"
+  ]
+},
+    {
       "name": "Debug: Brave (stored key)",
       "type": "chrome",
       "request": "launch",
