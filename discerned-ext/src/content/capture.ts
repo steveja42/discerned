@@ -1398,7 +1398,7 @@ function findContentBlockByLayout(): Element | null {
   // Return the highest-scoring of the final chosen set.
   if (chosen.length === 0) return null;
   const best = scored.find(s => chosen.includes(s.el))!;
-  log(LL.NORMAL, `Discerned: layout-finder picked <${best.el.tagName.toLowerCase()}> textLen=${best.textLen} ${Math.round(best.width)}×${Math.round(best.height)}`, 'url:', window.location.href);
+  log(LL.DEBUG, `Discerned: layout-finder picked <${best.el.tagName.toLowerCase()}> textLen=${best.textLen} ${Math.round(best.width)}×${Math.round(best.height)}`, 'url:', window.location.href);
   const host = shadowHostOf(best.el);
   if (host) {
     log(LL.DEBUG, `Discerned: layout finder winner is inside shadow root of <${host.tagName.toLowerCase()}>`, 'url:', window.location.href);
@@ -1545,7 +1545,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   // don't capture page chrome (sidebars, search, banners) the finder would grab.
   const layoutEl = siteTaggerRoot ?? findContentBlockByLayout();
   if (layoutEl) {
-    log(LL.NORMAL, `Discerned: article captured via layout finder <${layoutEl.tagName.toLowerCase()}>`, 'url:', base.url);
+    log(LL.DEBUG, `Discerned: article captured via layout finder <${layoutEl.tagName.toLowerCase()}>`, 'url:', base.url);
     const cleanup = markExcluded(document.body);
     const sizeCleanup = annotateLiveImageSizes(layoutEl);
     // A tagger-supplied root is already the intended scope — don't widen it.
@@ -1589,7 +1589,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     tagSemanticStructure(clone);
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
     const inlined = await inlineAllImages(clone.innerHTML.trim());
-    log(LL.NORMAL, `Discerned: layout-finder imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
+    log(LL.DEBUG, `Discerned: layout-finder imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     return {
       ...base,
       format: 'article',

@@ -158,7 +158,7 @@ export function relayLog(level: LogLevel, source: LogSource, serialized: string[
  * Minimum numeric level that will be emitted. Raise to suppress verbose output.
  * LL.TRACE=0, DEBUG=1, NORMAL=2, WARN=3, ERROR=4
  */
-let activeLogLevel: AppLogLevel = LL.DEBUG;
+let activeLogLevel: AppLogLevel = LL.NORMAL;
 
 export function setLogLevel(level: AppLogLevel): void {
   activeLogLevel = level;
