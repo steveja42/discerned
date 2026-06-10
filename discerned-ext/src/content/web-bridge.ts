@@ -276,10 +276,6 @@ window.addEventListener('message', (e: MessageEvent) => {
     }).catch(() => { /* non-fatal */ });
   }
   if (msg?.type === 'DISCERNED_SET_NIP07_PUBKEY') {
-    // Web app signed in with NIP-07 — forward the pubkey to background.
-    // The background's NIP07_DETECTED handler treats this as a user-gesture
-    // path (the user just clicked Sign In on the discerned origin) and
-    // triggers the kind-0 profile publish.
     chrome.runtime.sendMessage({
       type: 'NIP07_DETECTED',
       hasNIP07: true,

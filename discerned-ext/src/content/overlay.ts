@@ -13,14 +13,7 @@ import { LL, log } from '@/shared/logger';
 import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
 import { showArticleHighlight, hideArticleHighlight } from './highlighter';
 import { npubEncode } from 'nostr-tools/nip19';
-import { getNIP07PublicKey, signWithNIP07 } from '@/shared/nostr/auth';
-import { createProfileEvent } from '@/shared/nostr/events';
-
-// Cached NIP-05 for the current user; populated lazily when the settings drawer
-// opens. Settings re-renders read from here so we don't message the background
-// on every render.
-let cachedNip05: string | null = null;
-let cachedNip05Pubkey: string | null = null;
+import { getNIP07PublicKey } from '@/shared/nostr/auth';
 
 export interface OverlayShowOptions {
   initialFormat: ClipFormat;
@@ -706,43 +699,6 @@ export class DiscernedOverlay {
 
   // ── Settings drawer (auth status, stats, export) ───────────────────────────
 
-  /**
-   * Fetch the user's NIP-05 (and, for pro mode, their pubkey first) on
-   * settings-open. Re-renders settings if the result differs from the current
-   * cached value. Safe to call repeatedly — module-level cache prevents
-   * redundant background round-trips.
-   */
-  private async loadNip05ForSettings(): Promise<void> {
-    const auth = this.authState;
-    if (auth.type === 'guest') return;
-
-    // For pro (NIP-07) we do NOT call getPublicKey() here. Wallets (Alby,
-    // nos2x) render a blank, unresponsive approval popup for first-time
-    // getPublicKey() calls on the current page's origin regardless of the
-    // user gesture. The user signs in on the Discerned web app instead;
-    // that origin is the one we want approved anyway, and Sign In there
-    // forwards the pubkey to us via DISCERNED_SET_NIP07_PUBKEY. Settings
-    // renders a CTA for NIP-07 users who haven't signed in yet.
-
-    const pubkey = this.authState.type === 'pro' ? this.authState.pubkey
-      : this.authState.type === 'nip46' ? this.authState.pubkey
-      : this.authState.type === 'nsec' ? this.authState.pubkey
-      : null;
-    if (!pubkey) return;
-
-    const res = await chrome.runtime.sendMessage({ type: 'GET_NIP05_FOR_ME' }).catch(() => null);
-    const nip05 = (res?.success && res.data && typeof (res.data as { nip05?: unknown }).nip05 === 'string')
-      ? (res.data as { nip05: string }).nip05
-      : null;
-
-    const changed = nip05 !== cachedNip05 || pubkey !== cachedNip05Pubkey;
-    cachedNip05 = nip05;
-    cachedNip05Pubkey = pubkey;
-    if (changed && this.view === 'settings') {
-      this.render();
-    }
-  }
-
   private renderSettings() {
     const ev = this.escapeHtml.bind(this);
     const auth = this.authState;
@@ -750,10 +706,7 @@ export class DiscernedOverlay {
       try { const npub = npubEncode(pk); return `${npub.slice(0, 16)}…${npub.slice(-8)}`; } catch { return pk; }
     };
     const identityBlock = (pk: string): string => {
-      const nip05Line = cachedNip05 && cachedNip05Pubkey === pk
-        ? `<div class="profile-id"><span class="profile-id-label">NIP-05:</span> ${ev(cachedNip05)}</div>`
-        : '';
-      return `${nip05Line}<div class="profile-id"><span class="profile-id-label">npub:</span> ${ev(formatPubkey(pk))}</div>`;
+      return `<div class="profile-id"><span class="profile-id-label">npub:</span> ${ev(formatPubkey(pk))}</div>`;
     };
 
     let authBlock = '';
@@ -783,20 +736,12 @@ export class DiscernedOverlay {
         </div>
         <button class="btn btn-secondary" id="settings-open-webapp" type="button" style="margin-top:8px">Open Discerned web app →</button>
       `;
-      // Diagnostic: probe your signing extension directly from this page.
-      // Tests both getPublicKey and a kind-0 sign without routing through
-      // the discerned web app. The 15s/30s timeouts in auth.ts give Alby
-      // enough headroom to render its approval prompt on cold start.
-      const diagnostic = `
-        <div class="card-desc" style="margin-top:12px">
-          <strong>Diagnostics:</strong> probe your signing extension from this page.
-        </div>
-        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-          <button class="btn btn-secondary" id="settings-probe-nip07" type="button">Probe getPublicKey</button>
-          <button class="btn btn-secondary" id="settings-probe-signkind0" type="button">Sign test kind 0</button>
+      const diagnostic = __DISCERNED_TEST_BUILD__ ? `
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn btn-secondary" id="settings-publish-kind0" type="button">Publish Kind Zero</button>
         </div>
         <div id="settings-probe-result" class="card-desc" style="margin-top:8px;white-space:pre-wrap;font-family:var(--mono,monospace);font-size:12px"></div>
-      `;
+      ` : '';
       authBlock = `
         <div class="settings-card">
           <div class="card-row">
@@ -846,8 +791,6 @@ export class DiscernedOverlay {
         </div>
       `;
     }
-
-    void this.loadNip05ForSettings();
 
     this.shadow.innerHTML = `
       <style>${this.getStyles()}</style>
@@ -912,65 +855,27 @@ export class DiscernedOverlay {
       void chrome.runtime.sendMessage({ type: 'OPEN_HOME', autoSignin: true });
     });
 
-    this.shadow.getElementById('settings-probe-nip07')?.addEventListener('click', async () => {
-      const btn = this.shadow.getElementById('settings-probe-nip07') as HTMLButtonElement | null;
-      const out = this.shadow.getElementById('settings-probe-result');
-      if (!out) return;
-      if (btn) btn.disabled = true;
-      out.textContent = 'Calling window.nostr.getPublicKey() (15s timeout)… If your wallet popup appears blank or never opens, the wallet may be locked or wedged.';
-      const t0 = performance.now();
-      try {
-        const pubkey = await getNIP07PublicKey(15000);
-        const elapsed = Math.round(performance.now() - t0);
-        if (pubkey) {
-          out.textContent = `OK in ${elapsed}ms\npubkey: ${pubkey}\norigin: ${window.location.origin}`;
-          // Opportunistically share the pubkey with the background so the
-          // user gets the benefit of having unblocked it.
-          await chrome.runtime.sendMessage({ type: 'NIP07_DETECTED', hasNIP07: true, pubkey });
-        } else {
-          out.textContent = `No response in ${elapsed}ms\norigin: ${window.location.origin}\n\nLikely causes:\n• Wallet is locked — click its toolbar icon and enter your passphrase, then retry.\n• Wallet is wedged from a dismissed prompt — toggle the extension off/on at chrome://extensions.\n• Wallet hasn't injected window.nostr on this page yet — reload and retry.`;
+    if (__DISCERNED_TEST_BUILD__) {
+      this.shadow.getElementById('settings-publish-kind0')?.addEventListener('click', async () => {
+        const btn = this.shadow.getElementById('settings-publish-kind0') as HTMLButtonElement | null;
+        const out = this.shadow.getElementById('settings-probe-result');
+        if (!out) return;
+        if (btn) btn.disabled = true;
+        out.textContent = 'Publishing kind-0 event…';
+        const t0 = performance.now();
+        try {
+          const res = await chrome.runtime.sendMessage({ type: 'PUBLISH_KIND_ZERO' }).catch((e: unknown) => ({ success: false, error: String(e) }));
+          const elapsed = Math.round(performance.now() - t0);
+          if (res?.success) {
+            out.textContent = `Kind-0 published in ${elapsed}ms`;
+          } else {
+            out.textContent = `Kind-0 FAILED in ${elapsed}ms: ${(res as { error?: string }).error ?? 'unknown error'}`;
+          }
+        } finally {
+          if (btn) btn.disabled = false;
         }
-      } catch (err) {
-        const elapsed = Math.round(performance.now() - t0);
-        const msg = err instanceof Error ? err.message : String(err);
-        out.textContent = `Error in ${elapsed}ms: ${msg}\norigin: ${window.location.origin}`;
-      } finally {
-        if (btn) btn.disabled = false;
-      }
-    });
-
-    this.shadow.getElementById('settings-probe-signkind0')?.addEventListener('click', async () => {
-      const btn = this.shadow.getElementById('settings-probe-signkind0') as HTMLButtonElement | null;
-      const out = this.shadow.getElementById('settings-probe-result');
-      if (!out) return;
-      if (btn) btn.disabled = true;
-      out.textContent = 'Building kind-0 profile event and calling window.nostr.signEvent() (30s timeout)…';
-      const template = createProfileEvent({
-        name: 'discerned-probe',
-        about: 'Diagnostic test event from the Discerned extension overlay.',
       });
-      log(LL.NORMAL, '[nip07-probe] kind-0 template', template, 'url:', window.location.href);
-      const t0 = performance.now();
-      try {
-        const signed = await signWithNIP07(template, 30000);
-        const elapsed = Math.round(performance.now() - t0);
-        const sig = signed as { id?: string; pubkey?: string; sig?: string };
-        log(LL.NORMAL, '[nip07-probe] kind-0 signed OK', { elapsed, signed }, 'url:', window.location.href);
-        out.textContent = `Sign kind-0 OK in ${elapsed}ms\norigin: ${window.location.origin}\npubkey: ${sig.pubkey ?? '(missing)'}\nevent id: ${sig.id ?? '(missing)'}\nsig: ${sig.sig ? sig.sig.slice(0, 32) + '…' : '(missing)'}\n\nThis is a TEST event — not published to relays.`;
-        // Opportunistically pass the pubkey to the background so it can sync
-        // profile and approve the discerned origin for subsequent operations.
-        if (sig.pubkey) {
-          await chrome.runtime.sendMessage({ type: 'NIP07_DETECTED', hasNIP07: true, pubkey: sig.pubkey });
-        }
-      } catch (err) {
-        const elapsed = Math.round(performance.now() - t0);
-        const msg = err instanceof Error ? err.message : String(err);
-        log(LL.WARN, '[nip07-probe] kind-0 sign failed', { elapsed, msg }, 'url:', window.location.href);
-        out.textContent = `Sign kind-0 FAILED in ${elapsed}ms\norigin: ${window.location.origin}\nerror: ${msg}`;
-      } finally {
-        if (btn) btn.disabled = false;
-      }
-    });
+    }
 
     this.shadow.getElementById('settings-disconnect')?.addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'DISCONNECT_AUTH' });

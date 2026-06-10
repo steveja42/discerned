@@ -14,13 +14,6 @@ import {
   createQuoteNoteEvent,
   createResourceNoteEvent,
 } from '@/shared/nostr/events';
-import {
-  getCachedNip05,
-  localPartFor,
-  profileFor,
-  refreshNip05Cache,
-  type CachedNip05,
-} from './nip05-fetcher';
 import { prepareClipPayload } from '@/shared/nostr/encryption';
 import { publishWithMinimum, getRelayHealth } from './relay-manager';
 import {
@@ -227,154 +220,8 @@ async function seedCategories(): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.CATEGORIES]: merged });
 }
 
-// Promise that resolves once the SW has read auth state from storage. Other
-// startup tasks (e.g. initNip05) await this so they don't run while
-// currentAuthState is still the default 'guest'.
-const authRestored: Promise<void> = restoreAuthState();
+void restoreAuthState();
 seedCategories();
-
-// ── NIP-05 names map (kind-0 auto-publish) ──────────────────────────────────
-//
-// Source of truth: discerned-web/public/.well-known/nostr.json. The background
-// pulls it on startup and every 6h via chrome.alarms. When the user's hex
-// pubkey first appears in the map (or their local-part changes), republish
-// kind 0 so other Nostr clients display the verified identifier.
-
-const NIP05_ALARM = 'discerned-nip05-refresh';
-const NIP05_REFRESH_PERIOD_MIN = 6 * 60;
-
-function currentUserPubkeyHex(): string | null {
-  if (currentAuthState.type === 'nip46') return currentAuthState.pubkey;
-  if (currentAuthState.type === 'nsec') return currentAuthState.pubkey;
-  if (currentAuthState.type === 'pro') return currentAuthState.pubkey ?? null;
-  return null; // guest — don't bother publishing under an ephemeral key
-}
-
-async function publishKind0ForCurrentUser(cache: CachedNip05 | null): Promise<void> {
-  const pubkey = currentUserPubkeyHex();
-  if (!pubkey) return;
-  const local = localPartFor(cache, pubkey);
-  // local === null means we were just dropped from the map. Publish an empty
-  // nip05 string to explicitly retract the claim.
-  const nip05 = local ? `${local}@discerned.online` : '';
-  const profile = profileFor(cache, pubkey);
-  const template = createProfileEvent({
-    name: local ?? undefined,
-    nip05,
-    about: profile.about,
-    picture: profile.picture,
-  });
-  try {
-    // focusSigningTab: force the signing tab to be the active+focused tab
-    // before sending the sign request. nos2x renders a blank/stuck approval
-    // dialog when signing on a non-active tab; this is the only way to make
-    // its UI reliably appear for unprompted signs like kind 0.
-    const signed = await signEvent(template, { focusSigningTab: true });
-    const signedEventId = (signed as { id?: string }).id;
-    const result = await publishWithMinimum(signed);
-    const health = getRelayHealth(result.results);
-    if (result.success) {
-      log(LL.NORMAL,
-        '[nip05] published kind 0',
-        { eventId: signedEventId, pubkey, nip05, relays: `${health.healthy}/${health.total}` },
-        'url:', 'background');
-      await recordPublishedNip05(pubkey, nip05);
-    } else {
-      // Signed and dispatched, but fewer relays ACKed than required. Do NOT
-      // record as published — next trigger should retry.
-      log(LL.WARN,
-        '[nip05] kind 0 dispatched but did not meet ACK threshold; will retry on next trigger',
-        { eventId: signedEventId, pubkey, nip05, relays: `${health.healthy}/${health.total}`, results: result.results },
-        'url:', 'background');
-    }
-  } catch (err) {
-    log(LL.WARN, '[nip05] kind 0 publish failed', { pubkey, nip05, err }, 'url:', 'background');
-  }
-}
-
-/**
- * Persist that we've published kind 0 mapping `pubkey` → `nip05`. Used by the
- * cast-time sync to skip republishing when nothing has changed.
- */
-async function recordPublishedNip05(pubkey: string, nip05: string): Promise<void> {
-  try {
-    const stored = await chrome.storage.local.get(STORAGE_KEYS.PUBLISHED_NIP05_BY_PUBKEY);
-    const map = (stored[STORAGE_KEYS.PUBLISHED_NIP05_BY_PUBKEY] as Record<string, string> | undefined) ?? {};
-    map[pubkey] = nip05;
-    await chrome.storage.local.set({ [STORAGE_KEYS.PUBLISHED_NIP05_BY_PUBKEY]: map });
-  } catch (err) {
-    log(LL.WARN, '[nip05] failed to record published map', err);
-  }
-}
-
-/**
- * Refresh the nip05 cache and publish kind 0 if the user's desired nip05
- * differs from what we last published for their pubkey. Idempotent: if there's
- * nothing to do (no current pubkey, or already up to date), returns silently.
- * Safe to call from multiple triggers — the PUBLISHED_NIP05_BY_PUBKEY guard
- * suppresses redundant publishes.
- */
-async function maybeSyncProfile(reason: string, userGesture = false): Promise<void> {
-  try {
-    const pubkey = currentUserPubkeyHex();
-    log(LL.NORMAL, '[nip05] maybeSyncProfile called',
-      { reason, authType: currentAuthState.type, pubkey: pubkey ?? '(none)', userGesture },
-      'url:', 'background');
-    if (!pubkey) {
-      log(LL.NORMAL, '[nip05] skipping: no current user pubkey (auth not ready or guest)', 'url:', 'background');
-      return;
-    }
-    // NIP-07 wallets must sign in response to a user gesture — calling
-    // signEvent from a background alarm, install hook, or page-load trigger
-    // opens a blank unresponsive wallet popup (Alby, nos2x). Defer to the
-    // next user-driven path (overlay open, web Sign In, post-cast learn).
-    if (currentAuthState.type === 'pro' && !userGesture) {
-      log(LL.NORMAL, '[nip05] skipping NIP-07 kind 0: no user gesture', 'url:', 'background');
-      return;
-    }
-    const refreshed = await refreshNip05Cache(pubkey);
-    const desiredLocal = localPartFor(refreshed.cache, pubkey);
-    const desiredNip05 = desiredLocal ? `${desiredLocal}@discerned.online` : '';
-
-    const stored = await chrome.storage.local.get(STORAGE_KEYS.PUBLISHED_NIP05_BY_PUBKEY);
-    const map = (stored[STORAGE_KEYS.PUBLISHED_NIP05_BY_PUBKEY] as Record<string, string> | undefined) ?? {};
-    const lastPublished = map[pubkey];
-
-    if (lastPublished === desiredNip05) {
-      log(LL.NORMAL, '[nip05] skipping: already published this nip05 for this pubkey',
-        { pubkey, nip05: desiredNip05 }, 'url:', 'background');
-      return;
-    }
-    log(LL.NORMAL, '[nip05] sync triggering kind 0 publish',
-      { pubkey, from: lastPublished ?? '(none)', to: desiredNip05 },
-      'url:', 'background');
-    await publishKind0ForCurrentUser(refreshed.cache);
-  } catch (err) {
-    log(LL.WARN, '[nip05] profile sync failed', err, 'url:', 'background');
-  }
-}
-
-async function initNip05(): Promise<void> {
-  // Wait for auth state to be restored from storage before deciding whether to
-  // publish kind 0. Without this, the SW boots, calls maybeSyncProfile while
-  // currentAuthState is still 'guest', skips silently, and never tries again.
-  await authRestored;
-  try {
-    await chrome.alarms.create(NIP05_ALARM, { periodInMinutes: NIP05_REFRESH_PERIOD_MIN });
-  } catch (err) {
-    log(LL.WARN, '[nip05] alarm create failed', err);
-  }
-  // If a pubkey is already restored from storage the wallet has approved this
-  // origin in a prior session — safe to publish kind-0 immediately.
-  const alreadyHasPubkey = currentUserPubkeyHex() !== null;
-  await maybeSyncProfile('init-after-authRestored', alreadyHasPubkey);
-}
-
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === NIP05_ALARM) void maybeSyncProfile('6h-alarm');
-});
-
-void initNip05();
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   log(LL.NORMAL, 'Discerned extension installed/updated');
@@ -502,42 +349,19 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'UPDATE_CLIP_NOTE':
       return handleUpdateClipNote(message.id, message.note);
 
-    case 'NEEDS_NIP07_PUBKEY':
-      // Content scripts probe this before calling window.nostr.getPublicKey()
-      // on page load. Some wallets (nos2x) treat getPublicKey() as a per-origin
-      // permission prompt, which paints a blank approval popup on arbitrary
-      // sites — so only ask the wallet when the background actually needs the
-      // pubkey for the kind-0 publish (guest awaiting upgrade, or pro mode
-      // missing its pubkey).
-      return {
-        success: true,
-        data: {
-          needs:
-            currentAuthState.type === 'guest' ||
-            (currentAuthState.type === 'pro' && !currentAuthState.pubkey),
-        },
-      };
-
     case 'NIP07_DETECTED':
-      log(LL.NORMAL, '[nip05] NIP07_DETECTED received',
-        { hasNIP07: message.hasNIP07, msgPubkey: message.pubkey, authType: currentAuthState.type, authPubkey: (currentAuthState as { pubkey?: string }).pubkey ?? '(none)' });
       if (message.hasNIP07 && currentAuthState.type === 'guest') {
         currentAuthState = { type: 'pro', hasNIP07: true, pubkey: message.pubkey };
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
         log(LL.NORMAL, 'NIP-07 extension detected — switching to pro mode');
-        void maybeSyncProfile('nip07-detected-guest-to-pro');
       } else if (message.hasNIP07 && currentAuthState.type === 'pro' && message.pubkey && !currentAuthState.pubkey) {
         currentAuthState = { ...currentAuthState, pubkey: message.pubkey };
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
-        // A pubkey on NIP07_DETECTED only ever arrives from a user-gesture path:
-        // web-app Sign In click (via web-bridge → DISCERNED_SET_NIP07_PUBKEY).
-        // Safe to publish kind 0 immediately.
-        void maybeSyncProfile('nip07-detected-pubkey-fill', true);
       }
-      // Note: the signing tab is NOT seeded here. NIP-07 signing always routes
-      // through a tab on the discerned origin, resolved on demand in
-      // resolveSigningTab() — not the arbitrary site that reported NIP-07.
       return { success: true };
+
+    case 'PUBLISH_KIND_ZERO':
+      return handlePublishKind0(senderTabId);
 
     case 'RESOLVE_PENDING_SIGN':
       resolvePendingSign(message.id, message.signed);
@@ -546,13 +370,6 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'REJECT_PENDING_SIGN':
       rejectPendingSign(message.id, message.error);
       return { success: true };
-
-    case 'GET_NIP05_FOR_ME': {
-      const cache = await getCachedNip05();
-      const pubkey = currentUserPubkeyHex();
-      const local = localPartFor(cache, pubkey);
-      return { success: true, data: { nip05: local ? `${local}@discerned.online` : null } };
-    }
 
     case 'CONNECT_NIP46':
       return handleConnectNip46(message.bunkerUri);
@@ -648,7 +465,6 @@ async function handleConnectNip46(bunkerUri: string): Promise<BackgroundResponse
       [STORAGE_KEYS.AUTH_STATE]: newState,
       [STORAGE_KEYS.NIP46_CLIENT_KEY]: result.clientKeyHex,
     });
-    void maybeSyncProfile('nip46-connected');
     return { success: true, data: { pubkey: result.pubkey } };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Connection failed' };
@@ -671,7 +487,6 @@ async function handleConnectNsec(rawNsec: string, pin: string): Promise<Backgrou
       [STORAGE_KEYS.AUTH_STATE]: newState,
       [STORAGE_KEYS.NSEC_ENCRYPTED]: ncryptsec,
     });
-    void maybeSyncProfile('nsec-connected');
     return { success: true, data: { pubkey: pubkeyHex } };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to save account key' };
@@ -1203,7 +1018,6 @@ async function handleCast(
     const signedEvent: any = currentAuthState.type === 'pro'
       ? await signEventViaWebApp(eventTemplate)
       : await signEvent(eventTemplate);
-    if (currentAuthState.type === 'pro') await learnPubkeyIfMissing(signedEvent);
     const publishResult = await publishWithMinimum(signedEvent);
 
     if (!publishResult.success) {
@@ -1354,9 +1168,8 @@ async function resolveSigningTab(focusSigningTab = false): Promise<number> {
   // (3) Open our own tab in the user's current window. `focusSigningTab`
   // controls whether it's opened active. Some NIP-07 wallets (nos2x) leave a
   // blank/stuck approval dialog when the sign request comes from a non-active
-  // tab — for unprompted signs like the kind-0 NIP-05 profile publish we
-  // therefore force it active. For user-initiated signs (casts), background
-  // is fine because those normally hit case (2) reuse on later invocations.
+  // tab — for user-initiated signs (casts) background is fine because those
+  // normally hit case (2) reuse on later invocations.
   const base = await resolveBaseUrl();
   const tab = await chrome.tabs.create({ url: `${base}/about`, active: focusSigningTab });
   const tabId = tab.id;
@@ -1451,43 +1264,49 @@ function rejectPendingSign(id: string, error: string): void {
   entry.reject(new Error(error));
 }
 
-/**
- * When NIP-07 signs an event, the signed payload contains the user's pubkey.
- * `currentAuthState.pubkey` may not have been populated yet (e.g. older
- * persisted state predates the field, or the content-script detection only
- * reported `hasNIP07` without the pubkey). Capture it here so subsequent
- * background-only tasks like maybeSyncProfile() can identify the user.
- *
- * Idempotent: no-op if pubkey is already known or the signed payload doesn't
- * include one. Triggers a profile sync after persisting so the kind-0 publish
- * can run right after the first cast.
- */
-async function learnPubkeyIfMissing(signed: unknown): Promise<void> {
-  if (currentAuthState.type !== 'pro') return;
-  if (currentAuthState.pubkey) return;
-  const pubkey = (signed as { pubkey?: string } | null)?.pubkey;
-  if (typeof pubkey !== 'string' || pubkey.length !== 64) return;
-  currentAuthState = { ...currentAuthState, pubkey };
+// ── Kind-0 publish (dev-build manual trigger) ────────────────────────────────
+//
+// Triggered by the "Publish Kind Zero" button in the overlay settings (dev only).
+// Signs and publishes a bare kind-0 profile event using the current tab as the
+// NIP-07 signing context (for pro mode) so the wallet prompt appears on the
+// page the user already has focused.
+
+async function handlePublishKind0(senderTabId: number | undefined): Promise<BackgroundResponse> {
   try {
-    await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
-    log(LL.NORMAL, '[auth] learned NIP-07 pubkey from signed event', { pubkey }, 'url:', 'background');
+    const template = createProfileEvent({});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let signed: any;
+    if (currentAuthState.type === 'pro') {
+      // Sign directly in the sender tab — the user already has it open and the
+      // wallet's approval prompt will appear there. Do NOT route through
+      // resolveSigningTab, which requires a discerned.online URL.
+      if (senderTabId === undefined) throw new Error('No sender tab for NIP-07 signing');
+      const response = await chrome.tabs.sendMessage(senderTabId, {
+        type: 'SIGN_WITH_NIP07',
+        event: template,
+      }) as { signed?: object; error?: string } | null;
+      if (!response) throw new Error('NIP-07 content script did not respond');
+      if (response.error) throw new Error(response.error);
+      signed = response.signed;
+    } else {
+      signed = await signEvent(template);
+    }
+    const result = await publishWithMinimum(signed);
+    const health = getRelayHealth(result.results);
+    if (result.success) {
+      log(LL.NORMAL, '[kind0] published OK',
+        { relays: `${health.healthy}/${health.total}` }, 'url:', 'background');
+      return { success: true };
+    }
+    const ackErr = `Published but only ${health.healthy}/${health.total} relays ACKed`;
+    log(LL.WARN, '[kind0] publish failed', { reason: ackErr }, 'url:', 'background');
+    return { success: false, error: ackErr };
   } catch (err) {
-    log(LL.WARN, '[auth] failed to persist learned pubkey', err, 'url:', 'background');
+    log(LL.WARN, '[kind0] publish error', { err }, 'url:', 'background');
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
-  // Triggered immediately after a successful NIP-07 sign — the wallet just
-  // approved a sign request, so kind-0 piggybacks while the approval is hot.
-  void maybeSyncProfile('pubkey-learned', true);
 }
 
-/**
- * `opts.focusSigningTab`: only relevant in NIP-07 `pro` mode. Forces the
- * signing tab to be the active+focused tab before sending the sign request,
- * whether it was already open or freshly created. Some wallets (notably
- * nos2x) leave a blank/stuck approval dialog when the sign request originates
- * from a non-active tab. Pass `true` for unprompted signs (e.g. the kind-0
- * NIP-05 profile publish); user-initiated signs (cast) leave default-false
- * since the user is already engaged and brief background-tab signing is OK.
- */
 async function signEvent(
   template: Parameters<typeof finalizeEvent>[0],
   opts: { focusSigningTab?: boolean } = {},
@@ -1503,7 +1322,6 @@ async function signEvent(
     }
     if (!response) throw new Error('NIP-07 content script did not respond');
     if (response.error) throw new Error(response.error);
-    await learnPubkeyIfMissing(response.signed);
     return response.signed;
   } else if (currentAuthState.type === 'nip46') {
     const stored = await chrome.storage.local.get(STORAGE_KEYS.NIP46_CLIENT_KEY);
