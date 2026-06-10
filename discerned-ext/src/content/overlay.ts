@@ -13,7 +13,6 @@ import { LL, log } from '@/shared/logger';
 import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
 import { showArticleHighlight, hideArticleHighlight } from './highlighter';
 import { npubEncode } from 'nostr-tools/nip19';
-import { getNIP07PublicKey } from '@/shared/nostr/auth';
 
 export interface OverlayShowOptions {
   initialFormat: ClipFormat;
@@ -60,7 +59,6 @@ export class DiscernedOverlay {
   private generatedNpub: string | null = null;
   private captureGeneration = 0;
   private capturing = false;
-  private nip07ProbeRan = false;
   private publishMode: PublishMode = 'both';
   private interest: InterestLevel = 'Interesting';
   private ethics: EthicsLevel = 'Neutral';
@@ -115,8 +113,6 @@ export class DiscernedOverlay {
     this.authState = options.authState;
     this.view = options.authState.type === 'guest' && !options.nudgeDismissed ? 'gate' : 'main';
     this.note = '';
-    this.nip07ProbeRan = false;
-
     // Initial render immediately so the user sees the panel chrome, then
     // load persisted evaluation defaults and re-render main (if needed).
     this.render();
@@ -1051,11 +1047,6 @@ export class DiscernedOverlay {
 
           <div class="cast-notice" id="cast-notice">${this.renderCastNotice(isConnected)}</div>
 
-          <!-- Diagnostic: probe getPublicKey on overlay open. Tests whether
-               Alby (or whichever NIP-07 wallet is installed) responds
-               correctly when called from the main view shortly after the
-               overlay mounts. Result populated by triggerNip07Probe(). -->
-          <div id="nip07-probe-result" class="card-desc" style="margin-top:10px;font-family:var(--mono,monospace);font-size:11px;white-space:pre-wrap;opacity:0.8"></div>
         </div>
 
         <footer class="panel-footer">
@@ -1202,40 +1193,7 @@ export class DiscernedOverlay {
     this.setupCategoryCombobox();
     this.validateForm();
 
-    // Diagnostic: probe window.nostr.getPublicKey() once per overlay session
-    // shortly after the main view appears. Tests whether Alby (or whichever
-    // NIP-07 wallet is installed) renders its approval prompt correctly on
-    // first-touch from the current site's origin. Result lands in
-    // #nip07-probe-result. Only fires for pro mode without a pubkey, since
-    // that's the case we're investigating.
-    if (this.authState.type === 'pro' && !this.authState.pubkey && !this.nip07ProbeRan) {
-      this.nip07ProbeRan = true;
-      void this.runNip07Probe();
-    }
   }
-
-  private async runNip07Probe(): Promise<void> {
-    const out = this.shadow.getElementById('nip07-probe-result');
-    if (!out) return;
-    out.textContent = 'NIP-07 probe: calling getPublicKey() (15s timeout)…';
-    const t0 = performance.now();
-    try {
-      const pubkey = await getNIP07PublicKey(15000);
-      const elapsed = Math.round(performance.now() - t0);
-      if (pubkey) {
-        out.textContent = `NIP-07 probe: OK in ${elapsed}ms · origin: ${window.location.origin}`;
-        // Opportunistically share the pubkey with the background.
-        await chrome.runtime.sendMessage({ type: 'NIP07_DETECTED', hasNIP07: true, pubkey });
-      } else {
-        out.textContent = `NIP-07 probe: no response in ${elapsed}ms · origin: ${window.location.origin}`;
-      }
-    } catch (err) {
-      const elapsed = Math.round(performance.now() - t0);
-      const msg = err instanceof Error ? err.message : String(err);
-      out.textContent = `NIP-07 probe: error in ${elapsed}ms — ${msg}`;
-    }
-  }
-
 
 
   private renderCastNotice(isConnected: boolean): string {

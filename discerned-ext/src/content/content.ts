@@ -260,7 +260,7 @@ function showCastErrorToast(message: string) {
 }
 
 chrome.runtime.sendMessage({ type: 'REGISTER_LOG_TAB' }).catch(() => {});
-log(LL.NORMAL, 'Discerned content script loaded');
+log(LL.NORMAL, 'Discerned content script loaded', 'url:', window.location.href);
 
 // When the browser restores this tab from the back/forward cache, the extension
 // port is stale. Re-register so the background can relay logs again.
