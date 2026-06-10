@@ -255,7 +255,7 @@ function resolveSelection(selection: Selection | null, url: string): ResolvedSel
         const live = staticToLiveRange(sr);
         if (live && live.toString().trim().length > 0) {
           const host = shadowHostOf(sr.startContainer);
-          log(LL.NORMAL, `Discerned: using composed range from <${host?.tagName.toLowerCase() ?? 'document'}> shadow (${live.toString().length} chars)`, 'url:', url);
+          log(LL.DEBUG, `Discerned: using composed range from <${host?.tagName.toLowerCase() ?? 'document'}> shadow (${live.toString().length} chars)`, 'url:', url);
           return { kind: 'range', range: live };
         }
       }
@@ -272,7 +272,7 @@ function resolveSelection(selection: Selection | null, url: string): ResolvedSel
 
   // (3) Snapshot fallback.
   if (isSnapshotUsable(selectionSnapshot)) {
-    log(LL.NORMAL, `Discerned: using cached range from hasSelection (${selectionSnapshot.toString().length} chars)`, 'url:', url);
+    log(LL.DEBUG, `Discerned: using cached range from hasSelection (${selectionSnapshot.toString().length} chars)`, 'url:', url);
     return { kind: 'range', range: selectionSnapshot };
   }
 
@@ -325,7 +325,7 @@ function countShadowRoots(root: ParentNode = document.body): { open: number } {
 function logShadowPresence(url: string): { open: number } {
   const counts = countShadowRoots();
   if (counts.open === 0) return counts;
-  log(LL.NORMAL, `Discerned: ${counts.open} open shadow root(s) detected on page`, 'url:', url);
+  log(LL.DEBUG, `Discerned: ${counts.open} open shadow root(s) detected on page`, 'url:', url);
   return counts;
 }
 
@@ -474,7 +474,7 @@ async function extractSelection(): Promise<Capture> {
     if (tweetArticle) {
       const tweet = await extractTweet(baseFields(), 'selection', tweetArticle);
       if (tweet) {
-        log(LL.NORMAL, 'Discerned: selection on x.com — captured whole tweet as tweet-card', 'url:', url);
+        log(LL.DEBUG, 'Discerned: selection on x.com — captured whole tweet as tweet-card', 'url:', url);
         return tweet;
       }
       log(LL.DEBUG, 'Discerned: selection on x.com — Tier 0 yielded nothing, falling through', 'url:', url);
@@ -913,7 +913,7 @@ async function extractTweet(
   ${footerHtml}
 </div>`;
 
-  log(LL.NORMAL, `Discerned: tweet captured — name="${displayName}" handle="@${handle}" photos=${inlinedPhotos.filter(Boolean).length} videos=${inlinedVideoInfos.length} repost=${!!reposterHtml} quoted=${!!quotedHtml} stats=${statItems.length}`, 'url:', base.url);
+  log(LL.DEBUG, `Discerned: tweet captured — name="${displayName}" handle="@${handle}" photos=${inlinedPhotos.filter(Boolean).length} videos=${inlinedVideoInfos.length} repost=${!!reposterHtml} quoted=${!!quotedHtml} stats=${statItems.length}`, 'url:', base.url);
 
   // X appends ` https://t.co/… " / X` or just `" / X` to the page title.
   const tweetTitle = base.title
@@ -1051,7 +1051,7 @@ async function harvestEmbeddedTweets(scope: Document | Element): Promise<Map<str
   if (merged.size > 0) {
     const counts = { iframe: 0, blockquote: 0 };
     merged.forEach(d => { counts[d.source]++; });
-    log(LL.NORMAL, `harvestEmbeddedTweets: ${merged.size} tweet(s) — iframe=${counts.iframe} blockquote=${counts.blockquote}`, 'url:', window.location.href);
+    log(LL.DEBUG, `harvestEmbeddedTweets: ${merged.size} tweet(s) — iframe=${counts.iframe} blockquote=${counts.blockquote}`, 'url:', window.location.href);
   }
 
   return merged;
@@ -1258,7 +1258,7 @@ function findArticleElement(smartDetection: boolean): Element | null {
     const el = querySelectorAllDeep(document.body, sel)[0] ?? null;
     if (!el || (el.textContent ?? '').trim().length < ARTICLE_MIN_CHARS) continue;
     if (smartDetection && looksLikeContainer(el)) {
-      log(LL.NORMAL, `Discerned: skipping <${el.tagName.toLowerCase()}> (looks like container) — falling to Readability`, 'url:', window.location.href);
+      log(LL.DEBUG, `Discerned: skipping <${el.tagName.toLowerCase()}> (looks like container) — falling to Readability`, 'url:', window.location.href);
       return null;
     }
     return el;
@@ -1436,7 +1436,7 @@ function maybeExpandToFeed(el: Element): Element {
   if (parentRect.width > window.innerWidth * 0.95) return el;
   if (parent.querySelector(':scope > nav, :scope > header, :scope > footer')) return el;
 
-  log(LL.NORMAL, `Discerned: layout-finder expanded to feed parent — ${siblings.length} siblings, ${parentText} chars vs ${elText} alone`, 'url:', window.location.href);
+  log(LL.DEBUG, `Discerned: layout-finder expanded to feed parent — ${siblings.length} siblings, ${parentText} chars vs ${elText} alone`, 'url:', window.location.href);
   return parent;
 }
 
@@ -1500,7 +1500,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   // uses it): the tagger's root is more precise than a page-level <main>/<article>.
   const articleEl = siteTaggerRoot ? null : findArticleElement(opts.smartArticleDetection);
   if (articleEl) {
-    log(LL.NORMAL, `Discerned: article captured via semantic element <${articleEl.tagName.toLowerCase()}>`, 'url:', base.url);
+    log(LL.DEBUG, `Discerned: article captured via semantic element <${articleEl.tagName.toLowerCase()}>`, 'url:', base.url);
     const cleanup = markExcluded(document.body);
     const sizeCleanup = annotateLiveImageSizes(articleEl);
     const clone = deepCloneWithShadow(articleEl);
@@ -1527,7 +1527,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     log(LL.DEBUG, `Discerned: sanitiseTreeInPlace done — ${imgsBefore} imgs, ${imgsAfter} with remaining inline style, stripInlineStyles=${opts.stripInlineStyles}`, 'url:', base.url);
     log(LL.TRACE, `Discerned: sanitised bodyHtml (first 2000 chars): ${clone.innerHTML.slice(0, 2000)}`, 'url:', base.url);
     const inlined = await inlineAllImages(clone.innerHTML.trim());
-    log(LL.NORMAL, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
+    log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     return {
       ...base,
       format: 'article',
@@ -1602,14 +1602,14 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   // Tier 2: Readability — for pages without semantic article markup.
   const parsed = parseReadability();
   if (parsed) {
-    log(LL.NORMAL, 'Discerned: article captured via Readability', 'url:', base.url);
+    log(LL.DEBUG, 'Discerned: article captured via Readability', 'url:', base.url);
     let sanitized = sanitizeHtmlString(parsed.content);
     if (!/<img[\s>]/i.test(sanitized) && thumbnailUrl && isSafeImageSrc(thumbnailUrl)) {
       const alt = (parsed.title || base.title).replace(/"/g, '&quot;');
       sanitized = `<figure><img src="${thumbnailUrl}" alt="${alt}"></figure>\n${sanitized}`;
     }
     const inlined = await inlineAllImages(sanitized);
-    log(LL.NORMAL, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
+    log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     return {
       ...base,
       format: 'article',
@@ -2537,12 +2537,12 @@ function applySiteTagger(): boolean {
   const host = testHostOverride ?? window.location.hostname;
   for (const t of SITE_TAGGERS) {
     if (t.match(host)) {
-      log(LL.NORMAL, `Discerned: applying ${t.name} site tagger`, 'url:', window.location.href);
+      log(LL.DEBUG, `Discerned: applying ${t.name} site tagger`, 'url:', window.location.href);
       try {
         const root = t.tag(document);
         siteTaggerRoot = root ?? null;
         siteTaggerPostClone = t.postClone ?? null;
-        if (root) log(LL.NORMAL, `Discerned: ${t.name} tagger returned narrowed root <${root.tagName.toLowerCase()}>`, 'url:', window.location.href);
+        if (root) log(LL.DEBUG, `Discerned: ${t.name} tagger returned narrowed root <${root.tagName.toLowerCase()}>`, 'url:', window.location.href);
         return true;
       } catch (err) {
         log(LL.WARN, `Discerned: ${t.name} tagger failed:`, err);
@@ -2814,7 +2814,7 @@ function stripPageChrome(root: Element): void {
   const dropped = Array.from(root.querySelectorAll(STRIP_SELECTOR));
   dropped.forEach(el => el.remove());
   if (dropped.length > 0) {
-    log(LL.NORMAL, `Discerned: stripPageChrome removed ${dropped.length} landmark element(s)`, 'url:', window.location.href);
+    log(LL.DEBUG, `Discerned: stripPageChrome removed ${dropped.length} landmark element(s)`, 'url:', window.location.href);
   }
 }
 
