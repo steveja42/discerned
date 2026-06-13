@@ -12,6 +12,7 @@ import { STORAGE_KEYS } from '@/shared/types';
 import { LL, log } from '@/shared/logger';
 import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
 import { showArticleHighlight, hideArticleHighlight } from './highlighter';
+import { detectAuthState } from '@/shared/nostr/auth';
 import { npubEncode } from 'nostr-tools/nip19';
 
 export interface OverlayShowOptions {
@@ -67,6 +68,7 @@ export class DiscernedOverlay {
   private previewShadow: ShadowRoot | null = null;
   private outsideClickHandler: ((e: PointerEvent) => void) | null = null;
   private mountObserver: MutationObserver | null = null;
+  private authStorageListener: Parameters<typeof chrome.storage.onChanged.addListener>[0] | null = null;
 
   constructor() {
     this.host = document.createElement('div');
@@ -102,6 +104,10 @@ export class DiscernedOverlay {
       this.mountObserver.disconnect();
       this.mountObserver = null;
     }
+    if (this.authStorageListener) {
+      chrome.storage.onChanged.removeListener(this.authStorageListener);
+      this.authStorageListener = null;
+    }
     hideArticleHighlight();
     this.removePreview();
   }
@@ -111,7 +117,23 @@ export class DiscernedOverlay {
     this.format = options.initialFormat;
     this.hasSelection = options.hasSelection;
     this.authState = options.authState;
-    this.view = options.authState.type === 'guest' && !options.nudgeDismissed ? 'gate' : 'main';
+
+    // Refresh authState + re-render when the background persists a change
+    // (e.g. user completed web-app sign-in in another tab → pubkey arrives).
+    // Important: the overlay can stay open for minutes while the user signs in.
+    this.authStorageListener = (changes, area) => {
+      if (area !== 'local') return;
+      const next = changes[STORAGE_KEYS.AUTH_STATE]?.newValue as AuthState | undefined;
+      if (!next) return;
+      this.authState = next;
+      this.render();
+    };
+    chrome.storage.onChanged.addListener(this.authStorageListener);
+
+    const needsConnectPrompt =
+      options.authState.type === 'guest' ||
+      (options.authState.type === 'pro' && !options.authState.pubkey);
+    this.view = needsConnectPrompt && !options.nudgeDismissed ? 'gate' : 'main';
     this.note = '';
     // Initial render immediately so the user sees the panel chrome, then
     // load persisted evaluation defaults and re-render main (if needed).
@@ -147,7 +169,7 @@ export class DiscernedOverlay {
         this.customCategories = persisted.length > 0 ? persisted : this.customCategories;
       } catch { /* non-fatal; categories stay in-memory */ }
 
-      if (this.authState.type === 'guest') this.publishMode = 'local';
+      if (!this.isConnected()) this.publishMode = 'local';
 
       // Re-render main view to reflect loaded state (only if main view is active).
       if (this.view === 'main') this.render();
@@ -307,6 +329,17 @@ export class DiscernedOverlay {
   // ── Gate (first-run for guests) ────────────────────────────────────────────
 
   private renderGate() {
+    const signerDetected = this.authState.type === 'pro' && !this.authState.pubkey;
+    const icon = signerDetected ? '🔑' : '🌐';
+    const title = signerDetected ? 'Signing extension detected' : 'Local Only';
+    const desc = signerDetected
+      ? `We found your Nostr signing extension. Sign in to broadcast your clips publicly,
+         build a verifiable reputation, and join the Open Social Web. Or stay local-only —
+         your clips will be stored on this device.`
+      : `Your clips and evaluations will be stored locally. Connect an identity to also broadcast publicly,
+         build a verifiable reputation, and be part of the Open Social Web (Nostr).`;
+    const primaryLabel = signerDetected ? 'Sign in →' : 'Connect an identity →';
+
     this.shadow.innerHTML = `
       <style>${this.getStyles()}</style>
       <div class="discerned-root panel">
@@ -317,23 +350,31 @@ export class DiscernedOverlay {
           </div>
         </header>
         <div class="panel-body gate-body">
-          <div class="gate-icon">🌐</div>
-          <p class="gate-title">Local Only</p>
-          <p class="gate-desc">
-            Your clips and evaluations will be stored locally. Connect an identity to also broadcast publicly,
-            build a verifiable reputation, and be part of the Open Social Web (Nostr).
-          </p>
-          <button class="btn btn-primary gate-btn" id="gate-connect">Connect an identity →</button>
+          <div class="gate-icon">${icon}</div>
+          <p class="gate-title">${title}</p>
+          <p class="gate-desc">${desc}</p>
+          <button class="btn btn-primary gate-btn" id="gate-connect">${primaryLabel}</button>
           <button class="btn btn-ghost gate-btn" id="gate-clip-only">Store locally (no broadcast)</button>
         </div>
       </div>
     `;
     this.shadow.getElementById('close')?.addEventListener('click', () => this.hide());
     this.shadow.getElementById('gate-connect')?.addEventListener('click', () => {
-      this.identityBackTarget = 'gate';
-      this.identityStep = 'choose';
-      this.view = 'identity';
-      this.render();
+      if (signerDetected) {
+        // Skip the chooser — open the web-app sign-in tab directly. Dismiss
+        // the nudge so we don't re-prompt on every activation while the user
+        // is finishing sign-in on the web app.
+        void chrome.runtime.sendMessage({ type: 'OPEN_HOME', autoSignin: true });
+        void chrome.runtime.sendMessage({ type: 'DISMISS_OVERLAY_NUDGE' });
+        this.view = 'main';
+        this.render();
+        void this.refreshCapture();
+      } else {
+        this.identityBackTarget = 'gate';
+        this.identityStep = 'choose';
+        this.view = 'identity';
+        this.render();
+      }
     });
     this.shadow.getElementById('gate-clip-only')?.addEventListener('click', () => {
       this.view = 'main';
@@ -355,6 +396,14 @@ export class DiscernedOverlay {
 
   /** First screen after "Connect an identity": pick existing vs. create new. */
   private renderIdentityChooser() {
+    const signerDetected = this.authState.type === 'pro' && !this.authState.pubkey;
+    const signinCard = signerDetected ? `
+          <button class="choice-card" id="choice-signin" type="button">
+            <div class="choice-title">Sign in →</div>
+            <div class="choice-desc">Signing extension detected. Sign in to Discerned to start casting.</div>
+          </button>
+    ` : '';
+
     this.shadow.innerHTML = `
       <style>${this.getStyles()}</style>
       <div class="discerned-root panel">
@@ -366,6 +415,7 @@ export class DiscernedOverlay {
           </div>
         </header>
         <div class="panel-body identity-body">
+          ${signinCard}
           <button class="choice-card" id="choice-existing" type="button">
             <div class="choice-title">Connect existing identity →</div>
             <div class="choice-desc">Already on Nostr? Use a signing extension, remote signer, or your private key.</div>
@@ -385,6 +435,13 @@ export class DiscernedOverlay {
       this.view = this.identityBackTarget;
       this.render();
       if (this.view === 'main' && !this.capture) void this.refreshCapture();
+    });
+    this.shadow.getElementById('choice-signin')?.addEventListener('click', () => {
+      void chrome.runtime.sendMessage({ type: 'OPEN_HOME', autoSignin: true });
+      void chrome.runtime.sendMessage({ type: 'DISMISS_OVERLAY_NUDGE' });
+      this.view = 'main';
+      this.render();
+      void this.refreshCapture();
     });
     this.shadow.getElementById('choice-existing')?.addEventListener('click', () => {
       this.identityStep = 'existing';
@@ -454,11 +511,22 @@ export class DiscernedOverlay {
     const tab = (id: 'nip07' | 'nip46' | 'nsec') => activeTab === id ? ' active' : '';
     const panelHidden = (id: 'nip07' | 'nip46' | 'nsec') => activeTab === id ? '' : ' style="display:none"';
 
-    const nip07Panel = nip07Detected
+    const nip07HasPubkey = this.authState.type === 'pro' && !!this.authState.pubkey;
+    const nip07Panel = nip07HasPubkey
       ? `
-            <p class="identity-status ok"><span class="status-dot ok"></span>Signing extension detected — you're connected.</p>
-            <p class="panel-desc">Discerned will use your browser signing extension to sign casts. No key is stored here.</p>
+            <p class="identity-status ok"><span class="status-dot ok"></span>Signing extension connected.</p>
+            <p class="panel-desc">Discerned uses your browser signing extension to sign casts. No key is stored here.</p>
             <button class="btn btn-primary" id="btn-use-nip07" type="button">Continue</button>
+            <p class="identity-status" id="nip07-status"></p>
+          `
+      : nip07Detected
+      ? `
+            <p class="identity-status ok"><span class="status-dot ok"></span>Signing extension detected.</p>
+            <p class="panel-desc">
+              To finish connecting, sign in to Discerned. This is one time only — your signing extension
+              will then be used to sign casts. No key is stored here.
+            </p>
+            <button class="btn btn-primary" id="btn-signin-nip07" type="button">Sign in →</button>
             <p class="identity-status" id="nip07-status"></p>
           `
       : `
@@ -557,8 +625,19 @@ export class DiscernedOverlay {
       }
     });
 
-    // NIP-07 already detected — "Continue" just dismisses to the main view.
+    // NIP-07 already detected AND we have a pubkey — "Continue" dismisses to main.
     this.shadow.getElementById('btn-use-nip07')?.addEventListener('click', () => {
+      this.view = 'main';
+      this.render();
+      void this.refreshCapture();
+    });
+
+    // NIP-07 detected but no pubkey — kick off web-app sign-in. Dismiss the
+    // overlay so the user can complete sign-in in the discerned tab; the
+    // storage listener will refresh the cached auth state for next activation.
+    this.shadow.getElementById('btn-signin-nip07')?.addEventListener('click', () => {
+      void chrome.runtime.sendMessage({ type: 'OPEN_HOME', autoSignin: true });
+      void chrome.runtime.sendMessage({ type: 'DISMISS_OVERLAY_NUDGE' });
       this.view = 'main';
       this.render();
       void this.refreshCapture();
@@ -726,11 +805,8 @@ export class DiscernedOverlay {
         : '<div class="card-value">Signing extension detected — sign in to connect</div>';
       const noPubkeyCta = auth.pubkey ? '' : `
         <div class="card-desc" style="margin-top:8px">
-          To finish connecting, sign in on the Discerned web app. One click
-          there approves your signing extension for discerned.online and
-          you won't be asked again.
+          Open Discerned in any tab to sign in. You'll only be asked once.
         </div>
-        <button class="btn btn-secondary" id="settings-open-webapp" type="button" style="margin-top:8px">Open Discerned web app →</button>
       `;
       const diagnostic = __DISCERNED_TEST_BUILD__ ? `
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -847,10 +923,6 @@ export class DiscernedOverlay {
       this.render();
     });
 
-    this.shadow.getElementById('settings-open-webapp')?.addEventListener('click', () => {
-      void chrome.runtime.sendMessage({ type: 'OPEN_HOME', autoSignin: true });
-    });
-
     if (__DISCERNED_TEST_BUILD__) {
       this.shadow.getElementById('settings-publish-kind0')?.addEventListener('click', async () => {
         const btn = this.shadow.getElementById('settings-publish-kind0') as HTMLButtonElement | null;
@@ -875,6 +947,15 @@ export class DiscernedOverlay {
 
     this.shadow.getElementById('settings-disconnect')?.addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'DISCONNECT_AUTH' });
+      // Disconnect resets background to guest. Re-probe NIP-07 immediately so
+      // the user isn't told "no signing extension" when one is still installed
+      // — the background needs a fresh NIP07_DETECTED to transition guest→pro.
+      try {
+        const detected = await detectAuthState();
+        if (detected.type === 'pro') {
+          await chrome.runtime.sendMessage({ type: 'NIP07_DETECTED', hasNIP07: true }).catch(() => {});
+        }
+      } catch { /* non-fatal */ }
       const refreshed = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }).catch(() => null);
       if (refreshed?.success && refreshed.data) this.authState = refreshed.data as AuthState;
       this.render();
@@ -981,7 +1062,7 @@ export class DiscernedOverlay {
 
   private renderMain() {
     if (!this.opts) return;
-    const isConnected = this.authState.type !== 'guest';
+    const isConnected = this.isConnected();
 
     const formats: Array<{ id: ClipFormat; label: string; icon: string; disabled?: boolean }> = [
       { id: 'selection',          label: 'Selection',  icon: '✂',  disabled: !this.hasSelection },
@@ -1091,7 +1172,7 @@ export class DiscernedOverlay {
   }
 
   private attachMainListeners() {
-    const isConnected = this.authState.type !== 'guest';
+    const isConnected = this.isConnected();
 
     this.shadow.getElementById('close')?.addEventListener('click', () => this.hide());
     this.shadow.getElementById('open-settings')?.addEventListener('click', () => {
@@ -1234,7 +1315,7 @@ export class DiscernedOverlay {
     this.capturing = false;
     this.updatePreview();
     const noticeEl = this.shadow.getElementById('cast-notice');
-    if (noticeEl) noticeEl.innerHTML = this.renderCastNotice(this.authState.type !== 'guest');
+    if (noticeEl) noticeEl.innerHTML = this.renderCastNotice(this.isConnected());
     this.validateForm();
   }
 
@@ -1247,6 +1328,16 @@ export class DiscernedOverlay {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  // A NIP-07 signer can be detected (type='pro') without a pubkey — the user
+  // has the wallet installed but hasn't completed Sign In on the web app, so
+  // casts will fail. Treat that as not-connected; nip46/nsec always have a pubkey.
+  private isConnected(): boolean {
+    const a = this.authState;
+    if (a.type === 'guest') return false;
+    if (a.type === 'pro') return !!a.pubkey;
+    return true;
   }
 
   /**
@@ -1466,7 +1557,7 @@ export class DiscernedOverlay {
 
   private async handleClipAction() {
     if (!this.opts || !this.capture) return;
-    const isConnected = this.authState.type !== 'guest';
+    const isConnected = this.isConnected();
     const mode: PublishMode = isConnected ? this.publishMode : 'local';
     const evaluation = this.getEvaluation();
     const noteEl = this.shadow.getElementById('note-input') as HTMLTextAreaElement | null;

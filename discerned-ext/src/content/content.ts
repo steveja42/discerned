@@ -124,6 +124,20 @@ async function handleActivation() {
   const selectionPresent = hasSelection();
   const initialFormat = await pickInitialFormat(selectionPresent);
 
+  // Re-probe page for window.nostr on every activation. The MAIN-world bridge
+  // (nip07-bridge.ts) is injected at document_start on <all_urls>, so it's
+  // available here. The wallet may have appeared since the last activation,
+  // or the user may have just disconnected and we need to re-transition
+  // guest→pro before the GET_AUTH_STATE read below.
+  let detected: AuthState = { type: 'guest' };
+  try { detected = await detectAuthState(); } catch { /* non-fatal */ }
+  if (detected.type === 'pro' && isContextValid()) {
+    await chrome.runtime.sendMessage({
+      type: 'NIP07_DETECTED',
+      hasNIP07: true,
+    }).catch(() => {});
+  }
+
   let nudgeDismissed = false;
   try {
     const stored = await chrome.storage.local.get(STORAGE_KEYS.OVERLAY_NUDGE_DISMISSED);
