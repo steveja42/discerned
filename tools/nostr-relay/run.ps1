@@ -7,10 +7,50 @@
 # committed config.toml targets the NATIVE case (127.0.0.1:7777). For containers we
 # generate a temp config that listens on 0.0.0.0:8080 so the "-p 7777:8080" host
 # mapping can reach it, keeping config.toml as the single human-edited source.
+#
+# Pass -Yes (or set DISCERNED_RELAY_YES=1) to skip the confirmation prompt. The VS Code
+# "dev: relay" task passes -Yes so it never blocks the parallel "dev: both" launch.
+
+param([switch]$Yes)
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $here
+
+# Confirm before starting. Prompt only when a real interactive console is attached;
+# when launched non-interactively (e.g. by a VS Code task or CI), auto-continue so we
+# don't hang waiting on input that can never arrive.
+if (-not $Yes -and $env:DISCERNED_RELAY_YES -ne '1') {
+  $interactive = -not [System.Console]::IsInputRedirected -and $Host.UI.RawUI -ne $null
+  if ($interactive) {
+    $answer = Read-Host 'Starting local relay, continue? [Y/n]'
+    if ($answer -and $answer.Trim() -notmatch '^(y|yes)$') {
+      Write-Host 'Aborted.'
+      exit 0
+    }
+  } else {
+    Write-Host 'Starting local relay (non-interactive: auto-continue).'
+  }
+}
+
+# Idempotent: if something is already serving 127.0.0.1:7777, a relay is up (or the port
+# is taken) - exit cleanly instead of tearing down the running one and racing for the
+# port. Makes a second run (the VS Code task fired twice, or "pnpm relay:local" alongside
+# the task) a harmless no-op on both the native and container paths. Probe with a short
+# TcpClient connect rather than Test-NetConnection (faster, no timeout noise).
+$client = New-Object System.Net.Sockets.TcpClient
+try {
+  $connect = $client.BeginConnect('127.0.0.1', 7777, $null, $null)
+  if ($connect.AsyncWaitHandle.WaitOne(500) -and $client.Connected) {
+    Write-Host 'Local relay already running on ws://localhost:7777 - nothing to do.'
+    exit 0
+  }
+} catch {
+  # Connect failed -> nothing listening; fall through and start the relay.
+} finally {
+  $client.Close()
+}
+
 New-Item -ItemType Directory -Force -Path (Join-Path $here 'data') | Out-Null
 
 # Log level: show casts + subscription activity, without WAL-checkpoint noise.
