@@ -30,8 +30,22 @@
       "problemMatcher": []
     },
     {
+      "label": "dev: relay",
+      "type": "shell",
+      "command": "powershell -ExecutionPolicy Bypass -File tools/nostr-relay/run.ps1 -Yes",
+      "options": { "cwd": "${workspaceFolder:📁 Monorepo root}" },
+      "isBackground": true,
+      "presentation": {
+        "group": "dev",
+        "panel": "dedicated",
+        "reveal": "always",
+        "echo": true
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "dev: both",
-      "dependsOn": ["dev: extension", "dev: web"],
+      "dependsOn": ["dev: extension", "dev: web", "dev: relay"],
       "dependsOrder": "parallel",
       "problemMatcher": []
     }
