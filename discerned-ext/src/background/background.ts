@@ -192,10 +192,13 @@ async function restoreAuthState(): Promise<void> {
 
   if (saved?.type === 'nip46') {
     currentAuthState = saved;
+    log(LL.NORMAL, '[auth] restored nip46 pubkey:', saved.remotePubkey?.slice(0, 8));
   } else if (saved?.type === 'nsec') {
     currentAuthState = saved;
+    log(LL.NORMAL, '[auth] restored nsec pubkey:', saved.pubkey?.slice(0, 8));
   } else if (saved?.type === 'pro') {
     currentAuthState = saved;
+    log(LL.NORMAL, '[auth] restored nip07/pro pubkey:', saved.pubkey?.slice(0, 8) ?? '(pending)');
     const session = await chrome.storage.session.get(['signingTabId', 'signingTabIsOurs']);
     const storedTabId = session['signingTabId'];
     if (typeof storedTabId === 'number') {
@@ -205,6 +208,7 @@ async function restoreAuthState(): Promise<void> {
   } else {
     currentAuthState = { type: 'guest' };
     if (!guestPrivateKey) guestPrivateKey = generateSecretKey();
+    log(LL.NORMAL, '[auth] no stored auth — guest ephemeral key generated');
   }
   log(LL.DEBUG, 'Discerned auth state:', currentAuthState.type);
 }
@@ -353,10 +357,11 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       if (message.hasNIP07 && currentAuthState.type === 'guest') {
         currentAuthState = { type: 'pro', hasNIP07: true, pubkey: message.pubkey };
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
-        log(LL.NORMAL, 'NIP-07 extension detected — switching to pro mode');
+        log(LL.NORMAL, '[auth] NIP-07 detected — pro mode, pubkey:', message.pubkey?.slice(0, 8) ?? '(pending)');
       } else if (message.hasNIP07 && currentAuthState.type === 'pro' && message.pubkey && !currentAuthState.pubkey) {
         currentAuthState = { ...currentAuthState, pubkey: message.pubkey };
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
+        log(LL.NORMAL, '[auth] NIP-07 pubkey resolved:', message.pubkey.slice(0, 8));
       }
       return { success: true };
 
@@ -465,6 +470,7 @@ async function handleConnectNip46(bunkerUri: string): Promise<BackgroundResponse
       [STORAGE_KEYS.AUTH_STATE]: newState,
       [STORAGE_KEYS.NIP46_CLIENT_KEY]: result.clientKeyHex,
     });
+    log(LL.NORMAL, '[auth] nip46 connected, pubkey:', result.pubkey.slice(0, 8));
     return { success: true, data: { pubkey: result.pubkey } };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Connection failed' };
@@ -487,6 +493,7 @@ async function handleConnectNsec(rawNsec: string, pin: string): Promise<Backgrou
       [STORAGE_KEYS.AUTH_STATE]: newState,
       [STORAGE_KEYS.NSEC_ENCRYPTED]: ncryptsec,
     });
+    log(LL.NORMAL, '[auth] nsec connected, pubkey:', pubkeyHex.slice(0, 8));
     return { success: true, data: { pubkey: pubkeyHex } };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to save account key' };

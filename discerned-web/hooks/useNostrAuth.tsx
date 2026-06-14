@@ -35,7 +35,10 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     const stored = loadStoredPubkey();
-    if (stored) setAuth({ status: 'readonly', pubkey: stored, source: 'manual' });
+    if (stored) {
+      log(LL.NORMAL, '[auth] restored pubkey from localStorage:', stored.slice(0, 8));
+      setAuth({ status: 'readonly', pubkey: stored, source: 'manual' });
+    }
   }, []);
 
   useEffect(() => {
@@ -69,6 +72,7 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
         signedIn = true;
         nip07GetPubkey().then((pubkey) => {
           if (cancelled) return;
+          log(LL.NORMAL, '[auth] nip07 auto-signin pubkey:', pubkey.slice(0, 8));
           storePubkey(pubkey);
           setAuth({ status: 'connected', pubkey, source: 'nip07' });
           sendPubkeyToExtension(pubkey);
@@ -139,6 +143,7 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
 
   const signInNip07 = useCallback(async () => {
     const pubkey = await nip07GetPubkey();
+    log(LL.NORMAL, '[auth] nip07 sign-in pubkey:', pubkey.slice(0, 8));
     storePubkey(pubkey);
     setAuth({ status: 'connected', pubkey, source: 'nip07' });
     // Share the pubkey with the extension (if installed) so it can sign
@@ -147,6 +152,7 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInPubkey = useCallback((pubkey: string) => {
+    log(LL.NORMAL, '[auth] manual pubkey sign-in:', pubkey.slice(0, 8));
     storePubkey(pubkey);
     setAuth({ status: 'readonly', pubkey, source: 'manual' });
   }, []);
@@ -163,7 +169,7 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
         log(LL.DEBUG, '[useNostrAuth] setBridgeAuth ignored — already connected');
         return prev;
       }
-      log(LL.DEBUG, '[useNostrAuth] setBridgeAuth → readonly/bridge');
+      log(LL.NORMAL, '[auth] bridge pubkey:', pubkey.slice(0, 8));
       return { status: 'readonly', pubkey, source: 'bridge' };
     });
   }, []);

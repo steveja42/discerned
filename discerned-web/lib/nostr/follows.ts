@@ -5,6 +5,7 @@
 
 import { SimplePool, type Event, type Filter } from 'nostr-tools';
 import { ACTIVE_RELAYS } from '@/lib/constants';
+import { LL, log } from '@/lib/logger';
 
 export interface FollowProfile {
   pubkey: string;
@@ -27,6 +28,7 @@ export function subscribeFollowList(
 ): () => void {
   const pool = new SimplePool();
   const relays = [...ACTIVE_RELAYS];
+  log(LL.NORMAL, '[nostr] subscribeFollowList connecting to', relays, 'for', pubkey.slice(0, 8));
   let closed = false;
   const subs: { close: () => void }[] = [];
 

@@ -4,17 +4,26 @@
 
 import { SimplePool, type Event, type Filter } from 'nostr-tools';
 import { ACTIVE_RELAYS } from '@/lib/constants';
+import { LL, log } from '@/lib/logger';
 
 export function subscribeFeed(
   onEvent: (e: Event) => void,
   onEose: () => void,
 ): () => void {
+  const relays = [...ACTIVE_RELAYS];
+  log(LL.NORMAL, '[nostr] subscribeFeed connecting to', relays);
   const pool = new SimplePool();
   const filter: Filter = { kinds: [1], '#t': ['discerned'], limit: 50 };
   const sub = pool.subscribeMany(
-    [...ACTIVE_RELAYS],
+    relays,
     filter,
-    { onevent: onEvent, oneose: onEose },
+    {
+      onevent: onEvent,
+      oneose: () => {
+        log(LL.NORMAL, '[nostr] subscribeFeed EOSE from', relays);
+        onEose();
+      },
+    },
   );
 
   let closed = false;
