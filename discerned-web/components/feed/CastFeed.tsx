@@ -293,17 +293,6 @@ export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQ
           )}
         </div>
       </div>
-
-      <div className="sov-strip">
-        <span className="item"><span className="ok-dot" />Local-first · IndexedDB</span>
-        <span className="item"><span className="pulse-dot" />Connected to <span className="relay-count">3 relays</span></span>
-        <span className="item">
-          <Icon name="github" /> Extension on GitHub
-        </span>
-        <span className="spacer" />
-        <span className="item"><a>Export NIP-23</a></span>
-        <span className="item"><a>Public key visible</a></span>
-      </div>
     </main>
   );
 
