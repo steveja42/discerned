@@ -1186,9 +1186,9 @@ export class DiscernedOverlay {
           <div class="footer-meta">
             <div class="nostr-status${isConnected && !needsUnlock ? ' has-tip' : ''}" id="nostr-status">
               <span class="status-dot${isConnected ? ' connected' : ''}"></span>
-              <span class="status-text">${needsUnlock ? 'Connected · 🔒 Locked' : isConnected ? 'Connected to Nostr' : 'Local only'}</span>
+              <span class="status-text">${needsUnlock ? 'Connected · Locked' : isConnected ? 'Connected to Nostr' : 'Local only'}</span>
               ${!isConnected ? '<button class="link-btn" id="nostr-signup-link">Connect →</button>' : ''}
-              ${needsUnlock ? '<button class="link-btn" id="nostr-unlock-link">Unlock →</button>' : ''}
+              ${needsUnlock ? `<button class="link-btn" id="nostr-unlock-link"${this.publishMode === 'local' ? ' style="display:none"' : ''}>Unlock →</button>` : ''}
               ${isConnected && !needsUnlock ? '<span class="nostr-tip" id="nostr-tip" role="tooltip"></span>' : ''}
             </div>
             <div class="inline-unlock" id="inline-unlock" style="display:none">
@@ -1202,21 +1202,19 @@ export class DiscernedOverlay {
                 <button class="slider-seg${this.publishMode === 'cast' ? ' active' : ''}"
                         id="seg-cast" role="radio" aria-checked="${this.publishMode === 'cast'}"
                         ${!isConnected ? 'disabled' : ''}
-                        title="Publish to Nostr — your clip is public and signed with your identity">📡 Cast</button>
+                        title="Publish to Nostr — your clip is public and signed with your identity">${DiscernedOverlay.ICON_CAST}Cast</button>
                 <button class="slider-seg${this.publishMode === 'both' ? ' active' : ''}"
                         id="seg-both" role="radio" aria-checked="${this.publishMode === 'both'}"
                         ${!isConnected ? 'disabled' : ''}
-                        title="Save privately and publish to Nostr — you keep a local copy too">🔒📡 Both</button>
+                        title="Save locally and publish to Nostr — your clip is public and signed with your identity">${DiscernedOverlay.ICON_CLIP}${DiscernedOverlay.ICON_CAST}Both</button>
                 <button class="slider-seg${this.publishMode === 'local' ? ' active' : ''}"
                         id="seg-local" role="radio" aria-checked="${this.publishMode === 'local'}"
-                        title="Keep private — stored only on this device, never published">🔒 Local</button>
+                        title="Keep local — stored only on this device, not published">${DiscernedOverlay.ICON_CLIP}Clip</button>
               </div>
             </div>
           </div>
           <button class="btn btn-clip" id="clip" disabled>
-            <span class="icon" id="clip-icon">${this.getClipIcon()}</span>
-            <span class="label">CLIP</span>
-            <span class="sublabel" id="clip-sublabel">${this.getClipSublabel()}</span>
+            <span class="label" id="clip-label">${this.getClipLabel()}</span>
           </button>
         </footer>
 
@@ -1291,8 +1289,8 @@ export class DiscernedOverlay {
 
     // ── Publish-mode slider ───────────────────────────────────────────────────
     const pill = this.shadow.getElementById('slider-pill');
-    const clipIconEl  = this.shadow.getElementById('clip-icon');
-    const clipSublabelEl = this.shadow.getElementById('clip-sublabel');
+    const clipLabelEl = this.shadow.getElementById('clip-label');
+    const unlockLinkEl = this.shadow.getElementById('nostr-unlock-link');
     const order: PublishMode[] = ['cast', 'both', 'local'];
 
     const updateSlider = (suppressAnim = false) => {
@@ -1307,8 +1305,9 @@ export class DiscernedOverlay {
         seg.classList.toggle('active', segMode === this.publishMode);
         seg.setAttribute('aria-checked', String(segMode === this.publishMode));
       });
-      if (clipIconEl)     clipIconEl.textContent     = this.getClipIcon();
-      if (clipSublabelEl) clipSublabelEl.textContent = this.getClipSublabel();
+      if (clipLabelEl) clipLabelEl.textContent = this.getClipLabel();
+      // Clip-only mode never signs, so unlocking the stored key is pointless — hide the prompt.
+      if (unlockLinkEl) unlockLinkEl.style.display = this.publishMode === 'local' ? 'none' : '';
       const noticeEl = this.shadow.getElementById('cast-notice');
       if (noticeEl) noticeEl.innerHTML = this.renderCastNotice(isConnected);
     };
@@ -1340,7 +1339,13 @@ export class DiscernedOverlay {
     const submitInlineUnlock = () => { void this.unlockKeyInline(); };
     this.shadow.getElementById('inline-unlock-btn')?.addEventListener('click', submitInlineUnlock);
     inlinePin?.addEventListener('keydown', (e) => {
-      if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); submitInlineUnlock(); }
+      const key = (e as KeyboardEvent).key;
+      if (key === 'Enter') { e.preventDefault(); submitInlineUnlock(); }
+      else if (key === 'Escape') {
+        e.preventDefault();
+        const box = this.shadow.getElementById('inline-unlock');
+        if (box) box.style.display = 'none';
+      }
     });
 
     this.shadow.getElementById('clip')?.addEventListener('click', () => this.handleClipAction());
@@ -1841,17 +1846,20 @@ export class DiscernedOverlay {
     setTimeout(() => { loading.style.display = 'none'; }, 2500);
   }
 
-  private getClipIcon(): string {
-    if (this.publishMode === 'local') return '🔒';
-    if (this.publishMode === 'cast')  return '📡';
-    return '🔒📡';
+  private getClipLabel(): string {
+    if (this.publishMode === 'cast') return 'CAST';
+    if (this.publishMode === 'both') return 'CLIP & CAST';
+    return 'CLIP';
   }
 
-  private getClipSublabel(): string {
-    if (this.publishMode === 'local') return 'Private storage';
-    if (this.publishMode === 'cast')  return 'Nostr only';
-    return 'Clip & broadcast';
-  }
+  // Monochrome line icons for the publish-mode slider. Stroke uses currentColor so
+  // they follow the segment text colour (muted when inactive, white when active).
+  private static readonly ICON_CAST =
+    `<svg class="seg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<path d="M4.9 19.1A10 10 0 0 1 4.9 5M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M19.1 4.9a10 10 0 0 1 0 14.2"/><circle cx="12" cy="12" r="1.5"/></svg>`;
+  private static readonly ICON_CLIP =
+    `<svg class="seg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<path d="M21 11.5l-8.8 8.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>`;
 
   // ── Styles ─────────────────────────────────────────────────────────────────
 
@@ -2053,12 +2061,17 @@ export class DiscernedOverlay {
       .notice.warn { color: #8a5a00; }
 
       /* Footer meta */
-      .footer-meta { display: flex; align-items: center; justify-content: space-between; }
-      .nostr-status { display: flex; align-items: center; gap: 6px; }
+      /* Top-align so the status row stays put when the Unlock link wraps below it
+         (it grows downward instead of recentering the whole column). */
+      .footer-meta { display: flex; align-items: flex-start; justify-content: space-between; }
+      .nostr-status { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin-top: -3px; }
       .nostr-status.has-tip { position: relative; cursor: default; }
       .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p-ink-4); flex-shrink: 0; }
       .status-dot.connected { background: #7c3aed; }
-      .status-text { font-size: 11px; color: var(--p-ink-3); }
+      .status-text { font-size: 11px; color: var(--p-ink-3); white-space: nowrap; }
+      /* Keep dot + status text on one line; push the Unlock link to its own line beneath,
+         right-aligned (so its right edge sits under the end of "Locked") and pulled up a bit. */
+      #nostr-unlock-link { flex-basis: 100%; text-align: right; margin-top: -2px; padding-right: 1em; }
       /* Hover tooltip for the connected status (npub slice + relay count). */
       .nostr-tip {
         position: absolute; bottom: calc(100% + 7px); left: 0;
@@ -2075,11 +2088,13 @@ export class DiscernedOverlay {
         content: ''; position: absolute; top: 100%; left: 10px;
         border: 4px solid transparent; border-top-color: rgba(30, 41, 59, 0.96);
       }
-      .publish-mode-slider { display: flex; align-items: center; }
+      /* Nudge up so its centre lines up with the (now top-aligned) status row,
+         and pull right toward the panel edge a touch. */
+      .publish-mode-slider { display: flex; align-items: center; margin-top: -11px; margin-right: -6px; }
       .slider-track {
         position: relative; display: grid; grid-template-columns: repeat(3, 1fr);
         background: var(--p-surface-2); border: 1px solid var(--p-rule); border-radius: 8px;
-        overflow: hidden; height: 28px; width: 174px;
+        overflow: hidden; height: 37px; width: 232px;
       }
       .slider-pill {
         position: absolute; top: 2px; bottom: 2px; left: 2px;
@@ -2090,10 +2105,13 @@ export class DiscernedOverlay {
       }
       .slider-seg {
         position: relative; z-index: 1; background: none; border: none;
-        color: var(--p-ink-3); font-size: 10px; font-weight: 500; cursor: pointer;
+        color: var(--p-ink-3); font-size: 13px; font-weight: 500; cursor: pointer;
         padding: 0 4px; display: flex; align-items: center; justify-content: center;
-        gap: 2px; white-space: nowrap; transition: color 0.15s; font-family: inherit;
+        gap: 4px; white-space: nowrap; transition: color 0.15s; font-family: inherit;
       }
+      .slider-seg .seg-icon { width: 15px; height: 15px; flex-shrink: 0; }
+      /* On "Both" two icons sit side by side — pull them tighter than the icon→label gap. */
+      #seg-both .seg-icon + .seg-icon { margin-left: -2px; }
       .slider-seg:hover:not(:disabled) { color: var(--p-ink); }
       .slider-seg.active { color: var(--p-on-accent); font-weight: 600; }
       .slider-seg:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -2219,16 +2237,15 @@ export class DiscernedOverlay {
       .btn-primary { background: var(--p-cta-bg); color: var(--p-cta-ink); }
       .btn-primary:not(:disabled):hover { background: #1e40af; }
       .btn-clip {
-        width: 100%;
+        width: 33.333%; margin: 0 auto;
+        flex-direction: row; justify-content: center; padding: 9px 14px;
         background: var(--p-cta-bg); color: var(--p-cta-ink);
         box-shadow: 0 2px 8px var(--p-cta-shadow);
       }
       .btn-clip:not(:disabled):hover { background: #1e40af; }
       .btn-ghost { background: var(--p-surface); color: var(--p-ink-3); border: 1px solid var(--p-rule); }
       .btn-ghost:hover { background: var(--p-surface-2); color: var(--p-ink); }
-      .btn .icon { font-size: 22px; }
       .btn .label { font-size: 13px; }
-      .btn .sublabel { font-size: 11px; opacity: 0.7; font-weight: 400; }
 
       /* Gate */
       .gate-body {
