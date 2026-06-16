@@ -31,18 +31,20 @@ No CSS framework — all styling is plain CSS custom properties defined in `app/
 
 ## Design system
 
-All tokens live in `app/globals.css` under `body.style-editorial`. Do not add inline colors or hardcoded hex values — always use CSS variables. Key tokens:
+All tokens live in `app/globals.css` under `body.style-studio` (the active **Studio** theme — white surface, Plus Jakarta Sans, blue accent). Do not add inline colors or hardcoded hex values — always use CSS variables. Key tokens:
 
 ```css
---paper / --paper-2 / --paper-3   /* background scale */
---ink / --ink-2 / --ink-3 / --ink-4  /* text scale */
---accent: #3B82F6                  /* Discerned blue */
---accent-ink: #1E3A8A              /* deep navy for links/emphasis */
---interest: #3B82F6
---ethics: oklch(0.55 0.10 155)
---category: oklch(0.50 0.08 270)
---serif / --sans / --mono          /* Newsreader / Geist / JetBrains Mono */
+--paper / --paper-2 / --paper-3   /* background scale (white → #f7f7f7 → #efefef) */
+--ink / --ink-2 / --ink-3 / --ink-4  /* text scale (#0d0d0d → #b0b0b0) */
+--accent: #2563eb                  /* Discerned blue */
+--accent-ink: #1d4ed8              /* deeper blue for links/emphasis */
+--interest: #2563eb
+--ethics: #059669
+--category: #7c3aed
+--serif / --sans / --mono          /* Plus Jakarta Sans / Plus Jakarta Sans / JetBrains Mono */
 ```
+
+Studio also carries component-level overrides (tighter radii, upright non-italic brand/feed-title/excerpts, 12px topbar padding) under `body.style-studio .<selector>` directly below the token block.
 
 The design prototype lives at `C:\Users\steve\Downloads\discerned web design\design_handoff_discerned\` — reference it when making UI changes.
 
@@ -64,7 +66,7 @@ The marker contract is defined extension-side in `discerned-ext/src/content/capt
 ```
 app/
   globals.css          ← all tokens + component styles
-  layout.tsx           ← body class="style-editorial"
+  layout.tsx           ← body class="style-studio"
   page.tsx             ← home (mounts HomeClient)
   HomeClient.tsx       ← client: feed + popover + modal
   about/page.tsx       ← HeroBeacon + philosophy copy

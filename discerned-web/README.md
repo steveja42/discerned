@@ -49,8 +49,8 @@ pnpm exec tsc --noEmit  # type-check
 
 | File | Purpose |
 |---|---|
-| [app/globals.css](app/globals.css) | Design tokens + all component styles (Editorial theme) |
-| [app/layout.tsx](app/layout.tsx) | Root layout — `body.style-editorial` |
+| [app/globals.css](app/globals.css) | Design tokens + all component styles (Studio theme) |
+| [app/layout.tsx](app/layout.tsx) | Root layout — `body.style-studio` |
 | [app/page.tsx](app/page.tsx) | Home route — mounts `HomeClient` |
 | [app/HomeClient.tsx](app/HomeClient.tsx) | Client component: feed, popover, sign-in modal |
 | [app/not-found.tsx](app/not-found.tsx) | 404 page |

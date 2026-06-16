@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
   --paper: #f6f1e8;
@@ -26,16 +26,41 @@
 
 * { box-sizing: border-box; }
 
-body.style-editorial {
-  --paper: #f6f1e8; --paper-2: #efe8da; --paper-3: #e8dfcc;
-  --rule: #d8ccb1; --rule-soft: #e3d9c2;
-  --ink: #1a1714; --ink-2: #3a342c; --ink-3: #6b6357; --ink-4: #948b7d;
-  --accent: #3B82F6; --accent-soft: #3B82F614;
-  --accent-ink: #1E3A8A;
-  --interest: #3B82F6; --ethics: oklch(0.55 0.10 155); --category: oklch(0.50 0.08 270);
-  --serif: 'Newsreader', Georgia, serif;
-  --sans: 'Geist', system-ui, sans-serif;
+body.style-studio {
+  --paper: #ffffff; --paper-2: #f7f7f7; --paper-3: #efefef;
+  --rule: #e3e3e3; --rule-soft: #ebebeb;
+  --ink: #0d0d0d; --ink-2: #2b2b2b; --ink-3: #737373; --ink-4: #b0b0b0;
+  --accent: #2563eb; --accent-soft: rgba(37,99,235,0.08); --accent-ink: #1d4ed8;
+  --interest: #2563eb; --ethics: #059669; --category: #7c3aed;
+  --neutral-faded: #c0c0c0;
+  --serif: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --sans:  'Plus Jakarta Sans', system-ui, sans-serif;
+  --mono:  'JetBrains Mono', ui-monospace, monospace;
+  --shadow-page: 0 1px 0 rgba(0,0,0,0.05);
+  --shadow-pop:  0 8px 32px -8px rgba(0,0,0,0.12);
 }
+
+/* ============ Studio — component overrides ============ */
+body.style-studio .topbar         { padding: 12px 24px; }
+body.style-studio .main           { height: calc(100vh - 59px); } /* topbar shrinks 12px from base 71px */
+body.style-studio .brand-name     { font-style: normal; font-weight: 700; letter-spacing: -0.025em; }
+body.style-studio .feed-title     { font-size: 24px; font-weight: 700; letter-spacing: -0.025em; }
+body.style-studio .feed-title em  { font-style: normal; font-weight: 700; }
+body.style-studio .clip-title     { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+body.style-studio .clip-excerpt   { font-style: normal; border-left-color: var(--rule); }
+body.style-studio .clip-note      { font-size: 12px; }
+body.style-studio .clip:hover     { background: var(--paper-2); }
+body.style-studio .detail-title   { font-size: 20px; font-weight: 600; letter-spacing: -0.015em; }
+body.style-studio .detail-excerpt { font-style: normal; }
+body.style-studio .icon-btn            { border-radius: 6px; }
+body.style-studio .btn                 { border-radius: 6px; }
+body.style-studio .cat-chip            { border-radius: 5px; }
+body.style-studio .scope-toggle        { border-radius: 8px; }
+body.style-studio .scope-toggle button { border-radius: 5px; }
+body.style-studio .nav-item            { border-radius: 5px; }
+body.style-studio .follow              { border-radius: 5px; }
+body.style-studio .modal               { border-radius: 10px; }
+body.style-studio .search              { border-radius: 8px; }
 
 /* ============ Hero ============ */
 .hero {

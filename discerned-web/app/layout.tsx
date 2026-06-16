@@ -1,4 +1,4 @@
-// Root layout — applies the Editorial design system body class and project metadata.
+// Root layout — applies the Studio design system body class and project metadata.
 // All pages share this shell; no navigation chrome is rendered here (TopBar lives per-page).
 
 import type { Metadata } from 'next';
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="style-editorial">
+      <body className="style-studio">
 <NostrAuthProvider>
           <ClipStoreProvider>{children}</ClipStoreProvider>
           <PendingSignModal />
