@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import type { BridgeMessage } from '@/lib/bridge/extension-bridge';
 import { useNostrAuth } from '@/hooks/useNostrAuth';
 import { useClipStore } from '@/lib/bridge/ClipStoreContext';
+import { applyRelayMode } from '@/lib/constants';
 import { LL, log } from '@/lib/logger';
 
 export function useBridgeAuth() {
@@ -37,6 +38,11 @@ export function useBridgeAuth() {
       }
       if (msg.type === 'DISCERNED_BRIDGE_CLIPS') {
         setClips(msg.clips);
+      }
+      if (msg.type === 'DISCERNED_BRIDGE_RELAYS') {
+        // Extension is source of truth for the dev relay mode — apply it so the
+        // home-page feed re-subscribes to the same relay set the extension uses.
+        applyRelayMode(msg.mode);
       }
     };
     window.addEventListener('message', onMessage);

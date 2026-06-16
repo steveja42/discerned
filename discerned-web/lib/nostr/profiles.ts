@@ -7,7 +7,7 @@
 import { SimplePool, type Event, type Filter } from 'nostr-tools';
 import { npubEncode } from 'nostr-tools/nip19';
 import { isNip05, isValid, type Nip05 } from 'nostr-tools/nip05';
-import { ACTIVE_RELAYS } from '@/lib/constants';
+import { getActiveRelays } from '@/lib/constants';
 import { LL, log } from '@/lib/logger';
 
 export interface AuthorProfile {
@@ -43,7 +43,7 @@ export function subscribeAuthorProfiles(
   onUpdate: (profiles: Map<string, AuthorProfile>) => void,
 ): () => void {
   const pool = new SimplePool();
-  const relays = [...ACTIVE_RELAYS];
+  const relays = [...getActiveRelays()];
   log(LL.NORMAL, '[nostr] subscribeAuthorProfiles connecting to', relays, 'for', pubkeys.length, 'author(s)');
   let closed = false;
 

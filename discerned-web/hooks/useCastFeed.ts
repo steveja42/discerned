@@ -13,10 +13,27 @@ type FeedStatus = 'connecting' | 'live' | 'error';
 export function useCastFeed() {
   const [clips, setClips] = useState<ClipData[]>([]);
   const [status, setStatus] = useState<FeedStatus>('connecting');
+  // Bumped whenever the dev relay mode flips, forcing the subscribe effect to
+  // tear down its pool and re-subscribe against the new relay set.
+  const [relayEpoch, setRelayEpoch] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    let cleanupSub: (() => void) | undefined;
+    import('@/lib/constants').then(({ onRelayModeChange }) => {
+      if (!active) return;
+      cleanupSub = onRelayModeChange(() => setRelayEpoch((e) => e + 1));
+    });
+    return () => { active = false; cleanupSub?.(); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     let cleanup: (() => void) | undefined;
+
+    // Drop casts from the previous relay set so a mode flip doesn't leave stale
+    // entries mixed with the new feed.
+    setClips([]);
 
     const init = async () => {
       try {
@@ -51,7 +68,7 @@ export function useCastFeed() {
       cancelled = true;
       cleanup?.();
     };
-  }, []);
+  }, [relayEpoch]);
 
   return { clips, status };
 }

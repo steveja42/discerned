@@ -21,8 +21,8 @@ import {
   getOrCreateBunkerSigner,
   invalidateBunkerSigner,
 } from '@/shared/nostr/nip46-manager';
-import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation, ClipData, EmbeddedTweetData } from '@/shared/types';
-import { STORAGE_KEYS } from '@/shared/types';
+import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation, ClipData, EmbeddedTweetData, RelayMode } from '@/shared/types';
+import { STORAGE_KEYS, relaysForMode } from '@/shared/types';
 import { LL, log, setLogRelayTabs } from '@/shared/logger';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
 import { decode, nsecEncode, npubEncode } from 'nostr-tools/nip19';
@@ -99,6 +99,17 @@ async function pushResyncToWebApp(): Promise<void> {
 async function pushCategoriesToWebApp(categories: string[]): Promise<void> {
   const tabs = await chrome.tabs.query({ url: DISCERNED_URL_PATTERNS });
   const message: BackgroundMessage = { type: 'PUSH_CATEGORIES', categories };
+  for (const tab of tabs) {
+    if (tab.id === undefined) continue;
+    chrome.tabs.sendMessage(tab.id, message).catch(() => { /* non-fatal */ });
+  }
+}
+
+// Mirror the dev relay-mode toggle to any open discerned tab so the web app
+// re-subscribes its feed to the same relay set the extension publishes to.
+async function pushRelayModeToWebApp(mode: RelayMode): Promise<void> {
+  const tabs = await chrome.tabs.query({ url: DISCERNED_URL_PATTERNS });
+  const message: BackgroundMessage = { type: 'PUSH_RELAY_MODE', mode };
   for (const tab of tabs) {
     if (tab.id === undefined) continue;
     chrome.tabs.sendMessage(tab.id, message).catch(() => { /* non-fatal */ });
@@ -440,11 +451,22 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       return { success: true };
     }
 
+    case 'RELAY_MODE_CHANGED': {
+      // Dev relay toggle flipped (from the overlay drawer, or echoed from the web
+      // app's own toggle via the bridge). The overlay/web-bridge has already
+      // written the mode to storage; mirror it to any open discerned tab.
+      const relays = relaysForMode(message.mode);
+      log(LL.NORMAL, `Relay mode → ${message.mode} (${relays.length} relay(s)):`, relays);
+      await pushRelayModeToWebApp(message.mode);
+      return { success: true };
+    }
+
     case 'PUSH_NEW_CLIP':
     case 'FORCE_BRIDGE_RESYNC':
     case 'NAVIGATE_TO_CLIP':
     case 'PUSH_CATEGORIES':
     case 'PUSH_PENDING_SIGN':
+    case 'PUSH_RELAY_MODE':
       // These are background→content messages; the background never receives them.
       // (PUSH_PENDING_SIGN is sent TO the web-bridge content script, not received here.)
       return { success: false, error: 'Not handled by background' };

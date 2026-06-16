@@ -135,7 +135,9 @@ export type BackgroundMessage =
   | { type: 'GET_CLIP_BODY'; id: string }
   | { type: 'PUSH_PENDING_SIGN'; id: string; event: Record<string, unknown> }
   | { type: 'RESOLVE_PENDING_SIGN'; id: string; signed: Record<string, unknown> }
-  | { type: 'REJECT_PENDING_SIGN'; id: string; error: string };
+  | { type: 'REJECT_PENDING_SIGN'; id: string; error: string }
+  | { type: 'RELAY_MODE_CHANGED'; mode: RelayMode }
+  | { type: 'PUSH_RELAY_MODE'; mode: RelayMode };
 
 export type BackgroundResponse =
   | { success: true; data?: unknown }
@@ -176,7 +178,8 @@ export type WebBridgeOutbound =
   | { type: 'DISCERNED_BRIDGE_FOCUS_CLIP'; clipId: string }
   | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] }
   | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null }
-  | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown> };
+  | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown> }
+  | { type: 'DISCERNED_BRIDGE_RELAYS'; mode: RelayMode };
 
 export type WebBridgeInbound =
   | { type: 'DISCERNED_WEB_READY'; clipCount: number }
@@ -187,7 +190,8 @@ export type WebBridgeInbound =
   | { type: 'DISCERNED_REQUEST_CLIP_BODY'; id: string }
   | { type: 'DISCERNED_SET_NIP07_PUBKEY'; pubkey: string }
   | { type: 'DISCERNED_SIGNED'; id: string; signed: Record<string, unknown> }
-  | { type: 'DISCERNED_SIGN_REJECTED'; id: string; error: string };
+  | { type: 'DISCERNED_SIGN_REJECTED'; id: string; error: string }
+  | { type: 'DISCERNED_SET_RELAY_MODE'; mode: RelayMode };
 
 // Default relay list
 export const DEFAULT_RELAYS = [
@@ -201,7 +205,9 @@ export const DEFAULT_RELAYS = [
 export const LOCAL_RELAY = 'ws://localhost:7777';
 
 // Active relay set. Test/dev REPLACES the public relays so test casts never
-// reach the real network; production keeps the wss:// list.
+// reach the real network; production keeps the wss:// list. This is the
+// build-flag DEFAULT — it's the fallback used by resolveRelayMode() below when
+// the user hasn't set an explicit relay mode in chrome.storage.local.
 export const ACTIVE_RELAYS: readonly string[] = __DISCERNED_TEST_BUILD__
   ? [LOCAL_RELAY]
   : DEFAULT_RELAYS;
@@ -209,3 +215,27 @@ export const ACTIVE_RELAYS: readonly string[] = __DISCERNED_TEST_BUILD__
 // Min ACKs for publish success — derived from relay count, capped at 2 so
 // production still requires 2 while a single local relay needs only 1.
 export const MIN_PUBLISH_ACKS = Math.min(ACTIVE_RELAYS.length, 2);
+
+// ── Runtime relay mode (dev toggle) ──────────────────────────────────────────
+// A 'local' | 'production' preference persisted in chrome.storage.local under
+// STORAGE_KEYS.RELAYS. When unset, the build-flag default (ACTIVE_RELAYS) wins —
+// so production users who never touch the toggle behave exactly as before. The
+// extension is the source of truth; it mirrors this mode to the web app over the
+// bridge (DISCERNED_BRIDGE_RELAYS), and each side resolves its own URLs.
+export type RelayMode = 'local' | 'production';
+
+// Resolve the effective mode from a stored value, falling back to the build flag.
+export function resolveRelayMode(stored: string | undefined): RelayMode {
+  if (stored === 'local' || stored === 'production') return stored;
+  return __DISCERNED_TEST_BUILD__ ? 'local' : 'production';
+}
+
+// Map a mode to its concrete relay URL list.
+export function relaysForMode(mode: RelayMode): string[] {
+  return mode === 'local' ? [LOCAL_RELAY] : [...DEFAULT_RELAYS];
+}
+
+// Min ACKs derived from an actual relay list (1 for the lone local relay, 2 for production).
+export function minAcksFor(relays: readonly string[]): number {
+  return Math.min(relays.length, 2);
+}

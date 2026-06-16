@@ -8,7 +8,7 @@
 //         (only for the article highlight rectangle, drawn into document.body).
 
 import type { AuthState, Capture, ClipFormat, Evaluation, InterestLevel, EthicsLevel, Category, PublishMode } from '@/shared/types';
-import { STORAGE_KEYS } from '@/shared/types';
+import { STORAGE_KEYS, resolveRelayMode, relaysForMode } from '@/shared/types';
 import { LL, log } from '@/shared/logger';
 import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
 import { showArticleHighlight, hideArticleHighlight } from './highlighter';
@@ -864,6 +864,20 @@ export class DiscernedOverlay {
       `;
     }
 
+    // Dev-only relay toggle. Tree-shaken out of production builds via the flag.
+    const relayDevCard = __DISCERNED_TEST_BUILD__ ? `
+          <div class="settings-card">
+            <div class="card-label">Developer</div>
+            <label class="toggle-row">
+              <input type="checkbox" id="opt-local-relay" />
+              <span class="toggle-label">
+                <span class="toggle-title">Use local relay</span>
+                <span class="toggle-desc">Publish to ws://localhost:7777 instead of the public relays. Syncs to the web app feed.</span>
+              </span>
+            </label>
+          </div>
+    ` : '';
+
     this.shadow.innerHTML = `
       <style>${this.getStyles()}</style>
       <div class="discerned-root panel">
@@ -898,6 +912,7 @@ export class DiscernedOverlay {
               </span>
             </label>
           </div>
+          ${relayDevCard}
           <div class="settings-card">
             <button class="link-btn" id="settings-export">Export local clips as JSON</button>
           </div>
@@ -1012,6 +1027,7 @@ export class DiscernedOverlay {
       const stored = await chrome.storage.local.get([
         STORAGE_KEYS.SMART_ARTICLE_DETECTION,
         STORAGE_KEYS.STRIP_INLINE_STYLES,
+        STORAGE_KEYS.RELAYS,
       ]);
       const smartEl = this.shadow.getElementById('opt-smart-article') as HTMLInputElement | null;
       const stripEl = this.shadow.getElementById('opt-strip-styles')  as HTMLInputElement | null;
@@ -1024,6 +1040,20 @@ export class DiscernedOverlay {
       stripEl?.addEventListener('change', () => {
         void chrome.storage.local.set({ [STORAGE_KEYS.STRIP_INLINE_STYLES]: stripEl.checked });
       });
+
+      // Dev relay toggle (test builds only — the element is absent in production).
+      if (__DISCERNED_TEST_BUILD__) {
+        const relayEl = this.shadow.getElementById('opt-local-relay') as HTMLInputElement | null;
+        if (relayEl) {
+          relayEl.checked = resolveRelayMode(stored[STORAGE_KEYS.RELAYS] as string | undefined) === 'local';
+          relayEl.addEventListener('change', () => {
+            const mode = relayEl.checked ? 'local' : 'production';
+            void chrome.storage.local.set({ [STORAGE_KEYS.RELAYS]: mode });
+            // Broadcast so any open discerned tab re-subscribes its feed immediately.
+            chrome.runtime.sendMessage({ type: 'RELAY_MODE_CHANGED', mode }).catch(() => { /* non-fatal */ });
+          });
+        }
+      }
     } catch (err) {
       log(LL.WARN, 'Failed to load capture toggles', err);
     }
@@ -1042,6 +1072,27 @@ export class DiscernedOverlay {
       if (clipEl) clipEl.textContent = String(clipCount);
     } catch (err) {
       log(LL.WARN, 'Failed to load stats', err);
+    }
+  }
+
+  // Populate the "Connected to Nostr" footer tooltip with the user's npub slice
+  // and the active relay count. Async because the relay mode lives in storage.
+  private async updateNostrStatusTooltip() {
+    try {
+      const tip = this.shadow.getElementById('nostr-tip');
+      if (!tip) return;
+      const a = this.authState;
+      const pubkey = a.type === 'guest' ? null : a.pubkey;
+      let npubSlice = '';
+      if (pubkey) {
+        try { npubSlice = npubEncode(pubkey).slice(0, 12); } catch { npubSlice = ''; }
+      }
+      const stored = await chrome.storage.local.get(STORAGE_KEYS.RELAYS);
+      const relays = relaysForMode(resolveRelayMode(stored[STORAGE_KEYS.RELAYS] as string | undefined));
+      const relayPart = `${relays.length} relay${relays.length === 1 ? '' : 's'}`;
+      tip.textContent = npubSlice ? `${npubSlice}… · ${relayPart}` : relayPart;
+    } catch (err) {
+      log(LL.WARN, 'Failed to set Nostr status tooltip', err);
     }
   }
 
@@ -1132,10 +1183,11 @@ export class DiscernedOverlay {
 
         <footer class="panel-footer">
           <div class="footer-meta">
-            <div class="nostr-status">
+            <div class="nostr-status${isConnected ? ' has-tip' : ''}" id="nostr-status">
               <span class="status-dot${isConnected ? ' connected' : ''}"></span>
               <span class="status-text">${isConnected ? 'Connected to Nostr' : 'Local only'}</span>
               ${!isConnected ? '<button class="link-btn" id="nostr-signup-link">Connect →</button>' : ''}
+              ${isConnected ? '<span class="nostr-tip" id="nostr-tip" role="tooltip"></span>' : ''}
             </div>
             <div class="publish-mode-slider${!isConnected ? ' guest' : ''}" role="radiogroup" aria-label="Publish mode">
               <div class="slider-track">
@@ -1179,6 +1231,8 @@ export class DiscernedOverlay {
       this.view = 'settings';
       this.render();
     });
+
+    if (isConnected) void this.updateNostrStatusTooltip();
 
     this.shadow.querySelectorAll<HTMLButtonElement>('.chip').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1863,9 +1917,26 @@ export class DiscernedOverlay {
       /* Footer meta */
       .footer-meta { display: flex; align-items: center; justify-content: space-between; }
       .nostr-status { display: flex; align-items: center; gap: 6px; }
+      .nostr-status.has-tip { position: relative; cursor: default; }
       .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p-ink-4); flex-shrink: 0; }
       .status-dot.connected { background: #7c3aed; }
       .status-text { font-size: 11px; color: var(--p-ink-3); }
+      /* Hover tooltip for the connected status (npub slice + relay count). */
+      .nostr-tip {
+        position: absolute; bottom: calc(100% + 7px); left: 0;
+        white-space: nowrap; pointer-events: none;
+        background: rgba(30, 41, 59, 0.96); color: #f1f5f9;
+        font-size: 11px; font-family: var(--p-mono, monospace);
+        padding: 5px 8px; border-radius: 6px;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.35);
+        opacity: 0; transform: translateY(3px);
+        transition: opacity 0.14s, transform 0.14s; z-index: 10000;
+      }
+      .nostr-status.has-tip:hover .nostr-tip { opacity: 1; transform: translateY(0); }
+      .nostr-tip::after {
+        content: ''; position: absolute; top: 100%; left: 10px;
+        border: 4px solid transparent; border-top-color: rgba(30, 41, 59, 0.96);
+      }
       .publish-mode-slider { display: flex; align-items: center; }
       .slider-track {
         position: relative; display: grid; grid-template-columns: repeat(3, 1fr);

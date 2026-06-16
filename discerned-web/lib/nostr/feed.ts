@@ -3,15 +3,15 @@
 // Returns a cleanup function that closes the subscription and pool on unmount.
 
 import { SimplePool, type Event, type Filter } from 'nostr-tools';
-import { ACTIVE_RELAYS } from '@/lib/constants';
+import { getActiveRelays } from '@/lib/constants';
 import { LL, log } from '@/lib/logger';
 
 export function subscribeFeed(
   onEvent: (e: Event) => void,
   onEose: () => void,
 ): () => void {
-  const relays = [...ACTIVE_RELAYS];
-  log(LL.NORMAL, '[nostr] subscribeFeed connecting to', relays);
+  const relays = [...getActiveRelays()];
+  log(LL.NORMAL, `[nostr] subscribeFeed connecting to ${relays.length} relay(s):`, relays);
   const pool = new SimplePool();
   const filter: Filter = { kinds: [1], '#t': ['discerned'], limit: 50 };
   const sub = pool.subscribeMany(

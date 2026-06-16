@@ -14,7 +14,7 @@
 // Access: chrome.runtime.sendMessage, IndexedDB (same profile as extension)
 
 import type { AuthState, BackgroundMessage, ClipData, WebBridgeInbound, WebBridgeOutbound } from '@/shared/types';
-import { STORAGE_KEYS } from '@/shared/types';
+import { STORAGE_KEYS, resolveRelayMode } from '@/shared/types';
 import { LL, log } from '@/shared/logger';
 
 const ORIGIN = window.location.origin;
@@ -129,6 +129,12 @@ async function sendBridgeData(knownCount = 0): Promise<boolean> {
   const catStored = await chrome.storage.local.get(STORAGE_KEYS.CATEGORIES);
   const cats = (catStored[STORAGE_KEYS.CATEGORIES] as string[] | undefined) ?? [];
   post({ type: 'DISCERNED_BRIDGE_CATEGORIES', categories: cats });
+
+  // Mirror the current dev relay mode so the web app's feed subscribes to the
+  // same relay set the extension publishes to. The extension is source of truth.
+  const relayStored = await chrome.storage.local.get(STORAGE_KEYS.RELAYS);
+  const relayMode = resolveRelayMode(relayStored[STORAGE_KEYS.RELAYS] as string | undefined);
+  post({ type: 'DISCERNED_BRIDGE_RELAYS', mode: relayMode });
   return true;
 }
 
@@ -153,6 +159,9 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
   }
   if (message.type === 'PUSH_CATEGORIES') {
     post({ type: 'DISCERNED_BRIDGE_CATEGORIES', categories: message.categories });
+  }
+  if (message.type === 'PUSH_RELAY_MODE') {
+    post({ type: 'DISCERNED_BRIDGE_RELAYS', mode: message.mode });
   }
   if (message.type === 'PUSH_PENDING_SIGN') {
     // First-cast handoff from the background: surface a confirm UI in the
@@ -281,6 +290,12 @@ window.addEventListener('message', (e: MessageEvent) => {
       hasNIP07: true,
       pubkey: msg.pubkey,
     }).catch(() => { /* non-fatal */ });
+  }
+  if (msg?.type === 'DISCERNED_SET_RELAY_MODE') {
+    // The web app's own dev toggle was flipped — persist it (extension is the
+    // canonical store) and let the background re-broadcast to other tabs.
+    void chrome.storage.local.set({ [STORAGE_KEYS.RELAYS]: msg.mode });
+    chrome.runtime.sendMessage({ type: 'RELAY_MODE_CHANGED', mode: msg.mode }).catch(() => { /* non-fatal */ });
   }
   if (msg?.type === 'DISCERNED_REQUEST_CLIP_BODY') {
     const id = msg.id;

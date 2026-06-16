@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useClipStore } from '@/lib/bridge/ClipStoreContext';
 import { listenForBridge } from '@/lib/bridge/extension-bridge';
+import { applyRelayMode } from '@/lib/constants';
 
 export function useLibraryBridge() {
   const store = useClipStore();
@@ -43,6 +44,10 @@ export function useLibraryBridge() {
       }
       if (msg.type === 'DISCERNED_BRIDGE_CLIP_BODY') {
         setClipBody(msg.id, { bodyHtml: msg.bodyHtml, thumbnail: msg.thumbnail });
+      }
+      if (msg.type === 'DISCERNED_BRIDGE_RELAYS') {
+        // Honour the extension's dev relay mode on /clips too.
+        applyRelayMode(msg.mode);
       }
     }, mountClipCount.current);
 

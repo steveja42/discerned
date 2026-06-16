@@ -5,7 +5,7 @@
 
 import { SimplePool, type Event, type Filter } from 'nostr-tools';
 import { npubEncode } from 'nostr-tools/nip19';
-import { ACTIVE_RELAYS } from '@/lib/constants';
+import { getActiveRelays } from '@/lib/constants';
 import { LL, log } from '@/lib/logger';
 
 export interface FollowProfile {
@@ -28,7 +28,7 @@ export function subscribeFollowList(
   onUpdate: (follows: FollowProfile[]) => void,
 ): () => void {
   const pool = new SimplePool();
-  const relays = [...ACTIVE_RELAYS];
+  const relays = [...getActiveRelays()];
   log(LL.NORMAL, '[nostr] subscribeFollowList connecting to', relays, 'for', npubEncode(pubkey).slice(0, 12));
   let closed = false;
   const subs: { close: () => void }[] = [];

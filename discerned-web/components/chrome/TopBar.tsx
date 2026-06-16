@@ -11,6 +11,7 @@ import { npubEncode } from 'nostr-tools/nip19';
 import MiniBeacon from '@/components/brand/MiniBeacon';
 import StatusDot from '@/components/auth/StatusDot';
 import SettingsModal from '@/components/chrome/SettingsModal';
+import { getActiveRelays, onRelayModeChange } from '@/lib/constants';
 import type { AuthState } from '@/lib/types';
 
 interface TopBarProps {
@@ -53,7 +54,13 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
   const path = usePathname();
   const searchRef = useRef<HTMLInputElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Track the active relay count so the Nostr dot tooltip stays current when the
+  // relay mode flips (local ↔ production). Initialised from the env-resolved
+  // default (SSR-safe and identical on first client render → no hydration drift).
+  const [relayCount, setRelayCount] = useState(() => getActiveRelays().length);
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
+  useEffect(() => onRelayModeChange(() => setRelayCount(getActiveRelays().length)), []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -129,7 +136,7 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
                   auth.source === 'nip07' ? 'via NIP-07' :
                   auth.source === 'bridge' ? 'via extension' :
                   'read-only'
-                } · ${auth.pubkey ? npubEncode(auth.pubkey).slice(0, 12) : ''}…`
+                } · ${auth.pubkey ? npubEncode(auth.pubkey).slice(0, 12) : ''}… · ${relayCount} relay${relayCount === 1 ? '' : 's'}`
           }
           onClick={onSignIn}
           label={auth.status === 'guest' ? 'Sign in with Nostr' : `Nostr connected · ${auth.pubkey ? npubEncode(auth.pubkey).slice(0, 12) : ''}`}

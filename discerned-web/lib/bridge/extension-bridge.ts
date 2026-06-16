@@ -4,6 +4,7 @@
 // On mount, the page posts DISCERNED_WEB_READY so the extension knows it can send.
 
 import type { ClipData } from '@/lib/types';
+import type { RelayMode } from '@/lib/constants';
 import { LL, log } from '@/lib/logger';
 
 export type BridgeMessage =
@@ -13,7 +14,8 @@ export type BridgeMessage =
   | { type: 'DISCERNED_BRIDGE_FOCUS_CLIP'; clipId: string }
   | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] }
   | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null }
-  | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown> };
+  | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown> }
+  | { type: 'DISCERNED_BRIDGE_RELAYS'; mode: RelayMode };
 
 export function listenForBridge(
   handler: (msg: BridgeMessage) => void,
@@ -130,4 +132,11 @@ export function sendSignedToExtension(id: string, signed: Record<string, unknown
 // Tell the extension the user declined or the wallet rejected the sign.
 export function sendSignRejectedToExtension(id: string, error: string): void {
   window.postMessage({ type: 'DISCERNED_SIGN_REJECTED', id, error }, window.location.origin);
+}
+
+// Push a relay-mode change from the web app's own dev toggle to the extension,
+// which persists it (the extension is the canonical store) and re-broadcasts it
+// to any other open tabs. No-op when the extension isn't installed.
+export function sendRelayModeToExtension(mode: RelayMode): void {
+  window.postMessage({ type: 'DISCERNED_SET_RELAY_MODE', mode }, window.location.origin);
 }

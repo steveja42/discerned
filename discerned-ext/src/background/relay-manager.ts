@@ -7,7 +7,7 @@
 
 import { SimplePool } from 'nostr-tools/pool';
 import type { NostrEvent } from 'nostr-tools/core';
-import { ACTIVE_RELAYS, MIN_PUBLISH_ACKS } from '@/shared/types';
+import { STORAGE_KEYS, resolveRelayMode, relaysForMode, minAcksFor } from '@/shared/types';
 import { LL, log } from '@/shared/logger';
 
 export interface PublishResult {
@@ -25,11 +25,22 @@ class RelayPool {
   }
 
   /**
+   * Resolve the active relay set at call time from the persisted relay mode
+   * (chrome.storage.local), falling back to the build-flag default when unset.
+   */
+  private async getActiveRelays(): Promise<string[]> {
+    const stored = await chrome.storage.local.get(STORAGE_KEYS.RELAYS);
+    const mode = resolveRelayMode(stored[STORAGE_KEYS.RELAYS] as string | undefined);
+    return relaysForMode(mode);
+  }
+
+  /**
    * Publish an event to all relays
    */
   async publish(event: NostrEvent): Promise<PublishResult[]> {
-    const relayUrls = Array.from(ACTIVE_RELAYS);
-    
+    const relayUrls = await this.getActiveRelays();
+    log(LL.NORMAL, `Publishing to ${relayUrls.length} relay(s):`, relayUrls);
+
     const results = await Promise.allSettled(
       relayUrls.map(url => this.publishToRelay(url, event))
     );
@@ -81,15 +92,16 @@ class RelayPool {
    * Close all connections
    */
   async close(): Promise<void> {
-    this.pool.close(Array.from(ACTIVE_RELAYS));
+    const relays = await this.getActiveRelays();
+    this.pool.close(relays);
   }
 
   /**
    * Get connection status
    */
-  getStatus(): { relays: string[] } {
+  async getStatus(): Promise<{ relays: string[] }> {
     return {
-      relays: Array.from(ACTIVE_RELAYS),
+      relays: await this.getActiveRelays(),
     };
   }
 }
@@ -102,13 +114,17 @@ export const relayPool = new RelayPool();
  */
 export async function publishWithMinimum(
   event: NostrEvent,
-  minimumSuccess: number = MIN_PUBLISH_ACKS
+  minimumSuccess?: number
 ): Promise<{ success: boolean; results: PublishResult[] }> {
   const results = await relayPool.publish(event);
   const successCount = results.filter(r => r.success).length;
-  
+  // Derive the threshold from the relays actually attempted (1 for the lone
+  // local relay, 2 for production) so a mid-publish mode toggle can't cause a
+  // stale count mismatch. An explicit caller override still wins.
+  const minimum = minimumSuccess ?? minAcksFor(results.map(r => r.relay));
+
   return {
-    success: successCount >= minimumSuccess,
+    success: successCount >= minimum,
     results,
   };
 }
