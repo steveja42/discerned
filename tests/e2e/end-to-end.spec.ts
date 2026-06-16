@@ -1,6 +1,6 @@
 // The headline test: extension clips a real fixture page, stores it via the
 // real CLIP code path (background → IndexedDB), then the web app pulls it
-// through the real postMessage bridge content script on /library.
+// through the real postMessage bridge content script on /clips.
 
 import { test, expect } from '@playwright/test';
 import { launchWithExtension } from './helpers/launchExtension';
@@ -8,7 +8,7 @@ import { launchWithExtension } from './helpers/launchExtension';
 test.describe('end-to-end clip pipeline', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('captures blog-post.html and renders it on /library', async () => {
+  test('captures blog-post.html and renders it on /clips', async () => {
     const { ctx } = await launchWithExtension();
     try {
       // 1. Open the fixture, capture, and CLIP through the real background handler.
@@ -65,7 +65,7 @@ test.describe('end-to-end clip pipeline', () => {
 
       expect(clipResult).toMatchObject({ success: true });
 
-      // 3. Open the web app's /library — the bridge content script runs there
+      // 3. Open the web app's /clips — the bridge content script runs there
       //    because manifest.json includes http://localhost:3000/*. It will fetch
       //    the stored clips from IndexedDB and post DISCERNED_BRIDGE_CLIPS.
       //
@@ -81,7 +81,7 @@ test.describe('end-to-end clip pipeline', () => {
 
       let visible = false;
       for (let attempt = 0; attempt < 4 && !visible; attempt++) {
-        await libraryPage.goto('http://localhost:3000/library', { waitUntil: 'load' });
+        await libraryPage.goto('http://localhost:3000/clips', { waitUntil: 'load' });
         try {
           await row.waitFor({ state: 'visible', timeout: 5_000 });
           visible = true;

@@ -1,4 +1,4 @@
-// Connects the /library page to the Discerned extension bridge.
+// Connects the /clips page to the Discerned extension bridge.
 // Reads and writes clip state via ClipStoreContext so clips persist across
 // navigation without being re-fetched from the extension on every mount.
 

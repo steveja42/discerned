@@ -42,7 +42,7 @@ test('reddit-formats: article / selection / full-page all use site tagger', asyn
     await page.waitForSelector('shreddit-post, article', { timeout: 30_000 }).catch(() => undefined);
     await page.waitForTimeout(4_000);
 
-    // Helper: capture format X, post to /library, take screenshot of the
+    // Helper: capture format X, post to /clips, take screenshot of the
     // top of clip body so we can eyeball the byline alignment.
     const captureAndSnap = async (format: 'article' | 'selection' | 'full-page', tag: string) => {
       // For selection, set up a Range over the shreddit-post first so the
@@ -79,7 +79,7 @@ test('reddit-formats: article / selection / full-page all use site tagger', asyn
       writeFileSync(out(`reddit-${tag}-body.html`), body, 'utf8');
 
       const libPage = await ctx.newPage();
-      await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+      await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
       await libPage.evaluate((capture) => {
         const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };
         window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);

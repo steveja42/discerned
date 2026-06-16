@@ -13,7 +13,7 @@ const SO_URL =
 
 test.describe.configure({ mode: 'serial' });
 
-test('stackoverflow-visual: capture Q+A, render in /library, screenshot', async () => {
+test('stackoverflow-visual: capture Q+A, render in /clips, screenshot', async () => {
   test.skip(!process.env.SO, 'set SO=1 to run this');
   test.setTimeout(360_000);
 
@@ -92,7 +92,7 @@ test('stackoverflow-visual: capture Q+A, render in /library, screenshot', async 
     })) as Record<string, unknown>;
 
     const libPage = await ctx.newPage();
-    await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+    await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };
       window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);

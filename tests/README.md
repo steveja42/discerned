@@ -78,13 +78,13 @@ pnpm exec playwright test -c tests/e2e/playwright.config.ts --project=<project-n
 | Spec | Project | What it covers |
 |---|---|---|
 | `extension.spec.ts` | `extension` | Drives each fixture through the real content script via `__DISCERNED_TEST_CAPTURE` postMessage. Asserts the result matches the `.expected.json` sidecar. The main integration test for the capture pipeline end-to-end. |
-| `end-to-end.spec.ts` | `extension` | Full pipeline: capture → CLIP handler → IndexedDB → web bridge → `/library` rendering. |
-| `web-rendering.spec.ts` | `web` | Injects fixture clips through the real `postMessage` bridge into `/library` and asserts `<ClipRow>` renders correctly. |
+| `end-to-end.spec.ts` | `extension` | Full pipeline: capture → CLIP handler → IndexedDB → web bridge → `/clips` rendering. |
+| `web-rendering.spec.ts` | `web` | Injects fixture clips through the real `postMessage` bridge into `/clips` and asserts `<ClipRow>` renders correctly. |
 | `web-feed.spec.ts` | `web` | Uses `page.routeWebSocket` to mock the Nostr relay and verifies the public feed renders. |
 
 ### Fixture-visual specs — pixel baseline regression tests
 
-These specs capture a fixture HTML page through the real extension, render the resulting clip through `/library`, and assert the rendered `.clip-body` matches a committed PNG baseline. A test fails when pixels change unexpectedly — catching CSS regressions, sanitizer changes that drop content, or layout bugs in the `dx-*` class system.
+These specs capture a fixture HTML page through the real extension, render the resulting clip through `/clips`, and assert the rendered `.clip-body` matches a committed PNG baseline. A test fails when pixels change unexpectedly — catching CSS regressions, sanitizer changes that drop content, or layout bugs in the `dx-*` class system.
 
 Each spec is gated behind an env var so it doesn't run in normal CI but can be run on-demand.
 
@@ -122,7 +122,7 @@ Each spec is gated behind an env var so it doesn't run in normal CI but can be r
 1. The spec calls `runFixtureVisual({ site, hostOverride?, ... })` from `helpers/fixtureVisual.ts`.
 2. Playwright launches Chromium with the extension loaded, navigates to the fixture URL on the local fixture server (`127.0.0.1:4173`).
 3. A `__DISCERNED_TEST_CAPTURE` postMessage drives `captureContext('article')` inside the content script, with optional `hostOverride`. The resulting `Capture` object is returned to the test.
-4. A second tab opens `/library` on the Next.js dev server (`localhost:3000`) and the clip is injected via `DISCERNED_BRIDGE_CLIPS` postMessage.
+4. A second tab opens `/clips` on the Next.js dev server (`localhost:3000`) and the clip is injected via `DISCERNED_BRIDGE_CLIPS` postMessage.
 5. The test clicks the clip row to open the detail panel, waits for `.clip-body` to appear, waits for all `<img>` elements to decode (via `img.decode()`), and pins their dimensions to prevent layout shifts.
 6. `toHaveScreenshot()` takes a screenshot of `.clip-body` and compares it against the committed baseline PNG in `tests/e2e/<site>-fixture-visual.spec.ts-snapshots/`.
 

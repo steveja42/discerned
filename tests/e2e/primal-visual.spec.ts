@@ -1,6 +1,6 @@
 // Visual smoke test for the primal.net article clip.
 // Captures a real clip from primal.net via the extension, then renders it
-// through the actual web app (/library) and screenshots the rendered card so
+// through the actual web app (/clips) and screenshots the rendered card so
 // we can compare against the source page.
 //
 // Run with: PRIMAL=1 PWDEBUG_HEADLESS_NEW=1 pnpm exec playwright test \
@@ -134,9 +134,9 @@ test('primal: capture clip, render in web app, screenshot card', async () => {
       });
     })) as Record<string, unknown>;
 
-    // 2. Navigate to the web app /library page and inject the clip.
+    // 2. Navigate to the web app /clips page and inject the clip.
     const libPage = await ctx.newPage();
-    await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+    await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
 
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };

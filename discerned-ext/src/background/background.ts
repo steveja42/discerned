@@ -122,7 +122,7 @@ async function handleImportClips(clips: ClipData[]): Promise<BackgroundResponse>
   }
 }
 
-const LIBRARY_URL_PATTERNS = ['https://discerned.online/library*', 'http://localhost:3000/library*'];
+const LIBRARY_URL_PATTERNS = ['https://discerned.online/clips*', 'http://localhost:3000/clips*'];
 // Base URLs derived from DISCERNED_URL_PATTERNS (strip trailing /*).
 const DISCERNED_BASE_URLS = DISCERNED_URL_PATTERNS.map(p => p.replace(/\/\*$/, ''));
 
@@ -133,7 +133,7 @@ async function resolveBaseUrl(): Promise<string> {
 }
 
 // Discernments home — match the bare base URL with optional trailing slash and
-// query/hash, but NOT subpaths like /library or /about.
+// query/hash, but NOT subpaths like /clips or /about.
 const DISCERNMENTS_URL_PATTERNS = [
   'https://discerned.online/',
   'https://discerned.online/?*',
@@ -159,10 +159,10 @@ async function openDiscernmentsTab(autoSignin?: boolean): Promise<void> {
 
 async function openLibraryTab(clipId?: string): Promise<void> {
   const base = await resolveBaseUrl();
-  const url = clipId ? `${base}/library?clip=${encodeURIComponent(clipId)}` : `${base}/library`;
+  const url = clipId ? `${base}/clips?clip=${encodeURIComponent(clipId)}` : `${base}/clips`;
   const [existing] = await chrome.tabs.query({ url: LIBRARY_URL_PATTERNS });
   if (existing?.id !== undefined) {
-    // Tab is already on the library — activate it and navigate client-side via
+    // Tab is already on the clips page — activate it and navigate client-side via
     // the content script so React state (ClipStoreContext) is preserved and
     // there is no full reload, flash, or redundant clip re-send.
     await chrome.tabs.update(existing.id, { active: true });

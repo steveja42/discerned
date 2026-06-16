@@ -83,7 +83,7 @@ test('breitbart-visual: capture live article via headed Brave', async () => {
     expect(cap.title, 'capture should not be Cloudflare interstitial').not.toContain('moment');
 
     const libPage = await ctx.newPage();
-    await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+    await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };
       window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);

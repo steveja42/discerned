@@ -14,7 +14,7 @@ const FIXTURE_URL = 'http://127.0.0.1:4173/medium-article.html';
 
 test.describe.configure({ mode: 'serial' });
 
-test('medium-fixture-visual: capture local Medium fixture + render in /library', async () => {
+test('medium-fixture-visual: capture local Medium fixture + render in /clips', async () => {
   test.skip(!process.env.MED_FIX, 'set MED_FIX=1 to run this');
   test.setTimeout(120_000);
 
@@ -55,7 +55,7 @@ test('medium-fixture-visual: capture local Medium fixture + render in /library',
       'utf8');
 
     const libPage = await ctx.newPage();
-    await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+    await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };
       window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);

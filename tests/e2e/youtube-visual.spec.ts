@@ -1,6 +1,6 @@
 // Visual-parity check for YouTube watch pages.
 // Loads a real YouTube video page, captures via the extension, renders the
-// clip through /library, and screenshots both source and rendered.
+// clip through /clips, and screenshots both source and rendered.
 //
 // Run: $env:YOUTUBE='1'; pnpm exec playwright test \
 //   -c tests/e2e/playwright.config.ts --project=youtube-visual
@@ -16,7 +16,7 @@ const YT_URL =
 
 test.describe.configure({ mode: 'serial' });
 
-test('youtube-visual: capture watch page, render in /library, screenshot', async () => {
+test('youtube-visual: capture watch page, render in /clips, screenshot', async () => {
   test.skip(!process.env.YOUTUBE, 'set YOUTUBE=1 to run this');
   test.setTimeout(180_000);
 
@@ -72,9 +72,9 @@ test('youtube-visual: capture watch page, render in /library, screenshot', async
       });
     })) as Record<string, unknown>;
 
-    // Render in /library.
+    // Render in /clips.
     const libPage = await ctx.newPage();
-    await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+    await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };
       window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);

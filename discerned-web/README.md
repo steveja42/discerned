@@ -1,6 +1,6 @@
 # Discerned — Companion Web App
 
-A read-only companion surface for the [Discerned](https://discerned.online) Chrome extension. Browse the public Discernments feed on Nostr, explore your private Library, and learn about the project.
+A read-only companion surface for the [Discerned](https://discerned.online) Chrome extension. Browse the public Discernments feed on Nostr, explore your private Clips, and learn about the project.
 
 **Clipping happens only in the extension.** This web app does not create clips.
 
@@ -12,7 +12,7 @@ A read-only companion surface for the [Discerned](https://discerned.online) Chro
 |---|---|
 | `/` | Public Discernments feed — live `kind:1` Nostr events tagged `#discerned` |
 | `/about` | Brand page — HeroBeacon SVG, philosophy copy |
-| `/library` | Private Library — delivered from the extension via postMessage bridge |
+| `/clips` | Private Clips — delivered from the extension via postMessage bridge |
 
 ---
 
@@ -55,7 +55,7 @@ pnpm exec tsc --noEmit  # type-check
 | [app/HomeClient.tsx](app/HomeClient.tsx) | Client component: feed, popover, sign-in modal |
 | [app/not-found.tsx](app/not-found.tsx) | 404 page |
 | [app/about/page.tsx](app/about/page.tsx) | About / brand page — HeroBeacon + philosophy copy |
-| [app/library/page.tsx](app/library/page.tsx) | Library route — extension bridge or install prompt |
+| [app/clips/page.tsx](app/clips/page.tsx) | Clips route — extension bridge or install prompt |
 
 **components/**
 
@@ -100,7 +100,7 @@ pnpm exec tsc --noEmit  # type-check
 | [hooks/useCastFeed.ts](hooks/useCastFeed.ts) | Live Nostr feed with mock seed data |
 | [hooks/useNostrAuth.ts](hooks/useNostrAuth.ts) | NIP-07 / readonly / guest auth state |
 | [hooks/useFirstVisit.ts](hooks/useFirstVisit.ts) | `localStorage["discerned.seenHero"]` flag |
-| [hooks/useLibraryBridge.ts](hooks/useLibraryBridge.ts) | Extension bridge for `/library` with 2 s timeout |
+| [hooks/useLibraryBridge.ts](hooks/useLibraryBridge.ts) | Extension bridge for `/clips` with 2 s timeout |
 | [hooks/useBridgeAuth.ts](hooks/useBridgeAuth.ts) | Auth state derived from bridge hello message |
 
 ---
@@ -119,7 +119,7 @@ Pubkey is stored in `localStorage["discerned.auth"]`.
 
 ## Extension bridge
 
-When the Discerned extension is installed, its content script runs on `discerned.online/*` and posts clips + auth state to the page via `postMessage`. The web app listens via `lib/bridge/extension-bridge.ts` and announces readiness with `DISCERNED_WEB_READY`. If no bridge message arrives within 2 seconds, `/library` shows the install prompt. When the bridge is detected, a "My Library" link with a blue indicator dot appears in the TopBar.
+When the Discerned extension is installed, its content script runs on `discerned.online/*` and posts clips + auth state to the page via `postMessage`. The web app listens via `lib/bridge/extension-bridge.ts` and announces readiness with `DISCERNED_WEB_READY`. If no bridge message arrives within 2 seconds, `/clips` shows the install prompt. When the bridge is detected, a "My Clips" link with a blue indicator dot appears in the TopBar.
 
 ---
 

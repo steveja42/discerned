@@ -101,7 +101,7 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
 
       <div className="topbar-right">
         {navLink('/', 'Discernments')}
-        {extensionPresent && navLink('/library', 'My Library')}
+        {extensionPresent && navLink('/clips', 'My Clips')}
         {navLink('/about', 'About')}
         <a
           href="https://github.com/discerned-online"

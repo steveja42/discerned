@@ -41,7 +41,7 @@ interface SidebarLocalProps {
 function SidebarLocal({ activeCat, setActiveCat, catCounts, totalCount, interestMin, setInterestMin, ethicsMin, setEthicsMin, allCategories, onDeleteCategory, onSelectAllInCategory }: SidebarLocalProps) {
   return (
     <aside className="sidebar">
-      <div className="side-section-label" style={{ fontSize: '1.25rem', fontFamily: 'var(--serif)', fontStyle: 'italic', fontWeight: 700, letterSpacing: 0, textTransform: 'none', color: 'var(--ink)', marginBottom: '0.3rem' }}>Library</div>
+      <div className="side-section-label" style={{ fontSize: '1.25rem', fontFamily: 'var(--serif)', fontStyle: 'italic', fontWeight: 700, letterSpacing: 0, textTransform: 'none', color: 'var(--ink)', marginBottom: '0.3rem' }}>Clips</div>
       <div>
         <ul className="nav-list">
           <li

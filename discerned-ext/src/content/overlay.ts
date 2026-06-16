@@ -1622,7 +1622,7 @@ export class DiscernedOverlay {
     if (!loading) return;
     const { clipId, eventId } = opts;
     const libraryBtn = clipId
-      ? `<button class="open-library-btn">View in Library →</button>` : '';
+      ? `<button class="open-library-btn">View in Clips →</button>` : '';
     const discernmentBtn = eventId
       ? `<button class="open-discernment-btn">View in discernment →</button>` : '';
     const links = [libraryBtn, discernmentBtn].filter(Boolean).join('<br>');

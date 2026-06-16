@@ -1,7 +1,7 @@
 // Visual verification of embedded-tweet rendering.
 // Loads a real article (zerohedge.com by default) that contains widgets.js
 // tweet embeds, captures it through the dev test-bridge, renders the result
-// in the web app's /library, and screenshots the resulting clip-body.
+// in the web app's /clips, and screenshots the resulting clip-body.
 //
 // Run with: EMBED=1 pnpm exec playwright test \
 //   -c tests/e2e/playwright.config.ts --project=embedded-tweet-visual
@@ -19,7 +19,7 @@ const EMBED_URL =
 
 test.describe.configure({ mode: 'serial' });
 
-test('embedded-tweet: capture article with widgets.js tweets, render in library, screenshot', async () => {
+test('embedded-tweet: capture article with widgets.js tweets, render in clips, screenshot', async () => {
   test.skip(!process.env.EMBED, 'set EMBED=1 to run this');
   test.setTimeout(180_000);
 
@@ -102,7 +102,7 @@ test('embedded-tweet: capture article with widgets.js tweets, render in library,
 
     // ── Render through the web app ────────────────────────────────────────────
     const libPage = await ctx.newPage();
-    await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+    await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
 
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };
@@ -127,8 +127,8 @@ test('embedded-tweet: capture article with widgets.js tweets, render in library,
     // Sanity: locator-based check that tweet cards rendered in the DOM.
     const renderedCardCount = await clipBody.locator('.tweet-card').count();
     // eslint-disable-next-line no-console
-    console.log(`[probe] Rendered .tweet-card count in /library: ${renderedCardCount}`);
-    expect(renderedCardCount, 'tweet cards should render in /library').toBeGreaterThanOrEqual(1);
+    console.log(`[probe] Rendered .tweet-card count in /clips: ${renderedCardCount}`);
+    expect(renderedCardCount, 'tweet cards should render in /clips').toBeGreaterThanOrEqual(1);
 
     const rect = await clipBody.boundingBox();
     if (rect) {
@@ -159,7 +159,7 @@ test('embedded-tweet: capture article with widgets.js tweets, render in library,
     // eslint-disable-next-line no-console
     console.log('[probe] Artifacts written:');
     console.log('  test-output/embed-source.png        (source article screenshot)');
-    console.log('  test-output/embed-rendered.png      (rendered clip-body in /library)');
+    console.log('  test-output/embed-rendered.png      (rendered clip-body in /clips)');
     console.log('  test-output/embed-first-card.png    (close-up of first tweet card)');
     console.log('  test-output/embed-capture.json      (raw capture payload)');
   } finally {

@@ -20,7 +20,7 @@ const URL =
 
 test.describe.configure({ mode: 'serial' });
 
-test('medium-visual: capture article via headed Brave + render in /library', async () => {
+test('medium-visual: capture article via headed Brave + render in /clips', async () => {
   test.skip(!process.env.MEDIUM_VISUAL, 'set MEDIUM_VISUAL=1 to run this');
   test.setTimeout(240_000);
 
@@ -134,9 +134,9 @@ test('medium-visual: capture article via headed Brave + render in /library', asy
     // the profile didn't clear the challenge.
     expect(cap.title, 'capture should not be Cloudflare interstitial').not.toContain('moment');
 
-    // Render through /library and screenshot the top portion.
+    // Render through /clips and screenshot the top portion.
     const libPage = await ctx.newPage();
-    await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+    await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };
       window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);

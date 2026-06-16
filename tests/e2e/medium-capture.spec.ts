@@ -138,9 +138,9 @@ test('capture medium article', async () => {
       JSON.stringify({ ...cap, bodyHtml: ((cap.bodyHtml as string) ?? '').slice(0, 100000) }, null, 2),
       'utf8');
 
-    // Render the clip in /library
+    // Render the clip in /clips
     const libPage = await ctx.newPage();
-    await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+    await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };
       window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);

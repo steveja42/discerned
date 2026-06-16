@@ -1,6 +1,6 @@
 // Visual smoke / investigation harness for goodreads.com book clips.
 // Captures a real clip from goodreads.com via the extension, then renders it
-// through the actual web app (/library) and screenshots the rendered card so
+// through the actual web app (/clips) and screenshots the rendered card so
 // we can iterate on the (planned) tagGoodreads tagger and matching CSS.
 //
 // Run with: GOODREADS=1 PWDEBUG_HEADLESS_NEW=1 pnpm exec playwright test \
@@ -148,9 +148,9 @@ test('goodreads: capture clip, render in web app, screenshot card', async () => 
       });
     })) as Record<string, unknown>;
 
-    // Render through the web app /library.
+    // Render through the web app /clips.
     const libPage = await ctx.newPage();
-    await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+    await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };
       window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);

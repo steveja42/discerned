@@ -7,7 +7,7 @@ Companion web app for the Discerned Chrome extension, hosted at `discerned.onlin
 Three routes:
 - `/` — public Discernments feed (Nostr `kind:1` events tagged `#discerned`)
 - `/about` — brand/marketing page with HeroBeacon SVG
-- `/library` — user's private Library, delivered via extension postMessage bridge
+- `/clips` — user's private Clips, delivered via extension postMessage bridge
 
 ## Tech stack
 
@@ -68,7 +68,7 @@ app/
   page.tsx             ← home (mounts HomeClient)
   HomeClient.tsx       ← client: feed + popover + modal
   about/page.tsx       ← HeroBeacon + philosophy copy
-  library/page.tsx
+  clips/page.tsx
 components/
   brand/               ← MiniBeacon.tsx, HeroBeacon.tsx (do not modify SVGs)
   chrome/              ← TopBar.tsx
@@ -87,7 +87,7 @@ hooks/
   useCastFeed.ts
   useNostrAuth.ts
   useFirstVisit.ts
-  useLibraryBridge.ts  ← bridge listener for /library, 2s timeout
+  useLibraryBridge.ts  ← bridge listener for /clips, 2s timeout
 ```
 
 ## Brand mark discipline

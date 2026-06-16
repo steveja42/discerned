@@ -70,9 +70,9 @@ test('twitter: full-page capture produces readable bodyHtml', async () => {
     // eslint-disable-next-line no-console
     console.log(`[probe] full-page bodyText len=${bodyText.length} bodyHtml len=${bodyHtml.length}`);
 
-    // Render through /library and screenshot the resulting card.
+    // Render through /clips and screenshot the resulting card.
     const libPage = await ctx.newPage();
-    await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+    await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };
       window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
@@ -152,9 +152,9 @@ test('twitter: selection capture across the tweet text produces readable selecti
     // eslint-disable-next-line no-console
     console.log(`[probe] selection selectionText len=${selText.length}`);
 
-    // Render through /library and screenshot.
+    // Render through /clips and screenshot.
     const libPage = await ctx.newPage();
-    await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+    await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };
       window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);

@@ -13,7 +13,7 @@ const BBC_URL =
 
 test.describe.configure({ mode: 'serial' });
 
-test('bbc-visual: capture article, render in /library, screenshot', async () => {
+test('bbc-visual: capture article, render in /clips, screenshot', async () => {
   test.skip(!process.env.BBC, 'set BBC=1 to run this');
   test.setTimeout(180_000);
 
@@ -66,7 +66,7 @@ test('bbc-visual: capture article, render in /library, screenshot', async () => 
     })) as Record<string, unknown>;
 
     const libPage = await ctx.newPage();
-    await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+    await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' }, encrypted: '' };
       window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);

@@ -17,7 +17,7 @@ function LibraryWithClipId({ searchQuery }: { searchQuery: string }) {
   // stays clean and back-button history isn't polluted.
   useEffect(() => {
     if (initialClipId) {
-      router.replace('/library', { scroll: false });
+      router.replace('/clips', { scroll: false });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -1,4 +1,4 @@
-// Drives the /library page by injecting clip fixtures through the same
+// Drives the /clips page by injecting clip fixtures through the same
 // postMessage bridge the extension uses. Asserts that ClipRow renders the
 // fields we promise users will see.
 
@@ -11,9 +11,9 @@ const clips = loadClipFixtures().map((f) => ({
   encrypted: '',
 }));
 
-test.describe('web rendering — /library via bridge', () => {
+test.describe('web rendering — /clips via bridge', () => {
   test('renders one ClipRow per injected clip with title, domain, excerpt', async ({ page }) => {
-    await page.goto('/library');
+    await page.goto('/clips');
     // Wait for the bridge hook to mount and post DISCERNED_WEB_READY.
     await page.waitForLoadState('networkidle');
 
@@ -42,7 +42,7 @@ test.describe('web rendering — /library via bridge', () => {
   });
 
   test('clicking a clip surfaces its detail content', async ({ page }) => {
-    await page.goto('/library');
+    await page.goto('/clips');
     await page.waitForLoadState('networkidle');
 
     const articleClip = clips.find((c) => c.capture.format === 'article');

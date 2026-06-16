@@ -2,7 +2,7 @@
 //
 // Each fixture-visual spec calls runFixtureVisual({ site, ... }) — it loads
 // the fixture from the fixture-server, drives captureContext() via the dev
-// test bridge, renders the resulting clip through the web app's /library,
+// test bridge, renders the resulting clip through the web app's /clips,
 // dumps debug artifacts to test-output/, then asserts the rendered .clip-body
 // matches a pixel baseline.
 //
@@ -130,7 +130,7 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
   );
 
   const libPage = await ctx.newPage();
-  await libPage.goto('http://localhost:3000/library', { waitUntil: 'networkidle' });
+  await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
   await libPage.evaluate((capture) => {
     const clip = {
       capture,

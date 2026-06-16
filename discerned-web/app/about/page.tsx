@@ -30,7 +30,7 @@ export default function AboutPage() {
           <p className="hero-lede">
             Discerned is a quiet protocol for thoughtful readers. Clip what matters,
             rate it across <strong>Interest</strong>, <strong>Ethics</strong>, and <strong>Category</strong>,
-            and broadcast — or don&apos;t. Your library is yours; the signal is shared.
+            and broadcast — or don&apos;t. Your clips are yours; the signal is shared.
           </p>
           <div className="hero-cta">
             <button className="btn primary">Get the extension</button>
