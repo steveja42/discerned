@@ -28,7 +28,7 @@ export default function AboutPage() {
           <div className="hero-eyebrow">A value-attribution layer for the web</div>
           <h1 className="hero-title">Signal,<br /><em>not noise.</em></h1>
           <p className="hero-lede">
-            Discerned is a quiet protocol for thoughtful readers. Clip what matters,
+            Discerned is a best in class web clipper and global curation platform. Clip what matters,
             rate it across <strong>Interest</strong>, <strong>Ethics</strong>, and <strong>Category</strong>,
             and broadcast — or don&apos;t. Your clips are yours; the signal is shared.
           </p>
