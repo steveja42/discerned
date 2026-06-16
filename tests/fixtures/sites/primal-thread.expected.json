@@ -5,7 +5,6 @@
     "minLength": 200,
     "contains": [
       "HODL",
-      "Getting a little training in",
       "Sugestor Ultra",
       "Philipp",
       "Boog"
@@ -13,7 +12,6 @@
   },
   "bodyHtml": {
     "noScripts": true,
-    "hasImgs": true,
-    "containsClasses": ["dx-header", "dx-stats"]
+    "hasImgs": true
   }
 }

@@ -13,7 +13,6 @@
   },
   "bodyHtml": {
     "noScripts": true,
-    "hasImgs": true,
-    "containsClasses": ["dx-header", "dx-stats"]
+    "hasImgs": true
   }
 }

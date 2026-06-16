@@ -12,8 +12,18 @@ export function fixturePath(name: string): string {
 
 export function loadFixture(name: string, url: string): void {
   const html = readFileSync(fixturePath(name), 'utf8');
+  // Vitest's jsdom env runs with `runScripts: 'dangerously'`, so `document.write`
+  // EXECUTES any inline <script> in the fixture. Real-page snapshots (reddit,
+  // youtube, …) bundle the site's own JS, which throws under jsdom (`SML is not
+  // defined`, `responseStart`, …). Those surface as uncaught errors that fail the
+  // run with a non-zero exit even when every test passes. The capture pipeline
+  // only reads DOM structure — it never needs page scripts to run, and the
+  // sanitiser strips <script> from the captured output regardless — so neutralise
+  // them at the door. (The sanitiser XSS test injects its payload via a fixture
+  // and asserts the *captured* HTML is script-free, which is unaffected.)
+  const inert = html.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '');
   document.open();
-  document.write(html);
+  document.write(inert);
   document.close();
 
   // jsdom doesn't allow direct assignment to window.location; override the

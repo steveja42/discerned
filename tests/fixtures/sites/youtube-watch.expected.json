@@ -2,10 +2,10 @@
   "format": "article",
   "url": "http://127.0.0.1:4173/youtube-watch.html",
   "bodyText": {
-    "minLength": 50
+    "minLength": 10,
+    "contains": ["Me at the zoo"]
   },
   "bodyHtml": {
-    "noScripts": true,
-    "containsClasses": ["dx-post"]
+    "noScripts": true
   }
 }

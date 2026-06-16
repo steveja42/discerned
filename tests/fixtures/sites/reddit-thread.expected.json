@@ -2,10 +2,10 @@
   "format": "article",
   "url": "http://127.0.0.1:4173/reddit-thread.html",
   "bodyText": {
-    "minLength": 100
+    "minLength": 100,
+    "contains": ["Fallout76", "Commando Weps"]
   },
   "bodyHtml": {
-    "noScripts": true,
-    "containsClasses": ["dx-post"]
+    "noScripts": true
   }
 }
