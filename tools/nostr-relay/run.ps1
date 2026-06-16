@@ -101,16 +101,42 @@ function Invoke-Container([string]$engine, [string]$image) {
   # rather than passing a quoted command string through Start-Process -ArgumentList
   # (whose embedded quotes/spaces get mangled crossing the process boundary).
   $launcher = Join-Path $here 'relay-window.ps1'
+  # Map Windows timezone ID to IANA name for the container.
+  $winTz = [System.TimeZoneInfo]::Local.Id
+  $ianaTz = switch ($winTz) {
+    'Pacific Standard Time'  { 'America/Los_Angeles' }
+    'Mountain Standard Time' { 'America/Denver' }
+    'Central Standard Time'  { 'America/Chicago' }
+    'Eastern Standard Time'  { 'America/New_York' }
+    default                  { 'America/Los_Angeles' }
+  }
+
   $script = @"
 Set-Location '$here'
 Write-Host 'Discerned local relay - ws://localhost:7777 (Ctrl+C to stop)'
+`$localTz = [System.TimeZoneInfo]::Local
 & '$engine' run --rm ``
   -e 'RUST_LOG=$logLevel' ``
   -p '127.0.0.1:7777:8080' ``
   -v '$($cfg):/usr/src/app/config.toml:ro' ``
   -v '$($here)\data:/usr/src/app/db' ``
   --name discerned-local-relay ``
-  '$image'
+  '$image' 2>&1 | ForEach-Object {
+    # Rewrite UTC timestamps like 2026-06-16T17:01:04.123456Z to local time.
+    `$line = `$_ -as [string]
+    if (`$line -match '(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+)Z') {
+      `$tsStr = `$Matches[1]
+      `$utc = [datetime]::SpecifyKind([datetime]::ParseExact(`$tsStr, 'yyyy-MM-ddTHH:mm:ss.ffffff', `$null), [System.DateTimeKind]::Utc)
+      `$local = [System.TimeZoneInfo]::ConvertTimeFromUtc(`$utc, `$localTz)
+      `$offset = `$localTz.GetUtcOffset(`$utc)
+      `$sign = if (`$offset.TotalMinutes -ge 0) { '+' } else { '-' }
+      `$offsetStr = '{0}{1:D2}:{2:D2}' -f `$sign, [Math]::Abs(`$offset.Hours), [Math]::Abs(`$offset.Minutes)
+      `$localStr = `$local.ToString('yyyy-MM-ddTHH:mm:ss.ffffff') + `$offsetStr
+      `$line -replace ([regex]::Escape(`$tsStr) + 'Z'), `$localStr
+    } else {
+      `$line
+    }
+  }
 "@
   Set-Content -Path $launcher -Value $script -Encoding ascii
 
