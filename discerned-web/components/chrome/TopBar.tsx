@@ -117,6 +117,7 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
           <SettingsIcon />
         </button>
         <StatusDot
+          variant="nostr"
           connected={auth.status !== 'guest'}
           tooltip={
             auth.status === 'guest'

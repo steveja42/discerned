@@ -338,6 +338,7 @@ a { color: inherit; }
   flex-shrink: 0;
 }
 .status-dot.connected { background: var(--ethics); }
+.status-dot.nostr.connected { background: #7c3aed; }
 .status-dot.disconnected { background: var(--ink-4); }
 .status-dot-wrap .status-tip {
   position: absolute;

@@ -1864,7 +1864,7 @@ export class DiscernedOverlay {
       .footer-meta { display: flex; align-items: center; justify-content: space-between; }
       .nostr-status { display: flex; align-items: center; gap: 6px; }
       .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p-ink-4); flex-shrink: 0; }
-      .status-dot.connected { background: var(--p-accent); }
+      .status-dot.connected { background: #7c3aed; }
       .status-text { font-size: 11px; color: var(--p-ink-3); }
       .publish-mode-slider { display: flex; align-items: center; }
       .slider-track {

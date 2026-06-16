@@ -5,9 +5,10 @@ interface StatusDotProps {
   tooltip: string;
   onClick?: () => void;
   label: string;
+  variant?: 'default' | 'nostr';
 }
 
-export default function StatusDot({ connected, tooltip, onClick, label }: StatusDotProps) {
+export default function StatusDot({ connected, tooltip, onClick, label, variant = 'default' }: StatusDotProps) {
   const Tag = onClick ? 'button' : 'span';
   return (
     <Tag
@@ -16,7 +17,7 @@ export default function StatusDot({ connected, tooltip, onClick, label }: Status
       aria-label={label}
       style={onClick ? { background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' } : undefined}
     >
-      <span className={`status-dot ${connected ? 'connected' : 'disconnected'}`} />
+      <span className={`status-dot ${variant === 'nostr' ? 'nostr ' : ''}${connected ? 'connected' : 'disconnected'}`} />
       <span className="status-tip" role="tooltip">{tooltip}</span>
     </Tag>
   );
