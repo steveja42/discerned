@@ -347,7 +347,15 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       return handleCast(message.data);
 
     case 'GET_AUTH_STATE':
-      return { success: true, data: currentAuthState };
+      // For a stored key, report whether it's currently unlocked (the decrypted
+      // key lives only in this SW's memory, cleared when Chrome recycles the SW).
+      // `unlocked` is response-only — never persisted to currentAuthState.
+      return {
+        success: true,
+        data: currentAuthState.type === 'nsec'
+          ? { ...currentAuthState, unlocked: nsecPrivateKey !== null }
+          : currentAuthState,
+      };
 
     case 'GET_CLIP_COUNT':
       return handleGetClipCount();

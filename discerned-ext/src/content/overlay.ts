@@ -1114,6 +1114,7 @@ export class DiscernedOverlay {
   private renderMain() {
     if (!this.opts) return;
     const isConnected = this.isConnected();
+    const needsUnlock = this.needsUnlock();
 
     const formats: Array<{ id: ClipFormat; label: string; icon: string; disabled?: boolean }> = [
       { id: 'selection',          label: 'Selection',  icon: '✂',  disabled: !this.hasSelection },
@@ -1183,11 +1184,17 @@ export class DiscernedOverlay {
 
         <footer class="panel-footer">
           <div class="footer-meta">
-            <div class="nostr-status${isConnected ? ' has-tip' : ''}" id="nostr-status">
+            <div class="nostr-status${isConnected && !needsUnlock ? ' has-tip' : ''}" id="nostr-status">
               <span class="status-dot${isConnected ? ' connected' : ''}"></span>
-              <span class="status-text">${isConnected ? 'Connected to Nostr' : 'Local only'}</span>
+              <span class="status-text">${needsUnlock ? 'Connected · 🔒 Locked' : isConnected ? 'Connected to Nostr' : 'Local only'}</span>
               ${!isConnected ? '<button class="link-btn" id="nostr-signup-link">Connect →</button>' : ''}
-              ${isConnected ? '<span class="nostr-tip" id="nostr-tip" role="tooltip"></span>' : ''}
+              ${needsUnlock ? '<button class="link-btn" id="nostr-unlock-link">Unlock →</button>' : ''}
+              ${isConnected && !needsUnlock ? '<span class="nostr-tip" id="nostr-tip" role="tooltip"></span>' : ''}
+            </div>
+            <div class="inline-unlock" id="inline-unlock" style="display:none">
+              <input type="password" class="pin-input" id="inline-pin" placeholder="PIN" autocomplete="off" />
+              <button class="btn btn-secondary" id="inline-unlock-btn" type="button">Unlock</button>
+              <span class="inline-unlock-error" id="inline-unlock-error"></span>
             </div>
             <div class="publish-mode-slider${!isConnected ? ' guest' : ''}" role="radiogroup" aria-label="Publish mode">
               <div class="slider-track">
@@ -1323,6 +1330,19 @@ export class DiscernedOverlay {
       this.render();
     });
 
+    // Stored-key unlock: the footer "Unlock →" link reveals an inline PIN field.
+    this.shadow.getElementById('nostr-unlock-link')?.addEventListener('click', () => {
+      const box = this.shadow.getElementById('inline-unlock');
+      if (box) box.style.display = 'flex';
+      (this.shadow.getElementById('inline-pin') as HTMLInputElement | null)?.focus();
+    });
+    const inlinePin = this.shadow.getElementById('inline-pin') as HTMLInputElement | null;
+    const submitInlineUnlock = () => { void this.unlockKeyInline(); };
+    this.shadow.getElementById('inline-unlock-btn')?.addEventListener('click', submitInlineUnlock);
+    inlinePin?.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); submitInlineUnlock(); }
+    });
+
     this.shadow.getElementById('clip')?.addEventListener('click', () => this.handleClipAction());
 
     this.setupCategoryCombobox();
@@ -1392,6 +1412,14 @@ export class DiscernedOverlay {
     if (a.type === 'guest') return false;
     if (a.type === 'pro') return !!a.pubkey;
     return true;
+  }
+
+  // A stored key (nsec) is connected but unusable for casting until its PIN is
+  // entered — the decrypted key lives only in the background SW's memory and is
+  // cleared whenever Chrome recycles the SW. `unlocked` is reported by
+  // GET_AUTH_STATE. When true here, the cast path prompts for the PIN inline.
+  private needsUnlock(): boolean {
+    return this.authState.type === 'nsec' && this.authState.unlocked !== true;
   }
 
   /**
@@ -1629,30 +1657,18 @@ export class DiscernedOverlay {
     } else if (mode === 'cast') {
       // CAST only publishes to Nostr; local save requires an explicit CLIP action.
       this.removePreview();
-      this.showLoading('📡 Broadcasting…');
-      try {
-        const eventId = await this.opts.onCast(captureWithNote, evaluation);
-        this.showSuccess('Cast published 📡', { eventId });
-      } catch (err: unknown) {
-        log(LL.WARN, 'Discerned: cast failed', err instanceof Error ? err.message : err);
-        this.showError('Broadcast failed. Please try again.');
-      }
+      await this.broadcastWithUnlock(() => this.opts!.onCast(captureWithNote, evaluation), '📡 Broadcasting…');
 
     } else {
       // both: explicit local save first (idempotent double-save is safe), then broadcast.
       try { await this.opts.onClip(captureWithNote, evaluation); }
       catch { this.showError('Failed to clip. Please try again.'); return; }
       this.removePreview();
-      this.showLoading('Clipped! 📡 Broadcasting…');
-      try {
-        const eventId = await this.opts.onCast(captureWithNote, evaluation);
-        this.showSuccess('Clipped & cast 📡', { clipId: captureWithNote.id, eventId });
-      } catch (err: unknown) {
-        // Local clip already saved — surface the cast failure but keep the library link.
-        log(LL.WARN, 'Discerned: broadcast failed (clip already saved locally)',
-          err instanceof Error ? err.message : err);
-        this.showSuccess('Clipped 🔒 · broadcast failed', { clipId: captureWithNote.id });
-      }
+      await this.broadcastWithUnlock(
+        () => this.opts!.onCast(captureWithNote, evaluation),
+        'Clipped! 📡 Broadcasting…',
+        captureWithNote.id,
+      );
     }
 
     void chrome.storage.local.set({
@@ -1661,6 +1677,128 @@ export class DiscernedOverlay {
       [STORAGE_KEYS.LAST_ETHICS]:       this.ethics,
       [STORAGE_KEYS.LAST_CATEGORY]:     evaluation.category,
     });
+  }
+
+  /**
+   * Run a broadcast, unlocking a stored key first if needed. A stored key (nsec)
+   * can be locked because the decrypted key lives only in the background SW's
+   * memory and Chrome recycles the SW aggressively. Two paths land here:
+   *  - pre-check: `needsUnlock()` is already true → prompt before broadcasting.
+   *  - mid-cast race: the SW dies between the pre-check and the sign call, so the
+   *    cast rejects with `PIN_REQUIRED` → prompt, then auto-retry once unlocked.
+   * `clipId` (set in `both` mode) keeps the "View in Clips" link on the result.
+   */
+  private async broadcastWithUnlock(
+    cast: () => Promise<string | undefined>,
+    loadingText: string,
+    clipId?: string,
+  ): Promise<void> {
+    const succeed = (eventId?: string) =>
+      this.showSuccess(clipId ? 'Clipped & cast 📡' : 'Cast published 📡', { clipId, eventId });
+
+    if (this.needsUnlock()) {
+      const unlocked = await this.promptUnlockInLoading();
+      if (!unlocked) {
+        // User cancelled — keep the local clip (both mode) but report no broadcast.
+        if (clipId) this.showSuccess('Clipped 🔒 · not broadcast', { clipId });
+        else this.showError('Broadcast cancelled — key locked.');
+        return;
+      }
+    }
+
+    this.showLoading(loadingText);
+    try {
+      succeed(await cast());
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message === 'PIN_REQUIRED') {
+        // SW was recycled between the pre-check and signing — prompt then retry once.
+        const unlocked = await this.promptUnlockInLoading();
+        if (!unlocked) {
+          if (clipId) this.showSuccess('Clipped 🔒 · not broadcast', { clipId });
+          else this.showError('Broadcast cancelled — key locked.');
+          return;
+        }
+        this.showLoading(loadingText);
+        try {
+          succeed(await cast());
+          return;
+        } catch (retryErr: unknown) {
+          log(LL.WARN, 'Discerned: cast failed after unlock',
+            retryErr instanceof Error ? retryErr.message : retryErr);
+        }
+      } else {
+        log(LL.WARN, 'Discerned: cast failed', err instanceof Error ? err.message : err);
+      }
+      // Local clip already saved (both mode) — surface the failure but keep the link.
+      if (clipId) this.showSuccess('Clipped 🔒 · broadcast failed', { clipId });
+      else this.showError('Broadcast failed. Please try again.');
+    }
+  }
+
+  /**
+   * Render an inline PIN form inside the #loading panel and resolve true once the
+   * stored key is unlocked, or false if the user cancels. Loops on wrong PIN.
+   * On success the cached `authState.unlocked` is flipped so the footer updates.
+   */
+  private promptUnlockInLoading(): Promise<boolean> {
+    const loading = this.shadow.getElementById('loading');
+    if (!loading) return Promise.resolve(false);
+    const ev = this.escapeHtml.bind(this);
+    loading.style.display = 'flex';
+    loading.innerHTML = `
+      <div class="unlock-prompt">
+        <p class="unlock-title">🔒 Enter your PIN to unlock your key</p>
+        <input type="password" class="pin-input" id="cast-pin" placeholder="PIN" autocomplete="off" />
+        <span class="inline-unlock-error" id="cast-pin-error"></span>
+        <div class="unlock-actions">
+          <button class="btn btn-clip" id="cast-unlock-btn" type="button">Unlock &amp; Cast</button>
+          <button class="dismiss-btn" id="cast-unlock-cancel" type="button">Cancel</button>
+        </div>
+      </div>`;
+    const pinEl = loading.querySelector('#cast-pin') as HTMLInputElement | null;
+    const errEl = loading.querySelector('#cast-pin-error');
+    pinEl?.focus();
+
+    return new Promise<boolean>((resolve) => {
+      const submit = async () => {
+        const pin = pinEl?.value ?? '';
+        if (!pin) return;
+        if (errEl) errEl.textContent = '';
+        const res = await chrome.runtime.sendMessage({ type: 'UNLOCK_NSEC', pin }).catch(() => null);
+        if (res?.success) {
+          if (this.authState.type === 'nsec') this.authState = { ...this.authState, unlocked: true };
+          resolve(true);
+        } else {
+          if (errEl) errEl.textContent = ev(res?.error ?? 'Incorrect PIN. Please try again.');
+          if (pinEl) { pinEl.value = ''; pinEl.focus(); }
+        }
+      };
+      loading.querySelector('#cast-unlock-btn')?.addEventListener('click', () => void submit());
+      pinEl?.addEventListener('keydown', (e) => {
+        if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); void submit(); }
+      });
+      loading.querySelector('#cast-unlock-cancel')?.addEventListener('click', () => resolve(false));
+    });
+  }
+
+  /**
+   * Unlock the stored key from the footer "Unlock →" link's inline PIN field,
+   * then re-render so the footer reflects the unlocked state.
+   */
+  private async unlockKeyInline(): Promise<void> {
+    const pinEl = this.shadow.getElementById('inline-pin') as HTMLInputElement | null;
+    const errEl = this.shadow.getElementById('inline-unlock-error');
+    const pin = pinEl?.value ?? '';
+    if (!pin) return;
+    if (errEl) errEl.textContent = '';
+    const res = await chrome.runtime.sendMessage({ type: 'UNLOCK_NSEC', pin }).catch(() => null);
+    if (res?.success) {
+      if (this.authState.type === 'nsec') this.authState = { ...this.authState, unlocked: true };
+      this.render();
+    } else {
+      if (errEl) errEl.textContent = this.escapeHtml(res?.error ?? 'Incorrect PIN. Please try again.');
+      if (pinEl) { pinEl.value = ''; pinEl.focus(); }
+    }
   }
 
   private showLoading(text: string) {
@@ -2226,6 +2364,24 @@ export class DiscernedOverlay {
         color: var(--p-ink-3); font-size: 12px; cursor: pointer; text-decoration: underline;
       }
       .dismiss-btn:hover { color: var(--p-ink); }
+
+      /* Inline stored-key unlock (footer link) */
+      .inline-unlock { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+      .inline-unlock .pin-input { flex: 1; min-width: 100px; }
+      .inline-unlock .btn { padding: 6px 10px; font-size: 12px; }
+      .inline-unlock-error { font-size: 12px; color: #b91c1c; width: 100%; }
+      .pin-input {
+        background: var(--p-surface); border: 1px solid var(--p-rule);
+        border-radius: 6px; color: var(--p-ink); font-size: 13px; padding: 8px 10px;
+        outline: none; transition: border-color 0.15s; font-family: inherit;
+      }
+      .pin-input:focus { border-color: var(--p-accent); }
+
+      /* Inline unlock-and-cast prompt (in the #loading panel) */
+      .unlock-prompt { display: flex; flex-direction: column; align-items: stretch; gap: 8px; width: 100%; max-width: 280px; }
+      .unlock-title { color: var(--p-ink); font-size: 14px; font-weight: 600; text-align: center; }
+      .unlock-actions { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+      .unlock-actions .btn-clip { width: 100%; }
     `;
   }
 }

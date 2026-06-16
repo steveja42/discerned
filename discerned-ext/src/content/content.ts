@@ -236,7 +236,11 @@ async function handleCast(capture: Capture, evaluation: Evaluation): Promise<str
     return (response.data as { eventId?: string } | undefined)?.eventId;
   } catch (error) {
     log(LL.ERROR, 'Discerned: Cast failed', error, 'url:', window.location.href);
-    showCastErrorToast(error instanceof Error ? error.message : 'Broadcast failed');
+    // PIN_REQUIRED means the stored key is locked — the overlay handles this with
+    // an inline unlock prompt + auto-retry, so don't also surface a red toast.
+    if (!(error instanceof Error && error.message === 'PIN_REQUIRED')) {
+      showCastErrorToast(error instanceof Error ? error.message : 'Broadcast failed');
+    }
     throw error;
   }
 }

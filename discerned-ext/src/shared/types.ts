@@ -76,7 +76,10 @@ export type AuthState =
   | { type: 'guest' }
   | { type: 'pro'; hasNIP07: true; pubkey?: string }
   | { type: 'nip46'; pubkey: string; bunkerRelays: string[]; remotePubkey: string }
-  | { type: 'nsec'; pubkey: string; ncryptsec: string }; // NIP-49 encrypted blob
+  // `unlocked` is transient session state (the decrypted key lives only in the
+  // background SW's memory). It is NOT persisted — only set on the GET_AUTH_STATE
+  // response so the overlay can show a locked indicator and prompt for the PIN.
+  | { type: 'nsec'; pubkey: string; ncryptsec: string; unlocked?: boolean }; // NIP-49 encrypted blob
 
 /**
  * Embedded-tweet data harvested from a third-party page that embeds a tweet.
