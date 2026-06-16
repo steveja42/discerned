@@ -6,10 +6,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { npubEncode } from 'nostr-tools/nip19';
 import MiniBeacon from '@/components/brand/MiniBeacon';
 import StatusDot from '@/components/auth/StatusDot';
+import SettingsModal from '@/components/chrome/SettingsModal';
 import type { AuthState } from '@/lib/types';
 
 interface TopBarProps {
@@ -51,6 +52,7 @@ function SearchIcon() {
 export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, searchPlaceholder, searchValue, onSearchChange, extensionPresent }: TopBarProps) {
   const path = usePathname();
   const searchRef = useRef<HTMLInputElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
   useEffect(() => {
@@ -75,6 +77,7 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
   );
 
   return (
+    <>
     <header className="topbar">
       <div
         className={`brand brand-clickable ${brandHasPopover ? 'brand-pulse' : ''}`}
@@ -113,7 +116,7 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
         >
           <GitHubIcon />
         </a>
-        <button className="icon-btn" title="Settings">
+        <button className="icon-btn" title="Settings" onClick={() => setSettingsOpen(true)}>
           <SettingsIcon />
         </button>
         <StatusDot
@@ -138,5 +141,7 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
         />
       </div>
     </header>
+    {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+    </>
   );
 }

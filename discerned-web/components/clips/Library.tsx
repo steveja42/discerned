@@ -20,8 +20,6 @@ import DetailPanel from '@/components/feed/DetailPanel';
 import LibraryEmpty from './LibraryEmpty';
 import BulkActionBar from './BulkActionBar';
 import ResizableLayout from '@/components/layout/ResizableLayout';
-import { ImportDialog } from './ImportDialog';
-import { JsonImportDialog } from './JsonImportDialog';
 import { exportClipsJson } from '@/lib/export-utils';
 
 interface SidebarLocalProps {
@@ -163,9 +161,7 @@ interface LibraryProps {
 }
 
 export default function Library({ glyphVariant = 'bars', initialClipId, searchQuery }: LibraryProps) {
-  const { bridgePresent, clips, timedOut, categories, bodies, removeClips, updateClipNote, addClips, addCategories, removeCategory, setClipBody, focusClipId, clearFocusClipId } = useLibraryBridge();
-  const [importOpen, setImportOpen] = useState(false);
-  const [jsonImportOpen, setJsonImportOpen] = useState(false);
+  const { bridgePresent, clips, timedOut, categories, bodies, removeClips, updateClipNote, removeCategory, setClipBody, focusClipId, clearFocusClipId } = useLibraryBridge();
 
   useEffect(() => {
     if (!focusClipId) return;
@@ -356,36 +352,11 @@ export default function Library({ glyphVariant = 'bars', initialClipId, searchQu
         onExport={handleBulkExport}
         onClear={() => setSelectedIds(new Set())}
       />
-
-      <div className="sov-strip">
-        <span className="spacer" />
-        <span className="item"><a onClick={() => setImportOpen(true)} style={{ cursor: 'pointer' }}>Import Evernote</a></span>
-        <span className="item"><a onClick={() => setJsonImportOpen(true)} style={{ cursor: 'pointer' }}>Import JSON</a></span>
-        <span className="item"><a onClick={() => exportClipsJson(clips)} style={{ cursor: 'pointer' }}>Export JSON</a></span>
-      </div>
     </main>
   );
 
   return (
     <div className="app">
-      {importOpen && (
-        <ImportDialog
-          bridgePresent={bridgePresent}
-          existingCustomCategories={categories}
-          onClose={() => setImportOpen(false)}
-          onClipsImported={addClips}
-          onCategoriesCreated={addCategories}
-        />
-      )}
-      {jsonImportOpen && (
-        <JsonImportDialog
-          bridgePresent={bridgePresent}
-          existingCustomCategories={categories}
-          onClose={() => setJsonImportOpen(false)}
-          onClipsImported={addClips}
-          onCategoriesCreated={addCategories}
-        />
-      )}
       <ResizableLayout
         sidebar={
           <SidebarLocal
