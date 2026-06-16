@@ -9,6 +9,7 @@ import { npubEncode } from 'nostr-tools/nip19';
 import { CATEGORIES, INTEREST_LEVELS, ETHICS_LEVELS, interestRank, ethicsRank } from '@/lib/constants';
 import type { ClipData } from '@/lib/types';
 import type { FollowProfile } from '@/lib/nostr/follows';
+import type { AuthorProfile } from '@/lib/nostr/profiles';
 import type { GlyphVariant } from '@/components/glyph/Glyph';
 import ClipRow from './ClipRow';
 import DetailPanel from './DetailPanel';
@@ -190,6 +191,7 @@ interface CastFeedProps {
   clips: ClipData[];
   searchQuery?: string;
   follows?: FollowProfile[];
+  authors?: Map<string, AuthorProfile>;
   isSignedIn?: boolean;
   read?: Set<string>;
   markRead?: (id: string) => void;
@@ -200,7 +202,9 @@ interface CastFeedProps {
 const isPubkey = (v: string) => /^[0-9a-f]{64}$/.test(v);
 const EMPTY_READ: Set<string> = new Set();
 
-export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQuery, follows = [], isSignedIn = false, read, markRead }: CastFeedProps) {
+const EMPTY_AUTHORS: Map<string, AuthorProfile> = new Map();
+
+export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQuery, follows = [], authors = EMPTY_AUTHORS, isSignedIn = false, read, markRead }: CastFeedProps) {
   const readSet = read ?? EMPTY_READ;
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [interestMin, setInterestMin] = useState(0);
@@ -288,6 +292,7 @@ export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQ
                 selected={selected?.capture.id === clip.capture.id}
                 onClick={() => handleSelectClip(clip.capture.id)}
                 glyphVariant={glyphVariant}
+                author={clip.capture.authorPubkey ? authors.get(clip.capture.authorPubkey) : undefined}
               />
             ))
           )}
@@ -312,7 +317,7 @@ export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQ
           />
         }
         feed={feedContent}
-        detail={<DetailPanel clip={selected} onDelete={() => {}} onUpdateNote={() => {}} bodies={new Map()} onBodyFetched={() => {}} />}
+        detail={<DetailPanel clip={selected} author={selected?.capture.authorPubkey ? authors.get(selected.capture.authorPubkey) : undefined} onDelete={() => {}} onUpdateNote={() => {}} bodies={new Map()} onBodyFetched={() => {}} />}
         initialSidebarWidth={200}
       />
     </div>

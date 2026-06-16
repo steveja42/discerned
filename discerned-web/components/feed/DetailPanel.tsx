@@ -6,12 +6,14 @@
 import React, { useState, useEffect } from 'react';
 import type { ClipData } from '@/lib/types';
 import type { ClipBody } from '@/lib/bridge/ClipStoreContext';
+import { authorLabel, type AuthorProfile } from '@/lib/nostr/profiles';
 import { CATEGORIES, interestRank, ethicsRank } from '@/lib/constants';
 import Wedge from '@/components/glyph/Wedge';
 import { requestClipBody } from '@/lib/bridge/extension-bridge';
 
 interface DetailPanelProps {
   clip: ClipData | null;
+  author?: AuthorProfile;
   onDelete: (id: string) => void;
   onUpdateNote: (id: string, note: string) => void;
   bodies: Map<string, ClipBody>;
@@ -121,7 +123,7 @@ function renderTextWithBreaks(text: string): React.ReactNode {
   ));
 }
 
-export default function DetailPanel({ clip, onDelete, onUpdateNote, bodies, onBodyFetched }: DetailPanelProps) {
+export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodies, onBodyFetched }: DetailPanelProps) {
   // Request body from extension when clip changes and it's not cached yet.
   useEffect(() => {
     if (!clip) return;
@@ -154,6 +156,7 @@ export default function DetailPanel({ clip, onDelete, onUpdateNote, bodies, onBo
 
   const { capture, evaluation } = clip;
   const domain = domainOf(capture.url);
+  const caster = capture.authorPubkey ? authorLabel(capture.authorPubkey, author) : null;
   const cat = CATEGORIES[evaluation.category] ?? { label: evaluation.category, hue: 60 };
   const iIdx = interestRank(evaluation.interest);
   const eIdx = ethicsRank(evaluation.ethics);
@@ -202,6 +205,7 @@ export default function DetailPanel({ clip, onDelete, onUpdateNote, bodies, onBo
         <div className="detail-cat-inline">
           <span className="swatch-lg" style={{ background: `oklch(0.50 0.08 ${cat.hue})` }} />
           <span className="cat-name">{cat.label}</span>
+          {caster && <span className="cat-author" title={caster}>{caster}</span>}
         </div>
       </div>
 

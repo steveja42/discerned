@@ -7,12 +7,14 @@
 import type React from 'react';
 import type { ClipData } from '@/lib/types';
 import Glyph, { type GlyphVariant } from '@/components/glyph/Glyph';
+import { authorLabel, type AuthorProfile } from '@/lib/nostr/profiles';
 
 interface ClipRowProps {
   clip: ClipData;
   selected: boolean;
   onClick: (e: React.MouseEvent) => void;
   glyphVariant?: GlyphVariant;
+  author?: AuthorProfile;
   isSelectMode?: boolean;
   isSelected?: boolean;
   onSelect?: (id: string) => void;
@@ -38,11 +40,12 @@ function favColor(domain: string): string {
 }
 
 export default function ClipRow({
-  clip, selected, onClick, glyphVariant = 'bars',
+  clip, selected, onClick, glyphVariant = 'bars', author,
   isSelectMode = false, isSelected = false, onSelect,
 }: ClipRowProps) {
   const { capture, evaluation } = clip;
   const domain = domainOf(capture.url);
+  const caster = capture.authorPubkey ? authorLabel(capture.authorPubkey, author) : null;
 
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -68,6 +71,12 @@ export default function ClipRow({
           <span className="domain">{domain}</span>
           <span className="dot">·</span>
           <span>{formatDate(capture.timestamp)}</span>
+          {caster && (
+            <>
+              <span className="dot">·</span>
+              <span className="clip-author" title={caster}>{caster}</span>
+            </>
+          )}
         </div>
         <Glyph
           interest={evaluation.interest}

@@ -15,6 +15,7 @@ import { useFirstVisit } from '@/hooks/useFirstVisit';
 import { useCastFeed } from '@/hooks/useCastFeed';
 import { useBridgeAuth } from '@/hooks/useBridgeAuth';
 import { useFollowList } from '@/hooks/useFollowList';
+import { useAuthorProfiles } from '@/hooks/useAuthorProfiles';
 import { useReadCasts } from '@/hooks/useReadCasts';
 
 export default function HomeClient() {
@@ -24,6 +25,7 @@ export default function HomeClient() {
   const { clips, status } = useCastFeed();
   const { extensionPresent } = useBridgeAuth();
   const follows = useFollowList(auth.pubkey);
+  const authors = useAuthorProfiles(clips);
   const { read, markRead } = useReadCasts();
   const [signInOpen, setSignInOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,6 +65,7 @@ export default function HomeClient() {
         status={status}
         searchQuery={searchQuery}
         follows={follows}
+        authors={authors}
         isSignedIn={auth.status !== 'guest'}
         read={read}
         markRead={markRead}
