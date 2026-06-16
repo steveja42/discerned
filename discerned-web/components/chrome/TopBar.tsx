@@ -108,7 +108,7 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
         {extensionPresent && navLink('/clips', 'My Clips')}
         {navLink('/about', 'About')}
         <a
-          href="https://github.com/discerned-online"
+          href="https://github.com/steveja42/discerned/tree/main/discerned-web"
           target="_blank"
           rel="noopener noreferrer"
           className="icon-btn"
