@@ -15,6 +15,7 @@
 import { createContext, useContext, useState, useEffect, useLayoutEffect, useCallback, type ReactNode } from 'react';
 import type { AuthState } from '@/lib/types';
 import { loadStoredPubkey, storePubkey, clearStoredAuth, hasNip07, nip07GetPubkey } from '@/lib/nostr/auth';
+import { npubEncode } from 'nostr-tools/nip19';
 import { sendPubkeyToExtension } from '@/lib/bridge/extension-bridge';
 import { LL, log } from '@/lib/logger';
 
@@ -36,7 +37,7 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     const stored = loadStoredPubkey();
     if (stored) {
-      log(LL.NORMAL, '[auth] restored pubkey from localStorage:', stored.slice(0, 8));
+      log(LL.NORMAL, '[auth] restored pubkey from localStorage:', npubEncode(stored).slice(0, 12));
       setAuth({ status: 'readonly', pubkey: stored, source: 'manual' });
     }
   }, []);
@@ -72,7 +73,7 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
         signedIn = true;
         nip07GetPubkey().then((pubkey) => {
           if (cancelled) return;
-          log(LL.NORMAL, '[auth] nip07 auto-signin pubkey:', pubkey.slice(0, 8));
+          log(LL.NORMAL, '[auth] nip07 auto-signin pubkey:', npubEncode(pubkey).slice(0, 12));
           storePubkey(pubkey);
           setAuth({ status: 'connected', pubkey, source: 'nip07' });
           sendPubkeyToExtension(pubkey);
@@ -143,7 +144,7 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
 
   const signInNip07 = useCallback(async () => {
     const pubkey = await nip07GetPubkey();
-    log(LL.NORMAL, '[auth] nip07 sign-in pubkey:', pubkey.slice(0, 8));
+    log(LL.NORMAL, '[auth] nip07 sign-in pubkey:', npubEncode(pubkey).slice(0, 12));
     storePubkey(pubkey);
     setAuth({ status: 'connected', pubkey, source: 'nip07' });
     // Share the pubkey with the extension (if installed) so it can sign
@@ -152,7 +153,7 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInPubkey = useCallback((pubkey: string) => {
-    log(LL.NORMAL, '[auth] manual pubkey sign-in:', pubkey.slice(0, 8));
+    log(LL.NORMAL, '[auth] manual pubkey sign-in:', npubEncode(pubkey).slice(0, 12));
     storePubkey(pubkey);
     setAuth({ status: 'readonly', pubkey, source: 'manual' });
   }, []);
@@ -169,7 +170,7 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
         log(LL.DEBUG, '[useNostrAuth] setBridgeAuth ignored — already connected');
         return prev;
       }
-      log(LL.NORMAL, '[auth] bridge pubkey:', pubkey.slice(0, 8));
+      log(LL.NORMAL, '[auth] bridge pubkey:', npubEncode(pubkey).slice(0, 12));
       return { status: 'readonly', pubkey, source: 'bridge' };
     });
   }, []);
