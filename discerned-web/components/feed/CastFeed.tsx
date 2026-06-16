@@ -5,6 +5,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { npubEncode } from 'nostr-tools/nip19';
 import { CATEGORIES, INTEREST_LEVELS, ETHICS_LEVELS, interestRank, ethicsRank } from '@/lib/constants';
 import type { ClipData } from '@/lib/types';
 import type { FollowProfile } from '@/lib/nostr/follows';
@@ -30,8 +31,14 @@ interface SidebarProps {
   isSignedIn: boolean;
 }
 
+// npub for a follow, used wherever the key is shown to the user (never hex).
+function followNpub(f: FollowProfile): string {
+  try { return npubEncode(f.pubkey); } catch { return f.pubkey; }
+}
+
 function followInitial(f: FollowProfile): string {
-  return (f.name?.trim()?.[0] ?? f.pubkey[0] ?? '·').toUpperCase();
+  // Fall back to the first char past the shared "npub1" prefix, not raw hex.
+  return (f.name?.trim()?.[0] ?? followNpub(f)[5] ?? '·').toUpperCase();
 }
 
 function Sidebar({
@@ -83,7 +90,7 @@ function Sidebar({
                 {f.picture
                   ? <img className="av av-img" src={f.picture} alt="" />
                   : <span className="av">{followInitial(f)}</span>}
-                <span className="name">{f.name || `${f.pubkey.slice(0, 8)}…`}</span>
+                <span className="name">{f.name || `${followNpub(f).slice(0, 12)}…`}</span>
               </div>
             ))}
           </div>

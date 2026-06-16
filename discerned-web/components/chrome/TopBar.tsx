@@ -7,6 +7,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useRef, useEffect } from 'react';
+import { npubEncode } from 'nostr-tools/nip19';
 import MiniBeacon from '@/components/brand/MiniBeacon';
 import StatusDot from '@/components/auth/StatusDot';
 import type { AuthState } from '@/lib/types';
@@ -122,12 +123,12 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
               ? 'Sign in with Nostr'
               : `Nostr · ${
                   auth.source === 'nip07' ? 'via NIP-07' :
-                  auth.source === 'bridge' ? 'via bridge' :
+                  auth.source === 'bridge' ? 'via extension' :
                   'read-only'
-                } · ${auth.pubkey?.slice(0, 8)}…`
+                } · ${auth.pubkey ? npubEncode(auth.pubkey).slice(0, 12) : ''}…`
           }
           onClick={onSignIn}
-          label={auth.status === 'guest' ? 'Sign in with Nostr' : `Nostr connected · ${auth.pubkey?.slice(0, 8)}`}
+          label={auth.status === 'guest' ? 'Sign in with Nostr' : `Nostr connected · ${auth.pubkey ? npubEncode(auth.pubkey).slice(0, 12) : ''}`}
         />
         <StatusDot
           connected={!!extensionPresent}
