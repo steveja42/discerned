@@ -1671,22 +1671,22 @@ export class DiscernedOverlay {
            force visibility so we're never accidentally hidden. */
         visibility: visible !important;
 
-        /* ── Mint Tinted (translucent) — design tokens ──────────────────────── */
-        --p-bg:        rgba(166, 210, 184, 0.55);
-        --p-surface:   rgba(230, 243, 234, 0.65);
-        --p-surface-2: rgba(198, 222, 207, 0.70);
-        --p-ink:       #0f1a14;
-        --p-ink-2:     #243029;
-        --p-ink-3:     #4e5f55;
-        --p-ink-4:     #788a80;
-        --p-rule:      rgba(15, 26, 20, 0.18);
-        --p-rule-soft: rgba(15, 26, 20, 0.10);
-        --p-accent:     oklch(0.45 0.12 165);
-        --p-accent-ink: oklch(0.36 0.10 165);
-        --p-on-accent:  #ecf6f0;
-        --p-cta-bg:     #14201a;
-        --p-cta-ink:    #e6f3ea;
-        --p-cta-shadow: rgba(20, 60, 40, 0.40);
+        /* ── Jakarta Blue (translucent) — design tokens ─────────────────────── */
+        --p-bg:        rgba(167, 192, 235, 0.55);
+        --p-surface:   rgba(231, 238, 251, 0.65);
+        --p-surface-2: rgba(202, 217, 244, 0.70);
+        --p-ink:       #0f172a;
+        --p-ink-2:     #1e293b;
+        --p-ink-3:     #475569;
+        --p-ink-4:     #94a3b8;
+        --p-rule:      rgba(15, 23, 42, 0.18);
+        --p-rule-soft: rgba(15, 23, 42, 0.10);
+        --p-accent:     oklch(0.55 0.21 263);
+        --p-accent-ink: oklch(0.49 0.21 263);
+        --p-on-accent:  #eef4ff;
+        --p-cta-bg:     #1e3a8a;
+        --p-cta-ink:    #eaf1ff;
+        --p-cta-shadow: rgba(30, 58, 138, 0.40);
       }
       * { margin: 0; padding: 0; box-sizing: border-box;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
@@ -1709,7 +1709,7 @@ export class DiscernedOverlay {
       }
       /* Opaque fallback for browsers without backdrop-filter (some Firefox forks, older Chromium on Linux). */
       @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-        .discerned-root.panel { background: #d8ebe0; }
+        .discerned-root.panel { background: #dde7f9; }
       }
       @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 
@@ -1810,7 +1810,7 @@ export class DiscernedOverlay {
         outline: none; transition: border-color 0.15s, box-shadow 0.15s;
       }
       textarea#note-input::placeholder { color: var(--p-ink-4); }
-      textarea#note-input:focus { border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(42,102,80,0.15); }
+      textarea#note-input:focus { border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
 
       select {
         background: var(--p-surface); border: 1px solid var(--p-rule); color: var(--p-ink);
@@ -1819,7 +1819,7 @@ export class DiscernedOverlay {
         transition: border-color 0.2s;
       }
       select:hover { border-color: var(--p-ink-3); }
-      select:focus { outline: none; border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(42,102,80,0.15); }
+      select:focus { outline: none; border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
 
       /* Combobox */
       .combobox { position: relative; display: flex; }
@@ -1836,18 +1836,18 @@ export class DiscernedOverlay {
       }
       .combobox:focus-within input[type="text"],
       .combobox:focus-within .combobox-toggle { border-color: var(--p-accent); }
-      .combobox input[type="text"]:focus { outline: none; box-shadow: 0 0 0 3px rgba(42,102,80,0.15); }
+      .combobox input[type="text"]:focus { outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
       .combobox-toggle:hover { color: var(--p-ink); }
 
       .combobox-list {
         display: none; position: absolute; top: calc(100% + 3px); left: 0; right: 0;
-        background: rgba(230, 243, 234, 0.95);
+        background: rgba(231, 238, 251, 0.95);
         backdrop-filter: blur(12px) saturate(140%);
         -webkit-backdrop-filter: blur(12px) saturate(140%);
         border: 1px solid var(--p-rule); border-radius: 6px;
         list-style: none; z-index: 9999;
         max-height: 180px; overflow-y: auto;
-        box-shadow: 0 6px 18px rgba(20,60,40,0.25);
+        box-shadow: 0 6px 18px rgba(30,58,138,0.25);
       }
       .combobox-list.open { display: block; }
       .combobox-list li { padding: 7px 10px; color: var(--p-ink); font-size: 12px; cursor: pointer; font-family: inherit; }
@@ -1911,7 +1911,7 @@ export class DiscernedOverlay {
         touch-action: none;
         cursor: pointer;
       }
-      .pop-eq-slot:focus-visible { box-shadow: 0 0 0 3px rgba(42,102,80,0.4); border-color: var(--p-accent); }
+      .pop-eq-slot:focus-visible { box-shadow: 0 0 0 3px rgba(37,99,235,0.4); border-color: var(--p-accent); }
       .pop-eq-track {
         position: absolute;
         left: 50%; top: 10px; bottom: 10px;
@@ -2008,13 +2008,13 @@ export class DiscernedOverlay {
       .btn-secondary { background: var(--p-surface); color: var(--p-ink); border: 1px solid var(--p-rule); }
       .btn-secondary:not(:disabled):hover { background: var(--p-surface-2); }
       .btn-primary { background: var(--p-cta-bg); color: var(--p-cta-ink); }
-      .btn-primary:not(:disabled):hover { background: #1d2e25; }
+      .btn-primary:not(:disabled):hover { background: #1e40af; }
       .btn-clip {
         width: 100%;
         background: var(--p-cta-bg); color: var(--p-cta-ink);
         box-shadow: 0 2px 8px var(--p-cta-shadow);
       }
-      .btn-clip:not(:disabled):hover { background: #1d2e25; }
+      .btn-clip:not(:disabled):hover { background: #1e40af; }
       .btn-ghost { background: var(--p-surface); color: var(--p-ink-3); border: 1px solid var(--p-rule); }
       .btn-ghost:hover { background: var(--p-surface-2); color: var(--p-ink); }
       .btn .icon { font-size: 22px; }
@@ -2122,7 +2122,7 @@ export class DiscernedOverlay {
       /* Loading overlay */
       .loading {
         position: absolute; inset: 0;
-        background: rgba(230, 243, 234, 0.92);
+        background: rgba(231, 238, 251, 0.92);
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
         display: flex; flex-direction: column; align-items: center; justify-content: center;
