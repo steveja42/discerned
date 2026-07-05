@@ -1256,15 +1256,18 @@ async function pushPendingSignToWebApp(id: string, event: Record<string, unknown
 async function signEventViaWebApp(
   template: Parameters<typeof finalizeEvent>[0],
 ): Promise<Record<string, unknown>> {
-  // Reuse an open discerned tab if there is one (so we don't yank focus
-  // unexpectedly); otherwise open and focus a new one so the user can see
-  // the confirm prompt.
+  // PendingSignModal signs silently (no confirm click) once the wallet has
+  // already approved discerned.online, so reusing an already-open tab stays
+  // in the background — the page being clipped keeps focus. But opening a
+  // brand-new tab means there was no discerned tab open yet, which is also
+  // the likely case for a wallet's first-ever approval of this origin; some
+  // wallets (nos2x) render a blank/stuck popup if that tab isn't active
+  // (same caveat as focusTab above), so this path still activates it.
   const existing = await chrome.tabs.query({ url: DISCERNED_URL_PATTERNS });
   const live = existing.find(t => t.id !== undefined && !t.discarded);
   let tabId: number;
   if (live?.id !== undefined) {
     tabId = live.id;
-    await focusTab(tabId);
   } else {
     const base = await resolveBaseUrl();
     const tab = await chrome.tabs.create({ url: `${base}/`, active: true });
