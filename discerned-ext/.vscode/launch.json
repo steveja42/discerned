@@ -17,7 +17,14 @@
         "--load-extension=${workspaceFolder}/dist",
         "--no-first-run",
         "--no-default-browser-check",
-        "--remote-debugging-port=9222",
+        // 9333, not 9222: 9222 falls inside a Windows excluded TCP port range
+        // (Hyper-V/WinNAT dynamic reservation, e.g. 9212-9311) so bind() fails
+        // and the DevTools endpoint never opens -> "Unable to find debug
+        // target". 9333 is outside all exclusions. If this recurs for ALL
+        // configs, the exclusions reshuffled: check with
+        //   netsh int ipv4 show excludedportrange protocol=tcp
+        // and pick a port outside every listed range.
+        "--remote-debugging-port=9333",
       ],
       "skipFiles": [
         "<node_internals>/**/*.js"
@@ -36,7 +43,7 @@
         "--load-extension=${workspaceFolder}/dist",
         "--no-first-run",
         "--no-default-browser-check",
-        "--remote-debugging-port=9222"
+        "--remote-debugging-port=9333"
       ],
       "skipFiles": [
         "<node_internals>/**/*.js"
@@ -59,7 +66,7 @@
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
         "--no-first-run",
-        "--remote-debugging-port=9222",
+        "--remote-debugging-port=9333",
         "--profile-directory=Default",
       ]
     },
@@ -80,7 +87,7 @@
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
         "--no-first-run",
-        "--remote-debugging-port=9222",
+        "--remote-debugging-port=9333",
       ]
     },
     {
@@ -101,7 +108,7 @@
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
         "--no-first-run",
-        "--remote-debugging-port=9222",
+        "--remote-debugging-port=9333",
       ]
     },
     {
@@ -109,9 +116,12 @@
       "type": "chrome",
       "request": "launch",
       "webRoot": "${workspaceFolder}",
-      "cascadeTerminateToConfigurations": [
-        "Attach to Chrome (shared with extension debugger)"
-      ],
+      // Known quirk: under this debug config the js-debug debugger attaches to
+      // Alby's MV3 service worker / popup and stalls it, so clicking the Alby
+      // toolbar button hangs (no unlock prompt) and the pause/stop toolbar
+      // lingers. Workaround: toggle Alby off/on in brave://extensions to
+      // restart its SW without the debugger attached. nos2x has a trivial SW
+      // and is unaffected. (See git log for the investigation.)
       /* --- Path for Windows --- */
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       /* --- Path for macOS (Uncomment if needed) --- */
@@ -124,7 +134,49 @@
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
         "--no-first-run",
-        "--remote-debugging-port=9222",
+        "--remote-debugging-port=9333",
+      ]
+    },
+    {
+      // Same as "Debug: Brave (nip07-alby)" but the debugger attaches ONLY to
+      // the discerned web-app tab (localhost:3000 / discerned.online) via
+      // urlFilter -- it never attaches to Alby's MV3 service worker or popup,
+      // so clicking the Alby button no longer hangs / strands the toolbar.
+      // Trade-off: you only get VSCode-side breakpoints + console for the web
+      // app and content scripts running ON the app tab. Content-script logs on
+      // third-party sites (capture on primal.net etc.) and extension SW/popup
+      // breakpoints are NOT available here -- use the plain "(nip07-alby)"
+      // config or chrome://extensions "inspect" for those.
+      "name": "Debug: Brave (nip07-alby, web-app only)",
+      "type": "chrome",
+      "request": "launch",
+      // webRoot + source maps point at the web app (discerned-web), since that
+      // is the only target we debug here -- mirrors the "Attach to Chrome" cfg.
+      "webRoot": "${workspaceFolder}/../discerned-web",
+      // On a LAUNCH config, "url" (not urlFilter) is what scopes the debug
+      // target: js-debug opens this page and attaches to it. urlFilter is
+      // attach-semantics -- on launch there is no matching tab yet, so it times
+      // out with "Unable to find debug target" and kills the browser. Opening
+      // the app tab directly gives it a target immediately and still keeps the
+      // debugger off Alby's SW/popup.
+      "url": "http://localhost:3000/",
+      "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-nip07-alby",
+      "sourceMapPathOverrides": {
+        "webpack://_N_E/*": "${workspaceFolder}/../discerned-web/*"
+      },
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/../discerned-web/**",
+        "!**/node_modules/**"
+      ],
+      "skipFiles": [
+        "chrome-extension://**",
+        "<node_internals>/**/*.js"
+      ],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run",
+        "--remote-debugging-port=9333",
       ]
     },
     {
@@ -145,7 +197,7 @@
   "runtimeArgs": [
     "--load-extension=${workspaceFolder}\\dist",
     "--no-first-run",
-    "--remote-debugging-port=9222",
+    "--remote-debugging-port=9333",
     "--disable-background-networking",
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
@@ -170,7 +222,7 @@
   "runtimeArgs": [
     "--load-extension=${workspaceFolder}\\dist",
     "--no-first-run",
-    "--remote-debugging-port=9222",
+    "--remote-debugging-port=9333",
     "--disable-background-networking",
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
@@ -198,7 +250,7 @@
       "runtimeArgs": [
         "--load-extension=${workspaceFolder}\\dist",
         "--no-first-run",
-        "--remote-debugging-port=9222",
+        "--remote-debugging-port=9333",
       ]
     },
     {
@@ -218,7 +270,7 @@
         "--load-extension=${workspaceFolder}",
         // 2. Specify the folder name of the profile (e.g., "Default" or "Profile 1")
         "--profile-directory=Default",
-        "--remote-debugging-port=9222"
+        "--remote-debugging-port=9333"
       ]
     }
     ,
@@ -226,7 +278,8 @@
       "type": "chrome",
       "request": "attach",
       "name": "Attach to Chrome (shared with extension debugger)",
-      "port": 9222,
+      // Must match the launch configs' --remote-debugging-port (9333).
+      "port": 9333,
       "urlFilter": "*://{localhost:3000,discerned.online}/*",
       "webRoot": "${workspaceFolder}/../discerned-web",
       "sourceMapPathOverrides": {
