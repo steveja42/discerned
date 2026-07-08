@@ -10,6 +10,7 @@
     "watch": "vite build --watch",
     "build": "tsc && vite build",
     "build:test": "tsc && vite build --mode test --outDir dist-test",
+    "pack:ext": "node scripts/pack-extension.mjs",
     "type-check": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run",

@@ -2,3 +2,4 @@ node_modules
 .vscode/browser-test-profiles
 dist
 dist-test
+dist-pack

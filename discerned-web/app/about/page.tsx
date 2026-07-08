@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import HeroBeacon from '@/components/brand/HeroBeacon';
 import TopBar from '@/components/chrome/TopBar';
 import SignInModal from '@/components/auth/SignInModal';
@@ -33,7 +34,9 @@ export default function AboutPage() {
             and broadcast — or don&apos;t. Your clips are yours; the signal is shared.
           </p>
           <div className="hero-cta">
-            <button className="btn primary">Get the extension</button>
+            <Link href="/get-extension" className="btn primary" style={{ textDecoration: 'none' }}>
+              Get the extension
+            </Link>
           </div>
         </div>
       </section>

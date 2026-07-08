@@ -27,14 +27,9 @@ export default function LibraryEmpty() {
         Your clips appear here automatically when you open this page from the extension.
       </p>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <a
-          href="https://github.com/discerned-online"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn primary"
-        >
+        <Link href="/get-extension" className="btn primary">
           Get the Extension
-        </a>
+        </Link>
         <Link href="/about" className="btn ghost">
           Learn more about sovereignty →
         </Link>
