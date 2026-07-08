@@ -12,7 +12,6 @@ import { STORAGE_KEYS, SIGNAL_LEVELS, QUALIFIER_GROUPS, signalRank, resolveRelay
 import { LL, log } from '@/shared/logger';
 import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
 import { showArticleHighlight, hideArticleHighlight } from './highlighter';
-import { detectAuthState } from '@/shared/nostr/auth';
 import { npubEncode } from 'nostr-tools/nip19';
 
 export interface OverlayShowOptions {
@@ -804,8 +803,9 @@ export class DiscernedOverlay {
         : '<div class="card-value">Signing extension detected — sign in to connect</div>';
       const noPubkeyCta = auth.pubkey ? '' : `
         <div class="card-desc" style="margin-top:8px">
-          Open Discerned in any tab to sign in. You'll only be asked once.
+          Sign in to connect your signing extension. You'll only be asked once.
         </div>
+        <button class="btn btn-primary" id="settings-connect" style="margin-top:8px">Sign in →</button>
       `;
       const diagnostic = __DISCERNED_TEST_BUILD__ ? `
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -813,6 +813,15 @@ export class DiscernedOverlay {
         </div>
         <div id="settings-probe-result" class="card-desc" style="margin-top:8px;white-space:pre-wrap;font-family:var(--mono,monospace);font-size:12px"></div>
       ` : '';
+      // Only offer Disconnect once actually signed in (pubkey present). Without
+      // a pubkey the wallet is merely *detected* — nothing has been connected to
+      // disconnect from, and the MAIN view already treats this as "Local only".
+      // Showing Disconnect here would contradict the main view and, since a
+      // detected wallet re-promotes guest→pro on the next activation, the button
+      // could never toggle away.
+      const disconnectBtn = auth.pubkey
+        ? '<button class="link-btn" id="settings-disconnect">Disconnect</button>'
+        : '';
       authBlock = `
         <div class="settings-card">
           <div class="card-row">
@@ -820,7 +829,7 @@ export class DiscernedOverlay {
               <div class="card-label">Status</div>
               ${statusValue}
             </div>
-            <button class="link-btn" id="settings-disconnect">Disconnect</button>
+            ${disconnectBtn}
           </div>
           ${auth.pubkey ? identityBlock(auth.pubkey) : noPubkeyCta}
           ${diagnostic}
@@ -961,15 +970,11 @@ export class DiscernedOverlay {
 
     this.shadow.getElementById('settings-disconnect')?.addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'DISCONNECT_AUTH' });
-      // Disconnect resets background to guest. Re-probe NIP-07 immediately so
-      // the user isn't told "no signing extension" when one is still installed
-      // — the background needs a fresh NIP07_DETECTED to transition guest→pro.
-      try {
-        const detected = await detectAuthState();
-        if (detected.type === 'pro') {
-          await chrome.runtime.sendMessage({ type: 'NIP07_DETECTED', hasNIP07: true }).catch(() => {});
-        }
-      } catch { /* non-fatal */ }
+      // Disconnect resets the background to guest and must STAY guest until the
+      // user actively reconnects — do NOT re-probe NIP-07 here, or a fresh
+      // NIP07_DETECTED would flip guest→pro in the same tick and the Disconnect
+      // link would never toggle to "Connect". NIP-07 is re-detected when the
+      // user opens the connect flow, which is the right time to reconnect.
       const refreshed = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }).catch(() => null);
       if (refreshed?.success && refreshed.data) this.authState = refreshed.data as AuthState;
       this.render();
