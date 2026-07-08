@@ -21,6 +21,7 @@ Discerned is a Chrome Extension (Manifest V3) that acts as a value attribution l
 pnpm dev          # Vite watch mode
 pnpm build        # tsc + Vite production build
 pnpm build:test   # development-mode build → dist-test/ (for Playwright)
+pnpm pack:ext     # prod build → dist-pack/, zipped to the web app's public/ for download
 pnpm type-check   # tsc --noEmit (strict)
 pnpm lint         # ESLint on src/**/*.ts
 ```
@@ -33,6 +34,18 @@ pnpm lint         # ESLint on src/**/*.ts
 - **Playwright reads `dist-test/`, NOT `dist/`.** When you need to validate via a Playwright spec, run `pnpm build:test` first (it writes only to `dist-test/`, doesn't touch the dev `dist/`). The `tests/e2e/*` specs all load `dist-test/`.
 
 If you ever see an "extension is broken" symptom (overlay missing, bookmark-style 2-line clips when full content was expected), the user accidentally has stale `dist/` — the fix is to **restart `pnpm dev`**, NOT another `pnpm build`. Do not try to "fix" it with a production build.
+
+## Packing the extension for download (`pnpm pack:ext`)
+
+The web app's `/get-extension` page hands users a downloadable **unpacked** extension zip they side-load via `chrome://extensions` → Load unpacked. That zip is produced by `scripts/pack-extension.mjs` (run it as `pnpm pack:ext` from `discerned-ext/`).
+
+What it does:
+
+1. Runs `tsc`, then `vite build --outDir dist-pack --emptyOutDir` — a **production** build into a throwaway `dist-pack/` dir. It builds into `dist-pack/`, **not** the dev `dist/`, precisely so packing never disturbs the extension the user has loaded from `dist/` (same isolation rationale as `dist-test/` — see Dev environment above). `dist-pack/` is gitignored and deleted at the end of the run.
+2. Zips the build with `manifest.json` at the **zip root** (not nested in a subfolder) so users select the unzipped folder directly in Load unpacked. Zipping uses the OS-native tool — PowerShell `Compress-Archive` on Windows, `zip` elsewhere — so there's **no extra npm dependency**.
+3. Writes the result to `../discerned-web/public/discerned-extension.zip`.
+
+Because the web app is a **static export** deployed by Netlify (which only builds `discerned-web/`, never runs this script), the zip is **committed to git** so Netlify serves it. It does **not** auto-update: after shipping extension changes, re-run `pnpm pack:ext` and commit the refreshed zip. The manifest `version` is read only for the build log line — bump `manifest.json` yourself when cutting a new download.
 
 ## Architecture
 
