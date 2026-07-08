@@ -2,9 +2,10 @@
 // Builds a clean production copy of the extension and zips it for public download.
 //
 // The zip is what the web app's /get-extension page hands users so they can
-// "Load unpacked" in Chrome. We build into a throwaway `dist-pack/` dir (NOT the
-// dev `dist/` that `pnpm dev` watches — see discerned-ext/CLAUDE.md) and zip that,
-// so packing never disturbs the loaded dev extension.
+// "Load unpacked" in Chrome. We build into `dist-pack/` (NOT the dev `dist/`
+// that `pnpm dev` watches — see discerned-ext/CLAUDE.md) and zip that, so
+// packing never disturbs the loaded dev extension. `dist-pack/` is kept after
+// zipping so it can be loaded unpacked locally.
 //
 // Zipping uses the OS-native tool (PowerShell Compress-Archive on Windows, `zip`
 // elsewhere) so no extra npm dependency is needed.
@@ -55,5 +56,5 @@ if (process.platform === 'win32') {
   execFileSync('zip', ['-r', '-9', outFile, '.'], { cwd: buildDir, stdio: 'inherit' });
 }
 
-rmSync(buildDir, { recursive: true, force: true });
 console.log(`pack-extension: wrote ${outFile}`);
+console.log(`pack-extension: production build kept at ${buildDir} (load it unpacked from there)`);
