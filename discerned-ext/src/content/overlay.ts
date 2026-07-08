@@ -8,7 +8,7 @@
 //         (only for the article highlight rectangle, drawn into document.body).
 
 import type { AuthState, Capture, ClipFormat, Evaluation, SignalLevel, Category, PublishMode } from '@/shared/types';
-import { STORAGE_KEYS, SIGNAL_LEVELS, QUALIFIER_GROUPS, signalRank, resolveRelayMode, relaysForMode } from '@/shared/types';
+import { STORAGE_KEYS, SIGNAL_LEVELS, SIGNAL_DESCRIPTIONS, QUALIFIER_GROUPS, signalRank, resolveRelayMode, relaysForMode } from '@/shared/types';
 import { LL, log } from '@/shared/logger';
 import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
 import { showArticleHighlight, hideArticleHighlight } from './highlighter';
@@ -1409,7 +1409,7 @@ export class DiscernedOverlay {
     const idx = rated ? SIGNAL_LEVELS.indexOf(this.signal!) : 2;
     const pct = (idx / max) * 100;
     const ticks = SIGNAL_LEVELS.map((lvl, i) =>
-      `<button type="button" class="signal-tick${this.signal === lvl ? ' selected' : ''}" data-idx="${i}">${lvl}</button>`
+      `<button type="button" class="signal-tick${this.signal === lvl ? ' selected' : ''}" data-idx="${i}" title="${this.escapeHtml(SIGNAL_DESCRIPTIONS[lvl])}">${lvl}</button>`
     ).join('');
     const fill = rated ? ` style="--sig-pct: ${pct}%"` : '';
     return `
@@ -2104,7 +2104,7 @@ export class DiscernedOverlay {
       .nostr-status { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin-top: -3px; }
       .nostr-status.has-tip { position: relative; cursor: default; }
       .status-dot { width: 8px; height: 8px; background: var(--p-ink-4); flex-shrink: 0; }
-      .status-dot.connected { background: var(--p-accent); }
+      .status-dot.connected { background: #a855f7; }
       .status-text { font-size: 11px; color: var(--p-ink-3); white-space: nowrap; font-family: var(--p-mono); }
       /* Keep dot + status text on one line; push the Unlock link to its own line beneath,
          right-aligned (so its right edge sits under the end of "Locked") and pulled up a bit. */

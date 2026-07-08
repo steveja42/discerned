@@ -31,6 +31,15 @@ export type PublishMode = 'cast' | 'local' | 'both';
 // Low → high; star count = index + 1.
 export const SIGNAL_LEVELS = ['Toxic', 'Noise', 'Passable', 'Worthwhile', 'Masterpiece'] as const;
 
+// Hover-tooltip descriptions for each signal level (shown on the overlay ticks).
+export const SIGNAL_DESCRIPTIONS: Record<SignalLevel, string> = {
+  Toxic: '1 ★ — Outright fraud, dangerous disinformation, or malicious propaganda.',
+  Noise: '2 ★ — Clickbait, low-effort engagement bait, or highly manipulative spin.',
+  Passable: '3 ★ — Mediocre or casual. Fine for a quick glance, but mostly superficial filler.',
+  Worthwhile: '4 ★ — Solid, high-signal content. It delivered exactly what it promised.',
+  Masterpiece: '5 ★ — Exceptional execution. Flawless utility, deep wisdom, or elite artistic craft.',
+};
+
 export const signalRank = (lvl: SignalLevel): number =>
   (SIGNAL_LEVELS as readonly string[]).indexOf(lvl) + 1;
 
