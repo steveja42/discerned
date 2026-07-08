@@ -12,11 +12,13 @@ interface GlyphProps {
   interest: string;
   ethics: string;
   category: string;
+  signal?: string;
+  qualifiers?: string[];
   variant?: GlyphVariant;
 }
 
-export default function Glyph({ interest, ethics, category, variant = 'bars' }: GlyphProps) {
-  if (variant === 'radial') return <GlyphRadial interest={interest} ethics={ethics} category={category} />;
-  if (variant === 'letter') return <GlyphLetter interest={interest} ethics={ethics} category={category} />;
-  return <GlyphBars interest={interest} ethics={ethics} category={category} />;
+export default function Glyph({ interest, ethics, category, signal, qualifiers, variant = 'bars' }: GlyphProps) {
+  if (variant === 'radial') return <GlyphRadial interest={interest} ethics={ethics} category={category} signal={signal} qualifiers={qualifiers} />;
+  if (variant === 'letter') return <GlyphLetter interest={interest} ethics={ethics} category={category} signal={signal} qualifiers={qualifiers} />;
+  return <GlyphBars interest={interest} ethics={ethics} category={category} signal={signal} qualifiers={qualifiers} />;
 }

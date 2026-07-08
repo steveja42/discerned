@@ -9,8 +9,8 @@
     "selectionContext": "...次の段落では、 [...] さらに詳しく説明する。"
   },
   "evaluation": {
-    "interest": "Insightful",
-    "ethics": "Honest",
+    "signal": "Worthwhile",
+    "qualifiers": ["Quick Read", "量子物理 🧪"],
     "category": "Science"
   }
 }

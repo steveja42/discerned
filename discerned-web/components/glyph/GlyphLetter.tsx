@@ -1,13 +1,16 @@
 import { CATEGORIES, interestRank, ethicsRank } from '@/lib/constants';
 import { interestColor, ethicsColor } from '@/lib/dimensionColor';
+import SignalTag from './SignalTag';
 
 interface GlyphLetterProps {
   interest: string;
   ethics: string;
   category: string;
+  signal?: string;
+  qualifiers?: string[];
 }
 
-export default function GlyphLetter({ interest, ethics, category }: GlyphLetterProps) {
+export default function GlyphLetter({ interest, ethics, category, signal, qualifiers }: GlyphLetterProps) {
   const cat = CATEGORIES[category] ?? { label: category, hue: 60 };
   const iRank = interestRank(interest);
   const eRank = ethicsRank(ethics);
@@ -23,6 +26,7 @@ export default function GlyphLetter({ interest, ethics, category }: GlyphLetterP
         <span className="swatch" style={{ background: `oklch(0.50 0.08 ${cat.hue})` }} />
         {cat.label}
       </div>
+      <SignalTag signal={signal} qualifiers={qualifiers} />
       {(!iNeutral || !eNeutral) && (
         <div className="letter-grade">
           {!iNeutral && (

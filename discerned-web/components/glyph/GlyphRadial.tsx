@@ -1,13 +1,16 @@
 import { CATEGORIES, interestRank, ethicsRank } from '@/lib/constants';
 import { interestColor, ethicsColor } from '@/lib/dimensionColor';
+import SignalTag from './SignalTag';
 
 interface GlyphRadialProps {
   interest: string;
   ethics: string;
   category: string;
+  signal?: string;
+  qualifiers?: string[];
 }
 
-export default function GlyphRadial({ interest, ethics, category }: GlyphRadialProps) {
+export default function GlyphRadial({ interest, ethics, category, signal, qualifiers }: GlyphRadialProps) {
   const cat = CATEGORIES[category] ?? { label: category, hue: 60 };
   const cx = 32, cy = 32, r = 22;
   const iRank = interestRank(interest);
@@ -34,6 +37,7 @@ export default function GlyphRadial({ interest, ethics, category }: GlyphRadialP
         <span className="swatch" style={{ background: `oklch(0.50 0.08 ${cat.hue})` }} />
         {cat.label}
       </div>
+      <SignalTag signal={signal} qualifiers={qualifiers} />
       {(!iNeutral || !eNeutral) && (
         <svg width="64" height="64" viewBox="0 0 64 64">
           <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--rule)" strokeWidth="1.5" />

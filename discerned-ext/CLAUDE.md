@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Discerned is a Chrome Extension (Manifest V3) that acts as a value attribution layer for the web. Users capture content (selected text or page metadata), evaluate it on three axes (Interest, Ethics, Category), and publish cryptographically-signed signals to the [Nostr](https://nostr.com/) network.
+Discerned is a Chrome Extension (Manifest V3) that acts as a value attribution layer for the web. Users capture content (selected text or page metadata), evaluate it (a 5-level Signal rating, multi-select Qualifier tags, and a Category), and publish cryptographically-signed signals to the [Nostr](https://nostr.com/) network.
 
 ## Tech Stack
 
@@ -78,7 +78,7 @@ Runs exclusively on `discerned.online/*` and `localhost:3000/*`. Bridges the ext
 - **Resource Capture**: Page title, URL, OG image, published as Nostr kind 1
 - **Clip (🔒)**: Private; stored in IndexedDB (kind 30078 planned)
 - **Cast (📡)**: Public; published to Nostr relays
-- **Evaluation axes**: Interest (5 levels) · Ethics (5 levels) · Category (7 options)
+- **Evaluation**: Signal (5 levels, Toxic→Masterpiece, optional — absent = unrated) · Qualifiers (multi-select tags, built-in + custom) · Category (7 built-in options + custom)
 - **Auth modes**: NIP-07 (browser extension wallet), Local (no cast), NIP-46
 
 ## NIP-07 signing architecture

@@ -3,6 +3,10 @@
 
 import { LL, log } from '@/lib/logger';
 
+// Signal rating vocabulary (low → high) — mirrors SIGNAL_LEVELS in the extension's shared/types.ts.
+export const SIGNAL_LEVELS = ['Toxic', 'Noise', 'Passable', 'Worthwhile', 'Masterpiece'] as const;
+
+// Legacy axes — still used to render/filter old casts and old local clips.
 export const INTEREST_LEVELS = ['Noise', 'Neutral', 'Interesting', 'Insightful', 'Wise'] as const;
 export const ETHICS_LEVELS = ['Malicious', 'Misleading', 'Neutral', 'Honest', 'Exemplary'] as const;
 
@@ -16,6 +20,10 @@ export const CATEGORIES: Record<string, { label: string; hue: number }> = {
   Science:    { label: 'Science',    hue: 200 },
   Culture:    { label: 'Culture',    hue: 320 },
 };
+
+// Star count for a signal level (1–5). Returns 0 for unknown/unrated.
+export const signalRank = (lvl: string | undefined): number =>
+  lvl ? SIGNAL_LEVELS.indexOf(lvl as typeof SIGNAL_LEVELS[number]) + 1 : 0;
 
 export const interestRank = (lvl: string): number =>
   INTEREST_LEVELS.indexOf(lvl as typeof INTEREST_LEVELS[number]);

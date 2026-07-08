@@ -10,8 +10,8 @@
     "thumbnail": "https://example.com/og/news-hero.jpg"
   },
   "evaluation": {
-    "interest": "Insightful",
-    "ethics": "Honest",
+    "signal": "Worthwhile",
+    "qualifiers": ["Academic / Dense", "Primary Source"],
     "category": "Science"
   }
 }

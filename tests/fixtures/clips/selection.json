@@ -9,8 +9,8 @@
     "selectionContext": "...trust, you have everything you need. [...] If you have a pen and a paragraph..."
   },
   "evaluation": {
-    "interest": "Wise",
-    "ethics": "Honest",
+    "signal": "Masterpiece",
+    "qualifiers": ["Timeless", "Opinion / Essay", "Stoicism"],
     "category": "Philosophy"
   }
 }

@@ -8,8 +8,8 @@
     "thumbnail": "https://example.com/papers/efficient-attention/og.png"
   },
   "evaluation": {
-    "interest": "Insightful",
-    "ethics": "Honest",
+    "signal": "Worthwhile",
+    "qualifiers": [],
     "category": "Tech"
   }
 }

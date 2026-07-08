@@ -14,6 +14,9 @@ test.describe('extension capture pipeline', () => {
 
   for (const fx of fixtures) {
     test(`captures ${fx.htmlName} via extractor "${fx.expected.format}"`, async () => {
+      // Some fixtures (goodreads-book: 97 <img> with real CDN srcs) are
+      // network-bound — page load + image inlining can exceed the 30s default.
+      test.setTimeout(120_000);
       const { ctx } = await launchWithExtension();
       try {
         const page = await ctx.newPage();

@@ -8,7 +8,15 @@ import { resolve } from 'node:path';
 import { generateSecretKey, finalizeEvent } from 'nostr-tools/pure';
 import type { EventTemplate } from 'nostr-tools/core';
 import { parseEvent } from '@/lib/nostr/parse';
+import { SIGNAL_LEVELS } from '@/lib/constants';
 import type { Capture, Evaluation } from '@/lib/types';
+
+// First content line, mirroring evaluationSummary in the extension's events.ts.
+function summaryLine(evaluation: Evaluation): string {
+  if (!evaluation.signal) return `Discerned: ${evaluation.category}`;
+  const rank = (SIGNAL_LEVELS as readonly string[]).indexOf(evaluation.signal) + 1;
+  return `Discerned: ${'★'.repeat(rank)} ${evaluation.signal} — ${evaluation.category}`;
+}
 
 // Build a Discerned kind:1 event template from a fixture. Implementation mirrors
 // createQuoteNoteEvent / createResourceNoteEvent in discerned-ext/src/shared/nostr/events.ts.
@@ -17,16 +25,18 @@ import type { Capture, Evaluation } from '@/lib/types';
 function buildTemplate(capture: Capture, evaluation: Evaluation): EventTemplate {
   const tags: string[][] = [
     ['r', capture.url],
-    ['L', 'online.discerned.interest'],
-    ['L', 'online.discerned.ethics'],
     ['L', 'online.discerned.category'],
-    ['l', evaluation.interest, 'online.discerned.interest'],
-    ['l', evaluation.ethics, 'online.discerned.ethics'],
     ['l', evaluation.category, 'online.discerned.category'],
-    ['t', 'discerned'],
-    ['format', capture.format],
-    ['client', 'discerned'],
   ];
+  if (evaluation.signal) {
+    tags.push(['L', 'online.discerned.signal']);
+    tags.push(['l', evaluation.signal, 'online.discerned.signal']);
+  }
+  if (evaluation.qualifiers && evaluation.qualifiers.length > 0) {
+    tags.push(['L', 'online.discerned.qualifier']);
+    for (const q of evaluation.qualifiers) tags.push(['l', q, 'online.discerned.qualifier']);
+  }
+  tags.push(['t', 'discerned'], ['format', capture.format], ['client', 'discerned']);
 
   if (capture.note && capture.note.trim().length > 0) {
     tags.push(['note', capture.note]);
@@ -38,7 +48,7 @@ function buildTemplate(capture: Capture, evaluation: Evaluation): EventTemplate 
     tags.push(['quote', quoted]);
     if (capture.selectionContext) tags.push(['context', capture.selectionContext]);
     content = [
-      `Discerned: ${evaluation.interest} / ${evaluation.ethics} — ${evaluation.category}`,
+      summaryLine(evaluation),
       `> "${quoted}"`,
       '',
       capture.url,
@@ -48,7 +58,7 @@ function buildTemplate(capture: Capture, evaluation: Evaluation): EventTemplate 
     if (capture.thumbnail) tags.push(['image', capture.thumbnail]);
     if (capture.bodyText) tags.push(['body', capture.bodyText]);
     content = [
-      `Discerned: ${evaluation.interest} / ${evaluation.ethics} — ${evaluation.category}`,
+      summaryLine(evaluation),
       '',
       capture.title,
       capture.url,
@@ -92,8 +102,8 @@ describe('parseEvent (web)', () => {
 
       expect(clip.capture.format).toBe(fx.capture.format);
       expect(clip.capture.url).toBe(fx.capture.url);
-      expect(clip.evaluation.interest).toBe(fx.evaluation.interest);
-      expect(clip.evaluation.ethics).toBe(fx.evaluation.ethics);
+      expect(clip.evaluation.signal).toBe(fx.evaluation.signal);
+      expect(clip.evaluation.qualifiers).toEqual(fx.evaluation.qualifiers ?? []);
       expect(clip.evaluation.category).toBe(fx.evaluation.category);
 
       if (fx.capture.format === 'selection') {
@@ -128,8 +138,56 @@ describe('parseEvent (web)', () => {
     const clip = parseEvent(ev);
     expect(clip.capture.url).toBe('');
     expect(clip.capture.format).toBe('bookmark');
+    expect(clip.evaluation.signal).toBeUndefined();
+    expect(clip.evaluation.qualifiers).toEqual([]);
     expect(clip.evaluation.interest).toBe('Neutral');
     expect(clip.evaluation.ethics).toBe('Neutral');
+    expect(clip.evaluation.category).toBe('General');
+  });
+
+  it('parses legacy interest/ethics casts (no signal tags)', () => {
+    const ev = finalizeEvent({
+      kind: 1,
+      created_at: 1_700_000_000,
+      tags: [
+        ['r', 'https://example.com/legacy'],
+        ['L', 'online.discerned.interest'],
+        ['L', 'online.discerned.ethics'],
+        ['L', 'online.discerned.category'],
+        ['l', 'Wise', 'online.discerned.interest'],
+        ['l', 'Honest', 'online.discerned.ethics'],
+        ['l', 'Science', 'online.discerned.category'],
+        ['t', 'discerned'],
+        ['format', 'bookmark'],
+        ['title', 'A Legacy Cast'],
+      ],
+      content: 'Discerned: Wise / Honest — Science\n\nA Legacy Cast\nhttps://example.com/legacy',
+    }, SK);
+
+    const clip = parseEvent(ev);
+    expect(clip.evaluation.signal).toBeUndefined();
+    expect(clip.evaluation.qualifiers).toEqual([]);
+    expect(clip.evaluation.interest).toBe('Wise');
+    expect(clip.evaluation.ethics).toBe('Honest');
+    expect(clip.evaluation.category).toBe('Science');
+    expect(clip.capture.title).toBe('A Legacy Cast');
+  });
+
+  it('ignores an unrecognized signal level', () => {
+    const ev = finalizeEvent({
+      kind: 1,
+      created_at: 1_700_000_000,
+      tags: [
+        ['L', 'online.discerned.signal'],
+        ['l', 'Stupendous', 'online.discerned.signal'],
+        ['L', 'online.discerned.category'],
+        ['l', 'General', 'online.discerned.category'],
+      ],
+      content: 'x',
+    }, SK);
+
+    const clip = parseEvent(ev);
+    expect(clip.evaluation.signal).toBeUndefined();
     expect(clip.evaluation.category).toBe('General');
   });
 });

@@ -7,6 +7,7 @@
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { EventTemplate, NostrEvent } from 'nostr-tools/core';
 import type { Capture, Evaluation } from '@/shared/types';
+import { signalRank } from '@/shared/types';
 
 /**
  * Casts on rich-format clips inline the body in the event content only when the
@@ -21,20 +22,31 @@ export const CAST_INLINE_BODY_MAX_CHARS = 8000;
 function baseEvaluationTags(capture: Capture, evaluation: Evaluation): string[][] {
   const tags: string[][] = [
     ['r', capture.url],
-    ['L', 'online.discerned.interest'],
-    ['L', 'online.discerned.ethics'],
     ['L', 'online.discerned.category'],
-    ['l', evaluation.interest, 'online.discerned.interest'],
-    ['l', evaluation.ethics, 'online.discerned.ethics'],
     ['l', evaluation.category, 'online.discerned.category'],
-    ['t', 'discerned'],
-    ['format', capture.format],
-    ['client', 'discerned'],
   ];
+  if (evaluation.signal) {
+    tags.push(['L', 'online.discerned.signal']);
+    tags.push(['l', evaluation.signal, 'online.discerned.signal']);
+  }
+  if (evaluation.qualifiers.length > 0) {
+    tags.push(['L', 'online.discerned.qualifier']);
+    for (const q of evaluation.qualifiers) {
+      tags.push(['l', q, 'online.discerned.qualifier']);
+    }
+  }
+  tags.push(['t', 'discerned'], ['format', capture.format], ['client', 'discerned']);
   if (capture.note && capture.note.trim().length > 0) {
     tags.push(['note', capture.note]);
   }
   return tags;
+}
+
+// First content line, e.g. "Discerned: ★★★★ Worthwhile — Philosophy";
+// unrated clips carry just "Discerned: Philosophy".
+function evaluationSummary(evaluation: Evaluation): string {
+  if (!evaluation.signal) return `Discerned: ${evaluation.category}`;
+  return `Discerned: ${'★'.repeat(signalRank(evaluation.signal))} ${evaluation.signal} — ${evaluation.category}`;
 }
 
 function appendNoteToContent(content: string, capture: Capture): string {
@@ -56,7 +68,7 @@ export function createQuoteNoteEvent(
   const quotedText = capture.selectionText ?? '';
 
   const baseContent = [
-    `Discerned: ${evaluation.interest} / ${evaluation.ethics} — ${evaluation.category}`,
+    evaluationSummary(evaluation),
     `> "${quotedText}"`,
     '',
     capture.url,
@@ -93,7 +105,7 @@ export function createResourceNoteEvent(
   }
 
   const lines = [
-    `Discerned: ${evaluation.interest} / ${evaluation.ethics} — ${evaluation.category}`,
+    evaluationSummary(evaluation),
     '',
     capture.title,
     capture.url,

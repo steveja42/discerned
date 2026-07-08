@@ -24,14 +24,26 @@ export interface LogRelayMessage {
   serialized: string[];
 }
 
-export type InterestLevel = 'Wise' | 'Insightful' | 'Interesting' | 'Neutral' | 'Noise';
-export type EthicsLevel = 'Exemplary' | 'Honest' | 'Neutral' | 'Misleading' | 'Malicious';
+export type SignalLevel = 'Toxic' | 'Noise' | 'Passable' | 'Worthwhile' | 'Masterpiece';
 export type Category = string; // Predefined: General, Tech, Finance, Health, Politics, Philosophy, Science, Culture; or custom
 export type PublishMode = 'cast' | 'local' | 'both';
 
+// Low → high; star count = index + 1.
+export const SIGNAL_LEVELS = ['Toxic', 'Noise', 'Passable', 'Worthwhile', 'Masterpiece'] as const;
+
+export const signalRank = (lvl: SignalLevel): number =>
+  (SIGNAL_LEVELS as readonly string[]).indexOf(lvl) + 1;
+
+// Built-in qualifier chips, grouped as rendered in the overlay.
+export const QUALIFIER_GROUPS: readonly { label: string; items: readonly string[] }[] = [
+  { label: 'Tone & Style',     items: ['Humorous / Satire', 'Academic / Dense', 'Opinion / Essay'] },
+  { label: 'Utility & Format', items: ['Practical Tool', 'Primary Source', 'Quick Read'] },
+  { label: 'Longevity',        items: ['Timeless', 'Current Event', 'Passing Trend'] },
+] as const;
+
 export interface Evaluation {
-  interest: InterestLevel;
-  ethics: EthicsLevel;
+  signal?: SignalLevel;   // absent = unrated
+  qualifiers: string[];   // [] = none
   category: Category;
 }
 
@@ -158,9 +170,8 @@ export const STORAGE_KEYS = {
   CAST_COUNT: 'castCount',
   LAST_FORMAT: 'lastFormat',
   LAST_PUBLISH_MODE: 'lastPublishMode',
-  LAST_INTEREST:     'lastInterest',
-  LAST_ETHICS:       'lastEthics',
   LAST_CATEGORY:     'lastCategory',
+  QUALIFIERS:        'qualifiers', // persisted custom-qualifier list (sibling of CATEGORIES)
   SMART_ARTICLE_DETECTION: 'smartArticleDetection',
   STRIP_INLINE_STYLES:     'stripInlineStyles',
   CUSTOM_CATEGORIES:       'customCategories', // legacy key — superseded by CATEGORIES

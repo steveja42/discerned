@@ -128,9 +128,10 @@ Discerned casts use `kind:1` with these tags:
 
 ```
 ['t', 'discerned']
-['l', '<value>', 'online.discerned.interest']
-['l', '<value>', 'online.discerned.ethics']
+['l', '<value>', 'online.discerned.signal']     # optional — omitted when unrated
+['l', '<value>', 'online.discerned.qualifier']  # repeated, one per qualifier
 ['l', '<value>', 'online.discerned.category']
+# legacy casts carry online.discerned.interest / .ethics instead — parse.ts still reads them
 ['r', '<url>']
 ['quote', '<selected text>']
 ['format', 'selection' | 'article' | ...]

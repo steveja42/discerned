@@ -7,8 +7,8 @@
 // Access: Shadow DOM (ShadowRoot); chrome.runtime.sendMessage for auth + stats; on-page DOM
 //         (only for the article highlight rectangle, drawn into document.body).
 
-import type { AuthState, Capture, ClipFormat, Evaluation, InterestLevel, EthicsLevel, Category, PublishMode } from '@/shared/types';
-import { STORAGE_KEYS, resolveRelayMode, relaysForMode } from '@/shared/types';
+import type { AuthState, Capture, ClipFormat, Evaluation, SignalLevel, Category, PublishMode } from '@/shared/types';
+import { STORAGE_KEYS, SIGNAL_LEVELS, QUALIFIER_GROUPS, signalRank, resolveRelayMode, relaysForMode } from '@/shared/types';
 import { LL, log } from '@/shared/logger';
 import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
 import { showArticleHighlight, hideArticleHighlight } from './highlighter';
@@ -61,8 +61,11 @@ export class DiscernedOverlay {
   private captureGeneration = 0;
   private capturing = false;
   private publishMode: PublishMode = 'both';
-  private interest: InterestLevel = 'Interesting';
-  private ethics: EthicsLevel = 'Neutral';
+  // Signal + qualifiers open UNRATED every capture (no sticky defaults) —
+  // an untouched form saves as unrated. Category alone stays last-used.
+  private signal: SignalLevel | null = null;
+  private selectedQualifiers = new Set<string>();
+  private customQualifiers: string[] = [];
   private category: Category = 'General';
   private previewHost: HTMLElement | null = null;
   private previewShadow: ShadowRoot | null = null;
@@ -135,6 +138,9 @@ export class DiscernedOverlay {
       (options.authState.type === 'pro' && !options.authState.pubkey);
     this.view = needsConnectPrompt && !options.nudgeDismissed ? 'gate' : 'main';
     this.note = '';
+    // Always open unrated — capturing without touching the form saves as unrated.
+    this.signal = null;
+    this.selectedQualifiers.clear();
     // Initial render immediately so the user sees the panel chrome, then
     // load persisted evaluation defaults and re-render main (if needed).
     this.render();
@@ -144,29 +150,21 @@ export class DiscernedOverlay {
     void (async () => {
       try {
         const stored = await chrome.storage.local.get([
-          STORAGE_KEYS.LAST_PUBLISH_MODE, STORAGE_KEYS.LAST_INTEREST,
-          STORAGE_KEYS.LAST_ETHICS, STORAGE_KEYS.LAST_CATEGORY,
+          STORAGE_KEYS.LAST_PUBLISH_MODE, STORAGE_KEYS.LAST_CATEGORY,
         ]);
         const validModes: PublishMode[] = ['cast', 'local', 'both'];
         const m = stored[STORAGE_KEYS.LAST_PUBLISH_MODE] as string | undefined;
         if (m && (validModes as string[]).includes(m)) this.publishMode = m as PublishMode;
-
-        const validInterests: InterestLevel[] = ['Wise', 'Insightful', 'Interesting', 'Neutral', 'Noise'];
-        const si = stored[STORAGE_KEYS.LAST_INTEREST] as string | undefined;
-        if (si && (validInterests as string[]).includes(si)) this.interest = si as InterestLevel;
-
-        const validEthics: EthicsLevel[] = ['Exemplary', 'Honest', 'Neutral', 'Misleading', 'Malicious'];
-        const se = stored[STORAGE_KEYS.LAST_ETHICS] as string | undefined;
-        if (se && (validEthics as string[]).includes(se)) this.ethics = se as EthicsLevel;
 
         const sc = stored[STORAGE_KEYS.LAST_CATEGORY] as string | undefined;
         if (sc?.trim()) this.category = sc.trim();
       } catch { /* non-fatal; use defaults */ }
 
       try {
-        const catStored = await chrome.storage.local.get(STORAGE_KEYS.CATEGORIES);
+        const catStored = await chrome.storage.local.get([STORAGE_KEYS.CATEGORIES, STORAGE_KEYS.QUALIFIERS]);
         const persisted = (catStored[STORAGE_KEYS.CATEGORIES] as string[] | undefined) ?? [];
         this.customCategories = persisted.length > 0 ? persisted : this.customCategories;
+        this.customQualifiers = (catStored[STORAGE_KEYS.QUALIFIERS] as string[] | undefined) ?? [];
       } catch { /* non-fatal; categories stay in-memory */ }
 
       if (!this.isConnected()) this.publishMode = 'local';
@@ -219,26 +217,27 @@ export class DiscernedOverlay {
         * { margin:0; padding:0; box-sizing:border-box;
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
         .preview-card {
-          background:#1e1e1e; border:1px solid #333; border-left:4px solid #0ea5e9;
-          border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:8px;
+          background:#18181b; border:1px solid #3f3f46; border-left:4px solid #f59e0b;
+          padding:14px; display:flex; flex-direction:column; gap:8px;
           box-shadow:4px 4px 20px rgba(0,0,0,0.5);
           animation:fadeIn .18s ease-out;
           user-select:text; cursor:text;
         }
         @keyframes fadeIn { from { opacity:0; transform:translateX(-6px); } to { opacity:1; transform:none; } }
         .preview-label {
-          font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; color:#0ea5e9;
+          font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; color:#f59e0b;
+          font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
         }
         .preview-thumb {
-          max-width:100%; max-height:120px; width:auto; height:auto; object-fit:contain; border-radius:5px; align-self:flex-start;
+          max-width:100%; max-height:120px; width:auto; height:auto; object-fit:contain; align-self:flex-start;
         }
-        .preview-title { color:#fff; font-size:13px; font-weight:600; line-height:1.4; }
-        .preview-text  { color:#bbb; font-size:12px; line-height:1.55; white-space:pre-wrap; }
-        .preview-url   { color:#666; font-size:11px; word-break:break-all; }
-        .preview-loading { display:flex; align-items:center; gap:8px; color:#888; font-size:12px; }
+        .preview-title { color:#f4f4f5; font-size:13px; font-weight:600; line-height:1.4; }
+        .preview-text  { color:#a1a1aa; font-size:12px; line-height:1.55; white-space:pre-wrap; }
+        .preview-url   { color:#52525b; font-size:11px; word-break:break-all; }
+        .preview-loading { display:flex; align-items:center; gap:8px; color:#a1a1aa; font-size:12px; }
         .spinner {
           width:14px; height:14px; flex-shrink:0;
-          border:2px solid #333; border-top-color:#0ea5e9;
+          border:2px solid #3f3f46; border-top-color:#f59e0b;
           border-radius:50%; animation:spin .8s linear infinite;
         }
         @keyframes spin { to { transform:rotate(360deg); } }
@@ -1148,35 +1147,19 @@ export class DiscernedOverlay {
             <textarea id="note-input" maxlength="2000" placeholder="Add a note or comment (optional)…">${this.escapeHtml(this.note)}</textarea>
           </div>
 
-          <div class="form-block evaluation">
-            <div class="form-group">
-              <label for="category">Category</label>
-              <div class="combobox" id="category-combobox">
-                <input type="text" id="category" value="${this.escapeHtml(this.category)}" autocomplete="off" spellcheck="false" />
-                <button type="button" class="combobox-toggle" id="category-toggle" tabindex="-1">▾</button>
-                <ul class="combobox-list" id="category-list" role="listbox">
-                </ul>
-              </div>
-            </div>
-            <div class="form-group">
-              <label id="interest-label">Interest</label>
-              ${this.renderEqSlider({
-                id: 'interest',
-                lowToHigh: ['Noise','Neutral','Interesting','Insightful','Wise'],
-                value: this.interest,
-                labelledBy: 'interest-label',
-              })}
-            </div>
-            <div class="form-group">
-              <label id="ethics-label">Ethics</label>
-              ${this.renderEqSlider({
-                id: 'ethics',
-                lowToHigh: ['Malicious','Misleading','Neutral','Honest','Exemplary'],
-                value: this.ethics,
-                labelledBy: 'ethics-label',
-              })}
+          <div class="form-block">
+            <label for="category">Category</label>
+            <div class="combobox" id="category-combobox">
+              <input type="text" id="category" value="${this.escapeHtml(this.category)}" autocomplete="off" spellcheck="false" />
+              <button type="button" class="combobox-toggle" id="category-toggle" tabindex="-1">▾</button>
+              <ul class="combobox-list" id="category-list" role="listbox">
+              </ul>
             </div>
           </div>
+
+          ${this.renderSignalBlock()}
+
+          ${this.renderQualifiersBlock()}
 
           <div class="cast-notice" id="cast-notice">${this.renderCastNotice(isConnected)}</div>
 
@@ -1264,28 +1247,9 @@ export class DiscernedOverlay {
       if (noticeEl) noticeEl.innerHTML = this.renderCastNotice(isConnected);
     });
 
-    // ── Listbox helpers ───────────────────────────────────────────────────────
-    // ── EQ sliders (Interest + Ethics) ────────────────────────────────────────
-    this.attachEqSlider({
-      id: 'interest',
-      lowToHigh: ['Noise','Neutral','Interesting','Insightful','Wise'],
-      get: () => this.interest,
-      set: v => {
-        this.interest = v as InterestLevel;
-        void chrome.storage.local.set({ [STORAGE_KEYS.LAST_INTEREST]: this.interest });
-        this.validateForm();
-      },
-    });
-    this.attachEqSlider({
-      id: 'ethics',
-      lowToHigh: ['Malicious','Misleading','Neutral','Honest','Exemplary'],
-      get: () => this.ethics,
-      set: v => {
-        this.ethics = v as EthicsLevel;
-        void chrome.storage.local.set({ [STORAGE_KEYS.LAST_ETHICS]: this.ethics });
-        this.validateForm();
-      },
-    });
+    // ── Signal slider + qualifier chips ───────────────────────────────────────
+    this.attachSignalSlider();
+    this.attachQualifierChips();
 
     // ── Publish-mode slider ───────────────────────────────────────────────────
     const pill = this.shadow.getElementById('slider-pill');
@@ -1373,7 +1337,7 @@ export class DiscernedOverlay {
       const kb = (bodyText.length / 1024).toFixed(1);
       return `<span class="notice ok">Cast includes the full text — ~${this.escapeHtml(kb)} KB.</span>`;
     }
-    return `<span class="notice warn">Long body — cast publishes title, URL, note &amp; ratings; full text stays local.</span>`;
+    return `<span class="notice warn">Long body — cast publishes title, URL, note &amp; rating; full text stays local.</span>`;
   }
 
   private async refreshCapture() {
@@ -1428,135 +1392,192 @@ export class DiscernedOverlay {
   }
 
   /**
-   * Vertical equalizer-style slider for an evaluation axis. `lowToHigh[0]` sits
-   * at the bottom (most negative) and `lowToHigh.at(-1)` at the top (most
-   * positive). Labels render top → bottom (reverse of options).
+   * SIGNAL RATING block: mono section head + amber readout, a native
+   * horizontal range input, and clickable tick labels beneath. Unrated state
+   * = `.unrated` on the wrapper (thumb/fill hidden, readout muted "Unrated",
+   * Clear hidden); the native input still holds a parked midpoint value
+   * because a range can't be valueless.
    */
-  private renderEqSlider(opts: {
-    id: string;
-    lowToHigh: readonly string[];
-    value: string;
-    labelledBy: string;
-  }): string {
-    const n = opts.lowToHigh.length;
-    const idx = Math.max(0, opts.lowToHigh.indexOf(opts.value));
-    const pct = (idx / (n - 1)) * 100;
-    const ticks = opts.lowToHigh.map((_, i) =>
-      `<div class="pop-eq-tick" style="bottom: calc(${(i / (n - 1)) * 100}% - 0.5px)"></div>`
+  private renderSignalBlock(): string {
+    const max = SIGNAL_LEVELS.length - 1;
+    const rated = this.signal !== null;
+    const idx = rated ? SIGNAL_LEVELS.indexOf(this.signal!) : 2;
+    const pct = (idx / max) * 100;
+    const ticks = SIGNAL_LEVELS.map((lvl, i) =>
+      `<button type="button" class="signal-tick${this.signal === lvl ? ' selected' : ''}" data-idx="${i}">${lvl}</button>`
     ).join('');
-    const labels = [...opts.lowToHigh].reverse().map(opt =>
-      `<div class="pop-eq-label${opt === opts.value ? ' selected' : ''}" data-value="${this.escapeHtml(opt)}">${this.escapeHtml(opt)}</div>`
-    ).join('');
+    const fill = rated ? ` style="--sig-pct: ${pct}%"` : '';
     return `
-      <div class="pop-eq" data-eq-id="${opts.id}">
-        <div class="pop-eq-slot" id="eq-${opts.id}-slot"
-             role="slider" tabindex="0"
-             aria-labelledby="${opts.labelledBy}"
-             aria-valuemin="0" aria-valuemax="${n - 1}"
-             aria-valuenow="${idx}" aria-valuetext="${this.escapeHtml(opts.value)}">
-          <div class="pop-eq-ticks">${ticks}</div>
-          <div class="pop-eq-track"></div>
-          <div class="pop-eq-fill" style="top: calc(100% - ${pct}%)"></div>
-          <div class="pop-eq-thumb" style="bottom: ${pct}%"><span class="pop-eq-thumb-groove"></span></div>
+      <div class="form-block signal-block">
+        <div class="signal-head">
+          <span class="section-head" id="signal-label">Signal Rating</span>
+          <button type="button" class="signal-clear" id="signal-clear"${rated ? '' : ' hidden'}>Clear</button>
+          <span class="signal-readout${rated ? '' : ' unset'}" id="signal-readout">${rated ? `${signalRank(this.signal!)} ★ ${this.signal}` : 'Unrated'}</span>
         </div>
-        <div class="pop-eq-labels" id="eq-${opts.id}-labels">${labels}</div>
+        <div class="signal-slider${rated ? '' : ' unrated'}" id="signal-slider">
+          <input type="range" id="signal-range" min="0" max="${max}" step="1"
+                 value="${idx}" aria-labelledby="signal-label"
+                 aria-valuetext="${this.signal ?? 'Unrated'}"${fill} />
+        </div>
+        <div class="signal-ticks" id="signal-ticks">${ticks}</div>
+      </div>
+    `;
+  }
+
+  private renderQualifiersBlock(): string {
+    const chip = (q: string) =>
+      `<button type="button" class="qchip${this.selectedQualifiers.has(q) ? ' active' : ''}" data-q="${this.escapeHtml(q)}">${this.escapeHtml(q)}</button>`;
+    const groups = QUALIFIER_GROUPS.map(g => `
+      <div class="qual-group">
+        <div class="qual-group-label">${this.escapeHtml(g.label)}</div>
+        <div class="qual-chips">${g.items.map(chip).join('')}</div>
+      </div>
+    `).join('');
+    return `
+      <div class="form-block qualifiers-block">
+        <div class="section-head">Qualifiers</div>
+        ${groups}
+        <div class="qual-group">
+          <div class="qual-group-label">Custom</div>
+          <div class="qual-chips" id="custom-qual-chips">
+            ${this.customQualifiers.map(chip).join('')}
+            <input type="text" id="qual-input" class="qual-input" placeholder="+ add" maxlength="40" autocomplete="off" spellcheck="false" />
+          </div>
+        </div>
       </div>
     `;
   }
 
   /**
-   * Wire up an EQ slider's click / drag / keyboard / label-click behavior.
-   * The slider is rendered by {@link renderEqSlider}; this method finds it by id
-   * inside the shadow root and binds listeners that drive a single getter/setter
-   * pair held by the caller.
-   *
-   * Drag math mirrors the handoff spec: a 10px inset on top/bottom matches the
-   * slot's `top:10px; bottom:10px` ticks/track padding, and the live drag follows
-   * the cursor while a final `round` snaps to the nearest step on release.
+   * Wire the signal slider. State model: `this.signal === null` ⇔ wrapper has
+   * `.unrated` ⇔ thumb/fill hidden ⇔ readout "Unrated" ⇔ Clear hidden. Once a
+   * value is committed the native range owns click/drag/keyboard via `input`.
    */
-  private attachEqSlider(opts: {
-    id: string;
-    lowToHigh: readonly string[];
-    get: () => string;
-    set: (v: string) => void;
-  }): void {
-    const slot   = this.shadow.getElementById(`eq-${opts.id}-slot`)   as HTMLElement | null;
-    const labels = this.shadow.getElementById(`eq-${opts.id}-labels`) as HTMLElement | null;
-    if (!slot || !labels) return;
+  private attachSignalSlider(): void {
+    const wrap    = this.shadow.getElementById('signal-slider');
+    const range   = this.shadow.getElementById('signal-range') as HTMLInputElement | null;
+    const readout = this.shadow.getElementById('signal-readout');
+    const clear   = this.shadow.getElementById('signal-clear') as HTMLButtonElement | null;
+    const ticks   = this.shadow.getElementById('signal-ticks');
+    if (!wrap || !range || !readout || !clear || !ticks) return;
 
-    const fill  = slot.querySelector<HTMLElement>('.pop-eq-fill');
-    const thumb = slot.querySelector<HTMLElement>('.pop-eq-thumb');
-    const n     = opts.lowToHigh.length;
+    const max = SIGNAL_LEVELS.length - 1;
 
-    const SLOT_INSET = 10; // matches top:10px; bottom:10px in .pop-eq-track / .pop-eq-ticks
-
-    const repaint = (idx: number, snap: boolean) => {
-      const clamped = Math.max(0, Math.min(n - 1, snap ? Math.round(idx) : idx));
-      const value = opts.lowToHigh[snap ? clamped : Math.round(clamped)]!;
-      const pct = (clamped / (n - 1)) * 100;
-      if (fill)  fill.style.top    = `calc(100% - ${pct}%)`;
-      if (thumb) thumb.style.bottom = `${pct}%`;
-      slot.setAttribute('aria-valuenow', String(Math.round(clamped)));
-      slot.setAttribute('aria-valuetext', value);
-      labels.querySelectorAll<HTMLElement>('.pop-eq-label').forEach(el => {
-        el.classList.toggle('selected', el.dataset.value === value);
+    const paint = () => {
+      const rated = this.signal !== null;
+      const idx = rated ? SIGNAL_LEVELS.indexOf(this.signal!) : -1;
+      wrap.classList.toggle('unrated', !rated);
+      readout.classList.toggle('unset', !rated);
+      readout.textContent = rated ? `${signalRank(this.signal!)} ★ ${this.signal}` : 'Unrated';
+      clear.hidden = !rated;
+      range.setAttribute('aria-valuetext', this.signal ?? 'Unrated');
+      if (rated) range.style.setProperty('--sig-pct', `${(idx / max) * 100}%`);
+      else range.style.removeProperty('--sig-pct');
+      ticks.querySelectorAll<HTMLElement>('.signal-tick').forEach(el => {
+        el.classList.toggle('selected', Number(el.dataset.idx) === idx);
       });
-      if (snap && value !== opts.get()) opts.set(value);
     };
 
-    const indexFromClientY = (clientY: number): number => {
-      const r = slot.getBoundingClientRect();
-      const pct = 1 - (clientY - r.top - SLOT_INSET) / (r.height - SLOT_INSET * 2);
-      return Math.max(0, Math.min(n - 1, pct * (n - 1)));
+    const commit = (idx: number) => {
+      const clamped = Math.max(0, Math.min(max, Math.round(idx)));
+      this.signal = SIGNAL_LEVELS[clamped]!;
+      range.value = String(clamped);
+      paint();
     };
 
-    // Click / drag on the slot
-    let dragging = false;
-    const onDown = (e: PointerEvent) => {
-      e.preventDefault();
-      dragging = true;
-      slot.setPointerCapture(e.pointerId);
-      repaint(indexFromClientY(e.clientY), false);
+    const clearSignal = () => {
+      this.signal = null;
+      range.value = '2'; // park at midpoint; invisible while .unrated
+      paint();
     };
-    const onMove = (e: PointerEvent) => {
-      if (!dragging) return;
-      repaint(indexFromClientY(e.clientY), false);
-    };
-    const onUp = (e: PointerEvent) => {
-      if (!dragging) return;
-      dragging = false;
-      try { slot.releasePointerCapture(e.pointerId); } catch { /* already released */ }
-      repaint(indexFromClientY(e.clientY), true);
-    };
-    slot.addEventListener('pointerdown', onDown);
-    slot.addEventListener('pointermove', onMove);
-    slot.addEventListener('pointerup', onUp);
-    slot.addEventListener('pointercancel', onUp);
 
-    // Label clicks → snap to that step
-    labels.addEventListener('click', e => {
-      const t = (e.target as Element).closest<HTMLElement>('.pop-eq-label');
-      if (!t) return;
-      const v = t.dataset.value;
-      if (!v) return;
-      const i = opts.lowToHigh.indexOf(v);
-      if (i >= 0) repaint(i, true);
+    // Native `input` covers click/drag/keyboard once rated.
+    range.addEventListener('input', () => commit(Number(range.value)));
+
+    // While unrated, a click landing exactly on the parked midpoint fires no
+    // `input` (value unchanged) — commit from the pointer position instead.
+    wrap.addEventListener('pointerdown', e => {
+      if (this.signal !== null) return;
+      const r = range.getBoundingClientRect();
+      commit(((e.clientX - r.left) / r.width) * max);
     });
 
-    // Keyboard
-    slot.addEventListener('keydown', e => {
-      const cur = opts.lowToHigh.indexOf(opts.get());
-      let next = cur;
-      if (e.key === 'ArrowUp')        next = Math.min(cur + 1, n - 1);
-      else if (e.key === 'ArrowDown') next = Math.max(cur - 1, 0);
-      else if (e.key === 'PageUp')    next = Math.min(cur + 2, n - 1);
-      else if (e.key === 'PageDown')  next = Math.max(cur - 2, 0);
-      else if (e.key === 'Home')      next = n - 1;   // Home → top (most positive)
-      else if (e.key === 'End')       next = 0;       // End  → bottom (most negative)
-      else return;
-      e.preventDefault();
-      if (next !== cur) repaint(next, true);
+    range.addEventListener('keydown', e => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        clearSignal();
+        return;
+      }
+      if (this.signal !== null) return; // rated → native keys fire `input`
+      // While unrated the first press SELECTS rather than moves.
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown'].includes(e.key)) {
+        e.preventDefault();
+        commit(2); // Passable (midpoint)
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        commit(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        commit(max);
+      }
     });
+
+    clear.addEventListener('click', clearSignal);
+
+    ticks.addEventListener('click', e => {
+      const t = (e.target as Element).closest<HTMLElement>('.signal-tick');
+      if (!t?.dataset.idx) return;
+      commit(Number(t.dataset.idx));
+    });
+  }
+
+  private attachQualifierChips(): void {
+    const block = this.shadow.querySelector<HTMLElement>('.qualifiers-block');
+    const input = this.shadow.getElementById('qual-input') as HTMLInputElement | null;
+    const customRow = this.shadow.getElementById('custom-qual-chips');
+    if (!block || !input || !customRow) return;
+
+    block.addEventListener('click', e => {
+      const chipEl = (e.target as Element).closest<HTMLElement>('.qchip');
+      if (!chipEl?.dataset.q) return;
+      const q = chipEl.dataset.q;
+      if (this.selectedQualifiers.has(q)) this.selectedQualifiers.delete(q);
+      else this.selectedQualifiers.add(q);
+      chipEl.classList.toggle('active', this.selectedQualifiers.has(q));
+    });
+
+    // Typed custom qualifiers persist (like custom categories) and select immediately.
+    const addCustom = () => {
+      const trimmed = input.value.trim();
+      if (!trimmed) return;
+      input.value = '';
+      const known = [...QUALIFIER_GROUPS.flatMap(g => [...g.items]), ...this.customQualifiers];
+      const existing = known.find(q => q.toLowerCase() === trimmed.toLowerCase());
+      if (existing) {
+        this.selectedQualifiers.add(existing);
+        block.querySelectorAll<HTMLElement>('.qchip').forEach(el => {
+          if (el.dataset.q === existing) el.classList.add('active');
+        });
+        return;
+      }
+      this.customQualifiers.push(trimmed);
+      void chrome.storage.local.set({ [STORAGE_KEYS.QUALIFIERS]: [...this.customQualifiers] });
+      this.selectedQualifiers.add(trimmed);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'qchip active';
+      btn.dataset.q = trimmed;
+      btn.textContent = trimmed;
+      customRow.insertBefore(btn, input);
+    };
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addCustom();
+      }
+    });
+    input.addEventListener('blur', addCustom);
   }
 
   private setupCategoryCombobox() {
@@ -1631,15 +1652,17 @@ export class DiscernedOverlay {
   }
 
   private validateForm() {
+    // Signal + qualifiers are optional (unrated is a valid state); only a
+    // category and a finished capture are required.
     const category = (this.shadow.getElementById('category') as HTMLInputElement | null)?.value.trim();
-    const isValid = !!(this.interest && this.ethics && category) && !!this.capture && !this.capturing;
+    const isValid = !!category && !!this.capture && !this.capturing;
     const clipBtn = this.shadow.getElementById('clip') as HTMLButtonElement | null;
     if (clipBtn) clipBtn.disabled = !isValid;
   }
 
   private getEvaluation(): Evaluation {
     const category = ((this.shadow.getElementById('category') as HTMLInputElement).value.trim() || 'General') as Category;
-    return { interest: this.interest, ethics: this.ethics, category };
+    return { signal: this.signal ?? undefined, qualifiers: [...this.selectedQualifiers], category };
   }
 
   private async handleClipAction() {
@@ -1678,8 +1701,6 @@ export class DiscernedOverlay {
 
     void chrome.storage.local.set({
       [STORAGE_KEYS.LAST_PUBLISH_MODE]: this.publishMode,
-      [STORAGE_KEYS.LAST_INTEREST]:     this.interest,
-      [STORAGE_KEYS.LAST_ETHICS]:       this.ethics,
       [STORAGE_KEYS.LAST_CATEGORY]:     evaluation.category,
     });
   }
@@ -1870,26 +1891,37 @@ export class DiscernedOverlay {
         /* Page CSS can target our host <div> with cascade-winning selectors;
            force visibility so we're never accidentally hidden. */
         visibility: visible !important;
+        /* Dark scrollbars + form controls inside the shadow root. */
+        color-scheme: dark;
 
-        /* ── Jakarta Blue (translucent) — design tokens ─────────────────────── */
-        --p-bg:        rgba(167, 192, 235, 0.55);
-        --p-surface:   rgba(231, 238, 251, 0.65);
-        --p-surface-2: rgba(202, 217, 244, 0.70);
-        --p-ink:       #0f172a;
-        --p-ink-2:     #1e293b;
-        --p-ink-3:     #475569;
-        --p-ink-4:     #94a3b8;
-        --p-rule:      rgba(15, 23, 42, 0.18);
-        --p-rule-soft: rgba(15, 23, 42, 0.10);
-        --p-accent:     oklch(0.55 0.21 263);
-        --p-accent-ink: oklch(0.49 0.21 263);
-        --p-on-accent:  #eef4ff;
-        --p-cta-bg:     #1e3a8a;
-        --p-cta-ink:    #eaf1ff;
-        --p-cta-shadow: rgba(30, 58, 138, 0.40);
+        /* ── Dark zinc (analytical) — design tokens ─────────────────────────── */
+        --p-bg:        rgba(9, 9, 11, 0.92);
+        --p-surface:   #18181b;
+        --p-surface-2: #27272a;
+        --p-ink:       #f4f4f5;
+        --p-ink-2:     #d4d4d8;
+        --p-ink-3:     #a1a1aa;
+        --p-ink-4:     #52525b;
+        --p-rule:      #3f3f46;
+        --p-rule-soft: #27272a;
+        --p-accent:     #f59e0b;
+        --p-accent-ink: #fbbf24;
+        --p-on-accent:  #09090b;
+        --p-cta-bg:     #f4f4f5;
+        --p-cta-ink:    #09090b;
+        --p-cta-shadow: rgba(0, 0, 0, 0.60);
+        --p-mono:       ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
       * { margin: 0; padding: 0; box-sizing: border-box;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+      /* color-scheme alone doesn't reach shadow-root scrollers in Chromium —
+         style them explicitly so they don't render as light-theme bars. */
+      .discerned-root *::-webkit-scrollbar { width: 10px; height: 10px; }
+      .discerned-root *::-webkit-scrollbar-track { background: transparent; }
+      .discerned-root *::-webkit-scrollbar-thumb { background: var(--p-rule); }
+      .discerned-root *::-webkit-scrollbar-thumb:hover { background: var(--p-ink-4); }
+      .discerned-root *::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
 
       .discerned-root.panel {
         visibility: visible;
@@ -1899,17 +1931,15 @@ export class DiscernedOverlay {
         color: var(--p-ink);
         backdrop-filter: blur(18px) saturate(150%);
         -webkit-backdrop-filter: blur(18px) saturate(150%);
-        border-right: 1px solid rgba(255, 255, 255, 0.40);
-        box-shadow:
-          24px 0 60px -20px var(--p-cta-shadow),
-          inset 0 1px 0 rgba(255, 255, 255, 0.5);
+        border-right: 1px solid var(--p-rule);
+        box-shadow: 24px 0 60px -20px var(--p-cta-shadow);
         z-index: 2147483647;
         display: flex; flex-direction: column;
         animation: slideIn 0.18s ease-out;
       }
       /* Opaque fallback for browsers without backdrop-filter (some Firefox forks, older Chromium on Linux). */
       @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-        .discerned-root.panel { background: #dde7f9; }
+        .discerned-root.panel { background: #09090b; }
       }
       @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 
@@ -1919,14 +1949,15 @@ export class DiscernedOverlay {
         padding: 14px 16px;
         border-bottom: 1px solid var(--p-rule);
       }
-      .panel-header h2 { color: var(--p-ink); font-size: 16px; font-weight: 600; flex: 1; }
+      .panel-header h2 { color: var(--p-ink); font-size: 15px; font-weight: 700; flex: 1;
+                         font-family: var(--p-mono); text-transform: uppercase; letter-spacing: 0.06em; }
       .header-actions { display: flex; gap: 4px; }
 
       .icon-btn {
         background: none; border: none; color: var(--p-ink-3);
         cursor: pointer; width: 30px; height: 30px;
         display: flex; align-items: center; justify-content: center;
-        border-radius: 5px; font-size: 18px; transition: all 0.15s;
+        font-size: 18px; transition: all 0.15s;
       }
       .icon-btn:hover { background: var(--p-surface-2); color: var(--p-ink); }
       .close-btn { font-size: 24px; }
@@ -1952,27 +1983,27 @@ export class DiscernedOverlay {
       .chip {
         background: var(--p-surface); border: 1px solid var(--p-rule);
         color: var(--p-ink-2); font-size: 12px;
-        padding: 6px 10px; border-radius: 999px;
+        padding: 6px 10px;
         cursor: pointer; transition: all 0.15s;
         display: inline-flex; align-items: center; gap: 6px;
         font-family: inherit;
       }
-      .chip:hover:not(:disabled) { border-color: var(--p-accent); color: var(--p-ink); }
-      .chip.active { background: var(--p-accent); border-color: var(--p-accent); color: var(--p-on-accent); }
+      .chip:hover:not(:disabled) { border-color: var(--p-ink-4); color: var(--p-ink); }
+      .chip.active { background: var(--p-cta-bg); border-color: var(--p-cta-bg); color: var(--p-cta-ink); font-weight: 500; }
       .chip:disabled { opacity: 0.4; cursor: not-allowed; }
       .chip-icon { font-size: 13px; }
 
       /* Preview area */
       .preview-area { display: block; }
       .preview-card {
-        background: var(--p-surface); border-radius: 8px;
+        background: var(--p-surface);
         border-left: 4px solid var(--p-accent);
         padding: 12px;
         display: flex; flex-direction: column; gap: 6px;
       }
       .preview-thumb {
         max-width: 100%; max-height: 120px; width: auto; height: auto;
-        object-fit: contain; border-radius: 6px; align-self: flex-start;
+        object-fit: contain; align-self: flex-start;
       }
       .preview-title { color: var(--p-ink); font-size: 14px; font-weight: 600; }
       .preview-text  { color: var(--p-ink-2); font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
@@ -1980,7 +2011,7 @@ export class DiscernedOverlay {
       .preview-hint  { color: var(--p-accent-ink); font-size: 11px; }
       .preview-placeholder {
         background: var(--p-surface); border: 1px dashed var(--p-rule);
-        border-radius: 6px; padding: 14px;
+        padding: 14px;
         color: var(--p-ink-3); font-size: 12px; text-align: center;
       }
       .preview-loading {
@@ -1993,61 +2024,62 @@ export class DiscernedOverlay {
       .block-label {
         color: var(--p-ink-2); font-size: 11px; font-weight: 600;
         text-transform: uppercase; letter-spacing: 0.5px;
+        font-family: var(--p-mono);
       }
-      .form-block.evaluation { display: flex; flex-direction: row; gap: 12px; align-items: flex-start; }
       .form-group { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
       label {
         color: var(--p-ink-2); font-size: 11px; font-weight: 600;
         text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
+        font-family: var(--p-mono);
       }
 
       textarea#note-input {
         width: 100%; min-height: 56px;
         background: var(--p-surface); border: 1px solid var(--p-rule);
-        border-radius: 6px; color: var(--p-ink);
+        color: var(--p-ink);
         font-family: inherit; font-size: 13px;
         padding: 8px 10px; resize: vertical;
         outline: none; transition: border-color 0.15s, box-shadow 0.15s;
       }
       textarea#note-input::placeholder { color: var(--p-ink-4); }
-      textarea#note-input:focus { border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+      textarea#note-input:focus { border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(245,158,11,0.18); }
 
       select {
         background: var(--p-surface); border: 1px solid var(--p-rule); color: var(--p-ink);
-        padding: 8px; border-radius: 6px; font-size: 12px;
+        padding: 8px; font-size: 12px;
         width: 100%; font-family: inherit; cursor: pointer;
         transition: border-color 0.2s;
       }
       select:hover { border-color: var(--p-ink-3); }
-      select:focus { outline: none; border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+      select:focus { outline: none; border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(245,158,11,0.18); }
 
       /* Combobox */
       .combobox { position: relative; display: flex; }
       .combobox input[type="text"] {
         flex: 1; min-width: 0; background: var(--p-surface);
         border: 1px solid var(--p-rule); border-right: none; color: var(--p-ink);
-        padding: 8px; border-radius: 6px 0 0 6px;
+        padding: 8px;
         font-size: 12px; font-family: inherit; transition: border-color 0.2s;
       }
       .combobox-toggle {
         background: var(--p-surface); border: 1px solid var(--p-rule); border-left: none;
-        color: var(--p-ink-3); padding: 0 8px; border-radius: 0 6px 6px 0;
+        color: var(--p-ink-3); padding: 0 8px;
         cursor: pointer; font-size: 11px; transition: border-color 0.2s;
       }
       .combobox:focus-within input[type="text"],
       .combobox:focus-within .combobox-toggle { border-color: var(--p-accent); }
-      .combobox input[type="text"]:focus { outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+      .combobox input[type="text"]:focus { outline: none; box-shadow: 0 0 0 3px rgba(245,158,11,0.18); }
       .combobox-toggle:hover { color: var(--p-ink); }
 
       .combobox-list {
         display: none; position: absolute; top: calc(100% + 3px); left: 0; right: 0;
-        background: rgba(231, 238, 251, 0.95);
+        background: rgba(24, 24, 27, 0.97);
         backdrop-filter: blur(12px) saturate(140%);
         -webkit-backdrop-filter: blur(12px) saturate(140%);
-        border: 1px solid var(--p-rule); border-radius: 6px;
+        border: 1px solid var(--p-rule);
         list-style: none; z-index: 9999;
         max-height: 180px; overflow-y: auto;
-        box-shadow: 0 6px 18px rgba(30,58,138,0.25);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.5);
       }
       .combobox-list.open { display: block; }
       .combobox-list li { padding: 7px 10px; color: var(--p-ink); font-size: 12px; cursor: pointer; font-family: inherit; }
@@ -2058,7 +2090,7 @@ export class DiscernedOverlay {
       .cast-notice { min-height: 0; }
       .notice { font-size: 11px; line-height: 1.4; }
       .notice.ok   { color: var(--p-accent-ink); }
-      .notice.warn { color: #8a5a00; }
+      .notice.warn { color: #fbbf24; }
 
       /* Footer meta */
       /* Top-align so the status row stays put when the Unlock link wraps below it
@@ -2066,9 +2098,9 @@ export class DiscernedOverlay {
       .footer-meta { display: flex; align-items: flex-start; justify-content: space-between; }
       .nostr-status { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin-top: -3px; }
       .nostr-status.has-tip { position: relative; cursor: default; }
-      .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p-ink-4); flex-shrink: 0; }
-      .status-dot.connected { background: #7c3aed; }
-      .status-text { font-size: 11px; color: var(--p-ink-3); white-space: nowrap; }
+      .status-dot { width: 8px; height: 8px; background: var(--p-ink-4); flex-shrink: 0; }
+      .status-dot.connected { background: var(--p-accent); }
+      .status-text { font-size: 11px; color: var(--p-ink-3); white-space: nowrap; font-family: var(--p-mono); }
       /* Keep dot + status text on one line; push the Unlock link to its own line beneath,
          right-aligned (so its right edge sits under the end of "Locked") and pulled up a bit. */
       #nostr-unlock-link { flex-basis: 100%; text-align: right; margin-top: -2px; padding-right: 1em; }
@@ -2076,29 +2108,30 @@ export class DiscernedOverlay {
       .nostr-tip {
         position: absolute; bottom: calc(100% + 7px); left: 0;
         white-space: nowrap; pointer-events: none;
-        background: rgba(30, 41, 59, 0.96); color: #f1f5f9;
+        background: var(--p-surface-2); color: var(--p-ink);
+        border: 1px solid var(--p-rule);
         font-size: 11px; font-family: var(--p-mono, monospace);
-        padding: 5px 8px; border-radius: 6px;
-        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.35);
+        padding: 5px 8px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
         opacity: 0; transform: translateY(3px);
         transition: opacity 0.14s, transform 0.14s; z-index: 10000;
       }
       .nostr-status.has-tip:hover .nostr-tip { opacity: 1; transform: translateY(0); }
       .nostr-tip::after {
         content: ''; position: absolute; top: 100%; left: 10px;
-        border: 4px solid transparent; border-top-color: rgba(30, 41, 59, 0.96);
+        border: 4px solid transparent; border-top-color: var(--p-surface-2);
       }
       /* Nudge up so its centre lines up with the (now top-aligned) status row,
          and pull right toward the panel edge a touch. */
       .publish-mode-slider { display: flex; align-items: center; margin-top: -11px; margin-right: -6px; }
       .slider-track {
         position: relative; display: grid; grid-template-columns: repeat(3, 1fr);
-        background: var(--p-surface-2); border: 1px solid var(--p-rule); border-radius: 8px;
+        background: var(--p-surface); border: 1px solid var(--p-rule);
         overflow: hidden; height: 37px; width: 232px;
       }
       .slider-pill {
         position: absolute; top: 2px; bottom: 2px; left: 2px;
-        width: calc(33.333% - 2px); background: var(--p-accent); border-radius: 6px;
+        width: calc(33.333% - 2px); background: var(--p-cta-bg);
         pointer-events: none;
         transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
         will-change: transform;
@@ -2107,7 +2140,7 @@ export class DiscernedOverlay {
         position: relative; z-index: 1; background: none; border: none;
         color: var(--p-ink-3); font-size: 13px; font-weight: 500; cursor: pointer;
         padding: 0 4px; display: flex; align-items: center; justify-content: center;
-        gap: 4px; white-space: nowrap; transition: color 0.15s; font-family: inherit;
+        gap: 4px; white-space: nowrap; transition: color 0.15s; font-family: var(--p-mono);
       }
       .slider-seg .seg-icon { width: 15px; height: 15px; flex-shrink: 0; }
       /* On "Both" two icons sit side by side — pull them tighter than the icon→label gap. */
@@ -2116,105 +2149,88 @@ export class DiscernedOverlay {
       .slider-seg.active { color: var(--p-on-accent); font-weight: 600; }
       .slider-seg:disabled { opacity: 0.4; cursor: not-allowed; }
       .publish-mode-slider.guest .slider-seg:not(#seg-local) { opacity: 0.4; cursor: not-allowed; }
-      .slider-seg:focus-visible { outline: 2px solid var(--p-accent); outline-offset: -2px; border-radius: 6px; }
+      .slider-seg:focus-visible { outline: 2px solid var(--p-accent); outline-offset: -2px; }
 
-      /* ── EQ slider (Interest + Ethics) ─────────────────────────────────── */
-      .pop-eq {
-        display: grid;
-        grid-template-columns: 28px 1fr;
-        gap: 10px;
-        height: 170px;
-        align-items: stretch;
-      }
-      .pop-eq-slot {
-        position: relative;
-        width: 28px;
-        border-radius: 6px;
-        background: var(--p-surface);
-        border: 1px solid var(--p-rule);
-        box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.04);
-        outline: none;
-        overflow: hidden;
-        touch-action: none;
-        cursor: pointer;
-      }
-      .pop-eq-slot:focus-visible { box-shadow: 0 0 0 3px rgba(37,99,235,0.4); border-color: var(--p-accent); }
-      .pop-eq-track {
-        position: absolute;
-        left: 50%; top: 10px; bottom: 10px;
-        width: 4px;
-        margin-left: -2px;
-        background: var(--p-surface-2);
-        border-radius: 2px;
-        box-shadow: inset 0 0 0 1px var(--p-rule-soft);
-        pointer-events: none;
-      }
-      .pop-eq-fill {
-        position: absolute;
-        left: 50%; bottom: 10px;
-        width: 4px;
-        margin-left: -2px;
-        background: var(--p-accent);
-        border-radius: 2px;
-        opacity: 0.85;
-        pointer-events: none;
-        /* top is set inline so the fill ends at the thumb's center
-           (which sits at bottom: pct%), not pct% above bottom:10px. */
-      }
-      .pop-eq-ticks {
-        position: absolute;
-        left: 4px; right: 4px;
-        top: 10px; bottom: 10px;
-        pointer-events: none;
-      }
-      .pop-eq-tick {
-        position: absolute;
-        left: 0; right: 0;
-        height: 1px;
-        background: var(--p-rule);
-        opacity: 0.7;
-      }
-      .pop-eq-thumb {
-        position: absolute;
-        left: 50%;
-        width: 22px; height: 11px;
-        transform: translate(-50%, 50%);
-        background: var(--p-ink);
-        border-radius: 2px;
-        box-shadow:
-          0 1px 2px rgba(0, 0, 0, 0.35),
-          inset 0 1px 0 rgba(255, 255, 255, 0.18),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.25);
-        cursor: grab;
-        z-index: 2;
-        pointer-events: none;
-      }
-      .pop-eq-slot:active .pop-eq-thumb { cursor: grabbing; }
-      .pop-eq-thumb-groove {
-        position: absolute;
-        left: 3px; right: 3px;
-        top: 50%; height: 1px;
-        margin-top: -0.5px;
-        background: var(--p-ink-3);
-        opacity: 0.7;
-      }
-      .pop-eq-labels {
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        padding: 2px 0;
-        font-size: 11.5px;
-        line-height: 1;
+      /* ── Signal rating (single horizontal slider) ─────────────────────── */
+      .signal-block { gap: 8px; }
+      .section-head {
+        font-family: var(--p-mono); font-size: 11px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.08em;
         color: var(--p-ink-3);
       }
-      .pop-eq-label {
-        height: 11px;
-        display: flex; align-items: center;
-        cursor: pointer;
-        transition: color .12s, font-weight .12s;
+      .signal-head { display: flex; align-items: baseline; gap: 10px; }
+      .signal-head .section-head { flex: 1; }
+      .signal-clear {
+        background: none; border: none; padding: 0;
+        font-family: var(--p-mono); font-size: 10px;
+        text-transform: uppercase; letter-spacing: 0.05em;
+        color: var(--p-ink-4); text-decoration: underline; cursor: pointer;
       }
-      .pop-eq-label:hover { color: var(--p-ink-2); }
-      .pop-eq-label.selected { color: var(--p-ink); font-weight: 600; }
+      .signal-clear:hover { color: var(--p-ink); }
+      .signal-readout {
+        font-family: var(--p-mono); font-size: 13px; font-weight: 700;
+        color: var(--p-accent); white-space: nowrap;
+      }
+      .signal-readout.unset { color: var(--p-ink-4); font-weight: 400; }
+      .signal-slider input[type="range"] {
+        -webkit-appearance: none; appearance: none;
+        display: block; width: 100%; height: 20px;
+        background: transparent; cursor: pointer; outline: none;
+      }
+      .signal-slider input[type="range"]::-webkit-slider-runnable-track {
+        height: 4px;
+        background: linear-gradient(to right,
+          var(--p-accent) var(--sig-pct, 0%),
+          var(--p-rule) var(--sig-pct, 0%));
+      }
+      .signal-slider.unrated input[type="range"]::-webkit-slider-runnable-track {
+        background: var(--p-rule);
+      }
+      .signal-slider input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none; appearance: none;
+        width: 8px; height: 18px; margin-top: -7px;
+        background: var(--p-accent);
+        border: none;
+      }
+      .signal-slider.unrated input[type="range"]::-webkit-slider-thumb { opacity: 0; }
+      .signal-slider input[type="range"]:focus-visible { outline: 2px solid var(--p-accent); outline-offset: 2px; }
+      .signal-ticks { display: flex; justify-content: space-between; }
+      .signal-tick {
+        background: none; border: none; padding: 0;
+        font-family: var(--p-mono); font-size: 10px;
+        text-transform: uppercase; letter-spacing: 0.03em;
+        color: var(--p-ink-4); cursor: pointer; transition: color .12s;
+      }
+      .signal-tick:hover { color: var(--p-ink-2); }
+      .signal-tick.selected { color: var(--p-ink); font-weight: 700; }
+
+      /* ── Qualifier chips ──────────────────────────────────────────────── */
+      .qualifiers-block { gap: 8px; }
+      .qual-group { display: flex; flex-direction: column; gap: 5px; }
+      .qual-group-label {
+        font-family: var(--p-mono); font-size: 10px;
+        text-transform: uppercase; letter-spacing: 0.06em;
+        color: var(--p-ink-4);
+      }
+      .qual-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+      .qchip {
+        background: var(--p-surface); border: 1px solid var(--p-rule);
+        color: var(--p-ink-3); font-size: 12px; font-family: inherit;
+        padding: 4px 10px; cursor: pointer;
+        transition: border-color .12s, color .12s, background .12s;
+      }
+      .qchip:hover { border-color: var(--p-ink-4); color: var(--p-ink); }
+      .qchip.active {
+        background: var(--p-cta-bg); border-color: var(--p-cta-bg);
+        color: var(--p-cta-ink); font-weight: 500;
+      }
+      .qual-input {
+        background: transparent; border: 1px dashed var(--p-rule);
+        color: var(--p-ink); font-family: var(--p-mono); font-size: 11px;
+        padding: 4px 8px; width: 76px; outline: none;
+      }
+      .qual-input::placeholder { color: var(--p-ink-4); }
+      .qual-input:focus { border-style: solid; border-color: var(--p-accent); }
 
       .link-btn {
         background: none; border: none; color: var(--p-accent-ink);
@@ -2225,7 +2241,7 @@ export class DiscernedOverlay {
 
       /* Buttons */
       .btn {
-        padding: 14px; border: none; border-radius: 8px;
+        padding: 14px; border: none;
         font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s;
         display: flex; flex-direction: column; align-items: center; gap: 2px;
         font-family: inherit;
@@ -2235,17 +2251,17 @@ export class DiscernedOverlay {
       .btn-secondary { background: var(--p-surface); color: var(--p-ink); border: 1px solid var(--p-rule); }
       .btn-secondary:not(:disabled):hover { background: var(--p-surface-2); }
       .btn-primary { background: var(--p-cta-bg); color: var(--p-cta-ink); }
-      .btn-primary:not(:disabled):hover { background: #1e40af; }
+      .btn-primary:not(:disabled):hover { background: #ffffff; }
       .btn-clip {
         width: 33.333%; margin: 0 auto;
         flex-direction: row; justify-content: center; padding: 9px 14px;
         background: var(--p-cta-bg); color: var(--p-cta-ink);
         box-shadow: 0 2px 8px var(--p-cta-shadow);
       }
-      .btn-clip:not(:disabled):hover { background: #1e40af; }
+      .btn-clip:not(:disabled):hover { background: #ffffff; }
       .btn-ghost { background: var(--p-surface); color: var(--p-ink-3); border: 1px solid var(--p-rule); }
       .btn-ghost:hover { background: var(--p-surface-2); color: var(--p-ink); }
-      .btn .label { font-size: 13px; }
+      .btn .label { font-size: 13px; font-family: var(--p-mono); }
 
       /* Gate */
       .gate-body {
@@ -2253,7 +2269,7 @@ export class DiscernedOverlay {
         text-align: center; padding: 28px 20px; gap: 14px;
       }
       .gate-icon { font-size: 40px; }
-      .gate-title { font-size: 15px; font-weight: 600; color: var(--p-ink); }
+      .gate-title { font-size: 15px; font-weight: 700; color: var(--p-ink); font-family: var(--p-mono); }
       .gate-desc  { font-size: 12px; color: var(--p-ink-2); line-height: 1.6; max-width: 320px; }
       .gate-btn   { width: 100%; max-width: 280px; }
 
@@ -2265,6 +2281,7 @@ export class DiscernedOverlay {
         color: var(--p-ink-3); font-size: 12px; font-weight: 600;
         padding: 7px 14px; cursor: pointer; margin-bottom: -1px;
         transition: color 0.15s, border-color 0.15s;
+        font-family: var(--p-mono);
       }
       .tab-btn:hover { color: var(--p-ink); }
       .tab-btn.active { color: var(--p-accent); border-bottom-color: var(--p-accent); }
@@ -2272,37 +2289,37 @@ export class DiscernedOverlay {
       .panel-desc { font-size: 12px; color: var(--p-ink-2); line-height: 1.6; }
       .panel-desc a { color: var(--p-accent-ink); text-decoration: none; }
       .panel-desc a:hover { text-decoration: underline; }
-      .panel-desc code { background: var(--p-surface); border: 1px solid var(--p-rule); border-radius: 3px; padding: 1px 5px; font-size: 0.9em; color: var(--p-accent-ink); }
-      .panel-warning { background: rgba(240, 192, 64, 0.18); border: 1px solid rgba(180, 130, 0, 0.45); border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #5c3d00; line-height: 1.5; }
+      .panel-desc code { background: var(--p-surface); border: 1px solid var(--p-rule); padding: 1px 5px; font-size: 0.9em; color: var(--p-accent-ink); }
+      .panel-warning { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.40); padding: 10px 12px; font-size: 12px; color: #fbbf24; line-height: 1.5; }
       textarea {
         width: 100%; background: var(--p-surface); border: 1px solid var(--p-rule);
-        border-radius: 6px; color: var(--p-ink);
-        font-family: monospace; font-size: 12px;
+        color: var(--p-ink);
+        font-family: var(--p-mono); font-size: 12px;
         padding: 10px; resize: vertical; min-height: 56px;
         outline: none; transition: border-color 0.15s;
       }
       textarea:focus { border-color: var(--p-accent); }
       input[type="password"] {
         width: 100%; background: var(--p-surface); border: 1px solid var(--p-rule);
-        border-radius: 6px; color: var(--p-ink);
+        color: var(--p-ink);
         font-size: 13px; padding: 10px;
         outline: none; transition: border-color 0.15s; font-family: inherit;
       }
       input[type="password"]:focus { border-color: var(--p-accent); }
       .identity-status { font-size: 12px; min-height: 16px; display: flex; align-items: center; gap: 6px; }
-      .identity-status.error { color: #b91c1c; }
+      .identity-status.error { color: #f87171; }
       .identity-status.ok    { color: var(--p-accent-ink); }
       .identity-status.spin  { color: var(--p-ink-2); }
-      .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-      .status-dot.ok { background: #16a34a; }
-      .identity-divider { display: flex; align-items: center; gap: 8px; color: var(--p-ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin: 4px 0; }
+      .status-dot { display: inline-block; width: 8px; height: 8px; flex-shrink: 0; }
+      .status-dot.ok { background: #4ade80; }
+      .identity-divider { display: flex; align-items: center; gap: 8px; color: var(--p-ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin: 4px 0; font-family: var(--p-mono); }
       .identity-divider::before, .identity-divider::after { content: ""; flex: 1; height: 1px; background: var(--p-rule); }
-      .key-backup-box { font-family: monospace; font-size: 13px; color: var(--p-ink); background: var(--p-surface-2); border: 1px solid var(--p-rule); border-radius: 6px; padding: 12px; word-break: break-all; user-select: all; line-height: 1.5; }
+      .key-backup-box { font-family: var(--p-mono); font-size: 13px; color: var(--p-ink); background: var(--p-surface-2); border: 1px solid var(--p-rule); padding: 12px; word-break: break-all; user-select: all; line-height: 1.5; }
       .key-ack { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--p-ink-2); cursor: pointer; }
       .key-ack input { cursor: pointer; }
-      .key-label { font-size: 11px; font-weight: 600; color: var(--p-ink-3); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
+      .key-label { font-size: 11px; font-weight: 600; color: var(--p-ink-3); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; font-family: var(--p-mono); }
       .key-reveal { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-      .choice-card { display: block; width: 100%; text-align: left; background: var(--p-surface-2); border: 1px solid var(--p-rule); border-radius: 8px; padding: 14px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+      .choice-card { display: block; width: 100%; text-align: left; background: var(--p-surface-2); border: 1px solid var(--p-rule); padding: 14px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
       .choice-card:hover { border-color: var(--p-accent); background: var(--p-surface); }
       .choice-title { font-size: 14px; font-weight: 600; color: var(--p-accent-ink); margin-bottom: 4px; }
       .choice-desc { font-size: 12px; color: var(--p-ink-2); line-height: 1.5; }
@@ -2316,29 +2333,29 @@ export class DiscernedOverlay {
       .settings-body { gap: 12px; }
       .settings-card {
         background: var(--p-surface); border: 1px solid var(--p-rule);
-        border-radius: 8px; padding: 12px;
+        padding: 12px;
         display: flex; flex-direction: column; gap: 8px;
       }
-      .settings-card.warning { background: rgba(240, 192, 64, 0.18); border-color: rgba(180, 130, 0, 0.45); }
+      .settings-card.warning { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.40); }
       .card-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-      .card-label { font-size: 11px; color: var(--p-ink-3); text-transform: uppercase; letter-spacing: 0.5px; }
-      .card-title { font-size: 13px; font-weight: 600; color: #5c3d00; }
-      .card-desc  { font-size: 12px; color: #6f4b00; line-height: 1.5; }
+      .card-label { font-size: 11px; color: var(--p-ink-3); text-transform: uppercase; letter-spacing: 0.5px; font-family: var(--p-mono); }
+      .card-title { font-size: 13px; font-weight: 600; color: #fbbf24; }
+      .card-desc  { font-size: 12px; color: var(--p-ink-2); line-height: 1.5; }
       .card-value { font-size: 13px; color: var(--p-ink); }
       .card-value.ok { color: var(--p-accent-ink); }
-      .profile-id { font-size: 12px; color: var(--p-ink-2); font-family: monospace; background: var(--p-surface-2); border-radius: 4px; padding: 6px 8px; word-break: break-all; }
+      .profile-id { font-size: 12px; color: var(--p-ink-2); font-family: var(--p-mono); background: var(--p-surface-2); padding: 6px 8px; word-break: break-all; }
       .profile-id + .profile-id { margin-top: 4px; }
       .profile-id-label { color: var(--p-ink-3); margin-right: 6px; font-family: var(--p-font-sans, inherit); }
       .usage-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--p-ink-2); }
-      .usage-row-link { background: none; border: none; width: 100%; cursor: pointer; border-radius: 4px; padding: 2px 4px; margin: -2px -4px; transition: background 0.15s; font-family: inherit; }
+      .usage-row-link { background: none; border: none; width: 100%; cursor: pointer; padding: 2px 4px; margin: -2px -4px; transition: background 0.15s; font-family: inherit; }
       .usage-row-link:hover { background: var(--p-surface-2); color: var(--p-ink); }
       .usage-row-link:hover .usage-value { color: var(--p-accent-ink); }
       .usage-value { color: var(--p-ink); font-weight: 600; }
       .pin-unlock summary { font-size: 12px; color: var(--p-ink-3); cursor: pointer; }
       .pin-row { display: flex; gap: 6px; margin-top: 6px; }
-      .pin-row input { flex: 1; background: var(--p-surface); border: 1px solid var(--p-rule); border-radius: 4px; color: var(--p-ink); font-size: 12px; padding: 6px 8px; outline: none; }
+      .pin-row input { flex: 1; background: var(--p-surface); border: 1px solid var(--p-rule); color: var(--p-ink); font-size: 12px; padding: 6px 8px; outline: none; }
       .pin-row .btn { padding: 6px 10px; font-size: 12px; }
-      .pin-error { font-size: 12px; color: #b91c1c; margin-top: 4px; }
+      .pin-error { font-size: 12px; color: #f87171; margin-top: 4px; }
       .toggle-row { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
       .toggle-row input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; accent-color: var(--p-accent); width: 14px; height: 14px; cursor: pointer; }
       .toggle-label { display: flex; flex-direction: column; gap: 2px; }
@@ -2348,13 +2365,13 @@ export class DiscernedOverlay {
       /* Loading overlay */
       .loading {
         position: absolute; inset: 0;
-        background: rgba(231, 238, 251, 0.92);
+        background: rgba(9, 9, 11, 0.92);
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 14px;
-        /* Sit above the EQ thumbs (z-index:2) and publish-mode slider segs (z-index:1)
-           which would otherwise poke through the saving/success/error veil. */
+        /* Sit above the publish-mode slider segs (z-index:1) which would
+           otherwise poke through the saving/success/error veil. */
         z-index: 10;
       }
       .spinner {
@@ -2369,8 +2386,8 @@ export class DiscernedOverlay {
       }
       @keyframes spin { to { transform: rotate(360deg); } }
       .loading p { color: var(--p-ink-2); font-size: 14px; }
-      .success { color: var(--p-accent-ink); font-size: 18px; font-weight: 600; }
-      .error   { color: #b91c1c; font-size: 18px; font-weight: 600; }
+      .success { color: var(--p-accent-ink); font-size: 18px; font-weight: 600; font-family: var(--p-mono); }
+      .error   { color: #f87171; font-size: 18px; font-weight: 600; font-family: var(--p-mono); }
       .open-library-btn, .open-discernment-btn {
         margin-top: 10px; background: none; border: none; padding: 0;
         color: var(--p-accent-ink); font-size: 13px; cursor: pointer; text-decoration: underline;
@@ -2386,10 +2403,10 @@ export class DiscernedOverlay {
       .inline-unlock { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
       .inline-unlock .pin-input { flex: 1; min-width: 100px; }
       .inline-unlock .btn { padding: 6px 10px; font-size: 12px; }
-      .inline-unlock-error { font-size: 12px; color: #b91c1c; width: 100%; }
+      .inline-unlock-error { font-size: 12px; color: #f87171; width: 100%; }
       .pin-input {
         background: var(--p-surface); border: 1px solid var(--p-rule);
-        border-radius: 6px; color: var(--p-ink); font-size: 13px; padding: 8px 10px;
+        color: var(--p-ink); font-size: 13px; padding: 8px 10px;
         outline: none; transition: border-color 0.15s; font-family: inherit;
       }
       .pin-input:focus { border-color: var(--p-accent); }

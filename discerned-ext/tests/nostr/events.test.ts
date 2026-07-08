@@ -58,23 +58,47 @@ describe('Nostr event factory', () => {
         expect(extractTagValue(ev, 'client')).toBe('discerned');
         expect(extractTagValue(ev, 'format')).toBe(fx.capture.format satisfies ClipFormat);
 
-        // The three label namespaces, each with both an L (namespace declaration) and l (labeled value)
+        // Category is always labeled; signal and qualifier namespaces appear
+        // only when the evaluation carries them (unrated → absent entirely).
         const lTags = ev.tags.filter((t) => t[0] === 'l');
-        const interestTag = lTags.find((t) => t[2] === 'online.discerned.interest');
-        const ethicsTag = lTags.find((t) => t[2] === 'online.discerned.ethics');
-        const categoryTag = lTags.find((t) => t[2] === 'online.discerned.category');
-        expect(interestTag?.[1]).toBe(fx.evaluation.interest);
-        expect(ethicsTag?.[1]).toBe(fx.evaluation.ethics);
-        expect(categoryTag?.[1]).toBe(fx.evaluation.category);
-
         const LDeclarations = extractTagValues(ev, 'L');
-        expect(LDeclarations).toEqual(
-          expect.arrayContaining([
-            'online.discerned.interest',
-            'online.discerned.ethics',
-            'online.discerned.category',
-          ]),
-        );
+
+        const categoryTag = lTags.find((t) => t[2] === 'online.discerned.category');
+        expect(categoryTag?.[1]).toBe(fx.evaluation.category);
+        expect(LDeclarations).toContain('online.discerned.category');
+
+        const signalTag = lTags.find((t) => t[2] === 'online.discerned.signal');
+        if (fx.evaluation.signal) {
+          expect(signalTag?.[1]).toBe(fx.evaluation.signal);
+          expect(LDeclarations).toContain('online.discerned.signal');
+        } else {
+          expect(signalTag).toBeUndefined();
+          expect(LDeclarations).not.toContain('online.discerned.signal');
+        }
+
+        const qualifierValues = lTags
+          .filter((t) => t[2] === 'online.discerned.qualifier')
+          .map((t) => t[1]);
+        expect(qualifierValues).toEqual(fx.evaluation.qualifiers);
+        if (fx.evaluation.qualifiers.length > 0) {
+          expect(LDeclarations).toContain('online.discerned.qualifier');
+        } else {
+          expect(LDeclarations).not.toContain('online.discerned.qualifier');
+        }
+      });
+
+      it('leads content with the evaluation summary line', () => {
+        const template = buildTemplate(fx.capture, fx.evaluation);
+        const firstLine = template.content.split('\n')[0];
+        if (fx.evaluation.signal) {
+          const rank = ['Toxic', 'Noise', 'Passable', 'Worthwhile', 'Masterpiece']
+            .indexOf(fx.evaluation.signal) + 1;
+          expect(firstLine).toBe(
+            `Discerned: ${'★'.repeat(rank)} ${fx.evaluation.signal} — ${fx.evaluation.category}`,
+          );
+        } else {
+          expect(firstLine).toBe(`Discerned: ${fx.evaluation.category}`);
+        }
       });
 
       it('emits format-specific tags', () => {

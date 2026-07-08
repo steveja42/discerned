@@ -1,10 +1,13 @@
 // Converts a raw Nostr kind:1 event into the app's ClipData shape.
-// Discerned events use `l` tags with namespaced values for the three axes
-// (online.discerned.interest / ethics / category), `r` for the source URL,
-// and `quote` for the clipped selection text.
+// Discerned events use `l` tags with namespaced values — current casts carry
+// online.discerned.signal (single, optional) + online.discerned.qualifier
+// (repeated) + online.discerned.category; legacy casts carry
+// online.discerned.interest / ethics instead. `r` is the source URL and
+// `quote` the clipped selection text.
 
 import type { Event } from 'nostr-tools';
-import type { ClipData, ClipFormat, InterestLevel, EthicsLevel } from '@/lib/types';
+import type { ClipData, ClipFormat, InterestLevel, EthicsLevel, SignalLevel } from '@/lib/types';
+import { SIGNAL_LEVELS } from '@/lib/constants';
 
 function getTag(event: Event, tagName: string, namespace?: string): string | null {
   for (const tag of event.tags) {
@@ -16,8 +19,23 @@ function getTag(event: Event, tagName: string, namespace?: string): string | nul
   return null;
 }
 
+// All values for a repeated namespaced tag (e.g. one `l` per qualifier).
+function getTags(event: Event, tagName: string, namespace: string): string[] {
+  const values: string[] = [];
+  for (const tag of event.tags) {
+    if (tag[0] === tagName && tag[2] === namespace && tag[1]) values.push(tag[1]);
+  }
+  return values;
+}
+
 export function parseEvent(event: Event): ClipData {
   const url = getTag(event, 'r') ?? '';
+  const rawSignal = getTag(event, 'l', 'online.discerned.signal');
+  const signal = rawSignal && (SIGNAL_LEVELS as readonly string[]).includes(rawSignal)
+    ? (rawSignal as SignalLevel)
+    : undefined;
+  const qualifiers = getTags(event, 'l', 'online.discerned.qualifier');
+  // Legacy axes keep their Neutral defaults so old casts render exactly as before.
   const interest = (getTag(event, 'l', 'online.discerned.interest') ?? 'Neutral') as InterestLevel;
   const ethics = (getTag(event, 'l', 'online.discerned.ethics') ?? 'Neutral') as EthicsLevel;
   const category = getTag(event, 'l', 'online.discerned.category') ?? 'General';
@@ -48,7 +66,7 @@ export function parseEvent(event: Event): ClipData {
       note,
       authorPubkey: event.pubkey,
     },
-    evaluation: { interest, ethics, category },
+    evaluation: { signal, qualifiers, interest, ethics, category },
     encrypted: '',
   };
 }

@@ -58,11 +58,28 @@ test.describe('web rendering — /clips via bridge', () => {
 
     const row = page.locator('article.clip', { hasText: articleClip!.capture.title });
     await expect(row).toBeVisible();
+
+    // The row glyph shows the signal star pill + qualifier chips for rated clips.
+    if (articleClip!.evaluation.signal) {
+      await expect(row.locator('.signal-tag')).toBeVisible();
+    }
+    for (const q of articleClip!.evaluation.qualifiers ?? []) {
+      await expect(row.locator('.qual-chip', { hasText: q })).toBeVisible();
+    }
+
     await row.click();
     // The DetailPanel renders the full title in a .detail-title heading.
     // (The same title text also lives in the row's <h3> and possibly the body,
     //  so we scope strictly to the detail panel selector.)
     await expect(page.locator('.detail-title', { hasText: articleClip!.capture.title }))
       .toBeVisible();
+    // Detail panel surfaces the Signal section + each qualifier chip.
+    if (articleClip!.evaluation.signal) {
+      await expect(page.locator('.detail-section-label', { hasText: 'Signal' })).toBeVisible();
+      await expect(page.locator('.signal-name-lg')).toContainText(articleClip!.evaluation.signal);
+    }
+    for (const q of articleClip!.evaluation.qualifiers ?? []) {
+      await expect(page.locator('.detail-section .qual-chip', { hasText: q })).toBeVisible();
+    }
   });
 });

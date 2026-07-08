@@ -77,8 +77,19 @@ export function validateEncryptedPayload(payload: unknown): payload is Encrypted
   if (!p.evaluation || typeof p.evaluation !== 'object') {
     return false;
   }
-  const ev = p.evaluation as { interest?: unknown; ethics?: unknown; category?: unknown };
-  if (!ev.interest || !ev.ethics || !ev.category) {
+  // Category is the only required evaluation field; signal/qualifiers are
+  // optional so legacy {interest, ethics, category} payloads still validate.
+  const ev = p.evaluation as { category?: unknown; signal?: unknown; qualifiers?: unknown };
+  if (typeof ev.category !== 'string' || ev.category.length === 0) {
+    return false;
+  }
+  if (ev.signal !== undefined && typeof ev.signal !== 'string') {
+    return false;
+  }
+  if (
+    ev.qualifiers !== undefined &&
+    !(Array.isArray(ev.qualifiers) && ev.qualifiers.every((q) => typeof q === 'string'))
+  ) {
     return false;
   }
 

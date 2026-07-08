@@ -221,8 +221,8 @@ export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQ
 
   const filtered = useMemo(() => clips.filter((c) => {
     if (activeCat && c.evaluation.category !== activeCat) return false;
-    if (interestRank(c.evaluation.interest) + 1 < interestMin) return false;
-    if (ethicsRank(c.evaluation.ethics) + 1 < ethicsMin) return false;
+    if (interestRank(c.evaluation.interest ?? 'Neutral') + 1 < interestMin) return false;
+    if (ethicsRank(c.evaluation.ethics ?? 'Neutral') + 1 < ethicsMin) return false;
     if (activeFollow === 'unread' && readSet.has(c.capture.id)) return false;
     if (isPubkey(activeFollow) && c.capture.authorPubkey !== activeFollow) return false;
     if (q) {

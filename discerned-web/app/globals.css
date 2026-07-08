@@ -897,6 +897,48 @@ a { color: inherit; }
   background: var(--category);
 }
 
+/* Signal rating pill (star count) + qualifier chips — shared across glyph variants. */
+.signal-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--paper-3);
+  padding: 3px 7px;
+  border-radius: 3px;
+  border: 1px solid var(--rule);
+}
+.signal-stars { font-size: 10px; letter-spacing: 0.5px; color: #d99814; line-height: 1; }
+.signal-stars-off { color: var(--ink-4); opacity: 0.5; }
+.signal-name { color: var(--ink-2); }
+.qual-tags {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px;
+}
+.qual-chip {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  background: var(--paper-2);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--rule);
+  white-space: nowrap;
+}
+
+/* Detail-panel signal display (larger). */
+.signal-display { display: flex; align-items: center; gap: 10px; }
+.signal-stars-lg { font-size: 20px; letter-spacing: 2px; color: #d99814; line-height: 1; }
+.signal-name-lg {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
 /* Right panel — clip detail */
 .detail {
   border-left: 1px solid var(--rule);

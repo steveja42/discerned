@@ -33,7 +33,7 @@ export interface ClipFixture {
     selectionText?: string; selectionContext?: string;
     bodyHtml?: string; bodyText?: string; thumbnail?: string | null;
   };
-  evaluation: { interest: string; ethics: string; category: string };
+  evaluation: { signal?: string; qualifiers: string[]; category: string };
 }
 
 export function loadClipFixtures(): ClipFixture[] {

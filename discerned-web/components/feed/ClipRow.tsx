@@ -79,9 +79,11 @@ export default function ClipRow({
           )}
         </div>
         <Glyph
-          interest={evaluation.interest}
-          ethics={evaluation.ethics}
+          interest={evaluation.interest ?? 'Neutral'}
+          ethics={evaluation.ethics ?? 'Neutral'}
           category={evaluation.category}
+          signal={evaluation.signal}
+          qualifiers={evaluation.qualifiers}
           variant={glyphVariant}
         />
         <h3 className="clip-title">{capture.title}</h3>

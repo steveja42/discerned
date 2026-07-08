@@ -33,6 +33,14 @@ test.describe('public feed — mocked Nostr relay', () => {
   test('renders a clip from a mocked relay subscription', async ({ page }) => {
     const { event } = buildFixtureEvent();
 
+    // Force production relay mode so the feed opens wss:// sockets we can
+    // intercept. In dev the NEXT_PUBLIC_LOCAL_RELAY env var makes the feed
+    // subscribe to ws://localhost:7777 instead, which bypasses the mock (and,
+    // when the local relay is running, floods the feed with real test casts).
+    await page.addInitScript(() => {
+      try { localStorage.setItem('discerned.relayMode', 'production'); } catch { /* ignore */ }
+    });
+
     // Intercept any wss:// connection HomeClient opens via SimplePool.
     await page.routeWebSocket(/^wss:\/\//, (ws) => {
       ws.onMessage((message: string | Buffer) => {

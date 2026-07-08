@@ -56,7 +56,7 @@ test.describe('end-to-end clip pipeline', () => {
             {
               type: '__DISCERNED_TEST_CLIP',
               capture: cap,
-              evaluation: { interest: 'Insightful', ethics: 'Honest', category: 'Philosophy' },
+              evaluation: { signal: 'Worthwhile', qualifiers: ['Primary Source'], category: 'Philosophy' },
             },
             window.location.origin,
           );

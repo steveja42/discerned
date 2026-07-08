@@ -29,7 +29,7 @@ export default function AboutPage() {
           <h1 className="hero-title">Signal,<br /><em>not noise.</em></h1>
           <p className="hero-lede">
             Discerned is a best in class web clipper and global curation platform. Clip what matters,
-            rate it across <strong>Interest</strong>, <strong>Ethics</strong>, and <strong>Category</strong>,
+            rate its <strong>Signal</strong>, tag it with <strong>Qualifiers</strong>, file it under a <strong>Category</strong>,
             and broadcast — or don&apos;t. Your clips are yours; the signal is shared.
           </p>
           <div className="hero-cta">
@@ -44,7 +44,7 @@ export default function AboutPage() {
         </h2>
         <p style={{ margin: '0 0 16px' }}>
           Most platforms reward the loudest voice. Discerned rewards the most honest one.
-          Every clip carries a structured assessment — <em>Interest</em>, <em>Ethics</em>, and <em>Category</em> —
+          Every clip carries a structured assessment — a <em>Signal</em> rating, <em>Qualifier</em> tags, and a <em>Category</em> —
           recorded with the same care a librarian gives an accession.
         </p>
         <p style={{ margin: '0 0 16px' }}>

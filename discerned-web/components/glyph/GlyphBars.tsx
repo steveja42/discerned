@@ -1,13 +1,16 @@
 import { CATEGORIES, interestRank, ethicsRank } from '@/lib/constants';
 import Wedge from './Wedge';
+import SignalTag from './SignalTag';
 
 interface GlyphBarsProps {
   interest: string;
   ethics: string;
   category: string;
+  signal?: string;
+  qualifiers?: string[];
 }
 
-export default function GlyphBars({ interest, ethics, category }: GlyphBarsProps) {
+export default function GlyphBars({ interest, ethics, category, signal, qualifiers }: GlyphBarsProps) {
   const cat = CATEGORIES[category] ?? { label: category, hue: 60 };
   const iRank = interestRank(interest);
   const eRank = ethicsRank(ethics);
@@ -19,6 +22,7 @@ export default function GlyphBars({ interest, ethics, category }: GlyphBarsProps
         <span className="swatch" style={{ background: `oklch(0.50 0.08 ${cat.hue})` }} />
         {cat.label}
       </div>
+      <SignalTag signal={signal} qualifiers={qualifiers} />
       {!iNeutral && (
         <div className="glyph-row" title={`Interest: ${interest}`}>
           <span className="axis-key">I</span>

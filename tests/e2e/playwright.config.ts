@@ -223,6 +223,17 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'overlay-visual',
+      testMatch: /overlay-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'signal-render-visual',
+      testMatch: /signal-render-visual\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+      retries: 0,
+    },
+    {
       name: 'snapshot-fixtures',
       testMatch: /tools\/snapshot-fixtures\.spec\.ts/,
       retries: 0,

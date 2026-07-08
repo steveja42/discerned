@@ -31,7 +31,7 @@ export default function FirstVisitPopover({ onDismiss, onLearnMore }: FirstVisit
       <div className="brand-popover-eyebrow">Welcome</div>
       <div className="brand-popover-title">Signal, <em>not noise.</em></div>
       <p className="brand-popover-lede">
-        Discerned is a best in class web clipper and global curation platform. Clip, rate across three axes,
+        Discerned is a best in class web clipper and global curation platform. Clip, rate the signal,
         and broadcast — or don&apos;t.
       </p>
       <div className="brand-popover-actions">

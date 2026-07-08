@@ -9,8 +9,7 @@
     "bodyText": "The Cost of Coordination. Every organization, given enough time, converges on a fixed point: a meeting whose only purpose is to schedule another meeting."
   },
   "evaluation": {
-    "interest": "Interesting",
-    "ethics": "Neutral",
+    "qualifiers": [],
     "category": "Tech"
   }
 }

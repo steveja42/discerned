@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import type { ClipData } from '@/lib/types';
 import type { ClipBody } from '@/lib/bridge/ClipStoreContext';
 import { authorLabel, type AuthorProfile } from '@/lib/nostr/profiles';
-import { CATEGORIES, interestRank, ethicsRank } from '@/lib/constants';
+import { CATEGORIES, interestRank, ethicsRank, signalRank } from '@/lib/constants';
 import Wedge from '@/components/glyph/Wedge';
 import { requestClipBody } from '@/lib/bridge/extension-bridge';
 
@@ -158,11 +158,14 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
   const domain = domainOf(capture.url);
   const caster = capture.authorPubkey ? authorLabel(capture.authorPubkey, author) : null;
   const cat = CATEGORIES[evaluation.category] ?? { label: evaluation.category, hue: 60 };
-  const iIdx = interestRank(evaluation.interest);
-  const eIdx = ethicsRank(evaluation.ethics);
+  // Absent legacy axes (new signal-model clips) rank as Neutral → hidden.
+  const iIdx = interestRank(evaluation.interest ?? 'Neutral');
+  const eIdx = ethicsRank(evaluation.ethics ?? 'Neutral');
   const iNeutral = iIdx === 1;
   const eNeutral = eIdx === 2;
   const showAssessment = !iNeutral || !eNeutral;
+  const sRank = signalRank(evaluation.signal);
+  const quals = evaluation.qualifiers ?? [];
 
   return (
     <aside className="detail">
@@ -209,6 +212,34 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
         </div>
       </div>
 
+      {sRank > 0 && (
+        <div className="detail-section">
+          <div className="detail-section-header">
+            <div className="detail-section-label">Signal</div>
+          </div>
+          <div className="signal-display">
+            <span className="signal-stars-lg" aria-hidden>
+              {'★'.repeat(sRank)}
+              <span className="signal-stars-off">{'★'.repeat(5 - sRank)}</span>
+            </span>
+            <span className="signal-name-lg">{sRank} ★ {evaluation.signal}</span>
+          </div>
+        </div>
+      )}
+
+      {quals.length > 0 && (
+        <div className="detail-section">
+          <div className="detail-section-header">
+            <div className="detail-section-label">Qualifiers</div>
+          </div>
+          <div className="qual-tags">
+            {quals.map((q) => (
+              <span key={q} className="qual-chip">{q}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {showAssessment && (
         <div className="detail-section">
           <div className="detail-section-header">
@@ -218,7 +249,7 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
             {!iNeutral && (
               <div className="axis-large">
                 <div className="axis-name">Interest</div>
-                <Wedge kind="interest" label={evaluation.interest} />
+                <Wedge kind="interest" label={evaluation.interest ?? 'Neutral'} />
                 <div className="axis-num" style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   {evaluation.interest}
                 </div>
@@ -227,7 +258,7 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
             {!eNeutral && (
               <div className="axis-large">
                 <div className="axis-name">Ethics</div>
-                <Wedge kind="ethics" label={evaluation.ethics} />
+                <Wedge kind="ethics" label={evaluation.ethics ?? 'Neutral'} />
                 <div className="axis-num" style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   {evaluation.ethics}
                 </div>
