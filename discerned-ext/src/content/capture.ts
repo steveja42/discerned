@@ -1534,6 +1534,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       bodyHtml: inlined,
       bodyText: proseText(clone),
       thumbnail: inlinedThumbnail,
+      thumbnailUrl,
     };
   }
 
@@ -1596,6 +1597,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       bodyHtml: inlined,
       bodyText: proseText(clone),
       thumbnail: inlinedThumbnail,
+      thumbnailUrl,
     };
   }
 
@@ -1617,6 +1619,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       bodyHtml: inlined,
       bodyText: parsed.textContent.trim(),
       thumbnail: inlinedThumbnail,
+      thumbnailUrl,
     };
   }
 
@@ -1637,6 +1640,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     bodyHtml: inlined,
     bodyText: proseText(bodyClone),
     thumbnail: inlinedThumbnail,
+    thumbnailUrl,
   };
 }
 

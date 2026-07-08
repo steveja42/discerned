@@ -75,7 +75,17 @@ class RelayPool {
         // Awaiting the array itself resolves immediately (before the relay ACKs),
         // leaving the individual promises unhandled. Await the single relay's promise.
         const [relayPromise] = this.pool.publish([url], event);
-        await relayPromise;
+        const reason = await relayPromise;
+
+        // nostr-tools does NOT reject on a connection failure — instead it
+        // RESOLVES the promise with a "connection failure: ..." string (see
+        // SimplePool.publish in pool.js). A genuine relay ACK resolves with the
+        // relay's OK reason, which is empty (or a benign note) on success. Treat
+        // any resolved value that signals a failure as a rejection so a relay
+        // that never accepted the event can't be miscounted as a success.
+        if (typeof reason === 'string' && /^(connection failure|connection skipped|duplicate url)/i.test(reason)) {
+          throw new Error(reason);
+        }
 
         clearTimeout(timeout);
         log(LL.NORMAL, `Published to ${url}:`, event.id);

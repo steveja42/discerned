@@ -114,8 +114,15 @@ describe('Nostr event factory', () => {
           if (fx.capture.title && fx.capture.title.trim().length > 0) {
             expect(extractTagValue(ev, 'title')).toBe(fx.capture.title);
           }
-          if (fx.capture.thumbnail) {
-            expect(extractTagValue(ev, 'image')).toBe(fx.capture.thumbnail);
+          // The `image` tag carries a real URL only. A data: URI thumbnail
+          // (inlined hero image) is NOT published — it would blow past relay
+          // 64 KB limits. thumbnailUrl wins; thumbnail is used only if http(s).
+          const expectedImage = fx.capture.thumbnailUrl
+            ?? (fx.capture.thumbnail && /^https?:/i.test(fx.capture.thumbnail)
+              ? fx.capture.thumbnail
+              : null);
+          if (expectedImage) {
+            expect(extractTagValue(ev, 'image')).toBe(expectedImage);
           }
           if (fx.capture.bodyText) {
             // body tag exists only when caller passed an inlineBody; we always do for tests.
@@ -146,5 +153,38 @@ describe('Nostr event factory', () => {
     const sel = fixtures.find((f) => f.capture.format === 'selection');
     if (!sel) throw new Error('no selection fixture');
     expect(() => createResourceNoteEvent(sel.capture, sel.evaluation)).toThrow();
+  });
+
+  // Regression: an inlined hero image (data: URI) once got cast as the `image`
+  // tag, producing 60+ KB events that relays reject as "event too large".
+  describe('image tag never carries a data: URI (event-size guard)', () => {
+    const artFx = fixtures.find((f) => f.capture.format === 'article');
+    if (!artFx) throw new Error('no article fixture');
+
+    const dataUri = 'data:image/png;base64,' + 'A'.repeat(80_000);
+
+    it('drops a data: URI thumbnail with no thumbnailUrl fallback', () => {
+      const capture: Capture = { ...artFx.capture, thumbnail: dataUri, thumbnailUrl: null };
+      const ev = finalizeEventWithPrivateKey(
+        createResourceNoteEvent(capture, artFx.evaluation),
+        DETERMINISTIC_SK,
+      );
+      expect(extractTagValue(ev, 'image')).toBeNull();
+      // The whole event stays comfortably under the 64 KB relay ceiling.
+      expect(JSON.stringify(ev).length).toBeLessThan(64_000);
+    });
+
+    it('casts the original thumbnailUrl when the thumbnail is inlined', () => {
+      const capture: Capture = {
+        ...artFx.capture,
+        thumbnail: dataUri,
+        thumbnailUrl: 'https://example.com/og/hero.jpg',
+      };
+      const ev = finalizeEventWithPrivateKey(
+        createResourceNoteEvent(capture, artFx.evaluation),
+        DETERMINISTIC_SK,
+      );
+      expect(extractTagValue(ev, 'image')).toBe('https://example.com/og/hero.jpg');
+    });
   });
 });

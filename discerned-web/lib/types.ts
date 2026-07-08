@@ -20,7 +20,8 @@ export interface Capture {
   selectionContext?: string;
   bodyHtml?: string;
   bodyText?: string;
-  thumbnail?: string | null;
+  thumbnail?: string | null;      // may be an inlined data: URI (private clip render)
+  thumbnailUrl?: string | null;   // original http(s) URL — cast as the `image` tag (mirrors discerned-ext)
   // cast feed only — author of the published Nostr event (set by parseEvent)
   authorPubkey?: string;
 }

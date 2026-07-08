@@ -118,8 +118,15 @@ export function createResourceNoteEvent(
   if (capture.title && capture.title.trim().length > 0) {
     tags.push(['title', capture.title]);
   }
-  if (capture.thumbnail) {
-    tags.push(['image', capture.thumbnail]);
+  // Cast a real URL as the `image` tag — never a data: URI. Article/full-page
+  // captures inline the hero image as base64 (via inlineImage) for the private
+  // clip render; publishing that inline adds 50–60 KB and pushes the event past
+  // relay 64 KB limits ("event too large"). Prefer the preserved original URL
+  // (thumbnailUrl); fall back to `thumbnail` only when it's itself an http(s)
+  // URL (the bookmark path stores a raw URL there). Data URIs stay in IndexedDB.
+  const imageUrl = capture.thumbnailUrl ?? capture.thumbnail;
+  if (imageUrl && /^https?:/i.test(imageUrl)) {
+    tags.push(['image', imageUrl]);
   }
   if (inlineBody && inlineBody.trim().length > 0) {
     tags.push(['body', inlineBody]);

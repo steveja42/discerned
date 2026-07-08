@@ -75,7 +75,8 @@ export interface Capture {
   bodyHtml?: string;          // sanitized HTML; image src may be data: or https:
   bodyText?: string;          // plain text (Readability textContent or stripped)
   // bookmark / article
-  thumbnail?: string | null;
+  thumbnail?: string | null;      // may be an inlined data: URI (private clip render)
+  thumbnailUrl?: string | null;   // original http(s) URL of the thumbnail — cast as the `image` tag (data: URIs are too large for relays)
   // cast feed only — author of the published Nostr event (set by the web app's parseEvent)
   authorPubkey?: string;
 }
