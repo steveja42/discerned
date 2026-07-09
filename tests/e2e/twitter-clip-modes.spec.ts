@@ -111,9 +111,18 @@ test('twitter: selection capture across the tweet text produces readable selecti
     await page.goto(TWEET_URL, { waitUntil: 'load', timeout: 60_000 });
     await page.waitForTimeout(5_000);
 
-    // Select the tweet text. On x.com the tweet body is at [data-testid="tweetText"].
+    // Select the tweet text. Legacy x.com DOM puts the tweet body at
+    // [data-testid="tweetText"]; the redesigned DOM (mid-2026) dropped that
+    // testid in favour of a bare <div dir="auto"> — fall back to the first
+    // one outside the name/handle links, mirroring extractTweetBlock's own
+    // new-shape detection in capture.ts.
     await page.evaluate(() => {
-      const tweetEl = document.querySelector('[data-testid="tweetText"]');
+      const article = document.querySelector('article[data-testid="tweet"]')
+        ?? document.querySelector('article[data-tweet-id]')
+        ?? document.querySelector('article');
+      const tweetEl = article?.querySelector('[data-testid="tweetText"]')
+        ?? Array.from(article?.querySelectorAll<HTMLElement>('div[dir="auto"]') ?? [])
+            .find(el => !el.closest('a[href^="https://x.com/"], a[href^="/"]'));
       if (!tweetEl) throw new Error('no tweetText element');
       const range = document.createRange();
       range.selectNodeContents(tweetEl);

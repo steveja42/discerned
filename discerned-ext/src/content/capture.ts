@@ -468,7 +468,7 @@ async function extractSelection(): Promise<Capture> {
   // data-testid="tweet">, capture that whole tweet as a tweet-card rather
   // than the bare selected text. Users selecting on x.com almost always
   // want the tweet, not a 12-char span.
-  if (ancestor && /^https?:\/\/(www\.)?(twitter|x)\.com\//i.test(url)) {
+  if (ancestor && isTweetHost(url)) {
     const tweetArticle = ancestor.closest('article[data-testid="tweet"]')
       ?? ancestor.closest('article');
     if (tweetArticle) {
@@ -606,6 +606,16 @@ function extractBookmark(): Capture {
 }
 
 // ── Twitter / X extractor ────────────────────────────────────────────────────
+//
+// X has shipped two markup shapes we need to read. The "legacy" shape keys
+// everything off stable data-testid attributes (User-Name, tweetText,
+// Tweet-User-Avatar, ...). A newer shape (seen on x.com mid-2026) dropped
+// those testids in favour of Tailwind-ish utility classes with no stable
+// hooks except: article[data-tweet-id], aria-label on action buttons, and
+// plain <a href="https://x.com/<handle>"> links for the name/handle/avatar.
+// extractTweetBlock() below tries the legacy selectors first and falls back
+// to the new-shape equivalents so a future X redesign doesn't silently
+// degrade the capture to a generic/mispositioned layout again.
 
 /**
  * Build a clean tweet card from Twitter's live DOM using data-testid selectors,
@@ -615,10 +625,26 @@ function extractBookmark(): Capture {
 /** Extract name, badges, text, photos, and video poster from a tweet container element. */
 async function extractTweetBlock(root: Element) {
   const userNameEl = root.querySelector<HTMLElement>('[data-testid="User-Name"]');
-  const displayName = userNameEl?.querySelector<HTMLElement>('span > span')?.textContent?.trim() ?? '';
+
+  // New shape: no [data-testid="User-Name"] wrapper — the name is the first
+  // <a href="https://x.com/<handle>"> in the root with non-empty text that
+  // doesn't start with "@" (the avatar is also wrapped in a same-href link,
+  // but it has no text — filter those out), and the handle is the next such
+  // link whose text does start with "@".
+  const profileLinks = !userNameEl
+    ? Array.from(root.querySelectorAll<HTMLAnchorElement>('a[href^="https://x.com/"], a[href^="/"]'))
+        .filter(a => /^(https:\/\/x\.com\/|\/)[A-Za-z0-9_]+$/.test(a.getAttribute('href') ?? ''))
+        .filter(a => (a.textContent ?? '').trim().length > 0)
+    : [];
+  const nameLinkNew = profileLinks.find(a => !(a.textContent ?? '').trim().startsWith('@'));
+  const handleLinkNew = profileLinks.find(a => (a.textContent ?? '').trim().startsWith('@'));
+
+  const displayName = userNameEl?.querySelector<HTMLElement>('span > span')?.textContent?.trim()
+    ?? nameLinkNew?.textContent?.trim() ?? '';
 
   // Handle: prefer an <a href="/..."> inside User-Name (outer tweet), fall back to
-  // the first @-prefixed span anywhere in the root (quoted tweet's handle is outside User-Name).
+  // the first @-prefixed span anywhere in the root (quoted tweet's handle is outside User-Name),
+  // then the new-shape @handle link.
   const handleFromLink = userNameEl?.querySelector<HTMLAnchorElement>('a[href^="/"]')
     ?.getAttribute('href')?.replace(/^\//, '') ?? '';
   const handleFromSpan = !handleFromLink
@@ -626,14 +652,17 @@ async function extractTweetBlock(root: Element) {
         .find(s => s.textContent?.trim().startsWith('@'))
         ?.textContent?.trim().replace(/^@/, '') ?? ''
     : '';
-  const handle = handleFromLink || handleFromSpan;
+  const handle = handleFromLink || handleFromSpan || handleLinkNew?.textContent?.trim().replace(/^@/, '') || '';
 
   // Relative time shown in quoted tweets (e.g. "22h")
   const quoteTimeEl = root.querySelector<HTMLElement>('time[datetime]');
   const quoteTime = quoteTimeEl?.textContent?.trim() ?? '';
-  const nameLinkEl = userNameEl?.querySelector<HTMLElement>('a[href^="/"]');
-  const badgeEls = nameLinkEl
-    ? Array.from(nameLinkEl.querySelectorAll<HTMLElement>('img, svg[data-testid="icon-verified"]'))
+  const nameLinkEl = userNameEl?.querySelector<HTMLElement>('a[href^="/"]') ?? nameLinkNew ?? null;
+  // New shape puts the verified badge as a sibling of the name link, not nested inside it —
+  // search the link's parent row too so the badge still gets picked up.
+  const badgeScopeEl = nameLinkEl?.parentElement ?? nameLinkEl;
+  const badgeEls = badgeScopeEl
+    ? Array.from(badgeScopeEl.querySelectorAll<HTMLElement>('img, svg[data-testid="icon-verified"], svg[data-icon^="icon-verified"]'))
     : [];
   const badgeHtmlParts = await Promise.all(badgeEls.map(async (el) => {
     if (el.tagName.toLowerCase() === 'img') {
@@ -646,15 +675,27 @@ async function extractTweetBlock(root: Element) {
     }
     return `<svg class="tweet-badge-verified" viewBox="0 0 22 22" aria-label="Verified" width="16" height="16"><path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"/></svg>`;
   }));
-  const tweetTextEl = root.querySelector<HTMLElement>('[data-testid="tweetText"]');
+  // New shape drops [data-testid="tweetText"]; the body text is the first
+  // <div dir="auto"> in the root that isn't inside the name/handle header row.
+  const tweetTextEl = root.querySelector<HTMLElement>('[data-testid="tweetText"]')
+    ?? Array.from(root.querySelectorAll<HTMLElement>('div[dir="auto"]'))
+        .find(el => !el.closest('a[href^="https://x.com/"], a[href^="/"]')) ?? null;
   const sanitisedText = sanitizeHtmlString(tweetTextEl?.innerHTML ?? '');
   const plainText = tweetTextEl?.textContent?.trim() ?? '';
   // Videos: collect ALL video players — tweets can have 2 side-by-side videos.
   // For each tweetPhoto container with a videoPlayer, capture poster, duration, and aspect ratio.
-  const videoInfos: VideoInfo[] = Array.from(root.querySelectorAll<HTMLElement>('[data-testid="tweetPhoto"]'))
-    .filter(c => c.querySelector('[data-testid="videoPlayer"]'))
+  const photoContainersLegacy = Array.from(root.querySelectorAll<HTMLElement>('[data-testid="tweetPhoto"]'));
+  // New shape: each photo/video sits in an <a aria-label="Image"|"View media"> wrapper
+  // with no data-testid grouping; use the wrapper itself as the "container".
+  const photoContainersNew = photoContainersLegacy.length === 0
+    ? Array.from(root.querySelectorAll<HTMLElement>('a[aria-label="Image"], a[aria-label="View media"]'))
+    : [];
+  const photoContainers = photoContainersLegacy.length > 0 ? photoContainersLegacy : photoContainersNew;
+
+  const videoInfos: VideoInfo[] = photoContainers
+    .filter(c => c.querySelector('[data-testid="videoPlayer"], video[poster]'))
     .flatMap(container => {
-      const videoEl = container.querySelector<HTMLVideoElement>('[data-testid="videoPlayer"] video[poster]');
+      const videoEl = container.querySelector<HTMLVideoElement>('[data-testid="videoPlayer"] video[poster], video[poster]');
       const poster = videoEl?.getAttribute('poster') ?? null;
       if (!poster || !isSafeImageSrc(poster)) return [];
       const duration = Array.from(container.querySelectorAll<HTMLElement>('span'))
@@ -666,9 +707,9 @@ async function extractTweetBlock(root: Element) {
       return [{ poster, duration, aspectPct }];
     });
 
-  // Photo srcs: only from tweetPhoto containers that do NOT contain a video player.
-  const photoSrcs = Array.from(root.querySelectorAll<HTMLElement>('[data-testid="tweetPhoto"]'))
-    .filter(container => !container.querySelector('[data-testid="videoPlayer"]'))
+  // Photo srcs: only from containers that do NOT contain a video player.
+  const photoSrcs = photoContainers
+    .filter(container => !container.querySelector('[data-testid="videoPlayer"], video[poster]'))
     .flatMap(container => Array.from(container.querySelectorAll<HTMLImageElement>('img')))
     .map(img => img.src).filter(isSafeImageSrc);
 
@@ -736,6 +777,7 @@ async function extractTweet(
 ): Promise<Capture | null> {
   const article = articleOverride
     ?? document.querySelector('article[data-testid="tweet"]')
+    ?? document.querySelector('article[data-tweet-id]')
     ?? document.querySelector('article');
   if (!article) return null;
 
@@ -764,14 +806,20 @@ async function extractTweet(
   // The quoted tweet is the only [role="link"] inside the article that also
   // contains a [data-testid="User-Name"] — the outer tweet's User-Name is never
   // inside a role="link" wrapper.
-  const quoteContainer = article.querySelector<HTMLElement>('[role="link"]:has([data-testid="User-Name"])');
-  const isQuote = !!(quoteContainer?.querySelector('[data-testid="tweetText"]'));
+  // Avoid the :has() pseudo-class here — jsdom/nwsapi can throw on it when the
+  // tree contains Tailwind-style bracket classes (e.g. "w-[85%]") elsewhere on
+  // the page, which real X markup does. Plain traversal + filter is equivalent
+  // and doesn't touch the selector engine's :has() path.
+  const quoteContainer = Array.from(article.querySelectorAll<HTMLElement>('[role="link"]'))
+    .find(el => el.querySelector('[data-testid="User-Name"]') ?? el.querySelector('div[dir="auto"]'));
+  const isQuote = !!(quoteContainer?.querySelector('[data-testid="tweetText"], div[dir="auto"]'));
   let quotedHtml = '';
 
   if (isQuote && quoteContainer) {
-    log(LL.DEBUG, `Discerned: quote tweet detected — "${quoteContainer.querySelector('[data-testid="tweetText"]')?.textContent?.trim().slice(0, 60)}"`, 'url:', base.url);
+    log(LL.DEBUG, `Discerned: quote tweet detected — "${quoteContainer.querySelector('[data-testid="tweetText"], div[dir="auto"]')?.textContent?.trim().slice(0, 60)}"`, 'url:', base.url);
     const qb = await extractTweetBlock(quoteContainer);
-    const qAvatarImg = quoteContainer.querySelector<HTMLImageElement>('[data-testid="Tweet-User-Avatar"] img');
+    const qAvatarImg = quoteContainer.querySelector<HTMLImageElement>('[data-testid="Tweet-User-Avatar"] img')
+      ?? quoteContainer.querySelector<HTMLImageElement>('a[href^="https://x.com/"] img, a[href^="/"] img');
     const qAvatarSrc = qAvatarImg?.src ?? '';
     const [qAvatar, ...qInlinedRest] = await Promise.all([
       qAvatarSrc && isSafeImageSrc(qAvatarSrc) ? inlineImage(qAvatarSrc) : Promise.resolve(''),
@@ -819,38 +867,76 @@ async function extractTweet(
 
   const { displayName, handle, badgesHtml, sanitisedText } = outerBlock;
   // Photos in the outer tweet only (exclude any inside the quote container)
-  const tweetPhotoSrcs = Array.from(article.querySelectorAll<HTMLImageElement>('[data-testid="tweetPhoto"] img'))
+  const tweetPhotoSrcsLegacy = Array.from(article.querySelectorAll<HTMLImageElement>('[data-testid="tweetPhoto"] img'))
     .filter(img => !quoteContainer?.contains(img))
     .map(img => img.src).filter(isSafeImageSrc);
+  // New shape: no [data-testid="tweetPhoto"] grouping — photos sit under
+  // <a aria-label="Image"|"View media"> wrappers instead.
+  const tweetPhotoSrcs = tweetPhotoSrcsLegacy.length > 0 ? tweetPhotoSrcsLegacy
+    : Array.from(article.querySelectorAll<HTMLImageElement>('a[aria-label="Image"] img, a[aria-label="View media"] img'))
+        .filter(img => !quoteContainer?.contains(img))
+        .map(img => img.src).filter(isSafeImageSrc);
 
-  // Date/time — grab the <time> element and its parent link href
+  // Date/time — legacy: the <time> element and its parent link href.
+  // New shape: no <time> element — the date is plain text inside the first
+  // <a> below the border divider, e.g. "11:57 PM · May 14, 2026", and the
+  // view count lives in the next sibling <a>.
   const timeEl = article.querySelector<HTMLTimeElement>('time[datetime]');
-  const dateText = timeEl?.textContent?.trim() ?? '';
-  const dateHref = timeEl?.closest('a')?.getAttribute('href') ?? '';
+  let dateText = timeEl?.textContent?.trim() ?? '';
+  let dateHref = timeEl?.closest('a')?.getAttribute('href') ?? '';
+  let viewsText = '';
+  if (!timeEl) {
+    const statusHref = `/status/`;
+    const dateLink = Array.from(article.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
+      .find(a => !quoteContainer?.contains(a) && /\d{1,2}:\d{2}\s*(AM|PM)/i.test(a.textContent ?? ''));
+    if (dateLink) {
+      dateText = dateLink.textContent?.trim() ?? '';
+      const href = dateLink.getAttribute('href') ?? '';
+      dateHref = href.includes(statusHref) ? href : '';
+      const viewsLink = dateLink.parentElement?.nextElementSibling?.querySelector('a')
+        ?? dateLink.closest('span')?.nextElementSibling?.querySelector('a');
+      // The link wraps two spans — a count ("4.1M") and a "Views" label.
+      // Take only the count; buildFooterHtml appends its own " Views" suffix.
+      viewsText = viewsLink?.querySelector('span')?.textContent?.trim()
+        ?? viewsLink?.textContent?.trim() ?? '';
+    }
+  }
 
   // Engagement stats — lift each button's SVG icon + count text directly from the DOM.
   // We strip Twitter's obfuscated class names (useless without their stylesheet) but keep
   // viewBox and path data so the icons render correctly with our own sizing CSS.
   const STAT_TESTIDS = ['reply', 'retweet', 'like', 'bookmark'] as const;
+  const STAT_ARIA_LABELS: Record<typeof STAT_TESTIDS[number], string> = {
+    reply: 'Reply', retweet: 'Repost', like: 'Like', bookmark: 'Bookmark',
+  };
   const statItems: Array<{ svg: string; count: string; label: string }> = [];
   for (const testId of STAT_TESTIDS) {
-    const btn = article.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+    const btn = article.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
+      ?? article.querySelector<HTMLElement>(`button[aria-label="${STAT_ARIA_LABELS[testId]}"]`);
     if (!btn) continue;
     const svgEl = btn.querySelector('svg');
     if (!svgEl) continue;
     const svgClone = svgEl.cloneNode(true) as SVGElement;
     svgClone.removeAttribute('class');
     svgClone.querySelectorAll('[class]').forEach(el => el.removeAttribute('class'));
-    const countEl = btn.querySelector('[data-testid="app-text-transition-container"] span span');
+    // Legacy: count lives inside the same button. New shape: count is a
+    // separate sibling <button aria-label="<digits>">.
+    const countElLegacy = btn.querySelector('[data-testid="app-text-transition-container"] span span');
+    const countBtnNew = !countElLegacy
+      ? Array.from(btn.parentElement?.querySelectorAll<HTMLElement>('button[aria-label]') ?? [])
+          .find(b => b !== btn && /^\d+$/.test(b.getAttribute('aria-label') ?? ''))
+      : null;
+    const count = countElLegacy?.textContent?.trim() ?? countBtnNew?.getAttribute('aria-label') ?? '';
     statItems.push({
       svg: svgClone.outerHTML,
-      count: countEl?.textContent?.trim() ?? '',
+      count,
       label: btn.getAttribute('aria-label') ?? testId,
     });
   }
 
   // Avatar
   const avatarImg = article.querySelector<HTMLImageElement>('[data-testid="Tweet-User-Avatar"] img') ??
+                    article.querySelector<HTMLImageElement>(`a[href="https://x.com/${handle}"] img, a[href="/${handle}"] img`) ??
                     article.querySelector<HTMLImageElement>('img');
   const avatarSrc = avatarImg?.src ?? '';
 
@@ -885,16 +971,18 @@ async function extractTweet(
   // Footer: date link + stat buttons (SVG icon + count lifted from Twitter's DOM)
   const safeDate = dateText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const safeDateHref = dateHref.startsWith('/') ? `https://x.com${dateHref}` : '';
+  const safeViews = viewsText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const dateHtml = safeDate
     ? (safeDateHref
         ? `<a class="tweet-date" href="${safeDateHref}">${safeDate}</a>`
         : `<span class="tweet-date">${safeDate}</span>`)
     : '';
+  const viewsHtml = safeViews ? `<span class="tweet-date">${safeViews} Views</span>` : '';
   const statsHtml = statItems.map(({ svg, count, label }) =>
     `<span class="tweet-stat" aria-label="${label.replace(/"/g,'&quot;')}">${svg}${count ? `<span class="tweet-stat-count">${count}</span>` : ''}</span>`
   ).join('');
-  const footerHtml = (dateHtml || statsHtml)
-    ? `<div class="tweet-footer">${dateHtml}${statsHtml ? `<span class="tweet-stats">${statsHtml}</span>` : ''}</div>`
+  const footerHtml = (dateHtml || viewsHtml || statsHtml)
+    ? `<div class="tweet-footer">${dateHtml}${viewsHtml}${statsHtml ? `<span class="tweet-stats">${statsHtml}</span>` : ''}</div>`
     : '';
 
   const bodyHtml = `<div class="tweet-card tweet-card--native">
@@ -1486,7 +1574,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const liveVideoFrames = await captureVideoFrames(document.body);
 
   // Tier 0: Twitter/X — extract clean tweet card from data-testid selectors.
-  if (/^https?:\/\/(www\.)?(twitter|x)\.com\//i.test(window.location.href)) {
+  if (isTweetHost(window.location.href)) {
     const tweet = await extractTweet(base);
     if (tweet) return tweet;
     log(LL.DEBUG, 'Discerned: Twitter extractor yielded nothing, falling through to generic', 'url:', base.url);
@@ -1692,7 +1780,7 @@ async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
   // On twitter.com / x.com the user almost certainly wants the tweet card,
   // not the full SPA shell. Route through the same Tier 0 extractor as
   // article-format and preserve format='full-page' on the returned Capture.
-  if (/^https?:\/\/(www\.)?(twitter|x)\.com\//i.test(window.location.href)) {
+  if (isTweetHost(window.location.href)) {
     const tweet = await extractTweet(baseFields(), 'full-page');
     if (tweet) return tweet;
     log(LL.DEBUG, 'Discerned: full-page Twitter extractor yielded nothing, falling through to generic', 'url:', window.location.href);
@@ -2529,6 +2617,17 @@ function applyTaggerToClone(cloneRoot: Element | DocumentFragment): void {
 let testHostOverride: string | null = null;
 export function __setTestHostOverride(host: string | null): void {
   if (__DISCERNED_TEST_BUILD__) testHostOverride = host;
+}
+
+// Tier 0 (Twitter/X) gates on the real page URL, which fixture pages served
+// from 127.0.0.1 can never match — unlike SITE_TAGGERS, which only need a
+// hostname override. This lets fixture-visual specs pass hostOverride:
+// 'x.com' (etc.) to exercise extractTweet() against a saved DOM snapshot.
+// Tree-shaken to the plain regex test in production (testHostOverride is
+// always null when __DISCERNED_TEST_BUILD__ is false).
+function isTweetHost(url: string): boolean {
+  if (testHostOverride && /(^|\.)(twitter|x)\.com$/i.test(testHostOverride)) return true;
+  return /^https?:\/\/(www\.)?(twitter|x)\.com\//i.test(url);
 }
 
 function applySiteTagger(): boolean {

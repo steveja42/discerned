@@ -1,0 +1,13 @@
+{
+  "format": "article",
+  "title": { "contains": "Havana" },
+  "url": "https://x.com/CIA/status/2055074954375254084",
+  "bodyText": {
+    "minLength": 10,
+    "contains": ["Havana, Cuba", "@CIA"]
+  },
+  "bodyHtml": {
+    "noScripts": true,
+    "containsClasses": ["tweet-card", "tweet-header", "tweet-footer", "tweet-avatar", "tweet-handle", "tweet-stats"]
+  }
+}

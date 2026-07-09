@@ -203,6 +203,11 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'x-status-newshape-fixture-visual',
+      testMatch: /x-status-newshape-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
       name: 'article-with-embedded-tweet-fixture-visual',
       testMatch: /article-with-embedded-tweet-fixture-visual\.spec\.ts/,
       retries: 0,
