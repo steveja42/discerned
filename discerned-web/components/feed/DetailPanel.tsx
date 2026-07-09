@@ -285,10 +285,20 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
             />
           );
         }
-        if (capture.selectionText || capture.bodyText || thumbnail) {
+        // Tweet casts carry every photo as an imeta URL. Prefer rendering the
+        // full set (a gallery); the single `image`-tag thumbnail is the first
+        // of these, so showing both would duplicate it.
+        const photoUrls = capture.tweetPhotoUrls ?? [];
+        if (capture.selectionText || capture.bodyText || thumbnail || photoUrls.length > 0) {
           return (
             <div className="clip-body">
-              {thumbnail && <img src={thumbnail} alt="" />}
+              {photoUrls.length > 0
+                ? (
+                  <div className="cast-photos">
+                    {photoUrls.map((src, i) => <img key={i} src={src} alt="" />)}
+                  </div>
+                )
+                : thumbnail && <img src={thumbnail} alt="" />}
               {capture.selectionText && (
                 <blockquote
                   className="detail-excerpt"

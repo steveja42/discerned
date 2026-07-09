@@ -208,6 +208,12 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'tweet-cast-photos-visual',
+      testMatch: /tweet-cast-photos-visual\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+      retries: 0,
+    },
+    {
       name: 'article-with-embedded-tweet-fixture-visual',
       testMatch: /article-with-embedded-tweet-fixture-visual\.spec\.ts/,
       retries: 0,

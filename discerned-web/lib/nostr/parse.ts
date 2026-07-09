@@ -28,6 +28,20 @@ function getTags(event: Event, tagName: string, namespace: string): string[] {
   return values;
 }
 
+// NIP-92 imeta tags: ["imeta", "url <URL>", "m <mime>", …]. Pull the URL out
+// of each. Discerned tweet casts emit one imeta per tweet photo.
+function getImetaUrls(event: Event): string[] {
+  const urls: string[] = [];
+  for (const tag of event.tags) {
+    if (tag[0] !== 'imeta') continue;
+    for (const field of tag.slice(1)) {
+      const m = /^url\s+(\S+)/.exec(field);
+      if (m && /^https?:/i.test(m[1])) { urls.push(m[1]); break; }
+    }
+  }
+  return urls;
+}
+
 export function parseEvent(event: Event): ClipData {
   const url = getTag(event, 'r') ?? '';
   const rawSignal = getTag(event, 'l', 'online.discerned.signal');
@@ -45,6 +59,7 @@ export function parseEvent(event: Event): ClipData {
   const note = getTag(event, 'note') ?? undefined;
   const bodyText = getTag(event, 'body') ?? undefined;
   const thumbnail = getTag(event, 'image') ?? undefined;
+  const tweetPhotoUrls = getImetaUrls(event);
 
   // Prefer the explicit `title` tag; fall back for legacy casts that lack it.
   // Resource-cast content is "Discerned: …\n\n<title>\n<url>", so line index 2
@@ -63,6 +78,7 @@ export function parseEvent(event: Event): ClipData {
       selectionContext,
       bodyText,
       thumbnail,
+      tweetPhotoUrls: tweetPhotoUrls.length > 0 ? tweetPhotoUrls : undefined,
       note,
       authorPubkey: event.pubkey,
     },

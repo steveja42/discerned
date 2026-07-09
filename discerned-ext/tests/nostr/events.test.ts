@@ -187,4 +187,59 @@ describe('Nostr event factory', () => {
       expect(extractTagValue(ev, 'image')).toBe('https://example.com/og/hero.jpg');
     });
   });
+
+  // Tweet casts publish every photo as a real URL — one NIP-92 imeta tag per
+  // photo AND the URLs appended to the note content — never base64.
+  describe('tweet photos cast as imeta tags + content URLs', () => {
+    const artFx = fixtures.find((f) => f.capture.format === 'article');
+    if (!artFx) throw new Error('no article fixture');
+
+    const photos = [
+      'https://pbs.twimg.com/media/AAA?format=webp&name=medium',
+      'https://pbs.twimg.com/media/BBB?format=webp&name=medium',
+      'https://pbs.twimg.com/media/CCC?format=webp&name=medium',
+    ];
+
+    it('emits one imeta tag per photo and lists the URLs in content', () => {
+      const capture: Capture = {
+        ...artFx.capture,
+        thumbnailUrl: photos[0],
+        tweetPhotoUrls: photos,
+      };
+      const ev = finalizeEventWithPrivateKey(
+        createResourceNoteEvent(capture, artFx.evaluation),
+        DETERMINISTIC_SK,
+      );
+      // One imeta tag per photo, each carrying "url <URL>".
+      const imeta = extractTagValues(ev, 'imeta');
+      expect(imeta).toEqual(photos.map((u) => `url ${u}`));
+      // Every URL also present in the visible content for auto-embedding clients.
+      for (const u of photos) expect(ev.content).toContain(u);
+      // First photo doubles as the legacy image tag.
+      expect(extractTagValue(ev, 'image')).toBe(photos[0]);
+    });
+
+    it('never inlines a data: URI as an imeta url (event-size guard)', () => {
+      const capture: Capture = {
+        ...artFx.capture,
+        tweetPhotoUrls: ['data:image/webp;base64,' + 'A'.repeat(40_000), photos[1]],
+      };
+      const ev = finalizeEventWithPrivateKey(
+        createResourceNoteEvent(capture, artFx.evaluation),
+        DETERMINISTIC_SK,
+      );
+      const imeta = extractTagValues(ev, 'imeta');
+      expect(imeta).toEqual([`url ${photos[1]}`]);
+      expect(JSON.stringify(ev)).not.toContain('data:image');
+    });
+
+    it('adds no imeta tags when there are no tweet photos', () => {
+      const capture: Capture = { ...artFx.capture, tweetPhotoUrls: undefined };
+      const ev = finalizeEventWithPrivateKey(
+        createResourceNoteEvent(capture, artFx.evaluation),
+        DETERMINISTIC_SK,
+      );
+      expect(extractTagValues(ev, 'imeta')).toEqual([]);
+    });
+  });
 });

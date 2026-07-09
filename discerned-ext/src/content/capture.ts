@@ -814,6 +814,11 @@ async function extractTweet(
     .find(el => el.querySelector('[data-testid="User-Name"]') ?? el.querySelector('div[dir="auto"]'));
   const isQuote = !!(quoteContainer?.querySelector('[data-testid="tweetText"], div[dir="auto"]'));
   let quotedHtml = '';
+  // Cast metadata for the quoted (embedded older) tweet. The private clip's
+  // bodyHtml carries the quote as a rich card, but a public Nostr note can't —
+  // so we surface the quote's author, text, and photo URLs here to fold them
+  // into the cast's bodyText + imeta tags alongside the outer tweet's.
+  let quotedCastMeta: { displayName: string; handle: string; plainText: string; photoUrls: string[] } | null = null;
 
   if (isQuote && quoteContainer) {
     log(LL.DEBUG, `Discerned: quote tweet detected — "${quoteContainer.querySelector('[data-testid="tweetText"], div[dir="auto"]')?.textContent?.trim().slice(0, 60)}"`, 'url:', base.url);
@@ -850,6 +855,12 @@ async function extractTweet(
   <div class="tweet-text">${qb.sanitisedText}</div>
   ${qVideoHtml}${qPhotosHtml}
 </div>`;
+    quotedCastMeta = {
+      displayName: qb.displayName,
+      handle: qb.handle,
+      plainText: qb.plainText,
+      photoUrls: qb.photoSrcs.filter(src => /^https?:/i.test(src)),
+    };
   } else {
     log(LL.DEBUG, 'Discerned: no quote tweet detected', 'url:', base.url);
   }
@@ -1009,7 +1020,43 @@ async function extractTweet(
     .replace(/["\s]+\/\s*X\s*$/i, '')          // strip closing `" / X`
     .trim() || base.title;
 
-  const plainText = `${displayName} @${handle}\n\n${outerBlock.plainText}`;
+  // Cast metadata — a public Nostr note can't carry the rich tweet-card, so
+  // fold the author, tweet text, engagement counts, and date into the plain
+  // bodyText, and expose the photo URLs (real pbs.twimg.com links, not base64)
+  // so the cast can publish them as imeta tags + content URLs.
+  const STAT_EMOJI: Record<string, string> = { reply: '💬', retweet: '🔁', like: '❤️', bookmark: '🔖' };
+  const statsSummary = STAT_TESTIDS
+    .map(id => {
+      const item = statItems.find(s => (s.label ?? '').toLowerCase().includes(id) || (id === 'retweet' && (s.label ?? '').toLowerCase().includes('repost')));
+      return item && item.count ? `${STAT_EMOJI[id]} ${item.count}` : '';
+    })
+    .filter(Boolean)
+    .join('  ·  ');
+  const metaLine = [statsSummary, dateText].filter(Boolean).join('  ·  ');
+  // Quoted (embedded) tweet — render its author + text as a blockquote so the
+  // cast note carries the older post too, not just the outer tweet.
+  const quotedBlock = quotedCastMeta
+    ? [
+        '',
+        `> ${quotedCastMeta.displayName} @${quotedCastMeta.handle}`,
+        ...quotedCastMeta.plainText.split('\n').map(l => `> ${l}`),
+      ].join('\n')
+    : '';
+  const plainText = [
+    `${displayName} @${handle}`,
+    '',
+    outerBlock.plainText,
+    quotedBlock,
+    metaLine ? `\n${metaLine}` : '',
+  ].filter(s => s !== '').join('\n').trim();
+
+  // Photo URLs for the cast (original http(s), not the inlined base64) — outer
+  // tweet's photos first, then the quoted tweet's, deduped.
+  const tweetPhotoUrls = [
+    ...tweetPhotoSrcs.filter(src => /^https?:/i.test(src)),
+    ...(quotedCastMeta?.photoUrls ?? []),
+  ].filter((src, i, arr) => arr.indexOf(src) === i);
+
   if (format === 'selection') {
     return {
       ...base,
@@ -1026,6 +1073,8 @@ async function extractTweet(
     bodyHtml,
     bodyText: plainText,
     thumbnail: null,
+    thumbnailUrl: tweetPhotoUrls[0] ?? null,
+    tweetPhotoUrls: tweetPhotoUrls.length > 0 ? tweetPhotoUrls : undefined,
   };
 }
 

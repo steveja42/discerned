@@ -1125,6 +1125,11 @@ a { color: inherit; }
 .clip-body .tweet-photo-grid-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 .clip-body .tweet-photo-grid-3 .tweet-photo:nth-child(1) { grid-row: 1 / span 2; }
 .clip-body .tweet-photo-grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+/* Cast-only photo gallery (rendered from imeta URLs; no tweet-card wrapper). */
+.clip-body .cast-photos { display: grid; gap: 4px; margin: 12px 0; border-radius: 12px; overflow: hidden; }
+.clip-body .cast-photos:has(img:nth-child(2)) { grid-template-columns: 1fr 1fr; }
+.clip-body .cast-photos img { width: 100% !important; margin: 0 !important; max-height: 320px; object-fit: cover; border-radius: 0 !important; }
+.clip-body .cast-photos img:only-child { max-height: 420px; object-fit: contain; object-position: left top; }
 .clip-body .tweet-footer { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rule-soft); }
 .clip-body .tweet-date { font-size: 14px; color: var(--ink-3); font-family: var(--sans); text-decoration: none; }
 .clip-body .tweet-date:hover { text-decoration: underline; }

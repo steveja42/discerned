@@ -132,11 +132,25 @@ export function createResourceNoteEvent(
     tags.push(['body', inlineBody]);
   }
 
+  // Twitter/X photos — publish every photo as a real URL (never base64). Emit
+  // one NIP-92 `imeta` tag per photo for modern clients (Primal/Damus render a
+  // gallery) AND append the URLs to the note content, since most clients
+  // auto-embed image URLs found in the text. All URLs are pbs.twimg.com links,
+  // so they cost no event bytes beyond the URL string.
+  const photoUrls = (capture.tweetPhotoUrls ?? []).filter(u => /^https?:/i.test(u));
+  const contentLines = [...lines];
+  if (photoUrls.length > 0) {
+    for (const u of photoUrls) {
+      tags.push(['imeta', `url ${u}`]);
+    }
+    contentLines.push('', ...photoUrls);
+  }
+
   return {
     kind: 1,
     created_at: Math.floor(capture.timestamp / 1000),
     tags,
-    content: appendNoteToContent(lines.join('\n'), capture),
+    content: appendNoteToContent(contentLines.join('\n'), capture),
   };
 }
 
