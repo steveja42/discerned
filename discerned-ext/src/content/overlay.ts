@@ -7,8 +7,9 @@
 // Access: Shadow DOM (ShadowRoot); chrome.runtime.sendMessage for auth + stats; on-page DOM
 //         (only for the article highlight rectangle, drawn into document.body).
 
-import type { AuthState, Capture, ClipFormat, Evaluation, SignalLevel, Category, PublishMode } from '@/shared/types';
-import { STORAGE_KEYS, SIGNAL_LEVELS, SIGNAL_DESCRIPTIONS, QUALIFIER_GROUPS, signalRank, resolveRelayMode, relaysForMode } from '@/shared/types';
+import type { AuthState, Capture, ClipFormat, Evaluation, SignalLevel, Category, PublishMode, Theme, ResolvedTheme } from '@/shared/types';
+import { STORAGE_KEYS, SIGNAL_LEVELS, SIGNAL_DESCRIPTIONS, QUALIFIER_GROUPS, signalRank, resolveRelayMode, relaysForMode, resolveThemePref, resolveEffectiveTheme } from '@/shared/types';
+import { themeVarsBlock, prefersDark, onSystemThemeChange } from '@/shared/theme';
 import { LL, log } from '@/shared/logger';
 import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
 import { showArticleHighlight, hideArticleHighlight } from './highlighter';
@@ -76,11 +77,19 @@ export class DiscernedOverlay {
   private hasRendered = false;
   private mountObserver: MutationObserver | null = null;
   private authStorageListener: Parameters<typeof chrome.storage.onChanged.addListener>[0] | null = null;
+  // Theme: stored preference ('system'|'light'|'dark') + the theme actually applied.
+  // effectiveTheme is resolved provisionally from the OS at construction so the first
+  // synchronous render is correct for default ('system') users, then reconciled against
+  // stored preference in show(). themeSystemUnsub tears down the matchMedia listener.
+  private themePref: Theme = 'system';
+  private effectiveTheme: ResolvedTheme = 'dark';
+  private themeSystemUnsub: (() => void) | null = null;
 
   constructor() {
     this.host = document.createElement('div');
     this.host.id = OVERLAY_HOST_ID;
     this.shadow = this.host.attachShadow({ mode: 'closed' });
+    this.effectiveTheme = resolveEffectiveTheme('system', prefersDark());
 
     // Stop pointer/keyboard events propagating from the panel into the host page
     // so sites with document-level event delegation don't intercept clicks inside us.
@@ -115,8 +124,18 @@ export class DiscernedOverlay {
       chrome.storage.onChanged.removeListener(this.authStorageListener);
       this.authStorageListener = null;
     }
+    if (this.themeSystemUnsub) {
+      this.themeSystemUnsub();
+      this.themeSystemUnsub = null;
+    }
     hideArticleHighlight();
     this.removePreview();
+  }
+
+  /** Update the stored-preference + resolved-theme pair (does not render). */
+  private applyThemePref(pref: Theme): void {
+    this.themePref = pref;
+    this.effectiveTheme = resolveEffectiveTheme(pref, prefersDark());
   }
 
   async show(options: OverlayShowOptions): Promise<void> {
@@ -126,16 +145,40 @@ export class DiscernedOverlay {
     this.authState = options.authState;
 
     // Refresh authState + re-render when the background persists a change
-    // (e.g. user completed web-app sign-in in another tab → pubkey arrives).
-    // Important: the overlay can stay open for minutes while the user signs in.
+    // (e.g. user completed web-app sign-in in another tab → pubkey arrives), and
+    // restyle live when the theme preference changes (e.g. via the Appearance
+    // picker in this or another surface). The overlay can stay open for minutes.
     this.authStorageListener = (changes, area) => {
       if (area !== 'local') return;
       const next = changes[STORAGE_KEYS.AUTH_STATE]?.newValue as AuthState | undefined;
-      if (!next) return;
-      this.authState = next;
-      this.render();
+      if (next) {
+        this.authState = next;
+        this.render();
+      }
+      if (STORAGE_KEYS.THEME in changes) {
+        // Always re-render on a theme write: styles may change, and the Settings
+        // Appearance picker's active chip must move even when effectiveTheme is unchanged.
+        this.applyThemePref(resolveThemePref(changes[STORAGE_KEYS.THEME]?.newValue as string | undefined));
+        this.render();
+      }
     };
     chrome.storage.onChanged.addListener(this.authStorageListener);
+
+    // Follow OS light/dark changes while the preference is 'system'.
+    this.themeSystemUnsub = onSystemThemeChange(() => {
+      if (this.themePref !== 'system') return;
+      const prev = this.effectiveTheme;
+      this.effectiveTheme = resolveEffectiveTheme('system', prefersDark());
+      if (this.effectiveTheme !== prev) this.render();
+    });
+
+    // Load the stored theme preference and reconcile (provisional value was set
+    // from the OS at construction — no re-render unless the resolved theme differs).
+    void chrome.storage.local.get(STORAGE_KEYS.THEME).then((s) => {
+      const prev = this.effectiveTheme;
+      this.applyThemePref(resolveThemePref(s[STORAGE_KEYS.THEME] as string | undefined));
+      if (this.effectiveTheme !== prev) this.render();
+    }).catch(() => { /* keep provisional theme */ });
 
     const needsConnectPrompt =
       options.authState.type === 'guest' ||
@@ -216,32 +259,37 @@ export class DiscernedOverlay {
       document.body.appendChild(this.previewHost);
     }
     const shadow = this.previewShadow!;
+    // The preview card is its OWN (closed) shadow root, so it can't inherit the
+    // panel's :host tokens — it gets its own token block for the active theme.
     shadow.innerHTML = `
       <style>
+        :host {
+${themeVarsBlock(this.effectiveTheme)}
+        }
         * { margin:0; padding:0; box-sizing:border-box;
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
         .preview-card {
-          background:#18181b; border:1px solid #3f3f46; border-left:4px solid #f59e0b;
+          background:var(--p-card); border:1px solid var(--p-rule); border-left:4px solid var(--p-accent);
           padding:14px; display:flex; flex-direction:column; gap:8px;
-          box-shadow:4px 4px 20px rgba(0,0,0,0.5);
+          box-shadow:4px 4px 20px var(--p-cta-shadow);
           animation:fadeIn .18s ease-out;
           user-select:text; cursor:text;
         }
         @keyframes fadeIn { from { opacity:0; transform:translateX(-6px); } to { opacity:1; transform:none; } }
         .preview-label {
-          font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; color:#f59e0b;
-          font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+          font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; color:var(--p-accent);
+          font-family:var(--p-mono);
         }
         .preview-thumb {
           max-width:100%; max-height:120px; width:auto; height:auto; object-fit:contain; align-self:flex-start;
         }
-        .preview-title { color:#f4f4f5; font-size:13px; font-weight:600; line-height:1.4; }
-        .preview-text  { color:#a1a1aa; font-size:12px; line-height:1.55; white-space:pre-wrap; }
-        .preview-url   { color:#52525b; font-size:11px; word-break:break-all; }
-        .preview-loading { display:flex; align-items:center; gap:8px; color:#a1a1aa; font-size:12px; }
+        .preview-title { color:var(--p-ink); font-size:13px; font-weight:600; line-height:1.4; }
+        .preview-text  { color:var(--p-ink-3); font-size:12px; line-height:1.55; white-space:pre-wrap; }
+        .preview-url   { color:var(--p-ink-4); font-size:11px; word-break:break-all; }
+        .preview-loading { display:flex; align-items:center; gap:8px; color:var(--p-ink-3); font-size:12px; }
         .spinner {
           width:14px; height:14px; flex-shrink:0;
-          border:2px solid #3f3f46; border-top-color:#f59e0b;
+          border:2px solid var(--p-rule); border-top-color:var(--p-accent);
           border-radius:50%; animation:spin .8s linear infinite;
         }
         @keyframes spin { to { transform:rotate(360deg); } }
@@ -931,6 +979,14 @@ export class DiscernedOverlay {
               </span>
             </label>
           </div>
+          <div class="settings-card">
+            <div class="card-label">Appearance</div>
+            <div class="format-row" id="theme-picker" role="group" aria-label="Theme">
+              <button class="chip${this.themePref === 'system' ? ' active' : ''}" data-theme="system" type="button">🖥️ System</button>
+              <button class="chip${this.themePref === 'dark' ? ' active' : ''}" data-theme="dark" type="button">🌙 Dark</button>
+              <button class="chip${this.themePref === 'light' ? ' active' : ''}" data-theme="light" type="button">☀️ Light</button>
+            </div>
+          </div>
           ${relayDevCard}
           <div class="settings-card">
             <button class="link-btn" id="settings-export">Export local clips as JSON</button>
@@ -1032,6 +1088,15 @@ export class DiscernedOverlay {
     });
 
     this.shadow.getElementById('settings-export')?.addEventListener('click', () => this.exportClips());
+
+    // Appearance theme picker — persist the choice; the storage.onChanged listener
+    // (registered in show()) re-applies the theme and re-renders (moving the active chip).
+    this.shadow.querySelectorAll('#theme-picker .chip').forEach((el) => {
+      el.addEventListener('click', () => {
+        const val = (el as HTMLElement).dataset.theme as Theme;
+        void chrome.storage.local.set({ [STORAGE_KEYS.THEME]: val });
+      });
+    });
 
     void this.loadStats();
     void this.loadCaptureToggles();
@@ -1907,26 +1972,10 @@ export class DiscernedOverlay {
         /* Page CSS can target our host <div> with cascade-winning selectors;
            force visibility so we're never accidentally hidden. */
         visibility: visible !important;
-        /* Dark scrollbars + form controls inside the shadow root. */
-        color-scheme: dark;
 
-        /* ── Dark zinc (analytical) — design tokens ─────────────────────────── */
-        --p-bg:        rgba(9, 9, 11, 0.92);
-        --p-surface:   #18181b;
-        --p-surface-2: #27272a;
-        --p-ink:       #f4f4f5;
-        --p-ink-2:     #d4d4d8;
-        --p-ink-3:     #a1a1aa;
-        --p-ink-4:     #52525b;
-        --p-rule:      #3f3f46;
-        --p-rule-soft: #27272a;
-        --p-accent:     #f59e0b;
-        --p-accent-ink: #fbbf24;
-        --p-on-accent:  #09090b;
-        --p-cta-bg:     #f4f4f5;
-        --p-cta-ink:    #09090b;
-        --p-cta-shadow: rgba(0, 0, 0, 0.60);
-        --p-mono:       ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        /* Design tokens for the active theme (see shared/theme.ts). Includes
+           color-scheme so shadow-root scrollbars/form controls follow the theme. */
+${themeVarsBlock(this.effectiveTheme)}
       }
       * { margin: 0; padding: 0; box-sizing: border-box;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
@@ -1947,15 +1996,15 @@ export class DiscernedOverlay {
         color: var(--p-ink);
         backdrop-filter: blur(18px) saturate(150%);
         -webkit-backdrop-filter: blur(18px) saturate(150%);
-        border-right: 1px solid var(--p-rule);
-        box-shadow: 24px 0 60px -20px var(--p-cta-shadow);
+        border-right: 1px solid var(--p-panel-border);
+        box-shadow: var(--p-panel-shadow);
         z-index: 2147483647;
         display: flex; flex-direction: column;
         animation: slideIn 0.18s ease-out;
       }
       /* Opaque fallback for browsers without backdrop-filter (some Firefox forks, older Chromium on Linux). */
       @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-        .discerned-root.panel { background: #09090b; }
+        .discerned-root.panel { background: var(--p-panel-opaque); }
       }
       @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
       /* Re-renders after the initial mount carry .no-anim so the panel doesn't
@@ -2061,7 +2110,7 @@ export class DiscernedOverlay {
         outline: none; transition: border-color 0.15s, box-shadow 0.15s;
       }
       textarea#note-input::placeholder { color: var(--p-ink-4); }
-      textarea#note-input:focus { border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(245,158,11,0.18); }
+      textarea#note-input:focus { border-color: var(--p-accent); box-shadow: 0 0 0 3px var(--p-focus-ring); }
 
       select {
         background: var(--p-surface); border: 1px solid var(--p-rule); color: var(--p-ink);
@@ -2070,7 +2119,7 @@ export class DiscernedOverlay {
         transition: border-color 0.2s;
       }
       select:hover { border-color: var(--p-ink-3); }
-      select:focus { outline: none; border-color: var(--p-accent); box-shadow: 0 0 0 3px rgba(245,158,11,0.18); }
+      select:focus { outline: none; border-color: var(--p-accent); box-shadow: 0 0 0 3px var(--p-focus-ring); }
 
       /* Combobox */
       .combobox { position: relative; display: flex; }
@@ -2087,12 +2136,12 @@ export class DiscernedOverlay {
       }
       .combobox:focus-within input[type="text"],
       .combobox:focus-within .combobox-toggle { border-color: var(--p-accent); }
-      .combobox input[type="text"]:focus { outline: none; box-shadow: 0 0 0 3px rgba(245,158,11,0.18); }
+      .combobox input[type="text"]:focus { outline: none; box-shadow: 0 0 0 3px var(--p-focus-ring); }
       .combobox-toggle:hover { color: var(--p-ink); }
 
       .combobox-list {
         display: none; position: absolute; top: calc(100% + 3px); left: 0; right: 0;
-        background: rgba(24, 24, 27, 0.97);
+        background: var(--p-surface-solid);
         backdrop-filter: blur(12px) saturate(140%);
         -webkit-backdrop-filter: blur(12px) saturate(140%);
         border: 1px solid var(--p-rule);
@@ -2109,7 +2158,7 @@ export class DiscernedOverlay {
       .cast-notice { min-height: 0; }
       .notice { font-size: 11px; line-height: 1.4; }
       .notice.ok   { color: var(--p-accent-ink); }
-      .notice.warn { color: #fbbf24; }
+      .notice.warn { color: var(--p-warn-ink); }
 
       /* Footer meta */
       /* Top-align so the status row stays put when the Unlock link wraps below it
@@ -2118,7 +2167,7 @@ export class DiscernedOverlay {
       .nostr-status { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin-top: -3px; }
       .nostr-status.has-tip { position: relative; cursor: default; }
       .status-dot { width: 8px; height: 8px; background: var(--p-ink-4); flex-shrink: 0; }
-      .status-dot.connected { background: #a855f7; }
+      .status-dot.connected { background: var(--p-connected); }
       .status-text { font-size: 11px; color: var(--p-ink-3); white-space: nowrap; font-family: var(--p-mono); }
       /* Keep dot + status text on one line; push the Unlock link to its own line beneath,
          right-aligned (so its right edge sits under the end of "Locked") and pulled up a bit. */
@@ -2273,14 +2322,14 @@ export class DiscernedOverlay {
       .btn-secondary { background: var(--p-surface); color: var(--p-ink); border: 1px solid var(--p-rule); }
       .btn-secondary:not(:disabled):hover { background: var(--p-surface-2); }
       .btn-primary { background: var(--p-cta-bg); color: var(--p-cta-ink); }
-      .btn-primary:not(:disabled):hover { background: #ffffff; }
+      .btn-primary:not(:disabled):hover { background: var(--p-cta-bg-hover); }
       .btn-clip {
         width: 33.333%; margin: 0 auto;
         flex-direction: row; justify-content: center; padding: 9px 14px;
         background: var(--p-cta-bg); color: var(--p-cta-ink);
         box-shadow: 0 2px 8px var(--p-cta-shadow);
       }
-      .btn-clip:not(:disabled):hover { background: #ffffff; }
+      .btn-clip:not(:disabled):hover { background: var(--p-cta-bg-hover); }
       .btn-ghost { background: var(--p-surface); color: var(--p-ink-3); border: 1px solid var(--p-rule); }
       .btn-ghost:hover { background: var(--p-surface-2); color: var(--p-ink); }
       .btn .label { font-size: 13px; font-family: var(--p-mono); }
@@ -2312,7 +2361,7 @@ export class DiscernedOverlay {
       .panel-desc a { color: var(--p-accent-ink); text-decoration: none; }
       .panel-desc a:hover { text-decoration: underline; }
       .panel-desc code { background: var(--p-surface); border: 1px solid var(--p-rule); padding: 1px 5px; font-size: 0.9em; color: var(--p-accent-ink); }
-      .panel-warning { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.40); padding: 10px 12px; font-size: 12px; color: #fbbf24; line-height: 1.5; }
+      .panel-warning { background: var(--p-warn-bg); border: 1px solid var(--p-warn-border); padding: 10px 12px; font-size: 12px; color: var(--p-warn-ink); line-height: 1.5; }
       textarea {
         width: 100%; background: var(--p-surface); border: 1px solid var(--p-rule);
         color: var(--p-ink);
@@ -2329,11 +2378,11 @@ export class DiscernedOverlay {
       }
       input[type="password"]:focus { border-color: var(--p-accent); }
       .identity-status { font-size: 12px; min-height: 16px; display: flex; align-items: center; gap: 6px; }
-      .identity-status.error { color: #f87171; }
+      .identity-status.error { color: var(--p-danger); }
       .identity-status.ok    { color: var(--p-accent-ink); }
       .identity-status.spin  { color: var(--p-ink-2); }
       .status-dot { display: inline-block; width: 8px; height: 8px; flex-shrink: 0; }
-      .status-dot.ok { background: #4ade80; }
+      .status-dot.ok { background: var(--p-ok); }
       .identity-divider { display: flex; align-items: center; gap: 8px; color: var(--p-ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin: 4px 0; font-family: var(--p-mono); }
       .identity-divider::before, .identity-divider::after { content: ""; flex: 1; height: 1px; background: var(--p-rule); }
       .key-backup-box { font-family: var(--p-mono); font-size: 13px; color: var(--p-ink); background: var(--p-surface-2); border: 1px solid var(--p-rule); padding: 12px; word-break: break-all; user-select: all; line-height: 1.5; }
@@ -2358,10 +2407,10 @@ export class DiscernedOverlay {
         padding: 12px;
         display: flex; flex-direction: column; gap: 8px;
       }
-      .settings-card.warning { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.40); }
+      .settings-card.warning { background: var(--p-warn-bg); border-color: var(--p-warn-border); }
       .card-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
       .card-label { font-size: 11px; color: var(--p-ink-3); text-transform: uppercase; letter-spacing: 0.5px; font-family: var(--p-mono); }
-      .card-title { font-size: 13px; font-weight: 600; color: #fbbf24; }
+      .card-title { font-size: 13px; font-weight: 600; color: var(--p-warn-ink); }
       .card-desc  { font-size: 12px; color: var(--p-ink-2); line-height: 1.5; }
       .card-value { font-size: 13px; color: var(--p-ink); }
       .card-value.ok { color: var(--p-accent-ink); }
@@ -2377,7 +2426,7 @@ export class DiscernedOverlay {
       .pin-row { display: flex; gap: 6px; margin-top: 6px; }
       .pin-row input { flex: 1; background: var(--p-surface); border: 1px solid var(--p-rule); color: var(--p-ink); font-size: 12px; padding: 6px 8px; outline: none; }
       .pin-row .btn { padding: 6px 10px; font-size: 12px; }
-      .pin-error { font-size: 12px; color: #f87171; margin-top: 4px; }
+      .pin-error { font-size: 12px; color: var(--p-danger); margin-top: 4px; }
       .toggle-row { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
       .toggle-row input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; accent-color: var(--p-accent); width: 14px; height: 14px; cursor: pointer; }
       .toggle-label { display: flex; flex-direction: column; gap: 2px; }
@@ -2387,7 +2436,7 @@ export class DiscernedOverlay {
       /* Loading overlay */
       .loading {
         position: absolute; inset: 0;
-        background: rgba(9, 9, 11, 0.92);
+        background: var(--p-veil);
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
         display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -2409,7 +2458,7 @@ export class DiscernedOverlay {
       @keyframes spin { to { transform: rotate(360deg); } }
       .loading p { color: var(--p-ink-2); font-size: 14px; }
       .success { color: var(--p-accent-ink); font-size: 18px; font-weight: 600; font-family: var(--p-mono); }
-      .error   { color: #f87171; font-size: 18px; font-weight: 600; font-family: var(--p-mono); }
+      .error   { color: var(--p-danger); font-size: 18px; font-weight: 600; font-family: var(--p-mono); }
       .open-library-btn, .open-discernment-btn {
         margin-top: 10px; background: none; border: none; padding: 0;
         color: var(--p-accent-ink); font-size: 13px; cursor: pointer; text-decoration: underline;
@@ -2425,7 +2474,7 @@ export class DiscernedOverlay {
       .inline-unlock { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
       .inline-unlock .pin-input { flex: 1; min-width: 100px; }
       .inline-unlock .btn { padding: 6px 10px; font-size: 12px; }
-      .inline-unlock-error { font-size: 12px; color: #f87171; width: 100%; }
+      .inline-unlock-error { font-size: 12px; color: var(--p-danger); width: 100%; }
       .pin-input {
         background: var(--p-surface); border: 1px solid var(--p-rule);
         color: var(--p-ink); font-size: 13px; padding: 8px 10px;

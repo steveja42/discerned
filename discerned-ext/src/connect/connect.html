@@ -9,12 +9,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Connect — Discerned</title>
   <style>
+    /* Pre-JS theme fallback (dark). initPageTheme() injects the active theme's
+       tokens into :root at load; these keep the page styled until it runs. */
+    :root {
+      --p-panel-opaque: #09090b;
+      --p-surface: #18181b;
+      --p-surface-2: #27272a;
+      --p-ink: #f4f4f5;
+      --p-ink-2: #d4d4d8;
+      --p-ink-3: #a1a1aa;
+      --p-ink-4: #52525b;
+      --p-rule: #3f3f46;
+      --p-accent: #f59e0b;
+      --p-accent-ink: #fbbf24;
+      --p-on-accent: #09090b;
+      --p-ok: #4ade80;
+      --p-danger: #f87171;
+      --p-warn-bg: rgba(245, 158, 11, 0.12);
+      --p-warn-border: rgba(245, 158, 11, 0.40);
+      --p-warn-ink: #fbbf24;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #0f0f0f;
-      color: #e8e8e8;
+      background: var(--p-panel-opaque);
+      color: var(--p-ink);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
@@ -38,13 +59,13 @@
     .page-title {
       font-size: 1.3rem;
       font-weight: 600;
-      color: #fff;
+      color: var(--p-ink);
       margin-bottom: 10px;
     }
 
     .page-intro {
       font-size: 0.9rem;
-      color: #888;
+      color: var(--p-ink-3);
       line-height: 1.6;
       max-width: 480px;
     }
@@ -52,8 +73,8 @@
     /* ── Connected state ── */
     #already-connected {
       display: none;
-      background: #0a2a0a;
-      border: 1px solid #166534;
+      background: var(--p-surface);
+      border: 1px solid var(--p-ok);
       border-radius: 12px;
       padding: 28px 32px;
       max-width: 520px;
@@ -63,8 +84,8 @@
     }
 
     .connected-icon { font-size: 2.5rem; margin-bottom: 12px; }
-    .connected-title { font-size: 1.1rem; font-weight: 600; color: #4ade80; margin-bottom: 6px; }
-    .connected-desc  { font-size: 0.85rem; color: #86efac; line-height: 1.5; }
+    .connected-title { font-size: 1.1rem; font-weight: 600; color: var(--p-ok); margin-bottom: 6px; }
+    .connected-desc  { font-size: 0.85rem; color: var(--p-ink-2); line-height: 1.5; }
 
     /* ── Method cards ── */
     .methods {
@@ -76,8 +97,8 @@
     }
 
     .method-card {
-      background: #1a1a1a;
-      border: 1px solid #2a2a2a;
+      background: var(--p-surface);
+      border: 1px solid var(--p-rule);
       padding: 28px 32px;
       display: flex;
       flex-direction: column;
@@ -106,7 +127,7 @@
     .method-title {
       font-size: 1rem;
       font-weight: 600;
-      color: #fff;
+      color: var(--p-ink);
     }
 
     .method-badge {
@@ -115,20 +136,20 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.06em;
-      background: #7c3aed;
-      color: #fff;
+      background: var(--p-accent);
+      color: var(--p-on-accent);
       padding: 2px 7px;
       border-radius: 4px;
     }
 
     .method-subtitle {
       font-size: 0.78rem;
-      color: #666;
+      color: var(--p-ink-4);
     }
 
     .method-desc {
       font-size: 0.85rem;
-      color: #888;
+      color: var(--p-ink-3);
       line-height: 1.6;
     }
 
@@ -140,7 +161,7 @@
 
     .install-links a {
       font-size: 0.82rem;
-      color: #a78bfa;
+      color: var(--p-accent-ink);
       text-decoration: none;
       font-weight: 500;
     }
@@ -151,14 +172,14 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      color: #444;
+      color: var(--p-ink-4);
       font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       padding: 14px 32px;
-      background: #141414;
-      border-left: 1px solid #2a2a2a;
-      border-right: 1px solid #2a2a2a;
+      background: var(--p-surface-2);
+      border-left: 1px solid var(--p-rule);
+      border-right: 1px solid var(--p-rule);
     }
 
     .or-divider::before,
@@ -166,16 +187,16 @@
       content: '';
       flex: 1;
       height: 1px;
-      background: #2a2a2a;
+      background: var(--p-rule);
     }
 
     /* ── Inputs ── */
     textarea {
       width: 100%;
-      background: #252525;
-      border: 1px solid #3a3a3a;
+      background: var(--p-surface-2);
+      border: 1px solid var(--p-rule);
       border-radius: 6px;
-      color: #e8e8e8;
+      color: var(--p-ink);
       font-family: monospace;
       font-size: 12px;
       padding: 10px;
@@ -184,29 +205,29 @@
       outline: none;
       transition: border-color 0.15s;
     }
-    textarea:focus { border-color: #555; }
+    textarea:focus { border-color: var(--p-accent); }
 
     input[type="password"] {
       width: 100%;
-      background: #252525;
-      border: 1px solid #3a3a3a;
+      background: var(--p-surface-2);
+      border: 1px solid var(--p-rule);
       border-radius: 6px;
-      color: #e8e8e8;
+      color: var(--p-ink);
       font-size: 13px;
       padding: 10px;
       outline: none;
       transition: border-color 0.15s;
       font-family: inherit;
     }
-    input[type="password"]:focus { border-color: #555; }
+    input[type="password"]:focus { border-color: var(--p-accent); }
 
     .warning-box {
-      background: #2a1f00;
-      border: 1px solid #6b4a00;
+      background: var(--p-warn-bg);
+      border: 1px solid var(--p-warn-border);
       border-radius: 6px;
       padding: 10px 12px;
       font-size: 12px;
-      color: #f0c040;
+      color: var(--p-warn-ink);
       line-height: 1.5;
     }
 
@@ -223,11 +244,11 @@
     }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .btn-primary   { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); color: #fff; }
+    .btn-primary   { background: var(--p-accent); color: var(--p-on-accent); }
     .btn-primary:not(:disabled):hover { opacity: 0.88; }
 
-    .btn-secondary { background: #2a2a2a; color: #e8e8e8; border: 1px solid #444; }
-    .btn-secondary:not(:disabled):hover { background: #333; }
+    .btn-secondary { background: var(--p-surface-2); color: var(--p-ink); border: 1px solid var(--p-rule); }
+    .btn-secondary:not(:disabled):hover { background: var(--p-surface); }
 
     /* ── Status lines ── */
     .status-line {
@@ -237,16 +258,16 @@
       align-items: center;
       gap: 6px;
     }
-    .status-line.error { color: #f87171; }
-    .status-line.ok    { color: #4ade80; }
-    .status-line.info  { color: #94a3b8; }
-    .status-line.spin  { color: #a78bfa; }
+    .status-line.error { color: var(--p-danger); }
+    .status-line.ok    { color: var(--p-ok); }
+    .status-line.info  { color: var(--p-ink-3); }
+    .status-line.spin  { color: var(--p-accent-ink); }
 
     .spinner-inline {
       display: inline-block;
       width: 12px; height: 12px;
-      border: 2px solid #555;
-      border-top-color: #a78bfa;
+      border: 2px solid var(--p-rule);
+      border-top-color: var(--p-accent);
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
       flex-shrink: 0;
@@ -256,15 +277,15 @@
 
     /* ── Panel-level code inline ── */
     code {
-      background: #252525;
-      border: 1px solid #333;
+      background: var(--p-surface-2);
+      border: 1px solid var(--p-rule);
       border-radius: 3px;
       padding: 1px 5px;
       font-size: 0.9em;
-      color: #a78bfa;
+      color: var(--p-accent-ink);
     }
 
-    a.inline { color: #a78bfa; text-decoration: none; }
+    a.inline { color: var(--p-accent-ink); text-decoration: none; }
     a.inline:hover { text-decoration: underline; }
   </style>
 </head>

@@ -190,6 +190,7 @@ export const STORAGE_KEYS = {
   STRIP_INLINE_STYLES:     'stripInlineStyles',
   CUSTOM_CATEGORIES:       'customCategories', // legacy key — superseded by CATEGORIES
   CATEGORIES:              'categories',
+  THEME:                   'theme', // 'system' | 'light' | 'dark' — see resolveThemePref
 } as const;
 
 // Messages posted between the extension's web-bridge content script and the
@@ -266,4 +267,28 @@ export function relaysForMode(mode: RelayMode): string[] {
 // Min ACKs derived from an actual relay list (1 for the lone local relay, 2 for production).
 export function minAcksFor(relays: readonly string[]): number {
   return Math.min(relays.length, 2);
+}
+
+// ── Runtime theme (light / dark / system) ────────────────────────────────────
+// A 'system' | 'light' | 'dark' preference persisted in chrome.storage.local
+// under STORAGE_KEYS.THEME and shared across every extension surface (overlay,
+// preview card, error toast, and the standalone popup/onboarding/connect pages)
+// via chrome.storage.onChanged — no message passing needed. The concrete token
+// values for each theme live in shared/theme.ts (THEME_TOKENS). Add a theme by
+// widening these unions + adding one THEME_TOKENS entry + one picker chip.
+export type Theme = 'system' | 'light' | 'dark'; // stored preference
+export type ResolvedTheme = 'light' | 'dark';    // theme actually applied
+
+// Resolve the stored preference, defaulting to 'system' when unset/invalid.
+export function resolveThemePref(stored: string | undefined): Theme {
+  if (stored === 'system' || stored === 'light' || stored === 'dark') return stored;
+  return 'system';
+}
+
+// Map a preference to the theme actually applied. 'system' resolves to 'dark'
+// only when the OS reports a dark preference, otherwise 'light' — which also
+// covers "no OS preference exposed" (prefers-color-scheme resolves to light).
+export function resolveEffectiveTheme(pref: Theme, prefersDark: boolean): ResolvedTheme {
+  if (pref === 'system') return prefersDark ? 'dark' : 'light';
+  return pref;
 }

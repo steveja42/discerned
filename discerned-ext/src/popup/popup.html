@@ -10,16 +10,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Discerned</title>
   <style>
+    /* Pre-JS theme fallback (dark). initPageTheme() injects the active theme's
+       tokens into :root at load; these keep the page styled until it runs. */
+    :root {
+      --p-surface: #18181b;
+      --p-ink: #f4f4f5;
+      --p-ink-3: #a1a1aa;
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       width: 280px;
-      background: #1a1a1a;
-      color: #e8e8e8;
+      background: var(--p-surface);
+      color: var(--p-ink);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       padding: 16px 18px;
     }
-    h1 { font-size: 0.95rem; color: #fff; margin-bottom: 6px; }
-    p  { font-size: 0.8rem; color: #888; line-height: 1.55; }
+    h1 { font-size: 0.95rem; color: var(--p-ink); margin-bottom: 6px; }
+    p  { font-size: 0.8rem; color: var(--p-ink-3); line-height: 1.55; }
     .icon { font-size: 1.6rem; margin-bottom: 6px; }
   </style>
 </head>

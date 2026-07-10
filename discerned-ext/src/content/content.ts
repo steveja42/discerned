@@ -8,8 +8,9 @@ import { captureContext, isCapturablePage, hasSelection, __setTestHostOverride }
 import type { CaptureOptions } from './capture';
 import { DiscernedOverlay } from './overlay';
 import { detectAuthState, signWithNIP07 } from '@/shared/nostr/auth';
-import type { AuthState, BackgroundMessage, Capture, ClipFormat, Evaluation } from '@/shared/types';
-import { STORAGE_KEYS } from '@/shared/types';
+import type { AuthState, BackgroundMessage, Capture, ClipFormat, Evaluation, ResolvedTheme } from '@/shared/types';
+import { STORAGE_KEYS, resolveThemePref, resolveEffectiveTheme } from '@/shared/types';
+import { themeVarsBlock, prefersDark } from '@/shared/theme';
 import { LL, log, relayLog } from '@/shared/logger';
 
 
@@ -239,7 +240,7 @@ async function handleCast(capture: Capture, evaluation: Evaluation): Promise<str
     // PIN_REQUIRED means the stored key is locked — the overlay handles this with
     // an inline unlock prompt + auto-retry, so don't also surface a red toast.
     if (!(error instanceof Error && error.message === 'PIN_REQUIRED')) {
-      showCastErrorToast(error instanceof Error ? error.message : 'Broadcast failed');
+      void showCastErrorToast(error instanceof Error ? error.message : 'Broadcast failed');
     }
     throw error;
   }
@@ -250,23 +251,33 @@ async function handleCast(capture: Capture, evaluation: Evaluation): Promise<str
  * The host element is positioned directly (not inside the shadow) so it sits cleanly
  * above the overlay panel without shadow-DOM stacking ambiguity.
  */
-function showCastErrorToast(message: string) {
+async function showCastErrorToast(message: string) {
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Resolve the active theme (provisional from OS, then reconciled with the stored
+  // preference) so the toast matches the overlay's light/dark look.
+  let theme: ResolvedTheme = resolveEffectiveTheme('system', prefersDark());
+  try {
+    const stored = await chrome.storage.local.get(STORAGE_KEYS.THEME);
+    theme = resolveEffectiveTheme(resolveThemePref(stored[STORAGE_KEYS.THEME] as string | undefined), prefersDark());
+  } catch { /* use provisional theme */ }
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:2147483647;display:block;';
   host.attachShadow({ mode: 'closed' }).innerHTML = `
     <style>
+      :host {
+${themeVarsBlock(theme)}
+      }
       * { box-sizing: border-box; margin: 0; padding: 0;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
       .toast {
-        background: #1a1a1a; border: 1px solid #ef4444; border-radius: 8px;
+        background: var(--p-card); border: 1px solid var(--p-danger); border-radius: 8px;
         padding: 12px 16px; max-width: 300px; line-height: 1.4;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+        box-shadow: 0 4px 16px var(--p-cta-shadow);
         animation: in .25s ease;
       }
       @keyframes in { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:none } }
-      .title { font-size: 13px; font-weight: 600; color: #f87171; margin-bottom: 4px; }
-      .body  { font-size: 12px; color: #888; }
+      .title { font-size: 13px; font-weight: 600; color: var(--p-danger); margin-bottom: 4px; }
+      .body  { font-size: 12px; color: var(--p-ink-3); }
     </style>
     <div class="toast">
       <div class="title">📡 Broadcast failed</div>

@@ -2,9 +2,13 @@
 // Description: Handles all three Nostr identity connection methods on the connect page:
 //              NIP-07 extension detection, NIP-46 remote signer (bunker://), and nsec import.
 //              On successful connection, shows a confirmation and prompts the user to close the tab.
-// Access: chrome.runtime.sendMessage (background messages only), window.close
+// Access: chrome.runtime.sendMessage (background messages only), window.close,
+//         chrome.storage.local (theme preference) via initPageTheme().
 
 import type { AuthState } from '@/shared/types';
+import { initPageTheme } from '@/shared/theme';
+
+initPageTheme();
 
 document.addEventListener('DOMContentLoaded', async () => {
   await checkExistingAuth();
