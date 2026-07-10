@@ -69,6 +69,11 @@ export class DiscernedOverlay {
   private previewHost: HTMLElement | null = null;
   private previewShadow: ShadowRoot | null = null;
   private outsideClickHandler: ((e: PointerEvent) => void) | null = null;
+  // The panel's slide-in animation should play only on the FIRST render. show()
+  // renders once immediately, then re-renders after async storage loads — without
+  // this guard the panel visibly slides in twice (most noticeable on slow /
+  // heavily-mutating pages like ad-dense articles).
+  private hasRendered = false;
   private mountObserver: MutationObserver | null = null;
   private authStorageListener: Parameters<typeof chrome.storage.onChanged.addListener>[0] | null = null;
 
@@ -303,6 +308,12 @@ export class DiscernedOverlay {
       case 'keyBackup': this.renderKeyBackup(); break;
       case 'main':      this.renderMain();      break;
     }
+    // Suppress the slide-in animation on every render after the first, so async
+    // re-renders during show() don't replay it (the "slides in twice" glitch).
+    if (this.hasRendered) {
+      this.shadow.querySelector('.discerned-root')?.classList.add('no-anim');
+    }
+    this.hasRendered = true;
     this.blockHostPageEvents();
     this.applyHighlightForCurrentFormat();
   }
@@ -1947,6 +1958,9 @@ export class DiscernedOverlay {
         .discerned-root.panel { background: #09090b; }
       }
       @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+      /* Re-renders after the initial mount carry .no-anim so the panel doesn't
+         replay the slide-in each time show() patches the view. */
+      .discerned-root.panel.no-anim { animation: none; }
 
       .panel-header {
         flex: 0 0 auto;
@@ -2138,7 +2152,10 @@ export class DiscernedOverlay {
         position: absolute; top: 2px; bottom: 2px; left: 2px;
         width: calc(33.333% - 2px); background: var(--p-cta-bg);
         pointer-events: none;
-        transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+        /* Snappy ease-out (no spring overshoot). The previous
+           cubic-bezier(0.34,1.56,0.64,1) bounced past the target and settled
+           back, which read as a laggy dark→light transition on the segment. */
+        transition: transform 0.14s cubic-bezier(0.4, 0, 0.2, 1);
         will-change: transform;
       }
       .slider-seg {
