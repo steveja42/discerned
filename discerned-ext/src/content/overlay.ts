@@ -1249,8 +1249,10 @@ ${themeVarsBlock(this.effectiveTheme)}
         <footer class="panel-footer">
           <div class="footer-meta">
             <div class="nostr-status${isConnected && !needsUnlock ? ' has-tip' : ''}" id="nostr-status">
-              <span class="status-dot${isConnected ? ' connected' : ''}"></span>
-              <span class="status-text">${needsUnlock ? 'Connected · Locked' : isConnected ? 'Connected to Nostr' : 'Local only'}</span>
+              <span class="status-dot-text">
+                <span class="status-dot${isConnected ? ' connected' : ''}"></span>
+                <span class="status-text">${needsUnlock ? 'Connected · Locked' : isConnected ? 'Connected to Nostr' : 'Local only'}</span>
+              </span>
               ${!isConnected ? '<button class="link-btn" id="nostr-signup-link">Connect →</button>' : ''}
               ${needsUnlock ? `<button class="link-btn" id="nostr-unlock-link"${this.publishMode === 'local' ? ' style="display:none"' : ''}>Unlock →</button>` : ''}
               ${isConnected && !needsUnlock ? '<span class="nostr-tip" id="nostr-tip" role="tooltip"></span>' : ''}
@@ -2166,10 +2168,17 @@ ${themeVarsBlock(this.effectiveTheme)}
       /* Footer meta */
       /* Top-align so the status row stays put when the Unlock link wraps below it
          (it grows downward instead of recentering the whole column). */
-      .footer-meta { display: flex; align-items: flex-start; justify-content: space-between; }
+      .footer-meta { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+      /* flex-wrap stays enabled so #nostr-unlock-link (flex-basis: 100%, below)
+         can drop to its own line — but the dot+text pair itself must never
+         split across lines, so it's wrapped in its own inline-flex (nowrap)
+         group. Without this, dark mode's --p-mono (a real monospace font,
+         wider per-char than light's sans stack) pushed "Connected to Nostr"
+         past the row's width and wrapped the text below the dot. */
       .nostr-status { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin-top: -3px; }
       .nostr-status.has-tip { position: relative; cursor: default; }
-      .status-dot { width: 8px; height: 8px; background: var(--p-ink-4); flex-shrink: 0; }
+      .status-dot-text { display: inline-flex; align-items: center; flex-wrap: nowrap; gap: 6px; min-width: 0; }
+      .status-dot { width: 12px; height: 12px; background: var(--p-ink-4); border-radius: 50%; flex-shrink: 0; }
       .status-dot.connected { background: var(--p-connected); }
       .status-text { font-size: 11px; color: var(--p-ink-3); white-space: nowrap; font-family: var(--p-mono); }
       /* Keep dot + status text on one line; push the Unlock link to its own line beneath,

@@ -338,6 +338,11 @@ a { color: inherit; }
   flex-shrink: 0;
 }
 .status-dot.connected { background: var(--ethics); }
+/* RULE: the Nostr connection dot is a protocol-status indicator, not decor —
+   it must render the same purple in every theme/style variant, so it uses a
+   hardcoded literal instead of a themed var. Keep in sync with discerned-ext's
+   --p-connected (src/shared/theme.ts). Do not swap this for var(--ethics) or
+   any other themed token. */
 .status-dot.nostr.connected { background: #7c3aed; }
 .status-dot.disconnected { background: var(--ink-4); }
 .status-dot-wrap .status-tip {

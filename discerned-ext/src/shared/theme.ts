@@ -20,9 +20,10 @@ import {
  * Design tokens per theme.
  * - `dark` reproduces the current "Dark zinc" palette EXACTLY, so switching the
  *   overlay onto this registry leaves dark mode pixel-unchanged.
- * - `light` is the former "Jakarta Blue (translucent)" palette (recovered from
- *   git history — the scheme that predated dark-zinc), extended with the extra
- *   semantic tokens the overlay needs (focus ring, status colours, panel shell).
+ * - `light` mirrors discerned-web's default "paper" theme (warm cream surfaces,
+ *   warm near-black ink, amber/ochre accent — see discerned-web/app/globals.css
+ *   :root), extended with the extra semantic tokens the overlay needs (focus
+ *   ring, status colours, panel shell).
  */
 export const THEME_TOKENS: Record<ResolvedTheme, Record<string, string>> = {
   dark: {
@@ -48,6 +49,10 @@ export const THEME_TOKENS: Record<ResolvedTheme, Record<string, string>> = {
     '--p-warn-ink':     '#fbbf24',
     '--p-warn-bg':      'rgba(245, 158, 11, 0.12)',
     '--p-warn-border':  'rgba(245, 158, 11, 0.40)',
+    // RULE: --p-connected (the Nostr connection status dot) must be IDENTICAL
+    // across every theme — it's a protocol-status indicator, not decor, so it
+    // must not shift with light/dark. Keep this literal in sync with light's.
+    // (Enforced at runtime by assertConnectedColorIsThemeInvariant below.)
     '--p-connected':    '#a855f7',
     '--p-ok':           '#4ade80',
     '--p-danger':       '#f87171',
@@ -64,41 +69,57 @@ export const THEME_TOKENS: Record<ResolvedTheme, Record<string, string>> = {
   },
   light: {
     'color-scheme':    'light',
-    '--p-bg':          'rgba(167, 192, 235, 0.55)',
-    '--p-surface':     'rgba(231, 238, 251, 0.65)',
-    '--p-surface-2':   'rgba(202, 217, 244, 0.70)',
-    '--p-ink':         '#0f172a',
-    '--p-ink-2':       '#1e293b',
-    '--p-ink-3':       '#475569',
-    '--p-ink-4':       '#94a3b8',
-    '--p-rule':        'rgba(15, 23, 42, 0.18)',
-    '--p-rule-soft':   'rgba(15, 23, 42, 0.10)',
-    '--p-accent':      'oklch(0.55 0.21 263)',
-    '--p-accent-ink':  'oklch(0.49 0.21 263)',
-    '--p-on-accent':   '#eef4ff',
-    '--p-cta-bg':      '#1e3a8a',
-    '--p-cta-ink':     '#eaf1ff',
-    '--p-cta-shadow':  'rgba(30, 58, 138, 0.40)',
+    // Palette matches the discerned-web app's default "paper" theme
+    // (discerned-web/app/globals.css :root) — warm cream surfaces, near-black
+    // warm ink, and an amber/ochre accent — so the extension and companion
+    // web app read as one product in light mode.
+    '--p-bg':          'rgba(232, 223, 204, 0.55)',
+    '--p-surface':     'rgba(246, 241, 232, 0.75)',
+    '--p-surface-2':   'rgba(239, 232, 218, 0.80)',
+    '--p-ink':         '#1a1714',
+    '--p-ink-2':       '#3a342c',
+    '--p-ink-3':       '#6b6357',
+    '--p-ink-4':       '#948b7d',
+    '--p-rule':        'rgba(26, 23, 20, 0.16)',
+    '--p-rule-soft':   'rgba(26, 23, 20, 0.08)',
+    '--p-accent':      'oklch(0.62 0.12 65)',
+    '--p-accent-ink':  'oklch(0.42 0.10 65)',
+    '--p-on-accent':   '#fffaf0',
+    '--p-cta-bg':      '#1a1714',
+    '--p-cta-ink':     '#f6f1e8',
+    '--p-cta-shadow':  'rgba(26, 23, 20, 0.35)',
     // Former "Jakarta Blue" typography used no monospace — every label/header was
     // the base sans stack. Point --p-mono at sans in light so the whole UI reverts
     // to the former fonts (dark keeps the monospace "analytical" treatment).
     '--p-mono':        "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    '--p-focus-ring':   'rgba(37, 99, 235, 0.15)',
+    '--p-focus-ring':   'oklch(0.62 0.12 65 / 0.18)',
     '--p-warn-ink':     '#8a5a00',
     '--p-warn-bg':      'rgba(217, 119, 6, 0.12)',
     '--p-warn-border':  'rgba(217, 119, 6, 0.35)',
-    '--p-connected':    '#7c3aed',
-    '--p-ok':           '#16a34a',
+    '--p-connected':    '#a855f7',
+    '--p-ok':           'oklch(0.55 0.10 155)',
     '--p-danger':       '#dc2626',
-    '--p-cta-bg-hover': '#17306e',
-    '--p-surface-solid':'rgba(231, 238, 251, 0.97)',
-    '--p-card':         '#e7eefb',
-    '--p-veil':         'rgba(220, 231, 249, 0.92)',
-    '--p-panel-opaque': '#dde7f9',
-    '--p-panel-border': 'rgba(255, 255, 255, 0.40)',
-    '--p-panel-shadow': '24px 0 60px -20px rgba(30, 58, 138, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.5)',
+    '--p-cta-bg-hover': '#3a342c',
+    '--p-surface-solid':'rgba(246, 241, 232, 0.97)',
+    '--p-card':         '#f6f1e8',
+    '--p-veil':         'rgba(239, 232, 218, 0.92)',
+    '--p-panel-opaque': '#efe8da',
+    '--p-panel-border': 'rgba(255, 255, 255, 0.50)',
+    '--p-panel-shadow': '24px 0 60px -20px rgba(26, 23, 20, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5)',
   },
 };
+
+// Fails fast (at module load) if a future edit lets --p-connected drift between
+// themes — the Nostr status dot is a protocol indicator and must render the
+// same purple regardless of light/dark.
+const connectedColors = new Set(
+  Object.values(THEME_TOKENS).map((tokens) => tokens['--p-connected']),
+);
+if (connectedColors.size > 1) {
+  throw new Error(
+    `--p-connected must be identical across all themes, got: ${[...connectedColors].join(', ')}`,
+  );
+}
 
 /**
  * Serialize a theme's tokens into declarations for a `:host { … }` (shadow root)
