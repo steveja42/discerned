@@ -1,18 +1,26 @@
-# Netlify reads this file when "package path" is set to discerned-web/ in the
-# Netlify dashboard. The build runs with the working directory at the monorepo
-# root, but Netlify treats discerned-web/ as the effective project root.
+# Netlify build config for the Discerned monorepo — the ONLY Netlify config.
 #
-# Use --filter so pnpm runs the build in this package regardless of where
-# pnpm is invoked from.
+# The dashboard has "Package directory" set to discerned-web, so Netlify reads
+# THIS file (not a root netlify.toml). Base directory is the repo root, so the
+# build runs from there; --filter makes pnpm build this package regardless of
+# where it's invoked. Only the web app deploys to Netlify (the extension does not).
 
 [build]
   command = "pnpm install --frozen-lockfile && pnpm --filter=./discerned-web build"
-  publish = "discerned-web/.next"
+  # Static export (next.config.ts → output: 'export') emits to out/, not .next/.
+  publish = "discerned-web/out"
 
 [build.environment]
   PNPM_VERSION = "11"
   # Node 22 LTS is required by pnpm 11 (uses node:sqlite, introduced in Node 22).
   NODE_VERSION = "22"
+
+[build.ignore]
+  # Skip the deploy if the commit only touched files outside discerned-web/
+  # (e.g. extension-only changes). Compares HEAD against the last successful
+  # deploy's commit. The ignore command runs from the repo root, so the web app
+  # is just `discerned-web` (no ../ prefix).
+  command = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- discerned-web"
 
 # NIP-05 verifier — must allow cross-origin GET so other Nostr clients can
 # verify alice@discerned.online identifiers. Cache 5 min so a new user becomes
