@@ -2056,7 +2056,10 @@ ${themeVarsBlock(this.effectiveTheme)}
         display: inline-flex; align-items: center; gap: 6px;
         font-family: inherit;
       }
-      .chip:hover:not(:disabled) { border-color: var(--p-ink-4); color: var(--p-ink); }
+      /* :not(.active) so hover never overrides the active chip's text colour — without
+         it, hover (higher specificity than .chip.active) keeps the active text dark
+         until the cursor leaves, so the active colour appeared to apply only on mouse-out. */
+      .chip:hover:not(:disabled):not(.active) { border-color: var(--p-ink-4); color: var(--p-ink); }
       .chip.active { background: var(--p-cta-bg); border-color: var(--p-cta-bg); color: var(--p-cta-ink); font-weight: 500; }
       .chip:disabled { opacity: 0.4; cursor: not-allowed; }
       .chip-icon { font-size: 13px; }
@@ -2216,7 +2219,8 @@ ${themeVarsBlock(this.effectiveTheme)}
       .slider-seg .seg-icon { width: 15px; height: 15px; flex-shrink: 0; }
       /* On "Both" two icons sit side by side — pull them tighter than the icon→label gap. */
       #seg-both .seg-icon + .seg-icon { margin-left: -2px; }
-      .slider-seg:hover:not(:disabled) { color: var(--p-ink); }
+      /* :not(.active) — see .chip note; keep the active segment's text colour on hover. */
+      .slider-seg:hover:not(:disabled):not(.active) { color: var(--p-ink); }
       .slider-seg.active { color: var(--p-on-accent); font-weight: 600; }
       .slider-seg:disabled { opacity: 0.4; cursor: not-allowed; }
       .publish-mode-slider.guest .slider-seg:not(#seg-local) { opacity: 0.4; cursor: not-allowed; }
@@ -2290,7 +2294,7 @@ ${themeVarsBlock(this.effectiveTheme)}
         padding: 4px 10px; cursor: pointer;
         transition: border-color .12s, color .12s, background .12s;
       }
-      .qchip:hover { border-color: var(--p-ink-4); color: var(--p-ink); }
+      .qchip:hover:not(.active) { border-color: var(--p-ink-4); color: var(--p-ink); }
       .qchip.active {
         background: var(--p-cta-bg); border-color: var(--p-cta-bg);
         color: var(--p-cta-ink); font-weight: 500;

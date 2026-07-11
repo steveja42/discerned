@@ -79,7 +79,10 @@ export const THEME_TOKENS: Record<ResolvedTheme, Record<string, string>> = {
     '--p-cta-bg':      '#1e3a8a',
     '--p-cta-ink':     '#eaf1ff',
     '--p-cta-shadow':  'rgba(30, 58, 138, 0.40)',
-    '--p-mono':        'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+    // Former "Jakarta Blue" typography used no monospace — every label/header was
+    // the base sans stack. Point --p-mono at sans in light so the whole UI reverts
+    // to the former fonts (dark keeps the monospace "analytical" treatment).
+    '--p-mono':        "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     '--p-focus-ring':   'rgba(37, 99, 235, 0.15)',
     '--p-warn-ink':     '#8a5a00',
     '--p-warn-bg':      'rgba(217, 119, 6, 0.12)',
