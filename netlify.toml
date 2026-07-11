@@ -21,3 +21,14 @@
   # Skip the deploy if the commit only touched files outside discerned-web/.
   # Compares HEAD against the last successful deploy's commit.
   command = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- ../discerned-web"
+
+# GoatCounter analytics — reverse-proxied same-origin so hostname-based tracker
+# blockers (uBlock etc.) can't drop the hit. Mirrors the identical rule in
+# discerned-web/netlify.toml so whichever config Netlify loads (depends on the
+# dashboard "package path" setting) has the proxy. The counter script is vendored
+# at public/api/stats/count.js (served first-party); only the dynamic hit is proxied.
+[[redirects]]
+  from = "/api/stats/*"
+  to = "https://discernedweb.goatcounter.com/:splat"
+  status = 200
+  force = true

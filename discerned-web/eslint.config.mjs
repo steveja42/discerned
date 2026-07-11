@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored third-party script (GoatCounter count.js) — served verbatim, not our code.
+    "public/api/stats/count.js",
   ]),
 ]);
 

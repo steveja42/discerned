@@ -23,3 +23,16 @@
     Access-Control-Allow-Origin = "*"
     Content-Type = "application/json; charset=utf-8"
     Cache-Control = "public, max-age=300"
+
+# GoatCounter analytics — reverse-proxied same-origin so hostname-based tracker
+# blockers (uBlock etc.) can't drop the hit. The counter script is vendored at
+# public/api/stats/count.js (served first-party); only the dynamic /api/stats/count
+# hit is proxied here. status=200 keeps the URL same-origin in the browser; force=true
+# wins even though the path isn't a real file. :splat forwards /api/stats/count →
+# discernedweb.goatcounter.com/count. (Netlify can't interpolate env vars in redirect
+# targets, so the site code is a committed literal.)
+[[redirects]]
+  from = "/api/stats/*"
+  to = "https://discernedweb.goatcounter.com/:splat"
+  status = 200
+  force = true

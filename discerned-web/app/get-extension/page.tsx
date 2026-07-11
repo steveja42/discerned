@@ -11,8 +11,13 @@ import TopBar from '@/components/chrome/TopBar';
 import SignInModal from '@/components/auth/SignInModal';
 import { useNostrAuth } from '@/hooks/useNostrAuth';
 import { useBridgeAuth } from '@/hooks/useBridgeAuth';
+import { countEvent } from '@/lib/analytics';
 
 const ZIP_HREF = '/discerned-extension.zip';
+
+// Both ZIP links report the same GoatCounter event path so the dashboard aggregates one
+// "downloads" count. countEvent uses sendBeacon (non-blocking), so the download proceeds.
+const countZipDownload = () => countEvent('download-extension', 'Extension ZIP download');
 
 const codeStyle: React.CSSProperties = {
   fontFamily: 'var(--mono)',
@@ -43,7 +48,7 @@ const steps: { title: string; body: React.ReactNode }[] = [
     body: (
       <>
         Download{' '}
-        <a href={ZIP_HREF} download style={codeLinkStyle}>discerned-extension.zip</a>{' '}
+        <a href={ZIP_HREF} download style={codeLinkStyle} onClick={countZipDownload}>discerned-extension.zip</a>{' '}
         and unzip it to a folder you&apos;ll keep — Chrome loads the extension from that folder
         every time it starts, so don&apos;t delete it afterward.
       </>
@@ -117,7 +122,7 @@ export default function GetExtensionPage() {
         </p>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <a href={ZIP_HREF} download className="btn primary" style={{ textDecoration: 'none', fontSize: 14, padding: '11px 18px' }}>
+          <a href={ZIP_HREF} download className="btn primary" onClick={countZipDownload} style={{ textDecoration: 'none', fontSize: 14, padding: '11px 18px' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 2 }}>
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
             </svg>

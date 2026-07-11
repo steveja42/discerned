@@ -6,6 +6,7 @@ import './globals.css';
 import { ClipStoreProvider } from '@/lib/bridge/ClipStoreContext';
 import { NostrAuthProvider } from '@/hooks/useNostrAuth';
 import PendingSignModal from '@/components/auth/PendingSignModal';
+import GoatCounter from '@/components/analytics/GoatCounter';
 
 export const metadata: Metadata = {
   title: 'Discerned — Signal, not noise.',
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ClipStoreProvider>{children}</ClipStoreProvider>
           <PendingSignModal />
         </NostrAuthProvider>
+        <GoatCounter />
       </body>
     </html>
   );

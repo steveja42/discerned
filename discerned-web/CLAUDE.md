@@ -23,11 +23,25 @@ No CSS framework — all styling is plain CSS custom properties defined in `app/
 ## Key architectural rules
 
 - **No clip creation UI.** The `+` button must never appear. Clipping is the extension's job.
-- **No backend.** Everything is client-side — Nostr relays for the public feed, postMessage bridge for private clips.
+- **No backend.** Everything is client-side — Nostr relays for the public feed, postMessage bridge for private clips. (The one server-side touch is a Netlify reverse-proxy for analytics — see Analytics — which forwards but stores nothing of ours.)
 - **WSS only** for relay connections — never `ws://`.
 - **Sanitize Nostr content** before rendering — never trust raw event content as HTML.
 - **Origin-pin postMessage** on the extension bridge — both sides check `e.origin`.
 - **TypeScript strict** — no `any`.
+
+## Analytics
+
+Privacy-respecting traffic measurement via **GoatCounter** (cookieless, no PII, no cross-site tracking; aggregate page + download counts only). The README's "sovereignty principles" reflect this reframing — keep them in sync if the setup changes.
+
+**Same-origin proxying (bypasses hostname-based tracker blockers).** Both the counter script and its data endpoint are first-party:
+- **Script**: GoatCounter's `count.js` is **vendored** at `public/api/stats/count.js` (served at `/api/stats/count.js`). Refresh manually from `https://gc.zgo.at/count.js` if it drifts — the provenance/fetch-date is in the file header.
+- **Data endpoint**: `data-goatcounter="/api/stats/count"`. Netlify reverse-proxies `/api/stats/*` → `https://discernedweb.goatcounter.com/:splat` (`status = 200`, `force = true`). The rule lives in **both** `discerned-web/netlify.toml` and the root `netlify.toml` (whichever Netlify loads depends on the dashboard "package path"). The site code (`discernedweb`) is a **committed literal**, never a client env var — Netlify can't interpolate env vars in redirect targets, and the browser only ever talks to same-origin `/api/stats/*` anyway.
+
+**Code:**
+- `lib/analytics.ts` — `GOATCOUNTER_ENDPOINT` / `GOATCOUNTER_SCRIPT` / `PROD_HOST` constants, the `window.goatcounter` type, `isAnalyticsHost()`, and the null-safe `countEvent(path, title)` / `countPageview(path)` helpers.
+- `components/analytics/GoatCounter.tsx` (`'use client'`, mounted last in `app/layout.tsx`) — loads the script via `next/script` and reports **SPA route changes** via a `usePathname()` effect (count.js only auto-counts the initial hard load; the effect skips its first run to avoid double-counting).
+- **Hostname gate**: everything is a **no-op unless `window.location.hostname === 'discerned.online'`** — localhost and Netlify deploy previews never pollute stats. (The gate is resolved in an effect so SSR/first-render return `null` → no hydration mismatch.)
+- **Extension-ZIP downloads**: both download links in `app/get-extension/page.tsx` fire `countEvent('download-extension', …)` on click (`sendBeacon`, non-blocking → the download still proceeds). One shared event path so the dashboard shows a single downloads count.
 
 ## Design system
 

@@ -138,7 +138,7 @@ Match that design for any UI changes. The `MiniBeacon` and `HeroBeacon` SVGs are
 ## Sovereignty principles
 
 - No backend, no server-side data storage
-- No analytics, no telemetry
+- Privacy-respecting, cookieless analytics (GoatCounter) — aggregate page/download counts only, no cookies, no personal data, no cross-site tracking; proxied through our own domain
 - All relay connections use WSS only
 - Nostr content is sanitized before rendering
 - The extension bridge is origin-pinned on both sides
