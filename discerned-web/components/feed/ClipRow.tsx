@@ -91,7 +91,9 @@ export default function ClipRow({
           <p className="clip-excerpt">
             {capture.selectionText
               ? capture.selectionText.replace(/<[^>]*>/g, '')
-              : capture.bodyText}
+              // Cast bodies interleave bare image-URL lines at the images'
+              // in-article positions — drop them from the text excerpt.
+              : capture.bodyText?.replace(/^https?:\/\/\S+$/gm, '').replace(/\n{3,}/g, '\n\n').trim()}
           </p>
         )}
         {capture.note && <div className="clip-note">{capture.note}</div>}

@@ -9,5 +9,9 @@
   "bodyHtml": {
     "noScripts": true,
     "containsClasses": ["tweet-card", "tweet-header", "tweet-footer", "tweet-avatar", "tweet-handle", "tweet-stats"]
+  },
+  "imageUrls": {
+    "minCount": 3,
+    "contains": ["pbs.twimg.com/media/"]
   }
 }

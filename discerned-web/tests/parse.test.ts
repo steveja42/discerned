@@ -127,7 +127,7 @@ describe('parseEvent (web)', () => {
     });
   }
 
-  it('extracts tweet photo URLs from NIP-92 imeta tags', () => {
+  it('extracts image URLs from NIP-92 imeta tags', () => {
     const photos = [
       'https://pbs.twimg.com/media/AAA?format=webp&name=medium',
       'https://pbs.twimg.com/media/BBB?format=webp&name=medium',
@@ -146,19 +146,19 @@ describe('parseEvent (web)', () => {
     }, SK);
 
     const clip = parseEvent(ev);
-    expect(clip.capture.tweetPhotoUrls).toEqual(photos);
+    expect(clip.capture.imageUrls).toEqual(photos);
     // The single `image` tag still populates thumbnail for legacy renderers.
     expect(clip.capture.thumbnail).toBe(photos[0]);
   });
 
-  it('leaves tweetPhotoUrls undefined when there are no imeta tags', () => {
+  it('leaves imageUrls undefined when there are no imeta tags', () => {
     const ev = finalizeEvent({
       kind: 1,
       created_at: 1_700_000_000,
       tags: [['r', 'https://example.com'], ['format', 'article']],
       content: 'Discerned: General\n\nTitle\nhttps://example.com',
     }, SK);
-    expect(parseEvent(ev).capture.tweetPhotoUrls).toBeUndefined();
+    expect(parseEvent(ev).capture.imageUrls).toBeUndefined();
   });
 
   it('falls back to safe defaults when tags are missing', () => {

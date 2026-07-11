@@ -77,10 +77,13 @@ export interface Capture {
   // bookmark / article
   thumbnail?: string | null;      // may be an inlined data: URI (private clip render)
   thumbnailUrl?: string | null;   // original http(s) URL of the thumbnail — cast as the `image` tag (data: URIs are too large for relays)
-  // Twitter/X only — original http(s) URLs of every tweet photo, in order.
-  // Cast as NIP-92 `imeta` tags + appended to the note content so all photos
-  // render in Nostr clients (data: URIs stay in bodyHtml for the private clip).
-  tweetPhotoUrls?: string[];
+  // Original http(s) URLs of the capture's content images (any site), in
+  // document order. Generic captures are collected by inlineAllImages' pre-pass
+  // (avatars/icons filtered, capped at MAX_CAST_IMAGE_URLS); Tier-0 tweet
+  // captures fill it with every tweet photo. Cast as NIP-92 `imeta` tags +
+  // appended to the note content so all images render in Nostr clients
+  // (data: URIs stay in bodyHtml/selectionText for the private clip).
+  imageUrls?: string[];
   // cast feed only — author of the published Nostr event (set by the web app's parseEvent)
   authorPubkey?: string;
 }

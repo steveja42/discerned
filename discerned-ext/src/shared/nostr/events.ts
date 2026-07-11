@@ -54,6 +54,23 @@ function appendNoteToContent(content: string, capture: Capture): string {
   return `${content}\n\n— ${capture.note}`;
 }
 
+// Content images — publish every image as a real URL (never base64). Emit one
+// NIP-92 `imeta` tag per image for modern clients (Primal/Damus render a
+// gallery). Article bodies already carry the URLs interleaved at their
+// in-article positions (proseText), so clients that auto-embed image URLs in
+// text render them in place; only URLs NOT already in the content (tweet
+// casts, selections, bodies truncated past a URL) get appended at the end.
+function appendImageUrls(tags: string[][], contentLines: string[], capture: Capture): void {
+  const urls = (capture.imageUrls ?? []).filter(u => /^https?:/i.test(u));
+  if (urls.length === 0) return;
+  for (const u of urls) {
+    tags.push(['imeta', `url ${u}`]);
+  }
+  const existing = contentLines.join('\n');
+  const missing = urls.filter(u => !existing.includes(u));
+  if (missing.length > 0) contentLines.push('', ...missing);
+}
+
 /**
  * Create a Note event (Kind 1) for selection captures (quoted text inline).
  */
@@ -67,24 +84,25 @@ export function createQuoteNoteEvent(
 
   const quotedText = capture.selectionText ?? '';
 
-  const baseContent = [
+  const contentLines = [
     evaluationSummary(evaluation),
     `> "${quotedText}"`,
     '',
     capture.url,
-  ].join('\n');
+  ];
 
   const tags = baseEvaluationTags(capture, evaluation);
   tags.push(['quote', quotedText]);
   if (capture.selectionContext) {
     tags.push(['context', capture.selectionContext]);
   }
+  appendImageUrls(tags, contentLines, capture);
 
   return {
     kind: 1,
     created_at: Math.floor(capture.timestamp / 1000),
     tags,
-    content: appendNoteToContent(baseContent, capture),
+    content: appendNoteToContent(contentLines.join('\n'), capture),
   };
 }
 
@@ -122,29 +140,21 @@ export function createResourceNoteEvent(
   // captures inline the hero image as base64 (via inlineImage) for the private
   // clip render; publishing that inline adds 50–60 KB and pushes the event past
   // relay 64 KB limits ("event too large"). Prefer the preserved original URL
-  // (thumbnailUrl); fall back to `thumbnail` only when it's itself an http(s)
-  // URL (the bookmark path stores a raw URL there). Data URIs stay in IndexedDB.
-  const imageUrl = capture.thumbnailUrl ?? capture.thumbnail;
-  if (imageUrl && /^https?:/i.test(imageUrl)) {
+  // (thumbnailUrl); fall back to `thumbnail` when it's itself an http(s) URL
+  // (the bookmark path stores a raw URL there), then to the first content
+  // image — so clients that only read the `image` tag still get a picture.
+  // Data URIs stay in IndexedDB.
+  const imageUrl = [capture.thumbnailUrl, capture.thumbnail, ...(capture.imageUrls ?? [])]
+    .find((u): u is string => !!u && /^https?:/i.test(u));
+  if (imageUrl) {
     tags.push(['image', imageUrl]);
   }
   if (inlineBody && inlineBody.trim().length > 0) {
     tags.push(['body', inlineBody]);
   }
 
-  // Twitter/X photos — publish every photo as a real URL (never base64). Emit
-  // one NIP-92 `imeta` tag per photo for modern clients (Primal/Damus render a
-  // gallery) AND append the URLs to the note content, since most clients
-  // auto-embed image URLs found in the text. All URLs are pbs.twimg.com links,
-  // so they cost no event bytes beyond the URL string.
-  const photoUrls = (capture.tweetPhotoUrls ?? []).filter(u => /^https?:/i.test(u));
   const contentLines = [...lines];
-  if (photoUrls.length > 0) {
-    for (const u of photoUrls) {
-      tags.push(['imeta', `url ${u}`]);
-    }
-    contentLines.push('', ...photoUrls);
-  }
+  appendImageUrls(tags, contentLines, capture);
 
   return {
     kind: 1,

@@ -22,7 +22,7 @@ export interface Capture {
   bodyText?: string;
   thumbnail?: string | null;      // may be an inlined data: URI (private clip render)
   thumbnailUrl?: string | null;   // original http(s) URL — cast as the `image` tag (mirrors discerned-ext)
-  tweetPhotoUrls?: string[];      // Twitter/X only — original photo URLs, cast as imeta tags (mirrors discerned-ext)
+  imageUrls?: string[];           // content image URLs (any site), cast as NIP-92 imeta tags (mirrors discerned-ext)
   // cast feed only — author of the published Nostr event (set by parseEvent)
   authorPubkey?: string;
 }

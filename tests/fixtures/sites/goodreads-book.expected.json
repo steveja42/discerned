@@ -3,9 +3,13 @@
   "url": "http://127.0.0.1:4173/goodreads-book.html",
   "bodyText": {
     "minLength": 100,
-    "contains": ["Gatsby"]
+    "contains": ["Gatsby", "compressed.photo.goodreads.com/books/"]
   },
   "bodyHtml": {
     "noScripts": true
+  },
+  "imageUrls": {
+    "contains": ["compressed.photo.goodreads.com/books/"],
+    "excludes": ["_next/image"]
   }
 }

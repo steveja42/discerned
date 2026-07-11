@@ -91,6 +91,40 @@ function buildQuoteTweetCast(): NostrEvent {
   );
 }
 
+// Mirrors createResourceNoteEvent for an ARTICLE cast whose body interleaves
+// the image URLs at their in-article positions (the proseText behavior). The
+// web app must render those images inline where their URL lines sit — and
+// show NO top gallery, since every imeta URL is present in the body.
+function buildArticleCast(): NostrEvent {
+  const body = [
+    'Your home server deserves better than hand-me-down hardware.',
+    '',
+    PHOTOS[0],
+    '',
+    'Treating it like a spare PC means spare-PC reliability: no ECC, no redundancy, no plan for the day the disk dies.',
+    '',
+    PHOTOS[1],
+    '',
+    'A modest, purpose-built box beats a retired gaming rig for anything that has to stay up.',
+  ].join('\n');
+  return signCast(
+    [
+      ['r', 'https://example.com/home-server-article'],
+      ['L', 'online.discerned.category'],
+      ['l', 'General', 'online.discerned.category'],
+      ['t', 'discerned'],
+      ['format', 'article'],
+      ['client', 'discerned'],
+      ['title', 'Your Home Server Deserves Better'],
+      ['image', PHOTOS[0]],
+      ['body', body],
+      ['imeta', `url ${PHOTOS[0]}`],
+      ['imeta', `url ${PHOTOS[1]}`],
+    ],
+    `Discerned: General\n\nYour Home Server Deserves Better\nhttps://example.com/home-server-article\n\n--- body ---\n${body}`,
+  );
+}
+
 async function mockRelayWith(page: Page, event: NostrEvent): Promise<void> {
   await page.addInitScript(() => {
     try { localStorage.setItem('discerned.relayMode', 'production'); } catch { /* ignore */ }
@@ -142,6 +176,34 @@ test('tweet-cast-photos-visual', async ({ page }) => {
   await expect(clipBody).toContainText('@CIA');
 
   await clipBody.screenshot({ path: resolve(outDir, 'tweet-cast-photos-rendered.png') });
+});
+
+test('article-cast-inline-images-visual', async ({ page }) => {
+  test.skip(!process.env.TWEET_CAST, 'set TWEET_CAST=1 to run this');
+  test.setTimeout(60_000);
+  const outDir = resolve(__dirname, '..', '..', 'test-output');
+  mkdirSync(outDir, { recursive: true });
+
+  await mockRelayWith(page, buildArticleCast());
+  const clipBody = await openDetailAndDecode(page, 'Home Server');
+
+  // Both images render inline (at their URL lines), NOT as a top gallery.
+  await expect(clipBody.locator('img.cast-inline-img')).toHaveCount(2);
+  await expect(clipBody.locator('.cast-photos')).toHaveCount(0);
+  // The bare URL text must not remain visible.
+  await expect(clipBody).not.toContainText('pbs.twimg.com');
+  // Position: the first inline image sits between paragraph 1 and paragraph 2.
+  const order = await clipBody.evaluate((root) => {
+    const kids = Array.from(root.children).map((el) =>
+      el.tagName === 'IMG' ? 'img' : (el.textContent ?? '').slice(0, 20));
+    return kids;
+  });
+  const firstImg = order.indexOf('img');
+  const paraAfter = order.findIndex((t) => t.startsWith('Treating it like'));
+  expect(firstImg).toBeGreaterThan(0);
+  expect(paraAfter).toBeGreaterThan(firstImg);
+
+  await clipBody.screenshot({ path: resolve(outDir, 'article-cast-inline-rendered.png') });
 });
 
 test('tweet-cast-quote-visual', async ({ page }) => {

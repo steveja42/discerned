@@ -504,13 +504,14 @@ async function extractSelection(): Promise<Capture> {
   const sanitized = sanitizeFragment(fragment);
   log(LL.DEBUG, `Discerned: extractSelection — after sanitize: html=${sanitized.length} chars`, 'url:', url);
   const context = extractContext(range);
-  const inlined = await inlineAllImages(sanitized);
+  const { html: inlined, imageUrls } = await inlineAllImages(sanitized);
 
   return {
     ...baseFields(),
     format: 'selection',
     selectionText: inlined,
     selectionContext: context,
+    imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
   };
 }
 
@@ -1051,8 +1052,9 @@ async function extractTweet(
   ].filter(s => s !== '').join('\n').trim();
 
   // Photo URLs for the cast (original http(s), not the inlined base64) — outer
-  // tweet's photos first, then the quoted tweet's, deduped.
-  const tweetPhotoUrls = [
+  // tweet's photos first, then the quoted tweet's, deduped. Deliberately
+  // uncapped: tweet + quoted tweet can carry up to 8 photos.
+  const imageUrls = [
     ...tweetPhotoSrcs.filter(src => /^https?:/i.test(src)),
     ...(quotedCastMeta?.photoUrls ?? []),
   ].filter((src, i, arr) => arr.indexOf(src) === i);
@@ -1064,6 +1066,7 @@ async function extractTweet(
       format: 'selection',
       selectionText: bodyHtml,
       selectionContext: '',
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
   }
   return {
@@ -1073,8 +1076,8 @@ async function extractTweet(
     bodyHtml,
     bodyText: plainText,
     thumbnail: null,
-    thumbnailUrl: tweetPhotoUrls[0] ?? null,
-    tweetPhotoUrls: tweetPhotoUrls.length > 0 ? tweetPhotoUrls : undefined,
+    thumbnailUrl: imageUrls[0] ?? null,
+    imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
   };
 }
 
@@ -1587,13 +1590,30 @@ function maybeExpandToFeed(el: Element): Element {
  * present so prose-less pages still get *something*.
  */
 const PROSE_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, blockquote, dt, dd, pre, td, th, figcaption';
-function proseText(root: Element): string {
+/**
+ * Flatten the capture to plain text for the cast body. When `imageUrls` (the
+ * cast's image set) is given, each URL is emitted as its own paragraph at the
+ * position of its <img> in document order — so Nostr clients that auto-embed
+ * image URLs render the images where they sat in the article, instead of all
+ * of them stacking at the top/bottom. First occurrence claims the URL (same
+ * dedupe rule as collectCastImageUrls, so text and imeta tags stay in sync).
+ */
+function proseText(root: Element, imageUrls?: string[]): string {
+  const remaining = new Set(imageUrls ?? []);
+  const baseUrl = window.location.href;
   const parts: string[] = [];
-  root.querySelectorAll(PROSE_SELECTOR).forEach(el => {
+  let textParts = 0;
+  root.querySelectorAll(`${PROSE_SELECTOR}, img`).forEach(el => {
+    if (el.tagName.toLowerCase() === 'img') {
+      if (remaining.size === 0) return;
+      const abs = resolveImgSrc(el as HTMLImageElement, baseUrl);
+      if (abs && remaining.delete(abs)) parts.push(abs);
+      return;
+    }
     const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
-    if (t.length > 0) parts.push(t);
+    if (t.length > 0) { parts.push(t); textParts++; }
   });
-  if (parts.length === 0) return (root.textContent ?? '').trim();
+  if (textParts === 0) return (root.textContent ?? '').trim();
   return parts.join('\n\n');
 }
 
@@ -1663,15 +1683,16 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     const imgsAfter = clone.querySelectorAll('img[style]').length;
     log(LL.DEBUG, `Discerned: sanitiseTreeInPlace done — ${imgsBefore} imgs, ${imgsAfter} with remaining inline style, stripInlineStyles=${opts.stripInlineStyles}`, 'url:', base.url);
     log(LL.TRACE, `Discerned: sanitised bodyHtml (first 2000 chars): ${clone.innerHTML.slice(0, 2000)}`, 'url:', base.url);
-    const inlined = await inlineAllImages(clone.innerHTML.trim());
+    const { html: inlined, imageUrls } = await inlineAllImages(clone.innerHTML.trim());
     log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     return {
       ...base,
       format: 'article',
       bodyHtml: inlined,
-      bodyText: proseText(clone),
+      bodyText: proseText(clone, imageUrls),
       thumbnail: inlinedThumbnail,
       thumbnailUrl,
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
   }
 
@@ -1726,15 +1747,16 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     await substituteEmbeddedTweets(clone, harvestedTweets);
     tagSemanticStructure(clone);
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
-    const inlined = await inlineAllImages(clone.innerHTML.trim());
+    const { html: inlined, imageUrls } = await inlineAllImages(clone.innerHTML.trim());
     log(LL.DEBUG, `Discerned: layout-finder imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     return {
       ...base,
       format: 'article',
       bodyHtml: inlined,
-      bodyText: proseText(clone),
+      bodyText: proseText(clone, imageUrls),
       thumbnail: inlinedThumbnail,
       thumbnailUrl,
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
   }
 
@@ -1747,16 +1769,27 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       const alt = (parsed.title || base.title).replace(/"/g, '&quot;');
       sanitized = `<figure><img src="${thumbnailUrl}" alt="${alt}"></figure>\n${sanitized}`;
     }
-    const inlined = await inlineAllImages(sanitized);
+    const { html: inlined, imageUrls } = await inlineAllImages(sanitized);
     log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
+    // Readability hands back a string, not a tree — when cast images exist,
+    // re-parse the (pre-inlining) sanitized HTML so proseText can interleave
+    // the image URLs at their in-article positions. With no images the body
+    // stays Readability's own textContent, exactly as before.
+    let bodyText = parsed.textContent.trim();
+    if (imageUrls.length > 0) {
+      const bodyDoc = new DOMParser().parseFromString(`<div>${sanitized}</div>`, 'text/html');
+      const bodyRoot = bodyDoc.body.firstElementChild;
+      if (bodyRoot) bodyText = proseText(bodyRoot, imageUrls);
+    }
     return {
       ...base,
       format: 'article',
       title: parsed.title || base.title,
       bodyHtml: inlined,
-      bodyText: parsed.textContent.trim(),
+      bodyText,
       thumbnail: inlinedThumbnail,
       thumbnailUrl,
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
   }
 
@@ -1770,14 +1803,15 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   await substituteEmbeddedTweets(bodyClone, harvestedTweets);
   tagSemanticStructure(bodyClone);
   sanitiseTreeInPlace(bodyClone);
-  const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
+  const { html: inlined, imageUrls } = await inlineAllImages(bodyClone.innerHTML.trim());
   return {
     ...base,
     format: 'article',
     bodyHtml: inlined,
-    bodyText: proseText(bodyClone),
+    bodyText: proseText(bodyClone, imageUrls),
     thumbnail: inlinedThumbnail,
     thumbnailUrl,
+    imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
   };
 }
 
@@ -1860,13 +1894,14 @@ async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
   // so the captured HTML carries layout hints across sanitisation.
   tagSemanticStructure(bodyClone);
   sanitiseTreeInPlace(bodyClone, opts.stripInlineStyles);
-  const inlined = await inlineAllImages(bodyClone.innerHTML.trim());
+  const { html: inlined, imageUrls } = await inlineAllImages(bodyClone.innerHTML.trim());
   return {
     ...baseFields(),
     format: 'full-page',
     bodyHtml: inlined,
     bodyText: bodyClone.textContent?.trim() ?? '',
     thumbnail: getPageThumbnail(),
+    imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
   };
 }
 
@@ -3925,35 +3960,75 @@ async function inlineImage(src: string): Promise<string> {
   return src;
 }
 
-async function inlineAllImages(html: string): Promise<string> {
+// Max image URLs collected for a generic cast. Tweet captures (Tier 0) set
+// their own uncapped list — a tweet + quoted tweet can carry up to 8 photos.
+const MAX_CAST_IMAGE_URLS = 8;
+
+// Skip imgs whose annotated width/height is below this — avatars render at
+// ~44px, icons at 16–32px, real content images at hundreds of px. Only applied
+// when a size attribute is present (Tier-2 Readability output has none).
+const MIN_CAST_IMAGE_PX = 100;
+
+// Resolve an <img>'s real URL. Many news sites (CNN, etc.) lazy-load with
+// data-src; prefer it over a placeholder 1×1 src. Also check data-lazy-src
+// used by some WordPress themes. Relative srcs resolve against the live page.
+function resolveImgSrc(img: HTMLImageElement, baseUrl: string): string | null {
+  const raw =
+    img.getAttribute('data-src') ||
+    img.getAttribute('data-lazy-src') ||
+    img.getAttribute('src');
+  if (!raw) return null;
+  try {
+    return new URL(raw, baseUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+// Collect the remote URLs of cast-worthy content images, in document order:
+// skips avatars/byline imagery (dx-*/tweet-* markers survive sanitisation),
+// icon-sized imgs, and non-http(s) srcs; dedupes; caps at MAX_CAST_IMAGE_URLS.
+// Read-only — must not mutate the tree, so the inlined HTML output of
+// inlineAllImages is unaffected by collection.
+function collectCastImageUrls(imgs: HTMLImageElement[], baseUrl: string): string[] {
+  const urls: string[] = [];
+  for (const img of imgs) {
+    if (urls.length >= MAX_CAST_IMAGE_URLS) break;
+    if (img.matches('.dx-avatar, .tweet-avatar')) continue;
+    if (img.closest('.dx-header, .dx-byline, .tweet-header')) continue;
+    const w = parseInt(img.getAttribute('width') ?? '', 10);
+    const h = parseInt(img.getAttribute('height') ?? '', 10);
+    if ((!Number.isNaN(w) && w < MIN_CAST_IMAGE_PX) ||
+        (!Number.isNaN(h) && h < MIN_CAST_IMAGE_PX)) continue;
+    const abs = resolveImgSrc(img, baseUrl);
+    if (!abs || !/^https?:/i.test(abs)) continue;
+    if (!urls.includes(abs)) urls.push(abs);
+  }
+  return urls;
+}
+
+async function inlineAllImages(html: string): Promise<{ html: string; imageUrls: string[] }> {
   const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
   const root = doc.body.firstElementChild as HTMLElement | null;
-  if (!root) return html;
+  if (!root) return { html, imageUrls: [] };
 
   const imgs = Array.from(root.querySelectorAll('img'));
-  if (imgs.length === 0) return html;
+  if (imgs.length === 0) return { html, imageUrls: [] };
 
   // Resolve relative srcs against the live page (not the synthetic doc).
   const baseUrl = window.location.href;
+
+  // Collect cast-worthy remote URLs BEFORE inlining swaps srcs to data: URIs.
+  const imageUrls = collectCastImageUrls(imgs, baseUrl);
+
   const queue = imgs.slice();
 
   const worker = async () => {
     while (queue.length) {
       const img = queue.shift();
       if (!img) break;
-      // Many news sites (CNN, etc.) lazy-load with data-src; prefer it over a
-      // placeholder 1×1 src. Also check data-lazy-src used by some WordPress themes.
-      const raw =
-        img.getAttribute('data-src') ||
-        img.getAttribute('data-lazy-src') ||
-        img.getAttribute('src');
-      if (!raw) continue;
-      let abs: string;
-      try {
-        abs = new URL(raw, baseUrl).toString();
-      } catch {
-        continue;
-      }
+      const abs = resolveImgSrc(img, baseUrl);
+      if (!abs) continue;
       const inlined = await inlineImage(abs);
       img.setAttribute('src', inlined);
       // Remove lazy-load attributes so the stored HTML is self-contained.
@@ -3964,7 +4039,7 @@ async function inlineAllImages(html: string): Promise<string> {
 
   const workers = Array.from({ length: Math.min(INLINE_CONCURRENCY, imgs.length) }, worker);
   await Promise.all(workers);
-  return root.innerHTML;
+  return { html: root.innerHTML, imageUrls };
 }
 
 // ── Page capability check ────────────────────────────────────────────────────

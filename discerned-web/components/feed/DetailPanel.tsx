@@ -110,17 +110,27 @@ function NoteEditor({
   );
 }
 
-function renderTextWithBreaks(text: string): React.ReactNode {
-  return text.split(/\n{2,}/).map((para, i) => (
-    <p key={i}>
-      {para.split('\n').map((line, j, arr) => (
-        <React.Fragment key={j}>
-          {line}
-          {j < arr.length - 1 && <br />}
-        </React.Fragment>
-      ))}
-    </p>
-  ));
+function renderTextWithBreaks(text: string, imageUrls?: Set<string>): React.ReactNode {
+  return text.split(/\n{2,}/).map((para, i) => {
+    // Cast bodies interleave image URLs as their own paragraphs at the image's
+    // original in-article position — render those as the image itself. Only
+    // URLs declared by the event's imeta tags are rendered, never arbitrary
+    // URLs that happen to appear in the text.
+    const trimmed = para.trim();
+    if (imageUrls?.has(trimmed)) {
+      return <img key={i} className="cast-inline-img" src={trimmed} alt="" />;
+    }
+    return (
+      <p key={i}>
+        {para.split('\n').map((line, j, arr) => (
+          <React.Fragment key={j}>
+            {line}
+            {j < arr.length - 1 && <br />}
+          </React.Fragment>
+        ))}
+      </p>
+    );
+  });
 }
 
 export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodies, onBodyFetched }: DetailPanelProps) {
@@ -285,27 +295,33 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
             />
           );
         }
-        // Tweet casts carry every photo as an imeta URL. Prefer rendering the
-        // full set (a gallery); the single `image`-tag thumbnail is the first
-        // of these, so showing both would duplicate it.
-        const photoUrls = capture.tweetPhotoUrls ?? [];
+        // Casts carry every content image as an imeta URL. Article bodies
+        // interleave those URLs at each image's original in-article position —
+        // render those inline (renderTextWithBreaks swaps the URL paragraph
+        // for the image). URLs NOT in the body (tweet casts, truncated bodies)
+        // render as a top gallery. The single `image`-tag thumbnail is the
+        // first imeta URL, so it only shows when there are no imeta images.
+        const photoUrls = capture.imageUrls ?? [];
+        const bodyText = capture.bodyText ?? '';
+        const inlineUrls = new Set(photoUrls.filter((u) => bodyText.includes(u)));
+        const galleryUrls = photoUrls.filter((u) => !inlineUrls.has(u));
         if (capture.selectionText || capture.bodyText || thumbnail || photoUrls.length > 0) {
           return (
             <div className="clip-body">
-              {photoUrls.length > 0
+              {galleryUrls.length > 0
                 ? (
                   <div className="cast-photos">
-                    {photoUrls.map((src, i) => <img key={i} src={src} alt="" />)}
+                    {galleryUrls.map((src, i) => <img key={i} src={src} alt="" />)}
                   </div>
                 )
-                : thumbnail && <img src={thumbnail} alt="" />}
+                : photoUrls.length === 0 && thumbnail && <img src={thumbnail} alt="" />}
               {capture.selectionText && (
                 <blockquote
                   className="detail-excerpt"
                   dangerouslySetInnerHTML={{ __html: capture.selectionText }}
                 />
               )}
-              {capture.bodyText && renderTextWithBreaks(capture.bodyText)}
+              {capture.bodyText && renderTextWithBreaks(capture.bodyText, inlineUrls)}
             </div>
           );
         }

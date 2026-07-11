@@ -12,6 +12,7 @@ export interface ExpectedCapture {
   bodyHtml?: { hasImgs?: boolean; noScripts?: true; allowsOnly?: string[]; containsClasses?: string[] };
   thumbnail?: 'present' | 'absent';
   selectionText?: { contains?: string };
+  imageUrls?: { contains?: string[]; excludes?: string[]; minCount?: number };
 }
 
 const SCRIPT_RE   = /<script[\s>]/i;
@@ -74,5 +75,19 @@ export function matchExpected(cap: Capture, exp: ExpectedCapture): void {
 
   if (exp.selectionText?.contains !== undefined) {
     expect(cap.selectionText ?? '').toContain(exp.selectionText.contains);
+  }
+
+  if (exp.imageUrls) {
+    const urls = cap.imageUrls ?? [];
+    if (exp.imageUrls.minCount !== undefined) {
+      expect(urls.length, `imageUrls.length >= ${exp.imageUrls.minCount}`)
+        .toBeGreaterThanOrEqual(exp.imageUrls.minCount);
+    }
+    for (const needle of exp.imageUrls.contains ?? []) {
+      expect(urls.some(u => u.includes(needle)), `imageUrls has a URL containing "${needle}"`).toBe(true);
+    }
+    for (const needle of exp.imageUrls.excludes ?? []) {
+      expect(urls.some(u => u.includes(needle)), `imageUrls has no URL containing "${needle}"`).toBe(false);
+    }
   }
 }

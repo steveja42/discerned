@@ -9,5 +9,8 @@
   "bodyHtml": {
     "noScripts": true,
     "containsClasses": ["dx-header", "dx-byline-meta", "dx-stats"]
+  },
+  "imageUrls": {
+    "excludes": ["miro.medium.com"]
   }
 }

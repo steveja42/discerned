@@ -1096,9 +1096,15 @@ function buildCastTemplate(capture: Capture, evaluation: Evaluation) {
   const bodyText = capture.bodyText?.trim() ?? '';
   let inline: string | undefined;
   if (bodyText.length > 0) {
-    inline = bodyText.length <= CAST_INLINE_BODY_MAX_CHARS
-      ? bodyText
-      : bodyText.slice(0, CAST_INLINE_BODY_MAX_CHARS) + '\n\n[Content truncated due to length]';
+    if (bodyText.length <= CAST_INLINE_BODY_MAX_CHARS) {
+      inline = bodyText;
+    } else {
+      // Drop a trailing URL line the cut may have severed mid-URL — a partial
+      // image URL is noise, and appendImageUrls re-appends any image URL that
+      // no longer appears intact in the content.
+      const cut = bodyText.slice(0, CAST_INLINE_BODY_MAX_CHARS).replace(/\nhttps?:\/\/\S*$/, '');
+      inline = cut + '\n\n[Content truncated due to length]';
+    }
   }
   return createResourceNoteEvent(capture, evaluation, inline);
 }

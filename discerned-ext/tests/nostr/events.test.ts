@@ -188,9 +188,9 @@ describe('Nostr event factory', () => {
     });
   });
 
-  // Tweet casts publish every photo as a real URL — one NIP-92 imeta tag per
-  // photo AND the URLs appended to the note content — never base64.
-  describe('tweet photos cast as imeta tags + content URLs', () => {
+  // Casts publish every content image as a real URL — one NIP-92 imeta tag per
+  // image AND the URLs appended to the note content — never base64.
+  describe('capture images cast as imeta tags + content URLs', () => {
     const artFx = fixtures.find((f) => f.capture.format === 'article');
     if (!artFx) throw new Error('no article fixture');
 
@@ -200,29 +200,29 @@ describe('Nostr event factory', () => {
       'https://pbs.twimg.com/media/CCC?format=webp&name=medium',
     ];
 
-    it('emits one imeta tag per photo and lists the URLs in content', () => {
+    it('emits one imeta tag per image and lists the URLs in content', () => {
       const capture: Capture = {
         ...artFx.capture,
         thumbnailUrl: photos[0],
-        tweetPhotoUrls: photos,
+        imageUrls: photos,
       };
       const ev = finalizeEventWithPrivateKey(
         createResourceNoteEvent(capture, artFx.evaluation),
         DETERMINISTIC_SK,
       );
-      // One imeta tag per photo, each carrying "url <URL>".
+      // One imeta tag per image, each carrying "url <URL>".
       const imeta = extractTagValues(ev, 'imeta');
       expect(imeta).toEqual(photos.map((u) => `url ${u}`));
       // Every URL also present in the visible content for auto-embedding clients.
       for (const u of photos) expect(ev.content).toContain(u);
-      // First photo doubles as the legacy image tag.
+      // First image doubles as the legacy image tag.
       expect(extractTagValue(ev, 'image')).toBe(photos[0]);
     });
 
     it('never inlines a data: URI as an imeta url (event-size guard)', () => {
       const capture: Capture = {
         ...artFx.capture,
-        tweetPhotoUrls: ['data:image/webp;base64,' + 'A'.repeat(40_000), photos[1]],
+        imageUrls: ['data:image/webp;base64,' + 'A'.repeat(40_000), photos[1]],
       };
       const ev = finalizeEventWithPrivateKey(
         createResourceNoteEvent(capture, artFx.evaluation),
@@ -233,13 +233,67 @@ describe('Nostr event factory', () => {
       expect(JSON.stringify(ev)).not.toContain('data:image');
     });
 
-    it('adds no imeta tags when there are no tweet photos', () => {
-      const capture: Capture = { ...artFx.capture, tweetPhotoUrls: undefined };
+    it('adds no imeta tags when there are no content images', () => {
+      const capture: Capture = { ...artFx.capture, imageUrls: undefined };
       const ev = finalizeEventWithPrivateKey(
         createResourceNoteEvent(capture, artFx.evaluation),
         DETERMINISTIC_SK,
       );
       expect(extractTagValues(ev, 'imeta')).toEqual([]);
+    });
+
+    it('does not re-append URLs already interleaved in the inline body', () => {
+      const interleavedBody = `First paragraph of the article.\n\n${photos[0]}\n\nSecond paragraph after the image.\n\n${photos[1]}`;
+      const capture: Capture = {
+        ...artFx.capture,
+        bodyText: interleavedBody,
+        imageUrls: [photos[0], photos[1], photos[2]],
+      };
+      const ev = finalizeEventWithPrivateKey(
+        createResourceNoteEvent(capture, artFx.evaluation, interleavedBody),
+        DETERMINISTIC_SK,
+      );
+      // All three still get imeta tags.
+      expect(extractTagValues(ev, 'imeta')).toEqual(photos.map((u) => `url ${u}`));
+      // Interleaved URLs appear exactly once (in place, not duplicated at the
+      // end); the URL missing from the body is appended.
+      expect(ev.content.split(photos[0]).length - 1).toBe(1);
+      expect(ev.content.split(photos[1]).length - 1).toBe(1);
+      expect(ev.content.split(photos[2]).length - 1).toBe(1);
+      expect(ev.content.indexOf(photos[2])).toBeGreaterThan(ev.content.indexOf('Second paragraph'));
+    });
+
+    it('falls back to imageUrls[0] for the image tag when there is no thumbnail', () => {
+      const capture: Capture = {
+        ...artFx.capture,
+        thumbnail: null,
+        thumbnailUrl: null,
+        imageUrls: photos,
+      };
+      const ev = finalizeEventWithPrivateKey(
+        createResourceNoteEvent(capture, artFx.evaluation),
+        DETERMINISTIC_SK,
+      );
+      expect(extractTagValue(ev, 'image')).toBe(photos[0]);
+    });
+
+    it('selection casts publish imageUrls as imeta tags + content URLs too', () => {
+      const selFx = fixtures.find((f) => f.capture.format === 'selection');
+      if (!selFx) throw new Error('no selection fixture');
+      const capture: Capture = {
+        ...selFx.capture,
+        imageUrls: ['data:image/webp;base64,' + 'A'.repeat(40_000), ...photos.slice(0, 2)],
+      };
+      const ev = finalizeEventWithPrivateKey(
+        createQuoteNoteEvent(capture, selFx.evaluation),
+        DETERMINISTIC_SK,
+      );
+      const imeta = extractTagValues(ev, 'imeta');
+      expect(imeta).toEqual(photos.slice(0, 2).map((u) => `url ${u}`));
+      for (const u of photos.slice(0, 2)) expect(ev.content).toContain(u);
+      // The quoted text still leads the content, before the appended URLs.
+      expect(ev.content.indexOf('> "')).toBeLessThan(ev.content.indexOf(photos[0]));
+      expect(JSON.stringify(ev)).not.toContain('data:image');
     });
   });
 });
