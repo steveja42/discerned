@@ -9,18 +9,17 @@
   command = "pnpm install --frozen-lockfile && pnpm --filter=./discerned-web build"
   # Static export (next.config.ts → output: 'export') emits to out/, not .next/.
   publish = "discerned-web/out"
+  # Skip the deploy if the commit only touched files outside discerned-web/
+  # (e.g. extension-only changes). Compares HEAD against the last successful
+  # deploy's commit. Runs from the repo root, so the web app is just
+  # `discerned-web` (no ../ prefix). Must be a bare `ignore = "..."` string
+  # under [build] — NOT a [build.ignore] table (Netlify rejects that form).
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- discerned-web"
 
 [build.environment]
   PNPM_VERSION = "11"
   # Node 22 LTS is required by pnpm 11 (uses node:sqlite, introduced in Node 22).
   NODE_VERSION = "22"
-
-[build.ignore]
-  # Skip the deploy if the commit only touched files outside discerned-web/
-  # (e.g. extension-only changes). Compares HEAD against the last successful
-  # deploy's commit. The ignore command runs from the repo root, so the web app
-  # is just `discerned-web` (no ../ prefix).
-  command = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- discerned-web"
 
 # NIP-05 verifier — must allow cross-origin GET so other Nostr clients can
 # verify alice@discerned.online identifiers. Cache 5 min so a new user becomes
