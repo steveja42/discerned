@@ -3285,7 +3285,7 @@ const ALLOWED_ATTRS_GLOBAL = new Set(['style', 'class']);
 const TRUSTED_CLASS_PREFIXES = ['dx-', 'tweet-'];
 const ALLOWED_ATTRS_PER_TAG: Record<string, Set<string>> = {
   a:   new Set(['href']),
-  img: new Set(['src', 'alt', 'title', 'width', 'height']),
+  img: new Set(['src', 'alt', 'title', 'width', 'height', 'data-dx-src']),
   // Note: keys here MUST be lowercase — sanitiseElement compares attr.name.toLowerCase().
   // SVG camelCase attrs (viewBox, gradientUnits, etc.) are written as their lowercased
   // form, which matches the lowercased-attribute-name lookup browsers do on HTML-parsed SVG.
@@ -4029,6 +4029,12 @@ async function inlineAllImages(html: string): Promise<{ html: string; imageUrls:
       if (!img) break;
       const abs = resolveImgSrc(img, baseUrl);
       if (!abs) continue;
+      // Preserve the original http(s) URL before we overwrite src with a data:
+      // URI. The private clip renders the inline base64 (src); the public
+      // long-form (kind 30023) converts THIS attribute back into a real
+      // ![](url) so images render inline for any Nostr client (data: URIs are
+      // too large to publish). See html-to-markdown.ts.
+      if (/^https?:/i.test(abs)) img.setAttribute('data-dx-src', abs);
       const inlined = await inlineImage(abs);
       img.setAttribute('src', inlined);
       // Remove lazy-load attributes so the stored HTML is self-contained.

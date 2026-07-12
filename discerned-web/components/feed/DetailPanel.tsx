@@ -4,6 +4,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { ClipData } from '@/lib/types';
 import type { ClipBody } from '@/lib/bridge/ClipStoreContext';
 import { authorLabel, type AuthorProfile } from '@/lib/nostr/profiles';
@@ -287,12 +289,25 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
         const cached = bodies.get(capture.id);
         const bodyHtml = cached?.bodyHtml ?? capture.bodyHtml;
         const thumbnail = cached?.thumbnail ?? capture.thumbnail;
+        // The author's own bridged clips carry rich dx-* bodyHtml — render it as
+        // before (full fidelity). It wins over the public markdown.
         if (bodyHtml) {
           return (
             <div
               className="clip-body"
               dangerouslySetInnerHTML={{ __html: bodyHtml }}
             />
+          );
+        }
+        // Public NIP-23 long-form (kind 30023): content is markdown. Render it
+        // through the same .clip-body prose styles. Images resolve from the
+        // markdown's http(s) URLs; react-markdown never emits raw HTML by
+        // default, so this is safe without an extra sanitiser pass.
+        if (capture.markdown) {
+          return (
+            <div className="clip-body">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{capture.markdown}</ReactMarkdown>
+            </div>
           );
         }
         // Casts carry every content image as an imeta URL. Article bodies

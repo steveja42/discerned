@@ -7,6 +7,8 @@
 import { captureContext, isCapturablePage, hasSelection, __setTestHostOverride } from './capture';
 import type { CaptureOptions } from './capture';
 import { DiscernedOverlay } from './overlay';
+import { htmlToMarkdown } from './html-to-markdown';
+import { sourceHtmlForLongForm } from '@/shared/nostr/events';
 import { detectAuthState, signWithNIP07 } from '@/shared/nostr/auth';
 import type { AuthState, BackgroundMessage, Capture, ClipFormat, Evaluation, ResolvedTheme } from '@/shared/types';
 import { STORAGE_KEYS, resolveThemePref, resolveEffectiveTheme } from '@/shared/types';
@@ -229,9 +231,28 @@ async function handleClip(capture: Capture, evaluation: Evaluation) {
   }
 }
 
+// Selection long-forms are only worthwhile when the selection carries real
+// structure (a heading/list/link/image) — a one-line plain quote stays kind-1
+// only. Article/full-page always qualify (they're inherently long-form).
+const LONGFORM_SELECTION_STRUCTURE = /<(h[1-6]|ul|ol|li|a|img|blockquote|pre|table)\b/i;
+
+// Convert the capture's HTML to markdown for a companion kind-30023, when
+// eligible. Runs here (content script) because turndown needs a DOM the
+// background SW lacks; the result rides on Capture.longFormMarkdown. Returns
+// undefined for bookmarks and plain (unstructured) selections.
+function deriveLongFormMarkdown(capture: Capture): string | undefined {
+  const html = sourceHtmlForLongForm(capture);
+  if (!html) return undefined;
+  if (capture.format === 'selection' && !LONGFORM_SELECTION_STRUCTURE.test(html)) return undefined;
+  const md = htmlToMarkdown(html);
+  return md.trim().length > 0 ? md : undefined;
+}
+
 async function handleCast(capture: Capture, evaluation: Evaluation): Promise<string | undefined> {
   try {
-    const response = await sendToBackground({ type: 'CAST', data: { capture, evaluation } }, 150_000);
+    const longFormMarkdown = deriveLongFormMarkdown(capture);
+    const castCapture: Capture = longFormMarkdown ? { ...capture, longFormMarkdown } : capture;
+    const response = await sendToBackground({ type: 'CAST', data: { capture: castCapture, evaluation } }, 150_000);
     if (!response.success) throw new Error(response.error);
     log(LL.NORMAL, 'Discerned: Successfully cast', 'url:', window.location.href);
     return (response.data as { eventId?: string } | undefined)?.eventId;

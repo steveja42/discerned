@@ -8,6 +8,7 @@
 import type { Event } from 'nostr-tools';
 import type { ClipData, ClipFormat, InterestLevel, EthicsLevel, SignalLevel } from '@/lib/types';
 import { SIGNAL_LEVELS } from '@/lib/constants';
+import { stripDiscernedSnippet } from './strip-snippet';
 
 function getTag(event: Event, tagName: string, namespace?: string): string | null {
   for (const tag of event.tags) {
@@ -54,22 +55,62 @@ export function parseEvent(event: Event): ClipData {
   const ethics = (getTag(event, 'l', 'online.discerned.ethics') ?? 'Neutral') as EthicsLevel;
   const category = getTag(event, 'l', 'online.discerned.category') ?? 'General';
   const format = (getTag(event, 'format') ?? 'bookmark') as ClipFormat;
-  const selectionText = getTag(event, 'quote') ?? undefined;
-  const selectionContext = getTag(event, 'context') ?? undefined;
   const note = getTag(event, 'note') ?? undefined;
-  const bodyText = getTag(event, 'body') ?? undefined;
   const thumbnail = getTag(event, 'image') ?? undefined;
   const imageUrls = getImetaUrls(event);
+  // Strip the attribution snippet before touching content — it must never reach
+  // the UI, and (for kind-1) it would shift the line-index title fallback.
+  const content = stripDiscernedSnippet(event.content);
+
+  if (event.kind === 30023) {
+    // NIP-23 long-form: content is markdown; d is the source clip id; the
+    // published_at tag carries the original capture time (seconds).
+    const publishedAt = Number(getTag(event, 'published_at'));
+    const timestamp = Number.isFinite(publishedAt) && publishedAt > 0
+      ? publishedAt * 1000
+      : event.created_at * 1000;
+    const title = getTag(event, 'title') ?? (url || 'Untitled');
+    return {
+      capture: {
+        id: event.id,
+        kind: 30023,
+        format,
+        url,
+        title,
+        timestamp,
+        summary: getTag(event, 'summary') ?? undefined,
+        markdown: content,
+        longFormId: getTag(event, 'd') ?? undefined,
+        thumbnail,
+        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+        note,
+        authorPubkey: event.pubkey,
+      },
+      evaluation: { signal, qualifiers, interest, ethics, category },
+      encrypted: '',
+    };
+  }
+
+  // kind 1 (note)
+  const selectionText = getTag(event, 'quote') ?? undefined;
+  const selectionContext = getTag(event, 'context') ?? undefined;
+  const bodyText = getTag(event, 'body') ?? undefined;
+  // A summary+link note references its companion long-form via an 'a' tag
+  // (30023:<pubkey>:<d>). Expose the <d> as longFormId so the feed can dedup the
+  // pair, preferring the richer 30023.
+  const aTag = getTag(event, 'a');
+  const longFormId = aTag?.startsWith('30023:') ? aTag.split(':')[2] : undefined;
 
   // Prefer the explicit `title` tag; fall back for legacy casts that lack it.
   // Resource-cast content is "Discerned: …\n\n<title>\n<url>", so line index 2
   // is the title. Selection casts have no title — fall back to the URL.
-  const contentTitle = format !== 'selection' ? event.content.split('\n')[2]?.trim() : undefined;
+  const contentTitle = format !== 'selection' ? content.split('\n')[2]?.trim() : undefined;
   const title = getTag(event, 'title') ?? contentTitle ?? (url || 'Untitled');
 
   return {
     capture: {
       id: event.id,
+      kind: 1,
       format,
       url,
       title,
@@ -77,6 +118,7 @@ export function parseEvent(event: Event): ClipData {
       selectionText,
       selectionContext,
       bodyText,
+      longFormId,
       thumbnail,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
       note,

@@ -10,6 +10,24 @@ import type { ClipData } from '@/lib/types';
 
 type FeedStatus = 'connecting' | 'live' | 'error';
 
+// A companion kind-1 note (a summary + link) and its kind-30023 long-form share
+// this key: author pubkey + the long-form's `d` id. The note exposes it via its
+// `a` tag, the long-form via its own `d` tag (both surfaced as capture.longFormId
+// by parseEvent). Standalone clips fall back to their own event id.
+export function dedupKey(clip: ClipData): string {
+  const { longFormId, authorPubkey, id } = clip.capture;
+  return longFormId && authorPubkey ? `${authorPubkey}:${longFormId}` : id;
+}
+
+// Of two clips sharing a dedup key, prefer the richer kind-30023 long-form.
+export function preferLongForm(a: ClipData, b: ClipData): ClipData {
+  const aIsLong = a.capture.kind === 30023;
+  const bIsLong = b.capture.kind === 30023;
+  if (aIsLong && !bIsLong) return a;
+  if (bIsLong && !aIsLong) return b;
+  return a; // both same kind — keep the incumbent
+}
+
 export function useCastFeed() {
   const [clips, setClips] = useState<ClipData[]>([]);
   const [status, setStatus] = useState<FeedStatus>('connecting');
@@ -47,10 +65,25 @@ export function useCastFeed() {
             if (cancelled) return;
             const clip = parseEvent(e);
             setClips((prev) => {
-              if (prev.some((c) => c.capture.id === clip.capture.id)) return prev;
+              // Companion kind-1 note + kind-30023 long-form share a dedup key
+              // (author + long-form id); keep only one, PREFERRING the richer
+              // 30023. Standalone clips key on their own event id.
+              const key = dedupKey(clip);
+              const existingIdx = prev.findIndex((c) => dedupKey(c) === key);
+              let next: ClipData[];
+              if (existingIdx >= 0) {
+                const existing = prev[existingIdx];
+                // Same event re-delivered, or the less-preferred half of a pair:
+                // keep what we have.
+                if (preferLongForm(existing, clip) === existing) return prev;
+                next = [...prev];
+                next[existingIdx] = clip;
+              } else {
+                next = [clip, ...prev];
+              }
               // Sort by timestamp descending so newest is always on top,
               // regardless of the order in which relays deliver events.
-              return [clip, ...prev]
+              return next
                 .sort((a, b) => b.capture.timestamp - a.capture.timestamp)
                 .slice(0, 200);
             });

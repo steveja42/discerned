@@ -13,6 +13,9 @@ import {
   createProfileEvent,
   createQuoteNoteEvent,
   createResourceNoteEvent,
+  createLongFormEvent,
+  buildDiscernedSnippet,
+  type LongFormRef,
 } from '@/shared/nostr/events';
 import { prepareClipPayload } from '@/shared/nostr/encryption';
 import { publishWithMinimum, getRelayHealth } from './relay-manager';
@@ -22,10 +25,10 @@ import {
   invalidateBunkerSigner,
 } from '@/shared/nostr/nip46-manager';
 import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation, ClipData, EmbeddedTweetData, RelayMode } from '@/shared/types';
-import { STORAGE_KEYS, relaysForMode } from '@/shared/types';
+import { STORAGE_KEYS, relaysForMode, resolveRelayMode } from '@/shared/types';
 import { LL, log, setLogRelayTabs } from '@/shared/logger';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
-import { decode, nsecEncode, npubEncode } from 'nostr-tools/nip19';
+import { decode, nsecEncode, npubEncode, naddrEncode } from 'nostr-tools/nip19';
 import * as nip49 from 'nostr-tools/nip49';
 import type { BunkerPointer } from 'nostr-tools/nip46';
 
@@ -1042,28 +1045,152 @@ async function handleClip(data: { capture: Capture; evaluation: Evaluation }): P
   }
 }
 
+// Soft ceiling on the long-form markdown — a pathological page whose body
+// exceeds this would produce an event too large for relays; skip the long-form
+// (kind-1 still casts). Generous: NIP-23 is meant for long content.
+const LONGFORM_MARKDOWN_MAX_CHARS = 400_000;
+
+// The markdown for a companion kind-30023, precomputed in the content script
+// (turndown needs a DOM the background SW lacks) and carried on the capture.
+// Present only for long-form-eligible captures — see deriveLongFormMarkdown in
+// content.ts. Empty/oversize → no long-form (note-only cast).
+function longFormMarkdownFor(capture: Capture): string | undefined {
+  const md = capture.longFormMarkdown?.trim();
+  if (!md || md.length > LONGFORM_MARKDOWN_MAX_CHARS) return undefined;
+  return md;
+}
+
+// The casting user's hex pubkey, resolved per auth type. For guest we generate
+// the ephemeral key eagerly so the mention + naddr coordinate are available.
+// Returns undefined only when a pro/NIP-07 pubkey isn't known yet (rare).
+function resolveAuthorPubkey(): string | undefined {
+  switch (currentAuthState.type) {
+    case 'pro': return currentAuthState.pubkey;
+    case 'nsec': return currentAuthState.pubkey;
+    case 'nip46': return currentAuthState.remotePubkey;
+    case 'guest':
+      if (!guestPrivateKey) guestPrivateKey = generateSecretKey();
+      return getPublicKey(guestPrivateKey);
+  }
+}
+
+// Resolve the active relay URL list (same resolution the relay pool uses) for
+// seeding the nprofile/naddr mentions in the snippet + long-form link.
+async function resolveActiveRelays(): Promise<string[]> {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.RELAYS);
+  const mode = resolveRelayMode(stored[STORAGE_KEYS.RELAYS] as string | undefined);
+  return relaysForMode(mode);
+}
+
+// Build the kind-1 note template. With a longFormRef it becomes summary + link
+// to the companion article; otherwise it inlines the body (bookmark: none;
+// article/full-page: inlined when short enough for relays; selection: quote).
+function buildShortNote(
+  capture: Capture,
+  evaluation: Evaluation,
+  snippet: string,
+  longFormRef?: LongFormRef,
+) {
+  if (capture.format === 'selection') {
+    return createQuoteNoteEvent(capture, evaluation, snippet, longFormRef);
+  }
+  if (capture.format === 'bookmark') {
+    return createResourceNoteEvent(capture, evaluation, undefined, snippet, longFormRef);
+  }
+  // article / full-page — inline the body as before (self-sufficient note),
+  // truncating when it's too large for relays. A companion long-form, when
+  // present, is additionally linked (the note is never gutted).
+  let inline: string | undefined;
+  const bodyText = capture.bodyText?.trim() ?? '';
+  if (bodyText.length > 0) {
+    if (bodyText.length <= CAST_INLINE_BODY_MAX_CHARS) {
+      inline = bodyText;
+    } else {
+      const cut = bodyText.slice(0, CAST_INLINE_BODY_MAX_CHARS).replace(/\nhttps?:\/\/\S*$/, '');
+      inline = cut + '\n\n[Content truncated due to length]';
+    }
+  }
+  return createResourceNoteEvent(capture, evaluation, inline, snippet, longFormRef);
+}
+
 async function handleCast(
   data: { capture: Capture; evaluation: Evaluation },
 ): Promise<BackgroundResponse> {
   try {
-    const eventTemplate = buildCastTemplate(data.capture, data.evaluation);
-    // NIP-07 kind-1: always sign via the discerned web app so the wallet only
-    // ever approves discerned.online, not each site the overlay is used on.
-    // The web app signs silently (no modal) — window.nostr.signEvent is called
-    // automatically when DISCERNED_BRIDGE_PENDING_SIGN arrives.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const signedEvent: any = currentAuthState.type === 'pro'
-      ? await signEventViaWebApp(eventTemplate)
-      : await signEvent(eventTemplate);
-    const publishResult = await publishWithMinimum(signedEvent);
+    const { capture, evaluation } = data;
+    const relays = await resolveActiveRelays();
+    const authorPubkey = resolveAuthorPubkey();
+    const snippet = buildDiscernedSnippet(evaluation, authorPubkey, relays);
 
+    // NIP-07 kind-1/30023: always sign via the discerned web app so the wallet
+    // only ever approves discerned.online, not each site the overlay is used on.
+    // The web app signs silently (no modal) — window.nostr.signEvent is called
+    // automatically when DISCERNED_BRIDGE_PENDING_SIGN arrives. Kind-agnostic:
+    // the PendingSignModal signs whatever template arrives.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sign = (t: Parameters<typeof signEvent>[0]): Promise<any> =>
+      currentAuthState.type === 'pro' ? signEventViaWebApp(t) : signEvent(t);
+
+    const markdown = longFormMarkdownFor(capture);
+    const hasLongForm = !!markdown;
+
+    // A companion long-form's coordinate is 30023:<pubkey>:<capture.id> — it
+    // needs only the author pubkey, NOT a signed event. Deriving the ref up front
+    // (when the pubkey is known) decouples the two signs: neither has to be
+    // signed before the other, so the order carries no meaning here.
+    let longFormRef: LongFormRef | undefined;
+    if (hasLongForm && authorPubkey) {
+      longFormRef = {
+        coord: `30023:${authorPubkey}:${capture.id}`,
+        naddr: naddrEncode({ identifier: capture.id, pubkey: authorPubkey, kind: 30023, relays: relays.slice(0, 2) }),
+        relay: relays[0],
+      };
+    }
+
+    // Build + sign the kind-1 note. It references the long-form via longFormRef
+    // when the pubkey was known up front.
+    const noteTemplate = buildShortNote(capture, evaluation, snippet, longFormRef);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const signedNote: any = await sign(noteTemplate);
+
+    // Build + sign the companion long-form (best-effort). A failure here never
+    // fails the cast — the note is the feed-of-record. (Note + long-form share
+    // the signer, so their pubkeys match; if the ref wasn't derived up front,
+    // the note simply carries no 'a' link and the feed dedups heuristically.)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let signedLongForm: any = null;
+    if (hasLongForm) {
+      try {
+        const template = createLongFormEvent(capture, evaluation, markdown!, snippet);
+        signedLongForm = await sign(template);
+      } catch (err) {
+        signedLongForm = null;
+        log(LL.WARN, 'Long-form build/sign failed — casting note only:', err, 'url:', capture.url);
+      }
+    }
+
+    // Publish. Note first, long-form best-effort.
+    const publishResult = await publishWithMinimum(signedNote);
     if (!publishResult.success) {
       const health = getRelayHealth(publishResult.results);
       throw new Error(`Failed to cast signal (${health.healthy}/${health.total} relays)`);
     }
-
     const health = getRelayHealth(publishResult.results);
     log(LL.NORMAL, `Successfully cast to ${health.healthy}/${health.total} relays`);
+
+    if (signedLongForm) {
+      try {
+        const lfResult = await publishWithMinimum(signedLongForm);
+        const lfHealth = getRelayHealth(lfResult.results);
+        if (lfResult.success) {
+          log(LL.NORMAL, `Published long-form to ${lfHealth.healthy}/${lfHealth.total} relays`);
+        } else {
+          log(LL.WARN, `Long-form publish under threshold (${lfHealth.healthy}/${lfHealth.total}) — note cast succeeded`, 'url:', capture.url);
+        }
+      } catch (err) {
+        log(LL.WARN, 'Long-form publish failed — note cast succeeded:', err, 'url:', capture.url);
+      }
+    }
 
     const stored = await chrome.storage.local.get(STORAGE_KEYS.CAST_COUNT);
     const prev = (stored[STORAGE_KEYS.CAST_COUNT] as number | undefined) ?? 0;
@@ -1071,42 +1198,12 @@ async function handleCast(
 
     return {
       success: true,
-      data: { eventId: signedEvent.id, relays: publishResult.results },
+      data: { eventId: signedNote.id, relays: publishResult.results },
     };
   } catch (error) {
     log(LL.ERROR, 'Cast error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Cast failed' };
   }
-}
-
-/**
- * Build the kind-1 event template for the given Capture. Selection casts include the
- * quoted text inline (as today). Bookmark casts URL-summary only. Article / simplified
- * / full-page casts URL-summary by default; if `bodyText` is short enough to safely
- * fit on relays, the body is inlined too.
- */
-function buildCastTemplate(capture: Capture, evaluation: Evaluation) {
-  if (capture.format === 'selection') {
-    return createQuoteNoteEvent(capture, evaluation);
-  }
-  if (capture.format === 'bookmark') {
-    return createResourceNoteEvent(capture, evaluation);
-  }
-  // article / full-page
-  const bodyText = capture.bodyText?.trim() ?? '';
-  let inline: string | undefined;
-  if (bodyText.length > 0) {
-    if (bodyText.length <= CAST_INLINE_BODY_MAX_CHARS) {
-      inline = bodyText;
-    } else {
-      // Drop a trailing URL line the cut may have severed mid-URL — a partial
-      // image URL is noise, and appendImageUrls re-appends any image URL that
-      // no longer appears intact in the content.
-      const cut = bodyText.slice(0, CAST_INLINE_BODY_MAX_CHARS).replace(/\nhttps?:\/\/\S*$/, '');
-      inline = cut + '\n\n[Content truncated due to length]';
-    }
-  }
-  return createResourceNoteEvent(capture, evaluation, inline);
 }
 
 // ── Signing ─────────────────────────────────────────────────────────────────
@@ -1275,10 +1372,22 @@ async function signEventViaWebApp(
   if (live?.id !== undefined) {
     tabId = live.id;
   } else {
+    // Cold start — no discerned tab open yet. This is the first cast of the
+    // session (and often the wallet's first-ever approval of this origin).
+    // nos2x renders a BLANK/stuck approval popup if window.nostr.signEvent fires
+    // before the signing tab is the active tab in a FOCUSED window. So we open
+    // the tab active, focus its window, and confirm the content script is live
+    // BEFORE pushing the sign — the wallet then parents its popup to a visible,
+    // focused page. (The wallet may prompt again on later casts if the user
+    // approved "just this time" rather than "forever"; this path handles every
+    // such cold prompt, not just the first.)
     const base = await resolveBaseUrl();
     const tab = await chrome.tabs.create({ url: `${base}/`, active: true });
     if (tab.id === undefined) throw new Error('Failed to open discerned tab');
     tabId = tab.id;
+    if (tab.windowId !== undefined) {
+      await chrome.windows.update(tab.windowId, { focused: true }).catch(() => { /* non-fatal */ });
+    }
     await waitForContentScript(tabId);
   }
 

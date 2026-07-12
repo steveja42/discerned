@@ -84,6 +84,16 @@ export interface Capture {
   // appended to the note content so all images render in Nostr clients
   // (data: URIs stay in bodyHtml/selectionText for the private clip).
   imageUrls?: string[];
+  // Markdown for a companion kind-30023 long-form, converted from the capture
+  // HTML in the content script (turndown needs a DOM the background SW lacks)
+  // just before casting. Present only for long-form-eligible captures; not
+  // persisted to IndexedDB and not part of any web-bridge/parse shape.
+  longFormMarkdown?: string;
+  // long-form (kind 30023) — set by the web app's parseEvent when it ingests a
+  // NIP-23 event; the extension does not populate these on capture.
+  summary?: string;    // NIP-23 `summary` tag
+  markdown?: string;   // NIP-23 event content (snippet-stripped), rendered as markdown
+  longFormId?: string; // NIP-23 `d` tag (== the source Capture.id)
   // cast feed only — author of the published Nostr event (set by the web app's parseEvent)
   authorPubkey?: string;
 }
@@ -247,6 +257,20 @@ export const ACTIVE_RELAYS: readonly string[] = __DISCERNED_TEST_BUILD__
 // Min ACKs for publish success — derived from relay count, capped at 2 so
 // production still requires 2 while a single local relay needs only 1.
 export const MIN_PUBLISH_ACKS = Math.min(ACTIVE_RELAYS.length, 2);
+
+// ── Attribution snippet sentinels (mirrored ext↔web, keep in sync) ───────────
+// Every cast prepends a human-readable "Discerned by nostr:… — category · rating
+// · [qualifiers]" line so third-party Nostr clients show attribution. The line
+// is bracketed by these PURELY INVISIBLE sentinel markers so discerned's own web
+// app can strip the whole block by exact boundary before rendering — it renders
+// those axes from `l` tags via its glyph UI instead. The markers are runs of
+// invisible-math codepoints (U+2061 FUNCTION APPLICATION, U+2062 INVISIBLE
+// TIMES, U+2063 INVISIBLE SEPARATOR, U+2064 INVISIBLE PLUS); they render nothing
+// in every client and cannot occur in normal captured content. Written as \u
+// escapes so no editor can silently eat them. The web app mirror lives in
+// discerned-web/lib/nostr/strip-snippet.ts — if you change these, change both.
+export const SNIPPET_SENTINEL_OPEN = '⁣⁡⁢⁣';  // invisible open marker
+export const SNIPPET_SENTINEL_CLOSE = '⁢⁡⁣⁢'; // invisible close marker
 
 // ── Runtime relay mode (dev toggle) ──────────────────────────────────────────
 // A 'local' | 'production' preference persisted in chrome.storage.local under

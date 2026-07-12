@@ -1,6 +1,7 @@
 // Nostr relay subscription for the public Cast feed.
-// Subscribes to kind:1 events tagged #discerned across the default relay set.
-// Returns a cleanup function that closes the subscription and pool on unmount.
+// Subscribes to kind:1 notes AND kind:30023 long-form articles tagged #discerned
+// across the default relay set. Returns a cleanup function that closes the
+// subscription and pool on unmount.
 
 import { SimplePool, type Event, type Filter } from 'nostr-tools';
 import { getActiveRelays } from '@/lib/constants';
@@ -13,7 +14,7 @@ export function subscribeFeed(
   const relays = [...getActiveRelays()];
   log(LL.NORMAL, `[nostr] subscribeFeed connecting to ${relays.length} relay(s):`, relays);
   const pool = new SimplePool();
-  const filter: Filter = { kinds: [1], '#t': ['discerned'], limit: 50 };
+  const filter: Filter = { kinds: [1, 30023], '#t': ['discerned'], limit: 50 };
   const sub = pool.subscribeMany(
     relays,
     filter,

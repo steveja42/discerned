@@ -20,12 +20,14 @@
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
     "nostr-tools": "^2.7.2",
-    "terser": "^5.46.0"
+    "terser": "^5.46.0",
+    "turndown": "^7.2.0"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.3.0",
     "@types/chrome": "^0.0.268",
     "@types/node": "^20.11.19",
+    "@types/turndown": "^5.0.5",
     "@typescript-eslint/eslint-plugin": "^8.56.0",
     "@typescript-eslint/parser": "^8.56.0",
     "eslint": "^10.0.1",

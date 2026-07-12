@@ -23,6 +23,11 @@ export interface Capture {
   thumbnail?: string | null;      // may be an inlined data: URI (private clip render)
   thumbnailUrl?: string | null;   // original http(s) URL — cast as the `image` tag (mirrors discerned-ext)
   imageUrls?: string[];           // content image URLs (any site), cast as NIP-92 imeta tags (mirrors discerned-ext)
+  // long-form (kind 30023) — populated by parseEvent from a NIP-23 event
+  summary?: string;               // NIP-23 `summary` tag
+  markdown?: string;              // NIP-23 event content (snippet-stripped), rendered as markdown
+  longFormId?: string;            // NIP-23 `d` tag (== the source clip id)
+  kind?: number;                  // the source Nostr event kind (1 or 30023); used for feed dedup
   // cast feed only — author of the published Nostr event (set by parseEvent)
   authorPubkey?: string;
 }

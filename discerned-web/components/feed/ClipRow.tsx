@@ -39,6 +39,28 @@ function favColor(domain: string): string {
   return `oklch(0.30 0.08 ${hue})`;
 }
 
+// A one-line plain-text excerpt for the list row. Prefers a selection quote or
+// cast body; falls back to the long-form markdown (kind 30023 clips carry only
+// `markdown`) with the syntax stripped to readable prose.
+function rowExcerpt(capture: ClipData['capture']): string | null {
+  if (capture.selectionText) return capture.selectionText.replace(/<[^>]*>/g, '');
+  if (capture.bodyText) {
+    // Cast bodies interleave bare image-URL lines at the images' in-article
+    // positions — drop them from the text excerpt.
+    return capture.bodyText.replace(/^https?:\/\/\S+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  if (capture.markdown) {
+    return capture.markdown
+      .replace(/^#{1,6}\s+/gm, '')            // heading markers
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')   // images
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // links → link text
+      .replace(/[*_`>#-]/g, ' ')              // residual md punctuation
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+  return null;
+}
+
 export default function ClipRow({
   clip, selected, onClick, glyphVariant = 'bars', author,
   isSelectMode = false, isSelected = false, onSelect,
@@ -87,15 +109,10 @@ export default function ClipRow({
           variant={glyphVariant}
         />
         <h3 className="clip-title">{capture.title}</h3>
-        {(capture.selectionText || capture.bodyText) && (
-          <p className="clip-excerpt">
-            {capture.selectionText
-              ? capture.selectionText.replace(/<[^>]*>/g, '')
-              // Cast bodies interleave bare image-URL lines at the images'
-              // in-article positions — drop them from the text excerpt.
-              : capture.bodyText?.replace(/^https?:\/\/\S+$/gm, '').replace(/\n{3,}/g, '\n\n').trim()}
-          </p>
-        )}
+        {(() => {
+          const excerpt = rowExcerpt(capture);
+          return excerpt ? <p className="clip-excerpt">{excerpt}</p> : null;
+        })()}
         {capture.note && <div className="clip-note">{capture.note}</div>}
       </div>
     </article>
