@@ -6,7 +6,6 @@ import {
   createResourceNoteEvent,
   createQuoteNoteEvent,
   buildDiscernedSnippet,
-  deriveSummary,
   sourceHtmlForLongForm,
   finalizeEventWithPrivateKey,
   validateEvent,
@@ -46,12 +45,13 @@ describe('createLongFormEvent (kind 30023)', () => {
     expect(extractTagValue(ev, 'd')).toBe(artFx.capture.id);
   });
 
-  it('emits title, summary, published_at and discerned axis tags', () => {
+  it('emits title, published_at and discerned axis tags (no summary tag)', () => {
     const capture: Capture = { ...artFx.capture, note: 'A concise gloss.' };
     const template = createLongFormEvent(capture, artFx.evaluation, LONG_MD);
     const ev = finalizeEventWithPrivateKey(template, DETERMINISTIC_SK);
     expect(extractTagValue(ev, 'title')).toBe(capture.title);
-    expect(extractTagValue(ev, 'summary')).toBe('A concise gloss.');
+    // The summary tag is intentionally dropped (Nostrudel rendered it awkwardly).
+    expect(extractTagValue(ev, 'summary')).toBeNull();
     expect(extractTagValue(ev, 'published_at')).toBe(String(Math.floor(capture.timestamp / 1000)));
     // discerned axes ride along via baseEvaluationTags
     expect(extractTagValue(ev, 'r')).toBe(capture.url);
@@ -67,7 +67,7 @@ describe('createLongFormEvent (kind 30023)', () => {
   });
 
   it('prepends the sentinel-wrapped snippet when supplied', () => {
-    const snippet = buildDiscernedSnippet(artFx.evaluation, PUBKEY_HEX, RELAYS);
+    const snippet = buildDiscernedSnippet(artFx.evaluation);
     const template = createLongFormEvent(artFx.capture, artFx.evaluation, LONG_MD, snippet);
     expect(template.content.startsWith(SNIPPET_SENTINEL_OPEN)).toBe(true);
     expect(template.content).toContain(SNIPPET_SENTINEL_CLOSE);
@@ -78,51 +78,59 @@ describe('createLongFormEvent (kind 30023)', () => {
     const bookmark: Capture = { ...artFx.capture, format: 'bookmark' };
     expect(() => createLongFormEvent(bookmark, artFx.evaluation, LONG_MD)).toThrow();
   });
+
+  it('strips a leading duplicate title heading + hero image from the markdown', () => {
+    const title = 'My Great Article';
+    const heroTag = 'https://cdn.example.com/hero.jpg?w=1600&h=900&fit=crop';
+    const heroInMd = 'https://cdn.example.com/hero.jpg?fit=crop&w=1600&h=900'; // same image, reordered query
+    const capture: Capture = { ...artFx.capture, title, thumbnailUrl: heroTag };
+    const md = `# My Great Article\n\n![hero](${heroInMd})\n\nThe real article body starts here.`;
+    const ev = finalizeEventWithPrivateKey(
+      createLongFormEvent(capture, artFx.evaluation, md),
+      DETERMINISTIC_SK,
+    );
+    // Tags still carry the title + image for the client to render as heading/hero.
+    expect(extractTagValue(ev, 'title')).toBe(title);
+    expect(extractTagValue(ev, 'image')).toBe(heroTag);
+    // The markdown body no longer repeats them.
+    expect(ev.content).not.toContain('# My Great Article');
+    expect(ev.content).not.toContain(heroInMd);
+    expect(ev.content).toContain('The real article body starts here.');
+  });
+
+  it('keeps a leading heading that does NOT match the title', () => {
+    const md = '# A Different Section Heading\n\nBody.';
+    const ev = finalizeEventWithPrivateKey(
+      createLongFormEvent({ ...artFx.capture, title: 'Unrelated Title' }, artFx.evaluation, md),
+      DETERMINISTIC_SK,
+    );
+    expect(ev.content).toContain('# A Different Section Heading');
+  });
 });
 
 describe('buildDiscernedSnippet', () => {
-  it('includes a nostr: mention when the pubkey is known', () => {
-    const s = buildDiscernedSnippet(artFx.evaluation, PUBKEY_HEX, RELAYS);
-    expect(s).toContain('Discerned by nostr:');
+  it('reads "Discerned → … in Category" with no author mention', () => {
+    const s = buildDiscernedSnippet({ ...artFx.evaluation, category: 'Tech' });
+    expect(s).toContain('Discerned →');
+    expect(s).toContain('in Tech');
+    expect(s).not.toContain('Discerned by');
+    expect(s).not.toContain('Discerned —');
+    expect(s).not.toContain('nostr:');
     expect(s.startsWith(SNIPPET_SENTINEL_OPEN)).toBe(true);
     expect(s.endsWith(SNIPPET_SENTINEL_CLOSE)).toBe(true);
   });
 
-  it('omits the mention gracefully when the pubkey is unknown', () => {
-    const s = buildDiscernedSnippet(artFx.evaluation, undefined, RELAYS);
-    expect(s).toContain('Discerned by');
-    expect(s).not.toContain('nostr:');
-    expect(s).toContain(artFx.evaluation.category);
-  });
-
-  it('includes the signal only when set', () => {
-    const rated = buildDiscernedSnippet({ ...artFx.evaluation, signal: 'Worthwhile' }, PUBKEY_HEX);
-    expect(rated).toContain('Worthwhile');
-    const unrated = buildDiscernedSnippet({ ...artFx.evaluation, signal: undefined }, PUBKEY_HEX);
+  it('includes the signal before "in category" only when set', () => {
+    const rated = buildDiscernedSnippet({ ...artFx.evaluation, signal: 'Worthwhile', category: 'Tech' });
+    expect(rated).toMatch(/★+ Worthwhile in Tech/);
+    const unrated = buildDiscernedSnippet({ ...artFx.evaluation, signal: undefined, category: 'Tech' });
     expect(unrated).not.toContain('★');
+    expect(unrated).toContain('in Tech');
   });
 
   it('lists qualifiers when present', () => {
-    const s = buildDiscernedSnippet(
-      { ...artFx.evaluation, qualifiers: ['Primary Source', 'Timeless'] },
-      PUBKEY_HEX,
-    );
+    const s = buildDiscernedSnippet({ ...artFx.evaluation, qualifiers: ['Primary Source', 'Timeless'] });
     expect(s).toContain('[Primary Source, Timeless]');
-  });
-});
-
-describe('deriveSummary', () => {
-  it('prefers the note', () => {
-    expect(deriveSummary({ ...artFx.capture, note: 'my note' })).toBe('my note');
-  });
-  it('falls back to a body prefix', () => {
-    const body = 'word '.repeat(200).trim();
-    const s = deriveSummary({ ...artFx.capture, note: undefined, bodyText: body }, 100);
-    expect(s!.length).toBeLessThanOrEqual(101);
-    expect(s!.endsWith('…')).toBe(true);
-  });
-  it('returns undefined with no note and no body', () => {
-    expect(deriveSummary({ ...artFx.capture, note: undefined, bodyText: undefined })).toBeUndefined();
   });
 });
 
@@ -192,24 +200,49 @@ describe('kind-1 note becomes summary + link with a longFormRef', () => {
     relay: RELAYS[0],
   };
 
-  it('emits the a-tag + link line while KEEPING the inline body (note stays self-sufficient)', () => {
-    const capture: Capture = { ...artFx.capture, bodyText: 'This is the full article body text.' };
-    const snippet = buildDiscernedSnippet(artFx.evaluation, PUBKEY_HEX, RELAYS);
+  it('emits the a-tag + link line with a body TEASER (not the full body, no --- body --- marker)', () => {
+    const longBody = Array.from({ length: 12 }, (_, i) => `Paragraph ${i + 1}. ${'word '.repeat(20)}`).join('\n\n');
+    const capture: Capture = { ...artFx.capture, bodyText: longBody };
+    const snippet = buildDiscernedSnippet(artFx.evaluation);
     const template = createResourceNoteEvent(capture, artFx.evaluation, capture.bodyText, snippet, ref);
     const ev = finalizeEventWithPrivateKey(template, DETERMINISTIC_SK);
     expect(extractTagValue(ev, 'a')).toBe(ref.coord);
     expect(ev.content).toContain(`nostr:${ref.naddr}`);
     expect(ev.content).toContain('Read the full article');
-    // The note keeps its readable body AND links to the long-form.
-    expect(ev.content).toContain('--- body ---');
-    expect(extractTagValue(ev, 'body')).toBe('This is the full article body text.');
+    // No literal "--- body ---" marker; the full body is NOT inlined (teaser only).
+    expect(ev.content).not.toContain('--- body ---');
+    expect(ev.content).toContain('Paragraph 1.');
+    expect(ev.content).not.toContain('Paragraph 12.');
+    expect(ev.content).toContain('…');
+    // With a long-form companion, the note omits the `body` tag (full body lives
+    // in the 30023).
+    expect(extractTagValue(ev, 'body')).toBeNull();
+    // No duplicated "Discerned: …" summary line — the snippet carries attribution.
+    expect(ev.content).not.toMatch(/Discerned:/);
     // Snippet still leads the content.
     expect(ev.content.startsWith(SNIPPET_SENTINEL_OPEN)).toBe(true);
   });
 
+  it('drops a leading body line that duplicates the title', () => {
+    const title = 'I used a $40 OBD-II scanner and saved hundreds';
+    const body = `${title}\n\nWe have all experienced this situation.\n\nSecond paragraph.`;
+    const capture: Capture = { ...artFx.capture, title, bodyText: body };
+    const snippet = buildDiscernedSnippet(artFx.evaluation);
+    const ev = finalizeEventWithPrivateKey(
+      createResourceNoteEvent(capture, artFx.evaluation, body, snippet),
+      DETERMINISTIC_SK,
+    );
+    // The headline appears once as the title line, NOT again as the first body line.
+    const occurrences = ev.content.split(title).length - 1;
+    expect(occurrences).toBe(1);
+    expect(ev.content).toContain('We have all experienced this situation.');
+    // The `body` tag is also deduped.
+    expect(extractTagValue(ev, 'body')).not.toMatch(new RegExp(`^${title.replace(/[$()]/g, '\\$&')}`));
+  });
+
   it('selection note also supports the longFormRef + snippet', () => {
     const selFx = loadFixture((c) => c.format === 'selection');
-    const snippet = buildDiscernedSnippet(selFx.evaluation, PUBKEY_HEX, RELAYS);
+    const snippet = buildDiscernedSnippet(selFx.evaluation);
     const template = createQuoteNoteEvent(selFx.capture, selFx.evaluation, snippet, ref);
     const ev = finalizeEventWithPrivateKey(template, DETERMINISTIC_SK);
     expect(extractTagValue(ev, 'a')).toBe(ref.coord);

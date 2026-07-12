@@ -7,7 +7,6 @@
 
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { EventTemplate, NostrEvent } from 'nostr-tools/core';
-import { npubEncode, nprofileEncode } from 'nostr-tools/nip19';
 import type { Capture, Evaluation } from '@/shared/types';
 import { signalRank, SNIPPET_SENTINEL_OPEN, SNIPPET_SENTINEL_CLOSE } from '@/shared/types';
 
@@ -44,33 +43,23 @@ function baseEvaluationTags(capture: Capture, evaluation: Evaluation): string[][
   return tags;
 }
 
-// First content line, e.g. "Discerned: ★★★★ Worthwhile — Philosophy";
-// unrated clips carry just "Discerned: Philosophy".
-function evaluationSummary(evaluation: Evaluation): string {
-  if (!evaluation.signal) return `Discerned: ${evaluation.category}`;
-  return `Discerned: ${'★'.repeat(signalRank(evaluation.signal))} ${evaluation.signal} — ${evaluation.category}`;
-}
-
 function appendNoteToContent(content: string, capture: Capture): string {
   if (!capture.note || capture.note.trim().length === 0) return content;
   return `${content}\n\n— ${capture.note}`;
 }
 
-// Content images — publish every image as a real URL (never base64). Emit one
-// NIP-92 `imeta` tag per image for modern clients (Primal/Damus render a
-// gallery). Article bodies already carry the URLs interleaved at their
-// in-article positions (proseText), so clients that auto-embed image URLs in
-// text render them in place; only URLs NOT already in the content (tweet
-// casts, selections, bodies truncated past a URL) get appended at the end.
-function appendImageUrls(tags: string[][], contentLines: string[], capture: Capture): void {
+// Content images — publish every image as a real URL (never base64) as one
+// NIP-92 `imeta` tag per image. Modern clients (Primal/Damus/Nostrudel) render
+// a gallery from these tags. We deliberately do NOT append bare image-URL lines
+// to the content: the long-form markdown already embeds them as ![](url), and a
+// teaser/short note has no room — appending them just produced an ugly wall of
+// URLs at the bottom of the cast (and duplicated images whose query-params
+// differed from the inline ones).
+function appendImageUrls(tags: string[][], _contentLines: string[], capture: Capture): void {
   const urls = (capture.imageUrls ?? []).filter(u => /^https?:/i.test(u));
-  if (urls.length === 0) return;
   for (const u of urls) {
     tags.push(['imeta', `url ${u}`]);
   }
-  const existing = contentLines.join('\n');
-  const missing = urls.filter(u => !existing.includes(u));
-  if (missing.length > 0) contentLines.push('', ...missing);
 }
 
 // First http(s) image URL to cast as the `image` tag — never a data: URI (they
@@ -100,6 +89,84 @@ function appendLongFormRef(tags: string[][], contentLines: string[], ref?: LongF
   contentLines.push('', `Read the full article → nostr:${ref.naddr}`);
 }
 
+// Chars to cap a note's inline body at. Bodies longer than this are teasered.
+const NOTE_TEASER_MAX_CHARS = 600;
+
+// Many article extractions include the page's <h1> as the first line of the
+// body — which duplicates the note's title line. Drop a leading body line that
+// matches the title (case/space/punctuation-insensitive) so the note doesn't
+// show the headline twice.
+function stripLeadingTitle(bodyText: string | undefined, title: string): string | undefined {
+  const body = bodyText?.trim();
+  if (!body) return body ?? undefined;
+  const norm = (s: string) => s.trim().toLowerCase().replace(/[\s\p{P}]+/gu, ' ').trim();
+  const t = norm(title);
+  if (!t) return body;
+  // Split off the first block (up to the first blank line or first newline).
+  const nl = body.indexOf('\n');
+  const firstLine = (nl === -1 ? body : body.slice(0, nl)).trim();
+  if (norm(firstLine) === t) {
+    return body.slice(firstLine.length).replace(/^\s+/, '');
+  }
+  return body;
+}
+
+// A short teaser for a note that links to a companion long-form: the first few
+// paragraphs of the plain-text body, capped, ending with an ellipsis. Bare
+// image-URL lines (interleaved by proseText) are dropped from the teaser.
+function bodyTeaser(bodyText: string | undefined, maxChars = NOTE_TEASER_MAX_CHARS): string | undefined {
+  const body = bodyText?.trim();
+  if (!body) return undefined;
+  const paras = body
+    .split(/\n{2,}/)
+    .map(p => p.trim())
+    .filter(p => p.length > 0 && !/^https?:\/\/\S+$/i.test(p));
+  if (paras.length === 0) return undefined;
+  let out = '';
+  for (const p of paras) {
+    if (out.length > 0 && (out.length + p.length + 2) > maxChars) break;
+    out = out.length === 0 ? p : `${out}\n\n${p}`;
+    if (out.length >= maxChars) break;
+  }
+  if (out.length > maxChars) out = out.slice(0, maxChars).replace(/\s+\S*$/, '');
+  return out.length < body.length ? `${out}…` : out;
+}
+
+// The path portion of a URL (before '?'), lowercased — for comparing two URLs
+// that point at the same image but differ in query params (CDN resize tokens).
+function urlBase(u: string): string {
+  return u.split('?')[0].toLowerCase();
+}
+
+// NIP-23 clients render the `title` and `image` tags as a heading + hero banner
+// ABOVE the article body. If the markdown ALSO leads with its own `# title` and
+// hero `![](image)`, they show twice. Strip a leading title heading (matching
+// the title tag) and a leading hero image (matching the image tag by URL base
+// path) from the markdown so the client renders each once, from the tags.
+function stripLeadingArticleChrome(markdown: string, title: string, imageUrl?: string): string {
+  const norm = (s: string) => s.trim().toLowerCase().replace(/[\s\p{P}]+/gu, ' ').trim();
+  const t = norm(title);
+  const imgBase = imageUrl ? urlBase(imageUrl) : '';
+  const lines = markdown.split('\n');
+  let i = 0;
+  // Walk leading blank lines / a title heading / the hero image (in any order,
+  // possibly interleaved with blanks), stopping at the first real body line.
+  let changed = true;
+  while (changed && i < lines.length) {
+    changed = false;
+    while (i < lines.length && lines[i].trim() === '') { i++; changed = true; }
+    if (i >= lines.length) break;
+    const line = lines[i];
+    // Leading "# Heading" matching the title.
+    const h = /^#{1,3}\s+(.*)$/.exec(line.trim());
+    if (h && t && norm(h[1]) === t) { i++; changed = true; continue; }
+    // Leading hero image ![alt](url [ "title"]) whose URL matches the image tag.
+    const img = /^!\[[^\]]*\]\(([^)\s]+)/.exec(line.trim());
+    if (img && imgBase && urlBase(img[1]) === imgBase) { i++; changed = true; continue; }
+  }
+  return lines.slice(i).join('\n').replace(/^\s+/, '');
+}
+
 /**
  * The sanitised HTML to convert to markdown for a long-form (kind-30023) body.
  * Article/full-page carry it in bodyHtml; selections carry it (sanitised, with
@@ -115,56 +182,33 @@ export function sourceHtmlForLongForm(capture: Capture): string | undefined {
   return undefined;
 }
 
-// A short summary for the NIP-23 `summary` tag: the user's own note when present
-// (their gloss is the best summary), else a word-boundary prefix of the body.
-export function deriveSummary(capture: Capture, maxChars = 300): string | undefined {
-  const note = capture.note?.trim();
-  if (note) return note.length > maxChars ? note.slice(0, maxChars).replace(/\s+\S*$/, '') + '…' : note;
-  const body = capture.bodyText?.trim();
-  if (!body) return undefined;
-  if (body.length <= maxChars) return body;
-  return body.slice(0, maxChars).replace(/\s+\S*$/, '') + '…';
-}
-
 /**
- * The "Discerned by …" attribution snippet prepended to every cast's content.
- * Wrapped in invisible sentinel markers (SNIPPET_SENTINEL_*) so discerned's own
- * web app strips it before rendering, while third-party Nostr clients show the
- * visible line. `authorPubkey` is the casting user's hex pubkey (or undefined
- * when not yet known — the mention is then omitted, never blocking the cast).
- * `relays` seed the nprofile mention so clients can find the author.
+ * The "Discerned → ★★★ Rating in Category · [qualifiers]" snippet prepended to
+ * every cast's content. Wrapped in invisible sentinel markers
+ * (SNIPPET_SENTINEL_*) so discerned's own web app strips it before rendering,
+ * while third-party Nostr clients show the visible line. No author mention — the
+ * client already shows the poster.
  */
-export function buildDiscernedSnippet(
-  evaluation: Evaluation,
-  authorPubkey?: string,
-  relays: readonly string[] = []
-): string {
-  const parts: string[] = ['Discerned by'];
-  if (authorPubkey) {
-    let mention: string;
-    try {
-      mention = relays.length > 0
-        ? nprofileEncode({ pubkey: authorPubkey, relays: relays.slice(0, 2) as string[] })
-        : npubEncode(authorPubkey);
-    } catch {
-      mention = '';
-    }
-    if (mention) parts.push(`nostr:${mention}`);
-  }
-  const meta: string[] = [];
-  if (evaluation.signal) {
-    meta.push(`${'★'.repeat(signalRank(evaluation.signal))} ${evaluation.signal}`);
-  }
-  meta.push(evaluation.category);
-  if (evaluation.qualifiers.length > 0) meta.push(`[${evaluation.qualifiers.join(', ')}]`);
-  const line = `${parts.join(' ')} — ${meta.join(' · ')}`;
+export function buildDiscernedSnippet(evaluation: Evaluation): string {
+  const rating = evaluation.signal
+    ? `${'★'.repeat(signalRank(evaluation.signal))} ${evaluation.signal} `
+    : '';
+  const parts = [`${rating}in ${evaluation.category}`];
+  if (evaluation.qualifiers.length > 0) parts.push(`[${evaluation.qualifiers.join(', ')}]`);
+  const line = `Discerned → ${parts.join(' · ')}`;
   return `${SNIPPET_SENTINEL_OPEN}${line}${SNIPPET_SENTINEL_CLOSE}`;
 }
 
-// Prepend the attribution snippet to event content when one is supplied.
+// The web-app CTA appended to the end of every cast's content, visible in
+// third-party Nostr clients. Not sentinel-wrapped — we WANT it shown everywhere,
+// including discerned's own feed is fine (it's a harmless self-link).
+const DISCERNED_CTA = 'View more discerns at https://discerned.online';
+
+// Prepend the attribution snippet + append the web-app CTA to event content.
 function withSnippet(content: string, snippet?: string): string {
-  if (!snippet) return content;
-  return `${snippet}\n\n${content}`;
+  const withCta = `${content}\n\n${DISCERNED_CTA}`;
+  if (!snippet) return withCta;
+  return `${snippet}\n\n${withCta}`;
 }
 
 /**
@@ -183,8 +227,9 @@ export function createQuoteNoteEvent(
 
   const quotedText = capture.selectionText ?? '';
 
+  // The snippet carries the rating/category attribution — no "Discerned: …"
+  // summary line here.
   const contentLines = [
-    evaluationSummary(evaluation),
     `> "${quotedText}"`,
     '',
     capture.url,
@@ -224,20 +269,23 @@ export function createResourceNoteEvent(
     throw new Error('createResourceNoteEvent does not accept selection format');
   }
 
-  // The note stays self-sufficient — it inlines the body as before (when short
-  // enough for relays). A companion long-form, when present, is ALSO linked via
-  // an `a` tag + a "Read the full article" line (appendLongFormRef) so long-form
-  // clients can open the full NIP-23 article, but the note is never gutted.
-  const inline = inlineBody;
+  // Drop a leading body line that just repeats the title (the article's <h1>),
+  // so the note doesn't show the headline twice.
+  const dedupedBody = stripLeadingTitle(inlineBody, capture.title);
+
+  // The snippet carries the rating/category attribution, so the content no
+  // longer repeats a "Discerned: …" summary line. Content: title, url, then a
+  // body. With a companion long-form the body is a short TEASER (first few
+  // paragraphs) plus a "Read the full article →" link — keeping the note small.
+  // Without one, the note inlines the (relay-safe) body as before.
+  const body = longFormRef ? bodyTeaser(dedupedBody) : dedupedBody;
 
   const lines = [
-    evaluationSummary(evaluation),
-    '',
     capture.title,
     capture.url,
   ];
-  if (inline && inline.trim().length > 0) {
-    lines.push('', '--- body ---', inline);
+  if (body && body.length > 0) {
+    lines.push('', body);
   }
 
   const tags = baseEvaluationTags(capture, evaluation);
@@ -252,8 +300,10 @@ export function createResourceNoteEvent(
   if (imageUrl) {
     tags.push(['image', imageUrl]);
   }
-  if (inline && inline.trim().length > 0) {
-    tags.push(['body', inline]);
+  // The `body` tag mirrors the note's inline body for the web app's parser; use
+  // the full (title-deduped) inline body when there's no long-form, else omit.
+  if (!longFormRef && dedupedBody && dedupedBody.length > 0) {
+    tags.push(['body', dedupedBody]);
   }
 
   const contentLines = [...lines];
@@ -293,13 +343,18 @@ export function createLongFormEvent(
   if (capture.title && capture.title.trim().length > 0) {
     tags.push(['title', capture.title]);
   }
-  const summary = deriveSummary(capture);
-  if (summary) tags.push(['summary', summary]);
+  // No `summary` tag — Nostrudel renders it awkwardly (before our snippet) and
+  // clients derive their own preview from the content anyway.
   tags.push(['published_at', String(Math.floor(capture.timestamp / 1000))]);
   const imageUrl = pickImageUrl(capture);
   if (imageUrl) tags.push(['image', imageUrl]);
 
-  const contentLines = withSnippet(markdownBody, snippet).split('\n');
+  // NIP-23 clients render the title + image tags as heading + hero above the
+  // body; strip a duplicate leading heading/hero from the markdown so they don't
+  // appear twice.
+  const dedupedMarkdown = stripLeadingArticleChrome(markdownBody, capture.title, imageUrl);
+
+  const contentLines = withSnippet(dedupedMarkdown, snippet).split('\n');
   appendImageUrls(tags, contentLines, capture);
 
   return {

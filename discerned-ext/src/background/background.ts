@@ -1120,7 +1120,7 @@ async function handleCast(
     const { capture, evaluation } = data;
     const relays = await resolveActiveRelays();
     const authorPubkey = resolveAuthorPubkey();
-    const snippet = buildDiscernedSnippet(evaluation, authorPubkey, relays);
+    const snippet = buildDiscernedSnippet(evaluation);
 
     // NIP-07 kind-1/30023: always sign via the discerned web app so the wallet
     // only ever approves discerned.online, not each site the overlay is used on.

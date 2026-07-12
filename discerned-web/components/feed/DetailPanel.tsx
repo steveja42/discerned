@@ -303,9 +303,16 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
         // through the same .clip-body prose styles. Images resolve from the
         // markdown's http(s) URLs; react-markdown never emits raw HTML by
         // default, so this is safe without an extra sanitiser pass.
+        //
+        // The extension strips the leading title heading + hero image from the
+        // markdown (NIP-23 clients render those from the title/image tags to
+        // avoid duplication). The panel head already shows the title, so we only
+        // need to render the hero image (from the `image` tag → thumbnail) here,
+        // above the body.
         if (capture.markdown) {
           return (
             <div className="clip-body">
+              {thumbnail && <img className="longform-hero" src={thumbnail} alt="" />}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{capture.markdown}</ReactMarkdown>
             </div>
           );

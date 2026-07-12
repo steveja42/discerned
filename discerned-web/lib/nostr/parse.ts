@@ -101,10 +101,18 @@ export function parseEvent(event: Event): ClipData {
   const aTag = getTag(event, 'a');
   const longFormId = aTag?.startsWith('30023:') ? aTag.split(':')[2] : undefined;
 
-  // Prefer the explicit `title` tag; fall back for legacy casts that lack it.
-  // Resource-cast content is "Discerned: …\n\n<title>\n<url>", so line index 2
-  // is the title. Selection casts have no title — fall back to the URL.
-  const contentTitle = format !== 'selection' ? content.split('\n')[2]?.trim() : undefined;
+  // Prefer the explicit `title` tag (present on all current casts). Fall back
+  // for legacy/tagless casts: current resource-cast content (after snippet
+  // strip) is "<title>\n<url>\n\n<body>" (line 0 = title); older casts led with
+  // a "Discerned: …\n\n<title>\n<url>" summary (line 2 = title). Try both, skip
+  // a "Discerned:" line, and never treat the URL as the title.
+  let contentTitle: string | undefined;
+  if (format !== 'selection') {
+    const lines = content.split('\n').map((l) => l.trim());
+    const first = lines[0] ?? '';
+    const candidate = first.startsWith('Discerned:') ? lines[2] : first;
+    contentTitle = candidate && candidate !== url ? candidate : undefined;
+  }
   const title = getTag(event, 'title') ?? contentTitle ?? (url || 'Untitled');
 
   return {

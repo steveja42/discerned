@@ -87,17 +87,16 @@ describe('Nostr event factory', () => {
         }
       });
 
-      it('leads content with the evaluation summary line', () => {
+      it('leads content with the quote (selection) or title (resource) — no summary line', () => {
         const template = buildTemplate(fx.capture, fx.evaluation);
         const firstLine = template.content.split('\n')[0];
-        if (fx.evaluation.signal) {
-          const rank = ['Toxic', 'Noise', 'Passable', 'Worthwhile', 'Masterpiece']
-            .indexOf(fx.evaluation.signal) + 1;
-          expect(firstLine).toBe(
-            `Discerned: ${'★'.repeat(rank)} ${fx.evaluation.signal} — ${fx.evaluation.category}`,
-          );
+        // The rating/category attribution now lives in the snippet, not a
+        // "Discerned: …" content line.
+        expect(firstLine).not.toMatch(/^Discerned:/);
+        if (fx.capture.format === 'selection') {
+          expect(firstLine).toBe(`> "${fx.capture.selectionText ?? ''}"`);
         } else {
-          expect(firstLine).toBe(`Discerned: ${fx.evaluation.category}`);
+          expect(firstLine).toBe(fx.capture.title);
         }
       });
 
@@ -189,8 +188,10 @@ describe('Nostr event factory', () => {
   });
 
   // Casts publish every content image as a real URL — one NIP-92 imeta tag per
-  // image AND the URLs appended to the note content — never base64.
-  describe('capture images cast as imeta tags + content URLs', () => {
+  // image — never base64. Content images ride ONLY as NIP-92 imeta tags now;
+  // bare URL lines are no longer appended to content (they produced an ugly wall
+  // of URLs at the bottom of casts).
+  describe('capture images cast as imeta tags (no bare-URL content append)', () => {
     const artFx = fixtures.find((f) => f.capture.format === 'article');
     if (!artFx) throw new Error('no article fixture');
 
@@ -200,21 +201,23 @@ describe('Nostr event factory', () => {
       'https://pbs.twimg.com/media/CCC?format=webp&name=medium',
     ];
 
-    it('emits one imeta tag per image and lists the URLs in content', () => {
+    it('emits one imeta tag per image and does NOT append bare URL lines', () => {
       const capture: Capture = {
         ...artFx.capture,
+        bodyText: 'Just the article prose, no image URLs.',
         thumbnailUrl: photos[0],
         imageUrls: photos,
       };
       const ev = finalizeEventWithPrivateKey(
-        createResourceNoteEvent(capture, artFx.evaluation),
+        createResourceNoteEvent(capture, artFx.evaluation, capture.bodyText),
         DETERMINISTIC_SK,
       );
       // One imeta tag per image, each carrying "url <URL>".
       const imeta = extractTagValues(ev, 'imeta');
       expect(imeta).toEqual(photos.map((u) => `url ${u}`));
-      // Every URL also present in the visible content for auto-embedding clients.
-      for (const u of photos) expect(ev.content).toContain(u);
+      // URLs are NOT dumped into the content — no bare-URL-only lines.
+      const bareUrlLines = ev.content.split('\n').filter((l) => /^https:\/\/pbs\.twimg/.test(l.trim()));
+      expect(bareUrlLines).toEqual([]);
       // First image doubles as the legacy image tag.
       expect(extractTagValue(ev, 'image')).toBe(photos[0]);
     });
@@ -242,27 +245,6 @@ describe('Nostr event factory', () => {
       expect(extractTagValues(ev, 'imeta')).toEqual([]);
     });
 
-    it('does not re-append URLs already interleaved in the inline body', () => {
-      const interleavedBody = `First paragraph of the article.\n\n${photos[0]}\n\nSecond paragraph after the image.\n\n${photos[1]}`;
-      const capture: Capture = {
-        ...artFx.capture,
-        bodyText: interleavedBody,
-        imageUrls: [photos[0], photos[1], photos[2]],
-      };
-      const ev = finalizeEventWithPrivateKey(
-        createResourceNoteEvent(capture, artFx.evaluation, interleavedBody),
-        DETERMINISTIC_SK,
-      );
-      // All three still get imeta tags.
-      expect(extractTagValues(ev, 'imeta')).toEqual(photos.map((u) => `url ${u}`));
-      // Interleaved URLs appear exactly once (in place, not duplicated at the
-      // end); the URL missing from the body is appended.
-      expect(ev.content.split(photos[0]).length - 1).toBe(1);
-      expect(ev.content.split(photos[1]).length - 1).toBe(1);
-      expect(ev.content.split(photos[2]).length - 1).toBe(1);
-      expect(ev.content.indexOf(photos[2])).toBeGreaterThan(ev.content.indexOf('Second paragraph'));
-    });
-
     it('falls back to imageUrls[0] for the image tag when there is no thumbnail', () => {
       const capture: Capture = {
         ...artFx.capture,
@@ -277,7 +259,7 @@ describe('Nostr event factory', () => {
       expect(extractTagValue(ev, 'image')).toBe(photos[0]);
     });
 
-    it('selection casts publish imageUrls as imeta tags + content URLs too', () => {
+    it('selection casts publish imageUrls as imeta tags (data: URIs excluded)', () => {
       const selFx = fixtures.find((f) => f.capture.format === 'selection');
       if (!selFx) throw new Error('no selection fixture');
       const capture: Capture = {
@@ -290,9 +272,6 @@ describe('Nostr event factory', () => {
       );
       const imeta = extractTagValues(ev, 'imeta');
       expect(imeta).toEqual(photos.slice(0, 2).map((u) => `url ${u}`));
-      for (const u of photos.slice(0, 2)) expect(ev.content).toContain(u);
-      // The quoted text still leads the content, before the appended URLs.
-      expect(ev.content.indexOf('> "')).toBeLessThan(ev.content.indexOf(photos[0]));
       expect(JSON.stringify(ev)).not.toContain('data:image');
     });
   });
