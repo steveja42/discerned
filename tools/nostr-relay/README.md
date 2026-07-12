@@ -62,8 +62,42 @@ silently fall back to built-in defaults (ignoring our `max_event_bytes`, etc.).
   (already created). Keep the web app on `http://localhost:3000` — an `https://` page can't
   open a `ws://` socket (mixed content).
 
+## Previewing casts in real Nostr clients (`wss://` via `pnpm relay:tls`)
+
+To see how third-party clients render your notes and long-form articles **before** publishing
+to public relays, front the relay with a TLS endpoint so https-served web clients can connect
+(they're blocked from opening a plain `ws://` socket — mixed content).
+
+```powershell
+pnpm relay:local     # in one window — the actual relay on ws://localhost:7777
+pnpm relay:tls       # in another — adds wss://localhost:7778 (Caddy + mkcert cert)
+```
+
+`relay:tls` runs [Caddy](https://caddyserver.com) as a TLS terminator that reverse-proxies
+`wss://localhost:7778` → `ws://127.0.0.1:7777`, using an **mkcert**-issued cert your OS/browser
+trust store already trusts (no cert warning). The plain `ws://localhost:7777` endpoint keeps
+working unchanged; this only ADDS the `wss://` one. Both serve the same events. Ctrl+C in the
+`relay:tls` window to stop it. Prereqs: `caddy` + `mkcert` on PATH (run `mkcert -install` once
+if the cert dir is empty — `run-tls.ps1` does this automatically). Certs live under
+`tools/nostr-relay/certs/` (gitignored — per-machine).
+
+**Point a web client at it:** in **[nostrudel.ninja](https://nostrudel.ninja)** or
+**[coracle.social](https://coracle.social)** → relay settings → add `wss://localhost:7778`.
+Log in with the same npub you cast from and your notes + long-form (Reads) appear. Long-form
+articles show under the client's "Articles"/"Reads" section (kind 30023).
+
+**Mobile (Amethyst, etc.):** an Android phone won't trust your desktop's mkcert CA out of the
+box, and `localhost` on the phone isn't your PC. To test on a phone you'd install the mkcert
+root CA on the device AND expose the relay on your LAN IP (or a tunnel like Tailscale) with a
+cert whose SAN covers that host. Simplest desktop-only preview is a browser client above.
+
 ## Inspect what was cast
 
+- **Dump raw event JSON** (no install — uses Node's built-in WebSocket):
+  `node tools/dump-casts.mjs` (all `#discerned` notes + long-form),
+  `node tools/dump-casts.mjs 30023` (long-form only),
+  `node tools/dump-casts.mjs 1` (notes only). Prints each signed event as pretty JSON.
 - Watch the relay's stdout, or
-- `nak req -k 1 -t t=discerned ws://localhost:7777`, or
-- open the web feed at `http://localhost:3000`.
+- `nak req -k 1 -t t=discerned ws://localhost:7777` (if you have [nak](https://github.com/fiatjaf/nak)), or
+- open the web feed at `http://localhost:3000`, or
+- preview in a real Nostr client via `pnpm relay:tls` (see above).

@@ -8,7 +8,8 @@
     "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
     "test:live": "cross-env LIVE=1 playwright test -c tests/e2e/playwright.config.ts --grep @live",
     "pretest:e2e": "pnpm --filter=./discerned-ext build:test && pnpm --filter=./discerned-web build",
-    "relay:local": "powershell -ExecutionPolicy Bypass -File tools/nostr-relay/run.ps1"
+    "relay:local": "powershell -ExecutionPolicy Bypass -File tools/nostr-relay/run.ps1",
+    "relay:tls": "powershell -ExecutionPolicy Bypass -File tools/nostr-relay/run-tls.ps1"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
