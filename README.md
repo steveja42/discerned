@@ -5,7 +5,7 @@ A value attribution layer for the web. Capture content, evaluate it on three axe
 ## Sub-projects
 
 - **[discerned-ext/](./discerned-ext/)** — Chrome extension (Manifest V3). Capture, evaluate, and publish from any browser tab.
-- **[discerned-web/](./discerned-web/)** — Next.js companion web app deployed at [discerned.online](https://discerned.online). Public discernments feed plus a private Reading Room for clips delivered from the extension.
+- **[discerned-web/](./discerned-web/)** — Next.js companion web app deployed at [discerned.online](https://discerned.online). Public discerns feed plus a private Reading Room for clips delivered from the extension.
 - **[tests/](./tests/)** — Cross-project end-to-end test suite (Playwright) and shared HTML/clip fixtures.
 
 Each sub-project has its own README with stack, setup, and conventions. Read the relevant one before touching code in that project.

@@ -1,5 +1,5 @@
 // Global Nostr authentication state, shared via React context so every
-// consumer (HomeClient, TopBar wrappers, useBridgeAuth, etc.) sees the same
+// consumer (DiscernsClient, TopBar wrappers, useBridgeAuth, etc.) sees the same
 // auth instance. The home page should sign in via NIP-07 (window.nostr) on
 // its own — the extension bridge is only a presence indicator.
 //

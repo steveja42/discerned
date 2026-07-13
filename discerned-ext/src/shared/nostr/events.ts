@@ -202,7 +202,7 @@ export function buildDiscernedSnippet(evaluation: Evaluation): string {
 // The web-app CTA appended to the end of every cast's content, visible in
 // third-party Nostr clients. Not sentinel-wrapped — we WANT it shown everywhere,
 // including discerned's own feed is fine (it's a harmless self-link).
-const DISCERNED_CTA = 'View more discerns at https://discerned.online';
+const DISCERNED_CTA = 'View more discerns at https://discerned.online/discerns';
 
 // Prepend the attribution snippet + append the web-app CTA to event content.
 function withSnippet(content: string, snippet?: string): string {

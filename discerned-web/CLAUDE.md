@@ -4,8 +4,9 @@
 
 Companion web app for the Discerned Chrome extension, hosted at `discerned.online`. It is a **read-only** surface — clipping happens only in the extension, never here.
 
-Three routes:
-- `/` — public Discernments feed (Nostr `kind:1` events tagged `#discerned`)
+Routes:
+- `/` — client-side redirect to `/discerns` (static export — no server redirects; query string preserved for `?signin=1`)
+- `/discerns` — public Discerns feed (Nostr `kind:1` events tagged `#discerned`)
 - `/about` — brand/marketing page with HeroBeacon SVG
 - `/clips` — user's private Clips, delivered via extension postMessage bridge
 
@@ -80,8 +81,9 @@ The marker contract is defined extension-side in `discerned-ext/src/content/capt
 app/
   globals.css          ← all tokens + component styles
   layout.tsx           ← body class="style-studio"
-  page.tsx             ← home (mounts HomeClient)
-  HomeClient.tsx       ← client: feed + popover + modal
+  page.tsx             ← root: client redirect to /discerns
+  discerns/page.tsx    ← feed route (mounts DiscernsClient)
+  discerns/DiscernsClient.tsx ← client: feed + popover + modal
   about/page.tsx       ← HeroBeacon + philosophy copy
   clips/page.tsx
 components/

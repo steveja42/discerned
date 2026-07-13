@@ -1,4 +1,4 @@
-// Single row in the Discernments or Library clip list.
+// Single row in the Discerns or Library clip list.
 // Derives a deterministic favicon colour from the source domain so each site
 // gets a consistent avatar without fetching any external favicon service.
 

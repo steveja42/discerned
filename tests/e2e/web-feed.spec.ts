@@ -1,4 +1,4 @@
-// Mocks the public Nostr relay subscription used by HomeClient by intercepting
+// Mocks the public Nostr relay subscription used by DiscernsClient by intercepting
 // every wss:// WebSocket. On REQ, responds with a single signed Discerned
 // kind:1 event and EOSE. Asserts the event renders on the home feed.
 
@@ -41,7 +41,7 @@ test.describe('public feed — mocked Nostr relay', () => {
       try { localStorage.setItem('discerned.relayMode', 'production'); } catch { /* ignore */ }
     });
 
-    // Intercept any wss:// connection HomeClient opens via SimplePool.
+    // Intercept any wss:// connection DiscernsClient opens via SimplePool.
     await page.routeWebSocket(/^wss:\/\//, (ws) => {
       ws.onMessage((message: string | Buffer) => {
         const msg = typeof message === 'string' ? message : message.toString();
@@ -58,7 +58,7 @@ test.describe('public feed — mocked Nostr relay', () => {
       });
     });
 
-    await page.goto('/');
+    await page.goto('/discerns');
     // The feed renders one <article class="clip"> per kind:1 event. Scope to
     // that container — the title shows up in multiple child elements (.clip-title
     // and .clip-excerpt/.clip-note), so a page-wide getByText would be ambiguous.

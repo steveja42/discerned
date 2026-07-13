@@ -1,6 +1,6 @@
 // Sticky application topbar with brand mark, search input, nav links, and auth avatar.
 // When brandHasPopover is true, the beacon pulses to draw attention to the first-visit popover.
-// onBrandClick is wired by HomeClient to dismiss the popover and navigate to /about.
+// onBrandClick is wired by DiscernsClient to dismiss the popover and navigate to /about.
 
 'use client';
 
@@ -111,7 +111,7 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
       </div>
 
       <div className="topbar-right">
-        {navLink('/', 'Discernments')}
+        {navLink('/discerns', 'Discerns')}
         {extensionPresent && navLink('/clips', 'My Clips')}
         {navLink('/about', 'About')}
         <a

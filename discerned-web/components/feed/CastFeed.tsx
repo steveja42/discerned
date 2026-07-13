@@ -246,7 +246,7 @@ export default function CastFeed({ status, clips, searchQuery, follows = [], aut
     <main className="feed-col">
       <div className="feed-head">
         <div>
-          <h1 className="feed-title"><em>Discernments</em></h1>
+          <h1 className="feed-title"><em>Discerns</em></h1>
           <div className="feed-meta">
             {filtered.length} clips
             <span className="sep">·</span>

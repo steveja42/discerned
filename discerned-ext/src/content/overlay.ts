@@ -1923,10 +1923,10 @@ ${themeVarsBlock(this.effectiveTheme)}
     if (!loading) return;
     const { clipId, eventId } = opts;
     const libraryBtn = clipId
-      ? `<button class="open-library-btn">View in Clips →</button>` : '';
-    const discernmentBtn = eventId
-      ? `<button class="open-discernment-btn">View in discernment →</button>` : '';
-    const links = [libraryBtn, discernmentBtn].filter(Boolean).join('<br>');
+      ? `<button class="open-library-btn">View in My Clips →</button>` : '';
+    const discernBtn = eventId
+      ? `<button class="open-discern-btn">View in Discerns →</button>` : '';
+    const links = [libraryBtn, discernBtn].filter(Boolean).join('<br>');
     loading.innerHTML = `<div class="success">✓ ${this.escapeHtml(message)}${links ? `<br>${links}` : ''}<br><button class="dismiss-btn">Dismiss</button></div>`;
     if (clipId) {
       loading.querySelector('.open-library-btn')?.addEventListener('click', () => {
@@ -1935,7 +1935,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       });
     }
     if (eventId) {
-      loading.querySelector('.open-discernment-btn')?.addEventListener('click', () => {
+      loading.querySelector('.open-discern-btn')?.addEventListener('click', () => {
         chrome.runtime.sendMessage({ type: 'OPEN_HOME', eventId }).catch(() => {});
         this.hide();
       });
@@ -2472,11 +2472,11 @@ ${themeVarsBlock(this.effectiveTheme)}
       .loading p { color: var(--p-ink-2); font-size: 14px; }
       .success { color: var(--p-accent-ink); font-size: 18px; font-weight: 600; font-family: var(--p-mono); }
       .error   { color: var(--p-danger); font-size: 18px; font-weight: 600; font-family: var(--p-mono); }
-      .open-library-btn, .open-discernment-btn {
+      .open-library-btn, .open-discern-btn {
         margin-top: 10px; background: none; border: none; padding: 0;
         color: var(--p-accent-ink); font-size: 13px; cursor: pointer; text-decoration: underline;
       }
-      .open-library-btn:hover, .open-discernment-btn:hover { color: var(--p-accent); }
+      .open-library-btn:hover, .open-discern-btn:hover { color: var(--p-accent); }
       .dismiss-btn {
         margin-top: 8px; background: none; border: none; padding: 0;
         color: var(--p-ink-3); font-size: 12px; cursor: pointer; text-decoration: underline;

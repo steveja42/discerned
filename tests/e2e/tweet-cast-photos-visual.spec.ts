@@ -145,7 +145,7 @@ async function mockRelayWith(page: Page, event: NostrEvent): Promise<void> {
 }
 
 async function openDetailAndDecode(page: Page, rowText: string) {
-  await page.goto('/');
+  await page.goto('/discerns');
   const row = page.locator('article.clip', { hasText: rowText }).first();
   await row.waitFor({ state: 'visible', timeout: 10_000 });
   await row.click();

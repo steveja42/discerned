@@ -1,6 +1,6 @@
-// Client root for the home page (/). Wires together auth state, the live Cast feed,
-// the first-visit popover, and the sign-in modal. Brand clicks dismiss the popover
-// and navigate to /about.
+// Client root for the Discerns feed page (/discerns). Wires together auth state,
+// the live Cast feed, the first-visit popover, and the sign-in modal. Brand clicks
+// dismiss the popover and navigate to /about.
 
 'use client';
 
@@ -18,7 +18,7 @@ import { useFollowList } from '@/hooks/useFollowList';
 import { useAuthorProfiles } from '@/hooks/useAuthorProfiles';
 import { useReadCasts } from '@/hooks/useReadCasts';
 
-export default function HomeClient() {
+export default function DiscernsClient() {
   const router = useRouter();
   const { auth, signInPubkey } = useNostrAuth();
   const { showPopover, dismiss: dismissPopover } = useFirstVisit();
@@ -32,7 +32,7 @@ export default function HomeClient() {
 
   const handleBrandClick = () => {
     dismissPopover();
-    router.push('/');
+    router.push('/discerns');
   };
 
   const handleLearnMore = () => {

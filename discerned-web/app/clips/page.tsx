@@ -37,7 +37,7 @@ export default function LibraryPage() {
       <TopBar
         auth={auth}
         onSignIn={() => setSignInOpen(true)}
-        onBrandClick={() => router.push('/')}
+        onBrandClick={() => router.push('/discerns')}
         searchPlaceholder="Search your clips…"
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}

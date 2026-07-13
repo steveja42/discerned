@@ -146,21 +146,21 @@ async function resolveBaseUrl(): Promise<string> {
   return localTabs.length > 0 ? DISCERNED_BASE_URLS[1] : DISCERNED_BASE_URLS[0];
 }
 
-// Discernments home — match the bare base URL with optional trailing slash and
-// query/hash, but NOT subpaths like /clips or /about.
-const DISCERNMENTS_URL_PATTERNS = [
-  'https://discerned.online/',
-  'https://discerned.online/?*',
-  'https://discerned.online/#*',
-  'http://localhost:3000/',
-  'http://localhost:3000/?*',
-  'http://localhost:3000/#*',
+// Discerns feed — match the /discerns page with optional query/hash, but NOT
+// other subpaths like /clips or /about.
+const DISCERNS_URL_PATTERNS = [
+  'https://discerned.online/discerns',
+  'https://discerned.online/discerns?*',
+  'https://discerned.online/discerns#*',
+  'http://localhost:3000/discerns',
+  'http://localhost:3000/discerns?*',
+  'http://localhost:3000/discerns#*',
 ];
 
-async function openDiscernmentsTab(autoSignin?: boolean): Promise<void> {
+async function openDiscernsTab(autoSignin?: boolean): Promise<void> {
   const base = await resolveBaseUrl();
-  const url = autoSignin ? `${base}/?signin=1` : base;
-  const [existing] = await chrome.tabs.query({ url: DISCERNMENTS_URL_PATTERNS });
+  const url = autoSignin ? `${base}/discerns?signin=1` : `${base}/discerns`;
+  const [existing] = await chrome.tabs.query({ url: DISCERNS_URL_PATTERNS });
   if (existing?.id !== undefined) {
     await chrome.tabs.update(existing.id, { active: true, url: autoSignin ? url : undefined });
     if (existing.windowId !== undefined) {
@@ -423,9 +423,9 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
 
     case 'OPEN_HOME':
       // message.eventId is accepted for a future deep-link to the cast; for now we
-      // open the bare discernments feed (the just-cast event may not have propagated
+      // open the bare discerns feed (the just-cast event may not have propagated
       // to the subscribed relays yet, so deep-linking would risk a transient miss).
-      openDiscernmentsTab(message.autoSignin).catch(() => {});
+      openDiscernsTab(message.autoSignin).catch(() => {});
       return { success: true };
 
     case 'DISMISS_OVERLAY_NUDGE':

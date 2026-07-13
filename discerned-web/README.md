@@ -1,6 +1,6 @@
 # Discerned — Companion Web App
 
-A read-only companion surface for the [Discerned](https://discerned.online) Chrome extension. Browse the public Discernments feed on Nostr, explore your private Clips, and learn about the project.
+A read-only companion surface for the [Discerned](https://discerned.online) Chrome extension. Browse the public Discerns feed on Nostr, explore your private Clips, and learn about the project.
 
 **Clipping happens only in the extension.** This web app does not create clips.
 
@@ -10,7 +10,8 @@ A read-only companion surface for the [Discerned](https://discerned.online) Chro
 
 | Route | Purpose |
 |---|---|
-| `/` | Public Discernments feed — live `kind:1` Nostr events tagged `#discerned` |
+| `/` | Redirects to `/discerns` (client-side; query string preserved) |
+| `/discerns` | Public Discerns feed — live `kind:1` Nostr events tagged `#discerned` |
 | `/about` | Brand page — HeroBeacon SVG, philosophy copy |
 | `/clips` | Private Clips — delivered from the extension via postMessage bridge |
 
@@ -51,8 +52,9 @@ pnpm exec tsc --noEmit  # type-check
 |---|---|
 | [app/globals.css](app/globals.css) | Design tokens + all component styles (Studio theme) |
 | [app/layout.tsx](app/layout.tsx) | Root layout — `body.style-studio` |
-| [app/page.tsx](app/page.tsx) | Home route — mounts `HomeClient` |
-| [app/HomeClient.tsx](app/HomeClient.tsx) | Client component: feed, popover, sign-in modal |
+| [app/page.tsx](app/page.tsx) | Root route — client redirect to `/discerns` |
+| [app/discerns/page.tsx](app/discerns/page.tsx) | Discerns feed route — mounts `DiscernsClient` |
+| [app/discerns/DiscernsClient.tsx](app/discerns/DiscernsClient.tsx) | Client component: feed, popover, sign-in modal |
 | [app/not-found.tsx](app/not-found.tsx) | 404 page |
 | [app/about/page.tsx](app/about/page.tsx) | About / brand page — HeroBeacon + philosophy copy |
 | [app/clips/page.tsx](app/clips/page.tsx) | Clips route — extension bridge or install prompt |
@@ -65,7 +67,7 @@ pnpm exec tsc --noEmit  # type-check
 | [components/brand/HeroBeacon.tsx](components/brand/HeroBeacon.tsx) | Hero brand mark SVG |
 | [components/chrome/TopBar.tsx](components/chrome/TopBar.tsx) | Site-wide navigation bar |
 | [components/layout/ResizableLayout.tsx](components/layout/ResizableLayout.tsx) | Resizable two-pane layout |
-| [components/feed/CastFeed.tsx](components/feed/CastFeed.tsx) | Public Discernments feed list |
+| [components/feed/CastFeed.tsx](components/feed/CastFeed.tsx) | Public Discerns feed list |
 | [components/feed/ClipRow.tsx](components/feed/ClipRow.tsx) | Single clip row in the feed |
 | [components/feed/DetailPanel.tsx](components/feed/DetailPanel.tsx) | Clip detail side panel |
 | [components/feed/FilterStrip.tsx](components/feed/FilterStrip.tsx) | Feed filter controls |
