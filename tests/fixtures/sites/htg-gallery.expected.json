@@ -1,0 +1,18 @@
+{
+  "format": "article",
+  "url": "http://127.0.0.1:4173/htg-gallery.html",
+  "title": { "contains": "OBD-II scanner" },
+  "bodyText": {
+    "minLength": 50,
+    "contains": ["check engine light"]
+  },
+  "bodyHtml": {
+    "noScripts": true,
+    "hasImgs": true
+  },
+  "imageUrls": {
+    "minCount": 5,
+    "contains": ["2025-05-16_13-06-20_921.jpg", "w=750"],
+    "excludes": ["w=167", "w=120", "w=1920"]
+  }
+}

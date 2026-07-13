@@ -140,16 +140,62 @@ Write-Host 'Discerned local relay - ws://localhost:7777 (Ctrl+C to stop)'
 "@
   Set-Content -Path $launcher -Value $script -Encoding ascii
 
-  $wt = Get-Command wt.exe -ErrorAction SilentlyContinue
-  if ($wt) {
-    Start-Process wt.exe -ArgumentList @('powershell','-NoExit','-NoProfile','-File',$launcher)
-  } else {
-    Start-Process powershell -ArgumentList @('-NoExit','-NoProfile','-File',$launcher)
+  # Set-Content queues the write; it can return before the file is visible/unlocked
+  # on disk (more likely under AV scanning or parallel-task load, e.g. "dev: both"
+  # launching three tasks at once). Start-Process spawning the new console before
+  # that settles fails with "The system cannot find the file specified." Wait for
+  # the file to actually be readable before handing it to a new process.
+  $deadline = (Get-Date).AddSeconds(5)
+  while ((Get-Date) -lt $deadline) {
+    try {
+      $fs = [System.IO.File]::Open($launcher, 'Open', 'Read', 'None')
+      $fs.Close()
+      break
+    } catch {
+      Start-Sleep -Milliseconds 50
+    }
   }
+
+  # Launch directly via powershell.exe rather than wt.exe. Windows Terminal hands off
+  # each `wt.exe` invocation to a single running instance over COM; firing two `wt.exe`
+  # launches back-to-back (relay window + TLS window, below) can race that handoff and
+  # drop the -File argument entirely, which surfaces as a misleading "The system cannot
+  # find the file specified" even though the .ps1 is present on disk. Plain
+  # powershell.exe -> new conhost window has no such coalescing.
+  Start-Process powershell -ArgumentList @('-NoExit','-NoProfile','-File',$launcher)
 
   Write-Host "Relay launched in a separate window on ws://localhost:7777 (RUST_LOG=$logLevel)."
   Write-Host "Watch that window for the startup banner and a line per cast."
   Write-Host "Stop it with Ctrl+C in that window, or: $engine stop discerned-local-relay"
+
+  # A hidden Caddy instance from a previous run can outlive its launcher (Ctrl+C on
+  # the launching window doesn't reliably reach a detached -WindowStyle Hidden child),
+  # leaving it holding the admin API port (127.0.0.1:2019). The next "caddy run" then
+  # fails to bind and exits immediately - silently, since the window is hidden, so
+  # wss://7778 just doesn't come up with no visible error. Clear any stale instance
+  # first: try a graceful "caddy stop" (talks to the admin API), then fall back to
+  # killing whatever process still holds port 2019.
+  if (Get-Command caddy -ErrorAction SilentlyContinue) {
+    # "caddy stop" exits non-zero when no instance is running (the common case) -
+    # under $ErrorActionPreference = 'Stop' that throws a terminating NativeCommandError
+    # even with 2>$null, which would abort this whole script. Swallow it explicitly.
+    try { & caddy stop 2>$null | Out-Null } catch {}
+    Start-Sleep -Milliseconds 300
+    $stale = Get-NetTCPConnection -LocalPort 2019 -State Listen -ErrorAction SilentlyContinue
+    foreach ($conn in $stale) {
+      Write-Host "Clearing stale Caddy process (PID $($conn.OwningProcess)) still holding port 2019..."
+      Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+    }
+    if ($stale) { Start-Sleep -Milliseconds 300 }
+  }
+
+  # Also launch the TLS front (wss://localhost:7778 -> ws://127.0.0.1:7777), hidden -
+  # unlike the relay, Caddy doesn't need a visible console for Ctrl+C: stop it with
+  # "caddy stop" (talks to Caddy's local admin API) or by killing the process.
+  $tlsScript = Join-Path $here 'run-tls.ps1'
+  Start-Process powershell -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$tlsScript)
+  Write-Host "TLS front started hidden on wss://localhost:7778 (stop with 'caddy stop')."
+
   return 0
 }
 

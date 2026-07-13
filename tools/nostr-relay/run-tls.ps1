@@ -7,7 +7,9 @@
 # working unchanged for the extension + web app; this only ADDS wss://localhost:7778.
 #
 # Run from anywhere: "pnpm relay:tls" (root) or "pwsh tools/nostr-relay/run-tls.ps1".
-# Stop with Ctrl+C. Prereqs: caddy + mkcert on PATH (both already installed here).
+# When run standalone/interactively, stop with Ctrl+C. When launched hidden by
+# run.ps1 (no console attached), stop with "caddy stop" or by killing the process.
+# Prereqs: caddy + mkcert on PATH (both already installed here).
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -54,8 +56,10 @@ if (-not $relayUp) {
 
 Write-Host ''
 Write-Host "TLS relay proxy:  wss://localhost:$TLS_PORT  ->  ws://127.0.0.1:$RELAY_PORT" -ForegroundColor Green
-Write-Host 'Point web Nostr clients at that wss:// URL. Ctrl+C to stop.' -ForegroundColor Green
+Write-Host 'Point web Nostr clients at that wss:// URL.' -ForegroundColor Green
 Write-Host ''
 
-# Foreground so the console shows Caddy logs and Ctrl+C stops it cleanly.
+# Foreground within this process (blocks here) so Ctrl+C stops it cleanly when run
+# interactively. When run.ps1 launches this hidden (no console), there's no Ctrl+C
+# available - stop via "caddy stop" or by killing the process instead.
 & caddy run --config (Join-Path $here 'Caddyfile') --adapter caddyfile

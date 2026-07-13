@@ -3051,15 +3051,44 @@ function tagSemanticStructure(root: Element): void {
     }
   });
 
+  // A child that carries a substantial content image is media, not an action
+  // icon. Gallery/carousel slides ship an expand <button> or svg arrow NEXT TO
+  // the photo (How-to Geek's per-slide expand button is the reference case) —
+  // without this guard the slide track matches the icon-row shape below, gets
+  // dx-stats, and the markdown converter then drops every gallery photo from
+  // the cast. Sized by width/height ATTRIBUTE (like collectCastImageUrls):
+  // avatars annotate ~44px, icons 16–32px, content photos hundreds. Imgs with
+  // no size attributes stay non-blocking so stats rows whose children carry
+  // tiny preview avatars (primal's "top zaps") keep matching.
+  const hasContentImage = (el: Element): boolean =>
+    Array.from(el.querySelectorAll('img')).some(img => {
+      const w = parseInt(img.getAttribute('width') ?? '', 10);
+      const h = parseInt(img.getAttribute('height') ?? '', 10);
+      if ((Number.isFinite(w) && w >= MIN_CAST_IMAGE_PX) ||
+          (Number.isFinite(h) && h >= MIN_CAST_IMAGE_PX)) return true;
+      // No size attributes — a <figure>-wrapped img is still declared content.
+      return img.closest('figure') !== null;
+    });
+
+  // Belt to the guard above: carousel/gallery wrappers declare themselves in
+  // their class names (this pass runs BEFORE sanitisation strips classes).
+  // Never tag a slide track as an icon row, whatever its children hold.
+  const CAROUSEL_CLASS_RE = /\b(splide|swiper|slick|glide|flickity|carousel|gallery|lightbox)/i;
+  const insideCarousel = (el: Element): boolean =>
+    !!el.closest('[class*="splide" i], [class*="swiper" i], [class*="slick" i], [class*="carousel" i], [class*="gallery" i], [class*="lightbox" i]') ||
+    CAROUSEL_CLASS_RE.test(el.getAttribute('class') ?? '');
+
   // Stats rows BEFORE headers — so a stats container isn't also mis-tagged
   // as a header just because one of its many children happens to contain an
   // icon image (primal's "top zaps" preview avatars do exactly this). The
   // header pass below skips elements already tagged dx-stats.
   root.querySelectorAll('*').forEach(parent => {
+    if (insideCarousel(parent)) return;
     const children = Array.from(parent.children);
     if (children.length < STATS_MIN_ICON_SIBLINGS) return;
     const actionChildren = children.filter(c =>
-      c.tagName.toLowerCase() === 'button' || c.querySelector('svg')
+      (c.tagName.toLowerCase() === 'button' || c.querySelector('svg')) &&
+      !hasContentImage(c)
     );
     if (actionChildren.length >= STATS_MIN_ICON_SIBLINGS &&
         actionChildren.length / children.length >= 0.6) {
@@ -3077,6 +3106,7 @@ function tagSemanticStructure(root: Element): void {
   // action-shaped siblings, tag the parent too.
   const isActionShaped = (el: Element): boolean => {
     if (el.classList.contains('dx-stats')) return true;
+    if (hasContentImage(el)) return false; // media slide, not a clickable icon
     const tag = el.tagName.toLowerCase();
     if (tag === 'button' || tag === 'svg') return true;
     // An <a> or <div> that wraps a single svg/button (no real text content) is
@@ -3087,6 +3117,7 @@ function tagSemanticStructure(root: Element): void {
   };
   root.querySelectorAll('*').forEach(parent => {
     if (parent.classList.contains('dx-stats')) return;
+    if (insideCarousel(parent)) return;
     const children = Array.from(parent.children);
     if (children.length < 2) return;
     const actionLike = children.filter(isActionShaped);
@@ -3368,7 +3399,17 @@ function scrubStyle(value: string): string {
     .replace(/javascript\s*:/gi, '')
     .replace(/url\s*\(/gi, '')
     .replace(/-moz-binding/gi, '')
-    .replace(/behavior\s*:/gi, '');
+    .replace(/behavior\s*:/gi, '')
+    // Percentage vertical padding is the aspect-ratio sizer hack (padding-%
+    // resolves against WIDTH — no other use exists): a lazy-load wrapper
+    // reserves the image's height with e.g. `padding-bottom: 56.25%` over an
+    // absolutely-positioned img (How-to Geek's gallery is the reference case).
+    // The clip render resets the img's positioning, so the reserved space
+    // becomes inches of blank page above the photo — zero it at capture time.
+    // A CSS-side rule can't do this precisely: `[style*="padding-top:"]
+    // [style*="%"]` matches the substrings independently, so bsky rows with
+    // `flex: 1 1 0%; padding-bottom: 4px` lose real padding (see globals.css).
+    .replace(/padding-(top|bottom)\s*:\s*\d+(?:\.\d+)?%/gi, 'padding-$1: 0');
 }
 
 const IMG_LAYOUT_PROPS = [
@@ -3874,6 +3915,81 @@ function dedupAdjacentImages(root: Element): void {
   }
 }
 
+/**
+ * Drop the redundant thumbnail rail of an image-carousel / lightbox gallery.
+ *
+ * Carousel widgets (Splide, Swiper, Slick, PhotoSwipe — used across Valnet /
+ * Static-Media sites like How-to Geek, Android Police, MakeUseOf, and many
+ * WordPress galleries) render the SAME set of photos twice: a main track of
+ * large slides plus a thumbnail strip of small copies. The interactive chrome
+ * that hides all-but-one slide is CSS-class-driven, so once sanitisation strips
+ * those classes the clip shows every large slide AND every thumbnail — the same
+ * N images rendered N-large-then-N-small.
+ *
+ * `dedupAdjacentImages` deliberately won't merge these: the two tracks sit in
+ * separate wrapper elements (>6 ancestor levels apart) so it treats them as
+ * distinct regions — the same distance cap that protects avatars repeated
+ * across separate comments in a thread.
+ *
+ * This pass targets the stronger, unambiguous signal instead: images that share
+ * BOTH the same non-trivial alt text AND the same URL filename stem are the
+ * SAME photo, not two comments' identical avatar (avatars don't carry a
+ * per-photo alt). When that exact-duplicate key appears more than once we keep a
+ * single copy and drop the rest, regardless of distance. The dropped copies'
+ * now-empty carousel wrappers are pruned by the collapseEmpty pass that follows.
+ *
+ * Keeper = the copy the user actually SAW: carousels ship up to three <img>s per
+ * photo (a visible main slide, a hidden retina-source duplicate that renders at
+ * 0×0, and a small thumbnail). Rank by the intrinsic width ATTRIBUTE — the main
+ * slide (e.g. 1500) is always wider than its thumbnail (e.g. 334), and DOM order
+ * (main track precedes the thumbnail rail) breaks ties. We deliberately do NOT
+ * rank by *rendered* width: a carousel only renders its active slide, so the
+ * other main slides sit at 0×0 off-screen — ranking by rendered size would keep
+ * their (still-visible) thumbnails instead of the full-size images. The hidden
+ * retina-source duplicate (`visibility:hidden`) is a non-issue here: markExcluded
+ * removes it from the tree before this pass runs, so it never joins a group.
+ */
+function dedupGalleryThumbnails(root: Element): void {
+  const imgs = Array.from(root.querySelectorAll('img'));
+  if (imgs.length < 4) return; // need at least a 2-image gallery duplicated
+
+  const stemOf = (img: Element): string => {
+    const src = img.getAttribute('src') ?? img.getAttribute('data-dx-src') ?? '';
+    if (src.startsWith('data:')) return ''; // base64 varies per byte — no stem
+    const m = src.match(/([^/?#]+?)(?:\.[a-z]{2,5})?(?:\?|#|$)/i);
+    return m && m[1].length > 8 ? m[1].toLowerCase() : '';
+  };
+  const widthOf = (img: Element): number => {
+    const w = parseInt(img.getAttribute('width') ?? '', 10);
+    return Number.isFinite(w) ? w : 0;
+  };
+
+  // Key requires BOTH a real alt (>10 chars) and a stable filename stem, so it
+  // only ever fires on genuinely identical photos — never on avatars (no alt)
+  // or same-stem-different-crop hero variants (no shared long alt).
+  const groups = new Map<string, Element[]>();
+  imgs.forEach(img => {
+    const alt = (img.getAttribute('alt') ?? '').trim();
+    const stem = stemOf(img);
+    if (alt.length <= 10 || !stem) return;
+    const key = `${alt.slice(0, 80).toLowerCase()}|${stem}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(img);
+  });
+
+  let removed = 0;
+  groups.forEach(group => {
+    if (group.length < 2) return;
+    // Keep the widest (main slide); DOM order (main track first) breaks ties.
+    const keeper = group.reduce((best, img) => (widthOf(img) > widthOf(best) ? img : best), group[0]);
+    group.forEach(img => { if (img !== keeper) { img.remove(); removed++; } });
+  });
+
+  if (removed > 0) {
+    log(LL.DEBUG, `Discerned: dedupGalleryThumbnails removed ${removed} duplicate gallery img(s)`, 'url:', window.location.href);
+  }
+}
+
 function sanitiseTreeInPlace(root: Element, stripStyles = false) {
   // Drop dangerous elements outright before walking. <foreignObject> can host
   // arbitrary HTML inside <svg>; drop it explicitly even though it's not in the
@@ -3886,6 +4002,12 @@ function sanitiseTreeInPlace(root: Element, stripStyles = false) {
     sanitiseElement(node as Element, stripStyles);
   };
   Array.from(root.childNodes).forEach(walk);
+
+  // Drop the redundant small-thumbnail rail of a carousel/lightbox gallery
+  // (main slides + duplicate thumbnail strip) — the same photo rendered twice.
+  // Runs before dedupAdjacentImages: it uses a stronger alt+stem key with no
+  // distance cap, whereas dedupAdjacentImages won't cross the two tracks.
+  dedupGalleryThumbnails(root);
 
   // De-duplicate <img>s that the source rendered as multiple copies of the
   // same media (Reddit's blur-preview + main + lightbox-source pattern, news
