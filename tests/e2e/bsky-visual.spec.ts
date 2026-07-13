@@ -9,6 +9,8 @@
 import { test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
+import { assertClipBodyHealth } from './helpers/clipBodyHealth';
+import { screenshotClipBody } from './helpers/clipShot';
 
 const BSKY_URL =
   process.env.BSKY_URL ||
@@ -138,12 +140,7 @@ test('bsky: capture clip, render in web app, screenshot card', async () => {
     await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
     await libPage.waitForTimeout(1000);
 
-    const rect = await clipBody.boundingBox();
-    if (rect) {
-      await libPage.setViewportSize({ width: 1280, height: Math.ceil(rect.height) + 100 });
-      await libPage.waitForTimeout(500);
-    }
-    await clipBody.screenshot({ path: out('bsky-rendered.png') });
+    await screenshotClipBody(libPage, clipBody, out('bsky-rendered.png'));
     // Tight crop of the first few posts so the detail is legible: screenshot
     // just the first three dx-post elements stacked.
     const postCount = await libPage.locator('.clip-body .dx-post').count();
@@ -171,6 +168,10 @@ test('bsky: capture clip, render in web app, screenshot card', async () => {
       }).filter((i) => i.w > 40 && (i.radius.includes('50%') || i.h > 120)).slice(0, 25);
     });
     fs.writeFileSync(out('bsky-img-info.json'), JSON.stringify(imgInfo, null, 2), 'utf8');
+
+    // Structural health checks — after the screenshots so artifacts exist for
+    // diagnosis when an assertion fails.
+    await assertClipBodyHealth(clipBody);
 
     // Optional: screenshot a region around a text match (set BSKY_FIND).
     const find = process.env.BSKY_FIND;

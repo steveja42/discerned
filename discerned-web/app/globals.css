@@ -1295,6 +1295,19 @@ a { color: inherit; }
 .clip-body .dx-header > * {
   margin: 0;
 }
+/* Deeply-nested-avatar case (bsky): the header's first child is a wrapper that
+   holds BOTH the avatar and the name several levels down, so the flex-row
+   avatar/name split above does nothing and the name wraps under the avatar.
+   When a dx-header contains a marked img.dx-avatar that is NOT a shallow child,
+   float the avatar left and let the rest of the header text flow beside it.
+   Keyed on :has() so it only affects headers with a marked avatar. */
+.clip-body .dx-header:has(img.dx-avatar) {
+  display: block;
+}
+.clip-body .dx-header:has(img.dx-avatar) img.dx-avatar {
+  float: left;
+  margin: 2px 10px 2px 0 !important;
+}
 /* The avatar branch (first child with an img) shouldn't stretch. */
 .clip-body .dx-header > :first-child {
   flex-shrink: 0;
@@ -1439,8 +1452,10 @@ a { color: inherit; }
   vertical-align: middle;
 }
 /* The avatar branch is the header's first child; cap its width so a
-   container-less avatar wrapper doesn't stretch the flex row. */
-.clip-body .dx-header > :first-child {
+   container-less avatar wrapper doesn't stretch the flex row. Guarded with
+   :not(:only-child) — a header with no separate avatar cell must not have its
+   whole content squeezed to 44px. */
+.clip-body .dx-header > :first-child:not(:only-child) {
   width: 44px;
   min-width: 44px;
 }
@@ -1461,13 +1476,17 @@ a { color: inherit; }
   padding-left: 0;
 }
 /* dx-reply-row: a reply's avatar + (name + body) split. Two direct children;
-   first is the avatar wrapper, second is the name/body column. */
+   first is the avatar wrapper, second is the name/body column. Every avatar-
+   cell rule below requires :not(:only-child): when a reply carries NO avatar
+   cell at all (some primal replies), the row's single child is the CONTENT
+   column — pinning/painting it as an avatar rendered the whole reply as a
+   giant gray ellipse. */
 .clip-body .dx-reply-row {
   display: flex;
   gap: 10px;
   align-items: flex-start;
 }
-.clip-body .dx-reply-row > :first-child {
+.clip-body .dx-reply-row > :first-child:not(:only-child) {
   flex-shrink: 0;
   width: 40px;
   min-width: 40px;
@@ -1486,8 +1505,8 @@ a { color: inherit; }
    the avatar lazily and some replies never loaded), show a classic
    anonymous-user silhouette so the row still aligns left-to-right. The
    silhouette is an inline SVG data URI — no external request, no flash. */
-.clip-body .dx-reply-row > :first-child:not(:has(img)),
-.clip-body .dx-header > :first-child:not(:has(img)) {
+.clip-body .dx-reply-row > :first-child:not(:only-child):not(:has(img)),
+.clip-body .dx-header > :first-child:not(:only-child):not(:has(img)) {
   background-color: #d5cfc4;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><circle cx='20' cy='15' r='7' fill='%23a39e94'/><path d='M6 36c0-8 6-13 14-13s14 5 14 13z' fill='%23a39e94'/></svg>");
   background-size: cover;

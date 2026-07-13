@@ -217,6 +217,23 @@ When defining `postClone` for a site, ALSO keep important elements off the `dx-e
 
 Container heuristic relaxed: `looksLikeContainer()` no longer rejects an `<article>` element just because it contains a direct `<header>` or `<footer>` child — news sites legitimately use that semantic pattern.
 
+#### Generic passes inside `sanitiseTreeInPlace` (all capture paths)
+
+Three passes run on the sanitised **clone** so every path (site-tagger or generic; article/selection/full-page) inherits them. Guarded by `tests/fixtures/sites/chrome-patterns.html` + `chrome-patterns.test.ts`.
+
+- **`removeGenericChrome()`** — text-identified page chrome the `<nav>`/`<aside>` landmark stripper can't see (div-soup modules news sites render inline with the article):
+  - Skip-links (`^skip to` / `^jump to` with empty/`#` href).
+  - Exact-text chrome verbs on `<a>`/`<button>` (`CHROME_LINK_TEXT_RE`): share/save/follow/report/copy-link/show-comments/improve-this-question/add-as-preferred/add-us-on-google/open-comment-sort. Matched against the element's ENTIRE trimmed text, so a prose link merely *containing* the word survives. "Show more" is deliberately excluded (tweet cards use it).
+  - Related-content / recirculation boxes: **strong** headings (`STRONG_RELATED_RE`: "Discover more", "Want to know more?", "You might also like", "Up next", …) remove their prose-free enclosing container structurally; **weak** headings (`RELATED_HEADING_RE`) additionally require the container to be link-dominant (≥60% link text). Both bail if the container holds a ≥200-char `<p>` (real prose).
+  - Newsletter signup blocks (`NEWSLETTER_RE`) and "preferred source" promo strips (`PREFERRED_SOURCE_RE`).
+  - Interactive ARIA chrome: `select`, `[role=menu|menubar|listbox|tablist]`.
+  - Image-viewer lightbox hint captions ("Press enter or click to view image…").
+  - **dx-stats dedup**: identical `.dx-stats` text keeps only its first occurrence (Medium renders the same clap/comment counts 3×: sticky bar + inline + footer).
+  - HTML comments are stripped during the sanitise walk.
+  - Skips `.tweet-card` subtrees throughout.
+- **`applyFlexSeparation()`** — inserts a space text node between the element children of every container the LIVE page laid out with flex/grid (or whose span/a children compute to block/inline-block). Marked on the live DOM by `annotateLiveImageSizes` (`FLEXSEP_MARKER`), applied on the clone before class stripping. Fixes run-together text: "399M views21 years ago", "Imran Rahman-JonesTechnology reporter".
+- **sr-only exclusion** — `markExcluded` now also flags absolutely-positioned 1px-clip / `clip-path:inset` screen-reader-only elements. Fixes Stack Overflow's "2222 gold badges" (visible "22" + hidden "22 gold badges" gluing together).
+
 ### Embedded tweets on third-party sites
 
 Article captures detect and render embedded tweets from third-party pages (ZeroHedge, Breitbart, news blogs) as rich `tweet-card` blocks matching Tier 0's output.

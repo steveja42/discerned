@@ -10,6 +10,8 @@ import { test, expect } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
+import { assertClipBodyHealth } from './helpers/clipBodyHealth';
+import { screenshotClipBody } from './helpers/clipShot';
 
 const RD_URL =
   process.env.REDDIT_URL ||
@@ -99,6 +101,10 @@ test('reddit-formats: article / selection / full-page all use site tagger', asyn
           clip: { x: bodyBox.x, y: bodyBox.y, width: Math.min(bodyBox.width, 800), height: 700 },
         });
       }
+
+      // Structural health checks per format (after the screenshot).
+      await assertClipBodyHealth(clipBody);
+
       await libPage.close();
       return body;
     };

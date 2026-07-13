@@ -13,6 +13,8 @@ import { test, expect } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
+import { assertClipBodyHealth } from './helpers/clipBodyHealth';
+import { screenshotClipBody } from './helpers/clipShot';
 
 const URL =
   process.env.MEDIUM_URL ||
@@ -159,8 +161,12 @@ test('medium-visual: capture article via headed Brave + render in /clips', async
       path: out('medium-rendered-top.png'),
       clip: { x: 0, y: 0, width: 1280, height: 900 },
     });
-    // Also a full-clip-body screenshot in case the byline is below the fold.
-    await clipBody.screenshot({ path: out('medium-rendered-full.png') });
+    // Also a full-clip-body screenshot in case the byline is below the fold
+    // (tall-safe: viewport-clipped beyond 8k px).
+    await screenshotClipBody(libPage, clipBody, out('medium-rendered-full.png'));
+
+    // Structural health checks (after screenshots so artifacts survive a fail).
+    await assertClipBodyHealth(clipBody);
 
     // Dump just the dx-header + dx-stats markers from the rendered clip-body so
     // we can see what the generic tagger picked up (if anything).

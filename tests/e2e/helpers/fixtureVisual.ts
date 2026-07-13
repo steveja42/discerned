@@ -15,6 +15,7 @@ import { expect, type BrowserContext } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './launchExtension';
+import { assertClipBodyHealth, type ClipHealthOptions } from './clipBodyHealth';
 
 export interface FixtureVisualOptions {
   /** Slug used for the fixture file (e.g. "wikipedia") AND the baseline name. */
@@ -42,6 +43,8 @@ export interface FixtureVisualOptions {
    * stability check otherwise times out as the layout settles.
    */
   pageClipScreenshot?: boolean;
+  /** Options forwarded to assertClipBodyHealth (e.g. disable a check). */
+  health?: ClipHealthOptions;
 }
 
 export async function runFixtureVisual(opts: FixtureVisualOptions): Promise<void> {
@@ -69,6 +72,7 @@ export async function runFixtureVisual(opts: FixtureVisualOptions): Promise<void
       expectMarker: opts.expectMarker,
       hostOverride: opts.hostOverride,
       pageClipScreenshot: opts.pageClipScreenshot,
+      health: opts.health,
     });
   } finally {
     await ctx.close();
@@ -84,6 +88,7 @@ interface DriveArgs {
   expectMarker?: string;
   hostOverride?: string;
   pageClipScreenshot?: boolean;
+  health?: ClipHealthOptions;
 }
 
 async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
@@ -191,6 +196,11 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
     );
     expect(found, `expected marker "${args.expectMarker}" in clip body`).toBe(true);
   }
+
+  // Structural health checks — catch layout defects (stretched imgs, crushed
+  // columns, blank runs, chrome leaks) that a pixel diff only reports as
+  // "images differ" without saying why.
+  await assertClipBodyHealth(clipBody, args.health);
 
   // Pixel baseline. Regenerate with `--update-snapshots` after intentional
   // visual changes. Snapshot files live next to the calling spec under

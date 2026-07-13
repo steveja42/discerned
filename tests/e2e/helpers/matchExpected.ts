@@ -9,7 +9,7 @@ export interface ExpectedCapture {
   format: 'selection' | 'article' | 'full-page' | 'bookmark';
   title?: { contains?: string; equals?: string; matches?: string };
   url: string;
-  bodyText?: { minLength?: number; contains?: string[] };
+  bodyText?: { minLength?: number; contains?: string[]; excludes?: string[] };
   bodyHtml?: { hasImgs?: boolean; noScripts?: true; allowsOnly?: string[]; containsClasses?: string[] };
   thumbnail?: 'present' | 'absent';
   selectionText?: { contains?: string };
@@ -46,6 +46,9 @@ export function matchExpected(cap: CapturePartial, exp: ExpectedCapture): void {
     }
     for (const needle of exp.bodyText.contains ?? []) {
       expect(text).toContain(needle);
+    }
+    for (const needle of exp.bodyText.excludes ?? []) {
+      expect(text, `bodyText excludes "${needle}"`).not.toContain(needle);
     }
   }
 

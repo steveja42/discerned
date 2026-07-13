@@ -9,6 +9,8 @@
 import { test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
+import { assertClipBodyHealth } from './helpers/clipBodyHealth';
+import { screenshotClipBody } from './helpers/clipShot';
 
 const GOODREADS_URL =
   process.env.GOODREADS_URL ||
@@ -165,12 +167,7 @@ test('goodreads: capture clip, render in web app, screenshot card', async () => 
     await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
     await libPage.waitForTimeout(1000);
 
-    const rect = await clipBody.boundingBox();
-    if (rect) {
-      await libPage.setViewportSize({ width: 1280, height: Math.ceil(rect.height) + 100 });
-      await libPage.waitForTimeout(500);
-    }
-    await clipBody.screenshot({ path: out('goodreads-rendered.png') });
+    await screenshotClipBody(libPage, clipBody, out('goodreads-rendered.png'));
 
     // Tight crop of the top of the rendered card (book hero area) so the
     // detail is legible — full clip body is way too tall to read.
@@ -207,6 +204,9 @@ test('goodreads: capture clip, render in web app, screenshot card', async () => 
         },
       });
     }
+
+    // Structural health checks (after screenshots so artifacts survive a fail).
+    await assertClipBodyHealth(clipBody);
 
     // Image diagnostics: which images survived, their dimensions and context.
     const imgInfo = await clipBody.evaluate((root) => {

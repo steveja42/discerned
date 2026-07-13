@@ -6,6 +6,8 @@ import { test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
+import { assertClipBodyHealth } from './helpers/clipBodyHealth';
+import { screenshotClipBody } from './helpers/clipShot';
 
 const SO_URL =
   process.env.SO_URL ||
@@ -107,17 +109,15 @@ test('stackoverflow-visual: capture Q+A, render in /clips, screenshot', async ()
     await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
     await libPage.waitForTimeout(1000);
 
-    const rect = await clipBody.boundingBox();
-    if (rect) {
-      await libPage.setViewportSize({ width: 1280, height: Math.min(Math.ceil(rect.height) + 100, 8000) });
-      await libPage.waitForTimeout(500);
-    }
-    await clipBody.screenshot({ path: out('stackoverflow-rendered.png') });
+    await screenshotClipBody(libPage, clipBody, out('stackoverflow-rendered.png'));
 
     const html = (await clipBody.evaluate((el) => el.innerHTML)) as string;
     const stripped = html.replace(/data:image\/[^"'\s]+/g, 'data:image/...(elided)...');
     writeFileSync(out('stackoverflow-rendered.html'), html, 'utf8');
     writeFileSync(out('stackoverflow-rendered-stripped.html'), stripped, 'utf8');
+
+    // Structural health checks (after screenshots so artifacts survive a fail).
+    await assertClipBodyHealth(clipBody);
 
     // eslint-disable-next-line no-console
     console.log(`\n✓ Saved stackoverflow-* artifacts to ${outDir}\n`);

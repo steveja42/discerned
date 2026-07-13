@@ -6,6 +6,8 @@ import { test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
+import { assertClipBodyHealth } from './helpers/clipBodyHealth';
+import { screenshotClipBody } from './helpers/clipShot';
 
 const BBC_URL =
   process.env.BBC_URL ||
@@ -81,17 +83,15 @@ test('bbc-visual: capture article, render in /clips, screenshot', async () => {
     await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
     await libPage.waitForTimeout(1000);
 
-    const rect = await clipBody.boundingBox();
-    if (rect) {
-      await libPage.setViewportSize({ width: 1280, height: Math.min(Math.ceil(rect.height) + 100, 8000) });
-      await libPage.waitForTimeout(500);
-    }
-    await clipBody.screenshot({ path: out('bbc-rendered.png') });
+    await screenshotClipBody(libPage, clipBody, out('bbc-rendered.png'));
 
     const html = (await clipBody.evaluate((el) => el.innerHTML)) as string;
     const stripped = html.replace(/data:image\/[^"'\s]+/g, 'data:image/...(elided)...');
     writeFileSync(out('bbc-rendered.html'), html, 'utf8');
     writeFileSync(out('bbc-rendered-stripped.html'), stripped, 'utf8');
+
+    // Structural health checks (after screenshots so artifacts survive a fail).
+    await assertClipBodyHealth(clipBody);
 
     // eslint-disable-next-line no-console
     console.log(`\n✓ Saved bbc-* artifacts to ${outDir}\n`);

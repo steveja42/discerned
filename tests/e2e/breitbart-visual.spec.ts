@@ -10,6 +10,8 @@ import { test, expect } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
+import { assertClipBodyHealth } from './helpers/clipBodyHealth';
+import { screenshotClipBody } from './helpers/clipShot';
 
 const URL =
   process.env.BB_URL ||
@@ -110,7 +112,10 @@ test('breitbart-visual: capture live article via headed Brave', async () => {
       path: out('bb-live-rendered-top.png'),
       clip: { x: 0, y: 0, width: 1280, height: 1200 },
     });
-    await clipBody.screenshot({ path: out('bb-live-rendered-full.png') });
+    await screenshotClipBody(libPage, clipBody, out('bb-live-rendered-full.png'));
+
+    // Structural health checks (after screenshots so artifacts survive a fail).
+    await assertClipBodyHealth(clipBody);
   } finally {
     await ctx.close();
   }

@@ -37,7 +37,7 @@ function enmlToBodyHtml(contentEl: Element | null): string | undefined {
   // Parse it as XML
   const parser = new DOMParser();
   const enDoc = parser.parseFromString(raw, 'text/xml');
-  if (enDoc.querySelector('parseerror')) return undefined;
+  if (enDoc.querySelector('parsererror')) return undefined;
 
   function serializeNode(node: Node): string {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -82,7 +82,7 @@ function enmlToBodyText(contentEl: Element | null): string | undefined {
 
   const parser = new DOMParser();
   const enDoc = parser.parseFromString(raw, 'text/xml');
-  if (enDoc.querySelector('parseerror')) {
+  if (enDoc.querySelector('parsererror')) {
     // Fallback: strip all XML tags from the raw string
     return raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() || undefined;
   }
@@ -93,7 +93,7 @@ export function parseEnex(xmlText: string, notebookName: string): ClipData[] {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlText, 'text/xml');
 
-  if (doc.querySelector('parseerror')) {
+  if (doc.querySelector('parsererror')) {
     throw new Error('Invalid ENEX file: XML parse error');
   }
 

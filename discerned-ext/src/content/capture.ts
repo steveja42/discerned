@@ -1921,6 +1921,18 @@ function markExcluded(root: HTMLElement = document.body): () => void {
     if (s.position === 'fixed' || s.position === 'sticky' ||
         s.display === 'none' || s.visibility === 'hidden') {
       el.setAttribute(EXCL_MARKER, '1');
+      return;
+    }
+    // Screen-reader-only elements (the classic 1px clip pattern). Visually
+    // absent on the source page but their text glues onto visible siblings
+    // after sanitisation — Stack Overflow's badge counts read "22" visibly
+    // plus a hidden "22 gold badges" duplicate, rendering as "2222 gold
+    // badges" in the clip.
+    if (s.position === 'absolute' &&
+        ((parseFloat(s.width) <= 1 && parseFloat(s.height) <= 1) ||
+         s.clip.startsWith('rect(0px') ||
+         s.clipPath.startsWith('inset('))) {
+      el.setAttribute(EXCL_MARKER, '1');
     }
   });
   return () => querySelectorAllDeep(root, `[${EXCL_MARKER}]`).forEach(el => el.removeAttribute(EXCL_MARKER));
@@ -2129,6 +2141,43 @@ function tagBsky(root: Document | Element): Element | void {
       const statsRow = commonWrapper(replyBtn, likeBtn, post);
       if (statsRow) appendClass(statsRow, 'dx-stats');
     }
+  }
+
+  // Feed chrome bsky renders inline with the posts:
+  //
+  // (a) The "Suggested for you" follow-suggestions module on profile pages —
+  //     unrelated accounts, not content. Located by its heading text, then
+  //     climbed to the module wrapper (the ancestor that also contains the
+  //     suggestion cards' avatars).
+  for (const el of Array.from(root.querySelectorAll('div, span'))) {
+    if ((el.textContent ?? '').trim() !== 'Suggested for you') continue;
+    if (el.querySelector('div, span')) continue; // want the deepest text node holder
+    let box: Element | null = null;
+    let cursor: Element = el;
+    for (let i = 0; i < 6 && cursor.parentElement; i++) {
+      cursor = cursor.parentElement;
+      if (cursor.querySelectorAll('[data-testid="userAvatarImage"]').length >= 2) {
+        box = cursor;
+        break;
+      }
+    }
+    if (box && !box.querySelector('[data-testid^="feedItem-by-"]')) {
+      appendClass(box, 'dx-excl');
+    }
+    break;
+  }
+
+  // (b) "Reposted by …" gutter labels — bsky renders these as a leaf <div>
+  //     whose grid cell collapses to a crushed one-word-per-line strip after
+  //     sanitisation. They sit at feed level (siblings of the feedItem posts),
+  //     so scan the whole root, not per-post. The visual target (see CLAUDE.md
+  //     optimized-sites table) has no repost attribution, so drop each label.
+  for (const el of Array.from(root.querySelectorAll('div, span'))) {
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (!/^Reposted by\b/.test(t) || t.length > 80) continue;
+    // Deepest match only (the leaf text holder), so we don't excl a whole post.
+    if (el.querySelector('div, span, a')) continue;
+    appendClass(el, 'dx-excl');
   }
 
   // Narrow the capture to the content column. profileScreen on a profile page,
@@ -2442,6 +2491,24 @@ function tagReddit(root: Document | Element): Element | void {
     if (avatarImg) appendClass(avatarImg, 'dx-avatar');
   });
 
+  // "N more replies" lazy-loaders: Reddit renders the same label up to three
+  // times per collapsed branch (a [slot="loading"] div, the permalink anchor,
+  // and the faceplate-partial wrapper), and each copy lands in a grid gutter
+  // that collapses to a letter-per-line strip after sanitisation. The visual
+  // target has no lazy-load affordances — drop them all. Scoped to slots
+  // starting with "children" so the loader wrapper matches but the top-level
+  // comment-tree partial (different slot) never does.
+  root.querySelectorAll(
+    'shreddit-comment faceplate-partial[slot^="children"], shreddit-comment [slot="loading"], shreddit-comment a[slot="more-comments-permalink"]',
+  ).forEach(el => appendClass(el, 'dx-excl'));
+
+  // The bare "Sort by:" label span sits outside the dropdown the CHROME_LABELS
+  // pass below catches — drop it by exact text.
+  root.querySelectorAll('span, div').forEach(el => {
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (/^sort by:?$/i.test(t) && !el.querySelector('div, span')) appendClass(el, 'dx-excl');
+  });
+
   // Drop noisy SPA chrome that sits inside <main>: sort dropdown, search box,
   // "Reply" / "Share" / "Report" comment-action buttons, the floating bottom
   // "Back to top" pill. Reddit names each via `aria-label` or `name=` attrs.
@@ -2585,6 +2652,20 @@ function tagYoutube(root: Document | Element): Element | void {
   primaryInner.querySelectorAll(
     'ytd-horizontal-card-list-renderer, ytd-rich-list-header-renderer, ytd-horizontal-list-renderer, ytd-reel-shelf-renderer, ytd-shelf-renderer, ytd-video-description-transcript-section-renderer, ytd-video-description-music-section-renderer, ytd-video-description-infocards-section-renderer, ytd-structured-description-content-renderer, ytd-clip-creation-renderer, ytd-location-description-renderer, ytd-engagement-panel-section-list-renderer, ytd-video-primary-info-renderer, ytd-video-secondary-info-renderer'
   ).forEach(el => appendClass(el, 'dx-excl'));
+
+  // Drop the "...more" / "Show less" description-expander toggle buttons — they
+  // survive as a bare "...moreShow less" text run under the description.
+  primaryInner.querySelectorAll(
+    '#expand, #collapse, tp-yt-paper-button#expand, tp-yt-paper-button#collapse, #more, #less',
+  ).forEach(el => appendClass(el, 'dx-excl'));
+
+  // Drop the Comments section header + its count/sort chrome when the comment
+  // list itself is empty (comments load lazily and often haven't rendered at
+  // capture time, leaving a lone "Comments" heading + "Sort by" control).
+  const comments = primaryInner.querySelector('#comments, ytd-comments');
+  if (comments && comments.querySelectorAll('ytd-comment-thread-renderer').length === 0) {
+    appendClass(comments, 'dx-excl');
+  }
 
   return primaryInner;
 }
@@ -3519,6 +3600,14 @@ function sanitiseElement(element: Element, stripStyles = false) {
 
 const SIZE_MARKER = 'data-discerned-sized';
 
+// Stamped on live elements whose computed display is flex/grid. Their children
+// sit visually apart on the source page, but once sanitisation strips the
+// source classes the children collapse to adjacent inline boxes and their text
+// runs together ("399M views21 years ago", "Imran Rahman-JonesTechnology
+// reporter"). applyFlexSeparation() reads the marker on the clone and inserts
+// space text nodes between the children before it is stripped.
+const FLEXSEP_MARKER = 'data-discerned-flexsep';
+
 /**
  * Write each live <img>'s rendered width/height onto the live element as
  * width/height attributes, so subsequent cloneNode(true) copies them into
@@ -3551,12 +3640,38 @@ function annotateLiveImageSizes(liveRoot: Element): () => void {
     img.setAttribute(SIZE_MARKER, '1');
     annotated.push({ img, hadWidth, hadHeight });
   });
+
+  // Same annotate→clone→cleanup lifecycle for flex/grid containers, feeding
+  // applyFlexSeparation() on the clone (see FLEXSEP_MARKER).
+  const flexMarked: Element[] = [];
+  forEachDeepElement(liveRoot, el => {
+    if (el.childElementCount < 2) return;
+    const d = window.getComputedStyle(el).display;
+    let mark = d === 'flex' || d === 'inline-flex' || d === 'grid' || d === 'inline-grid';
+    if (!mark) {
+      // Inline-by-default children (span/a) that the source styles as block
+      // or inline-block sit visually apart on the page too — after class
+      // stripping they revert to plain inline and their text runs together
+      // (BBC's <span>Name</span><span>Role</span> byline).
+      for (const c of Array.from(el.children)) {
+        if (c.tagName !== 'SPAN' && c.tagName !== 'A') continue;
+        const cd = window.getComputedStyle(c).display;
+        if (cd === 'block' || cd === 'inline-block' || cd === 'list-item') { mark = true; break; }
+      }
+    }
+    if (mark) {
+      el.setAttribute(FLEXSEP_MARKER, '1');
+      flexMarked.push(el);
+    }
+  });
+
   return () => {
     annotated.forEach(({ img, hadWidth, hadHeight }) => {
       if (!hadWidth) img.removeAttribute('width');
       if (!hadHeight) img.removeAttribute('height');
       img.removeAttribute(SIZE_MARKER);
     });
+    flexMarked.forEach(el => el.removeAttribute(FLEXSEP_MARKER));
   };
 }
 
@@ -3990,14 +4105,212 @@ function dedupGalleryThumbnails(root: Element): void {
   }
 }
 
+// ── Generic page-chrome text patterns ────────────────────────────────────────
+// Exact-text chrome verbs on <a>/<button>: share/save/follow clusters (BBC),
+// question toolbars (Stack Overflow), author Follow buttons (Medium). Matched
+// against the element's ENTIRE trimmed text, so a prose link containing one of
+// these words is never touched. "Show more" is deliberately absent — tweet
+// cards carry a legitimate "Show more" anchor.
+const CHROME_LINK_TEXT_RE = new RegExp(
+  '^(share|save|follow|following|report|reply|copy link|show comments' +
+  '|improve this (question|answer)|add a comment|follow this (question|answer).*' +
+  '|share a link to this (question|answer)|short permalink.*' +
+  '|add as preferred.*|choose .{0,40} as a preferred source.*|add us on google' +
+  '|open comment sort options|expand comment search)$', 'i');
+// Skip-navigation links ("Skip to content", "Jump to ratings and reviews").
+const SKIP_LINK_RE = /^(skip to|jump to)\b/i;
+// Headings that UNAMBIGUOUSLY introduce a recirculation module — removed
+// structurally (no link-density requirement, since teaser cards mix images
+// and non-link text).
+const STRONG_RELATED_RE = new RegExp(
+  '^(discover more|want to know more\\??|you might also like|recommended for you' +
+  '|suggested for you|most (read|popular)|trending now|up next' +
+  '|related (articles|stories|posts))$', 'i');
+// Weaker headings that also occur in real prose — these additionally require
+// the container to be link-dominant before anything is removed.
+const RELATED_HEADING_RE = new RegExp(
+  '^(discover more|want to know more\\??|related(:| articles| stories| posts| topics)?' +
+  '|recommended( for you)?|read (next|more)|more from\\b.*|you might also like' +
+  '|most (read|popular)|trending( now)?|suggested for you|up next|popular in\\b.*)$', 'i');
+// Newsletter signup copy.
+const NEWSLETTER_RE =
+  /(subscribe to (our|the) newsletter|sign up for (our|the) |never miss the news|directly to your inbox|daily recap of|get our (free )?newsletter)/i;
+// "Make us your preferred source" promos (Google preferred-source pitch) that
+// render as plain text next to an icon link rather than as a labelled link.
+const PREFERRED_SOURCE_RE = /(preferred source of news|add us on google|make .{0,40} your preferred source)/i;
+
+/**
+ * Drop page chrome that the landmark stripper can't see: it identifies chrome
+ * by TEXT rather than by <nav>/<aside> tags, so it works on the div-soup
+ * modules news sites render inline with the article (share/save toolbars,
+ * "Discover more" recirculation boxes, newsletter signups, sort menus).
+ * Runs inside sanitiseTreeInPlace so every capture path (site-tagger or
+ * generic, article/selection/full-page) gets it. Skips tweet-card subtrees —
+ * their links are part of the reconstructed tweet.
+ */
+function removeGenericChrome(root: Element): void {
+  const inTweetCard = (el: Element): boolean => !!el.closest('[class*="tweet-card"]');
+
+  // (1) Skip-links + exact-text chrome verbs.
+  root.querySelectorAll('a, button').forEach(el => {
+    // The tree is detached (isConnected is false everywhere) — use
+    // root.contains() to skip only nodes a prior removal already dropped.
+    if (!root.contains(el) || inTweetCard(el)) return;
+    const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (text.length === 0 || text.length > 60) return;
+    const href = el.getAttribute('href') ?? '';
+    if (SKIP_LINK_RE.test(text) && (href === '' || href.startsWith('#'))) { el.remove(); return; }
+    if (CHROME_LINK_TEXT_RE.test(text)) el.remove();
+  });
+
+  // (2) Related-content boxes: a short heading matching RELATED_HEADING_RE
+  // whose container is link-dominant (a list of story/category links). Climb
+  // conservatively so an article section that merely SAYS "Related:" in prose
+  // survives.
+  const headingSeeds = Array.from(root.querySelectorAll('*')).filter(el => {
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    return t.length > 0 && t.length <= 40 && RELATED_HEADING_RE.test(t) &&
+      !Array.from(el.children).some(c => RELATED_HEADING_RE.test((c.textContent ?? '').trim()));
+  });
+  // Real prose disqualifies a container from removal — a recirculation module
+  // holds teaser titles and category links, never a 200-char paragraph.
+  const hasLongProse = (el: Element): boolean =>
+    Array.from(el.querySelectorAll('p')).some(p => (p.textContent ?? '').trim().length >= 200);
+
+  for (const seed of headingSeeds) {
+    if (!root.contains(seed) || inTweetCard(seed)) continue;
+    const seedText = (seed.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const strong = STRONG_RELATED_RE.test(seedText);
+    const seedLen = seedText.length;
+    let box: Element | null = null;
+    let cursor: Element = seed;
+    for (let i = 0; i < 3; i++) {
+      const p: Element | null = cursor.parentElement;
+      if (!p || p === root) break;
+      const total = (p.textContent ?? '').replace(/\s+/g, ' ').length;
+      if (total > (strong ? 2500 : 1500)) break; // too big — would eat article content
+      if (hasLongProse(p)) break;
+      if (strong) {
+        // Unambiguous module heading: the enclosing prose-free container IS
+        // the module, whatever mix of links/images/teaser text it holds.
+        if (p.querySelectorAll('a').length >= 1) box = p;
+      } else {
+        const linkLen = Array.from(p.querySelectorAll('a'))
+          .reduce((n, a) => n + (a.textContent ?? '').replace(/\s+/g, ' ').length, 0);
+        const rest = total - seedLen;
+        if (rest > 0 && p.querySelectorAll('a').length >= 2 && linkLen / rest >= 0.6) {
+          box = p;
+        }
+      }
+      cursor = p;
+    }
+    if (box) {
+      box.remove();
+      log(LL.DEBUG, 'Discerned: removeGenericChrome dropped related-content box', 'url:', window.location.href);
+    }
+  }
+
+  // (3) Newsletter signup blocks: smallest text match, then climb to the
+  // enclosing short container.
+  const newsletterSeeds = Array.from(root.querySelectorAll('*')).filter(el =>
+    NEWSLETTER_RE.test(el.textContent ?? '') &&
+    !Array.from(el.children).some(c => NEWSLETTER_RE.test(c.textContent ?? '')));
+  for (const seed of newsletterSeeds) {
+    if (!root.contains(seed) || seed === root) continue;
+    let box: Element = seed;
+    for (let i = 0; i < 3; i++) {
+      const p = box.parentElement;
+      if (!p || p === root || (p.textContent ?? '').length > 500) break;
+      box = p;
+    }
+    box.remove();
+    log(LL.DEBUG, 'Discerned: removeGenericChrome dropped newsletter block', 'url:', window.location.href);
+  }
+
+  // (3b) "Preferred source" promo strips — text pitch + icon link, not a
+  // labelled anchor, so pass (1) can't see them.
+  const promoSeeds = Array.from(root.querySelectorAll('*')).filter(el =>
+    PREFERRED_SOURCE_RE.test(el.textContent ?? '') &&
+    !Array.from(el.children).some(c => PREFERRED_SOURCE_RE.test(c.textContent ?? '')));
+  for (const seed of promoSeeds) {
+    if (!root.contains(seed) || seed === root) continue;
+    let box: Element = seed;
+    for (let i = 0; i < 2; i++) {
+      const p = box.parentElement;
+      if (!p || p === root || (p.textContent ?? '').replace(/\s+/g, ' ').length > 200) break;
+      box = p;
+    }
+    box.remove();
+  }
+
+  // (4) Interactive ARIA chrome that has no meaning in a static clip: dropdown
+  // menus, sort listboxes, tab strips, native selects.
+  root.querySelectorAll('select, [role="menu"], [role="menubar"], [role="listbox"], [role="tablist"]').forEach(el => {
+    if (inTweetCard(el)) return;
+    el.remove();
+  });
+
+  // (5) Image-viewer affordance captions ("Press enter or click to view image
+  // in full size") — Medium/CMS lightbox hint text that sits above every
+  // figure. Exact-ish leaf text match.
+  const VIEWER_HINT_RE = /^(press enter or click to view|click to (view|enlarge|expand)|tap to (view|expand)|view (image|full size))/i;
+  root.querySelectorAll('span, div, p, figcaption').forEach(el => {
+    if (el.querySelector('img, div, span, p')) return;
+    if (VIEWER_HINT_RE.test((el.textContent ?? '').trim())) el.remove();
+  });
+
+  // (6) De-duplicate repeated engagement rows. Medium renders the SAME
+  // clap/comment counts three times (sticky top bar + inline bar + footer),
+  // and each survived as a dx-stats row → "79 4" appears three times. Keep the
+  // first occurrence of each distinct non-empty dx-stats text; drop the rest.
+  const seenStats = new Set<string>();
+  root.querySelectorAll('.dx-stats').forEach(el => {
+    const key = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (key.length === 0) { el.remove(); return; }
+    if (seenStats.has(key)) { el.remove(); return; }
+    seenStats.add(key);
+  });
+}
+
+/**
+ * Insert a space text node between the element children of every container the
+ * live page laid out with flex/grid (FLEXSEP_MARKER, stamped by
+ * annotateLiveImageSizes). Without this, sanitisation collapses visually
+ * separated flex items into adjacent inline boxes whose text runs together:
+ * "399M views21 years ago", "Imran Rahman-JonesTechnology reporter".
+ */
+function applyFlexSeparation(root: Element): void {
+  const targets = Array.from(root.querySelectorAll(`[${FLEXSEP_MARKER}]`));
+  if (root.hasAttribute?.(FLEXSEP_MARKER)) targets.push(root);
+  for (const el of targets) {
+    el.removeAttribute(FLEXSEP_MARKER);
+    const kids = Array.from(el.children);
+    for (let i = 0; i < kids.length - 1; i++) {
+      const left = kids[i].textContent ?? '';
+      const right = kids[i + 1].textContent ?? '';
+      if (left.length === 0 || right.length === 0) continue;
+      if (/\s$/.test(left) || /^\s/.test(right)) continue;
+      el.insertBefore(document.createTextNode(' '), kids[i + 1]);
+    }
+  }
+}
+
 function sanitiseTreeInPlace(root: Element, stripStyles = false) {
   // Drop dangerous elements outright before walking. <foreignObject> can host
   // arbitrary HTML inside <svg>; drop it explicitly even though it's not in the
   // SVG whitelist (the walk-unwrap below would otherwise leak its children).
   root.querySelectorAll('script, style, iframe, object, embed, link, meta, noscript, foreignObject').forEach(el => el.remove());
 
+  // Space out former flex/grid children BEFORE the attribute-stripping walk
+  // consumes the live-layout markers, then drop text-identified page chrome.
+  applyFlexSeparation(root);
+  removeGenericChrome(root);
+
   const walk = (node: Node) => {
     Array.from(node.childNodes).forEach(walk);
+    // Comments never belong in a stored clip — they bloat the HTML and can
+    // carry source-page junk (build markers, ad-slot annotations).
+    if (node.nodeType === Node.COMMENT_NODE) { (node as Comment).remove(); return; }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     sanitiseElement(node as Element, stripStyles);
   };

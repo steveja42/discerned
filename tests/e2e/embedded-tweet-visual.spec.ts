@@ -12,6 +12,8 @@ import { test, expect } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
+import { assertClipBodyHealth } from './helpers/clipBodyHealth';
+import { screenshotClipBody } from './helpers/clipShot';
 
 const EMBED_URL =
   process.env.EMBED_URL ||
@@ -130,12 +132,7 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
     console.log(`[probe] Rendered .tweet-card count in /clips: ${renderedCardCount}`);
     expect(renderedCardCount, 'tweet cards should render in /clips').toBeGreaterThanOrEqual(1);
 
-    const rect = await clipBody.boundingBox();
-    if (rect) {
-      await libPage.setViewportSize({ width: 1280, height: Math.ceil(rect.height) + 100 });
-      await libPage.waitForTimeout(500);
-    }
-    await clipBody.screenshot({ path: out('embed-rendered.png') });
+    await screenshotClipBody(libPage, clipBody, out('embed-rendered.png'));
 
     // Screenshot every tweet card for tight visual comparison.
     const allCards = clipBody.locator('.tweet-card');
@@ -155,6 +152,9 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
         });
       }
     }
+
+    // Structural health checks (after screenshots so artifacts survive a fail).
+    await assertClipBodyHealth(clipBody);
 
     // eslint-disable-next-line no-console
     console.log('[probe] Artifacts written:');

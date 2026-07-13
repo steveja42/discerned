@@ -10,7 +10,9 @@ import { matchExpected } from './helpers/matchExpected';
 const fixtures = loadSiteFixtures();
 
 test.describe('extension capture pipeline', () => {
-  test.describe.configure({ mode: 'serial' });
+  // NOT serial: each fixture test is independent (own browser context). Serial
+  // mode made one failure abort every later fixture — the standing
+  // reddit-thread failure was silently skipping 8 fixtures incl. xss-injected.
 
   for (const fx of fixtures) {
     test(`captures ${fx.htmlName} via extractor "${fx.expected.format}"`, async () => {

@@ -6,6 +6,8 @@ import { test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
+import { assertClipBodyHealth } from './helpers/clipBodyHealth';
+import { screenshotClipBody } from './helpers/clipShot';
 
 const RD_URL =
   process.env.REDDIT_URL ||
@@ -144,26 +146,31 @@ test('reddit-visual: capture post + comments, render in /clips, screenshot', asy
 
     const libPage = await ctx.newPage();
     await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
-    await libPage.evaluate((capture) => {
+    // Re-post the (large) clip until the row appears: the Reddit clip inlines
+    // dozens of images, so a single BRIDGE_CLIPS burst can land before React's
+    // useLibraryBridge listener has mounted and get delivered to nobody.
+    const postClip = () => libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' }, encrypted: '' };
       window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
       window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
     }, cap);
 
     const row = libPage.locator('article.clip').first();
-    await row.waitFor({ state: 'visible', timeout: 10_000 });
+    let rowVisible = false;
+    for (let attempt = 0; attempt < 4 && !rowVisible; attempt++) {
+      await postClip();
+      try {
+        await row.waitFor({ state: 'visible', timeout: 8_000 });
+        rowVisible = true;
+      } catch { /* bridge race — re-post and retry */ }
+    }
     await row.click();
 
     const clipBody = libPage.locator('.clip-body');
     await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
     await libPage.waitForTimeout(1000);
 
-    const rect = await clipBody.boundingBox();
-    if (rect) {
-      await libPage.setViewportSize({ width: 1280, height: Math.min(Math.ceil(rect.height) + 100, 8000) });
-      await libPage.waitForTimeout(500);
-    }
-    await clipBody.screenshot({ path: out('reddit-rendered.png') });
+    await screenshotClipBody(libPage, clipBody, out('reddit-rendered.png'));
 
     // Tight top-of-clip crop so byline + first image are legible without
     // downscaling the whole thread. Captures the first ~600px below the
@@ -180,6 +187,9 @@ test('reddit-visual: capture post + comments, render in /clips, screenshot', asy
     const stripped = html.replace(/data:image\/[^"'\s]+/g, 'data:image/...(elided)...');
     writeFileSync(out('reddit-rendered.html'), html, 'utf8');
     writeFileSync(out('reddit-rendered-stripped.html'), stripped, 'utf8');
+
+    // Structural health checks (after screenshots so artifacts survive a fail).
+    await assertClipBodyHealth(clipBody);
 
     // eslint-disable-next-line no-console
     console.log(`\n✓ Saved reddit-* artifacts to ${outDir}\n`);

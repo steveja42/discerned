@@ -9,6 +9,8 @@ import { test, expect } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
+import { assertClipBodyHealth } from './helpers/clipBodyHealth';
+import { screenshotClipBody } from './helpers/clipShot';
 
 const TWEET_URL =
   process.env.TWEET_URL ||
@@ -86,6 +88,9 @@ test('twitter: full-page capture produces readable bodyHtml', async () => {
     await libPage.waitForTimeout(1500);
     const card = clipBody.locator('.tweet-card').first();
     await card.screenshot({ path: out('twitter-fullpage-rendered.png') });
+
+    // Structural health checks (after the screenshot).
+    await assertClipBodyHealth(clipBody);
   } finally {
     await ctx.close();
   }
@@ -177,6 +182,9 @@ test('twitter: selection capture across the tweet text produces readable selecti
     await libPage.waitForTimeout(1500);
     const card = clipBody.locator('.tweet-card').first();
     await card.screenshot({ path: out('twitter-selection-rendered.png') });
+
+    // Structural health checks (after the screenshot).
+    await assertClipBodyHealth(clipBody);
   } finally {
     await ctx.close();
   }

@@ -1,0 +1,27 @@
+{
+  "format": "article",
+  "url": "http://127.0.0.1:4173/chrome-patterns.html",
+  "title": { "contains": "Trade Talks Resume" },
+  "bodyText": {
+    "minLength": 400,
+    "contains": [
+      "Negotiators from twelve countries",
+      "signing ceremony"
+    ],
+    "excludes": [
+      "Skip to content",
+      "Jump to ratings",
+      "Add as preferred",
+      "Improve this question",
+      "Discover more",
+      "Want to know more",
+      "NEVER MISS THE NEWS",
+      "directly to your inbox",
+      "Open comment sort options",
+      "JonesTechnology",
+      "22 gold badges",
+      "2222"
+    ]
+  },
+  "bodyHtml": { "noScripts": true }
+}
