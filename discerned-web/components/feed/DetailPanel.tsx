@@ -1,5 +1,5 @@
-// Right-rail detail panel — renders the selected clip's full excerpt, axis track bars,
-// category swatch, and action buttons. Shows a placeholder when no clip is selected.
+// Right-rail detail panel — renders the selected clip's full excerpt, signal stars,
+// qualifiers, category swatch, and action buttons. Shows a placeholder when no clip is selected.
 
 'use client';
 
@@ -9,8 +9,7 @@ import remarkGfm from 'remark-gfm';
 import type { ClipData } from '@/lib/types';
 import type { ClipBody } from '@/lib/bridge/ClipStoreContext';
 import { authorLabel, type AuthorProfile } from '@/lib/nostr/profiles';
-import { CATEGORIES, interestRank, ethicsRank, signalRank } from '@/lib/constants';
-import Wedge from '@/components/glyph/Wedge';
+import { CATEGORIES, signalRank } from '@/lib/constants';
 import { requestClipBody } from '@/lib/bridge/extension-bridge';
 
 interface DetailPanelProps {
@@ -170,12 +169,6 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
   const domain = domainOf(capture.url);
   const caster = capture.authorPubkey ? authorLabel(capture.authorPubkey, author) : null;
   const cat = CATEGORIES[evaluation.category] ?? { label: evaluation.category, hue: 60 };
-  // Absent legacy axes (new signal-model clips) rank as Neutral → hidden.
-  const iIdx = interestRank(evaluation.interest ?? 'Neutral');
-  const eIdx = ethicsRank(evaluation.ethics ?? 'Neutral');
-  const iNeutral = iIdx === 1;
-  const eNeutral = eIdx === 2;
-  const showAssessment = !iNeutral || !eNeutral;
   const sRank = signalRank(evaluation.signal);
   const quals = evaluation.qualifiers ?? [];
 
@@ -248,34 +241,6 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
             {quals.map((q) => (
               <span key={q} className="qual-chip">{q}</span>
             ))}
-          </div>
-        </div>
-      )}
-
-      {showAssessment && (
-        <div className="detail-section">
-          <div className="detail-section-header">
-            <div className="detail-section-label">Assessment</div>
-          </div>
-          <div className="axis-display">
-            {!iNeutral && (
-              <div className="axis-large">
-                <div className="axis-name">Interest</div>
-                <Wedge kind="interest" label={evaluation.interest ?? 'Neutral'} />
-                <div className="axis-num" style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  {evaluation.interest}
-                </div>
-              </div>
-            )}
-            {!eNeutral && (
-              <div className="axis-large">
-                <div className="axis-name">Ethics</div>
-                <Wedge kind="ethics" label={evaluation.ethics ?? 'Neutral'} />
-                <div className="axis-num" style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  {evaluation.ethics}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}

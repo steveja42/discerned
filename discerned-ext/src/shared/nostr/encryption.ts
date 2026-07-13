@@ -77,8 +77,7 @@ export function validateEncryptedPayload(payload: unknown): payload is Encrypted
   if (!p.evaluation || typeof p.evaluation !== 'object') {
     return false;
   }
-  // Category is the only required evaluation field; signal/qualifiers are
-  // optional so legacy {interest, ethics, category} payloads still validate.
+  // Category is the only required evaluation field; signal/qualifiers are optional.
   const ev = p.evaluation as { category?: unknown; signal?: unknown; qualifiers?: unknown };
   if (typeof ev.category !== 'string' || ev.category.length === 0) {
     return false;

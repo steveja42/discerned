@@ -3,45 +3,43 @@
 
 'use client';
 
-import { INTEREST_LEVELS, ETHICS_LEVELS } from '@/lib/constants';
-
 interface FilterStripProps {
-  interestMin: number;
-  ethicsMin: number;
+  activeSignals: string[];
+  activeQuals: string[];
   activeCat: string | null;
-  onClearInterest: () => void;
-  onClearEthics: () => void;
+  onClearSignal: (s: string) => void;
+  onClearQual: (q: string) => void;
   onClearCat: () => void;
   onClearAll: () => void;
 }
 
 export default function FilterStrip({
-  interestMin,
-  ethicsMin,
+  activeSignals,
+  activeQuals,
   activeCat,
-  onClearInterest,
-  onClearEthics,
+  onClearSignal,
+  onClearQual,
   onClearCat,
   onClearAll,
 }: FilterStripProps) {
-  const hasFilters = interestMin > 0 || ethicsMin > 0 || !!activeCat;
+  const hasFilters = activeSignals.length > 0 || activeQuals.length > 0 || !!activeCat;
   if (!hasFilters) return null;
 
   return (
     <div className="active-filters">
       <span className="label">Filters</span>
-      {interestMin > 0 && (
-        <span className="active-pill">
-          Interest ≥ {INTEREST_LEVELS[interestMin - 1]}
-          <span className="x" onClick={onClearInterest}>×</span>
+      {activeSignals.map((s) => (
+        <span key={s} className="active-pill">
+          Signal: {s}
+          <span className="x" onClick={() => onClearSignal(s)}>×</span>
         </span>
-      )}
-      {ethicsMin > 0 && (
-        <span className="active-pill">
-          Ethics ≥ {ETHICS_LEVELS[ethicsMin - 1]}
-          <span className="x" onClick={onClearEthics}>×</span>
+      ))}
+      {activeQuals.map((q) => (
+        <span key={q} className="active-pill">
+          {q}
+          <span className="x" onClick={() => onClearQual(q)}>×</span>
         </span>
-      )}
+      ))}
       {activeCat && (
         <span className="active-pill">
           {activeCat}

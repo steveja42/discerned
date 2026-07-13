@@ -13,8 +13,7 @@
   --accent: oklch(0.62 0.12 65);
   --accent-soft: oklch(0.62 0.12 65 / 0.12);
   --accent-ink: oklch(0.42 0.10 65);
-  --interest: oklch(0.62 0.12 65);
-  --ethics:   oklch(0.55 0.10 155);
+  --signal: #d99814;
   --category: oklch(0.50 0.08 270);
   --neutral-faded: oklch(0.78 0.01 80 / 0.55);
   --shadow-page: 0 1px 0 rgba(26,23,20,0.04), 0 24px 48px -24px rgba(26,23,20,0.18);
@@ -31,7 +30,7 @@ body.style-studio {
   --rule: #e3e3e3; --rule-soft: #ebebeb;
   --ink: #0d0d0d; --ink-2: #2b2b2b; --ink-3: #737373; --ink-4: #b0b0b0;
   --accent: #2563eb; --accent-soft: rgba(37,99,235,0.08); --accent-ink: #1d4ed8;
-  --interest: #2563eb; --ethics: #059669; --category: #7c3aed;
+  --signal: #d99814; --category: #7c3aed;
   --neutral-faded: #c0c0c0;
   --serif: 'Plus Jakarta Sans', system-ui, sans-serif;
   --sans:  'Plus Jakarta Sans', system-ui, sans-serif;
@@ -337,12 +336,11 @@ a { color: inherit; }
   display: block;
   flex-shrink: 0;
 }
-.status-dot.connected { background: var(--ethics); }
+.status-dot.connected { background: #059669; }
 /* RULE: the Nostr connection dot is a protocol-status indicator, not decor —
    it must render the same purple in every theme/style variant, so it uses a
    hardcoded literal instead of a themed var. Keep in sync with discerned-ext's
-   --p-connected (src/shared/theme.ts). Do not swap this for var(--ethics) or
-   any other themed token. */
+   --p-connected (src/shared/theme.ts). Do not swap this for a themed token. */
 .status-dot.nostr.connected { background: #7c3aed; }
 .status-dot.disconnected { background: var(--ink-4); }
 .status-dot-wrap .status-tip {
@@ -601,14 +599,9 @@ a { color: inherit; }
   transition: all 120ms;
 }
 .axis-range .pip:hover { border-color: var(--ink-4); color: var(--ink-3); }
-.axis-range .pip.active.interest {
-  background: var(--interest);
-  border-color: var(--interest);
-  color: var(--paper);
-}
-.axis-range .pip.active.ethics {
-  background: var(--ethics);
-  border-color: var(--ethics);
+.axis-range .pip.active.signal {
+  background: var(--signal);
+  border-color: var(--signal);
   color: var(--paper);
 }
 
@@ -849,43 +842,11 @@ a { color: inherit; }
 .clip-foot .echoed { color: var(--ink-3); }
 .clip-foot .echoed strong { color: var(--ink); font-family: var(--sans); font-weight: 500; }
 
-/* Triple-axis glyph */
-.glyph {
-  display: flex; flex-direction: row; gap: 10px;
-  align-items: center;
-  flex-shrink: 0;
-  flex-wrap: wrap;
+/* Category tag + signal-tag row in each clip card. */
+.clip-glyph-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
-.glyph-row {
-  display: flex; align-items: center; gap: 6px;
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--ink-3);
-  letter-spacing: 0.04em;
-}
-.glyph-row .axis-key {
-  width: 10px; text-transform: uppercase;
-  color: var(--ink-4);
-}
-.glyph-row .dim-label {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--ink-3);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  margin-left: 4px;
-}
-.bars {
-  display: flex; gap: 2px;
-}
-.bars .bar {
-  width: 7px; height: 12px;
-  background: var(--paper-3);
-  border-radius: 1.5px;
-}
-.bars .bar.on.interest { background: var(--interest); }
-.bars .bar.on.ethics { background: var(--ethics); }
-.glyph .cat-tag {
+.clip-glyph-row .cat-tag {
   display: inline-flex; align-items: center; gap: 4px;
   font-family: var(--mono);
   font-size: 9.5px;
@@ -897,12 +858,11 @@ a { color: inherit; }
   border-radius: 3px;
   border: 1px solid var(--rule);
 }
-.glyph .cat-tag .swatch {
+.clip-glyph-row .cat-tag .swatch {
   width: 6px; height: 6px; border-radius: 50%;
-  background: var(--category);
 }
 
-/* Signal rating pill (star count) + qualifier chips — shared across glyph variants. */
+/* Signal rating pill (star count) + qualifier chips. */
 .signal-tag {
   display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--mono);
@@ -1848,53 +1808,6 @@ a { color: inherit; }
   border: 1px solid var(--rule-soft);
 }
 
-/* Triple-axis — large display */
-.axis-display {
-  display: grid;
-  gap: 12px;
-}
-.axis-large {
-  display: grid;
-  grid-template-columns: 90px 1fr auto;
-  align-items: center;
-  gap: 10px;
-}
-.axis-large .axis-name {
-  font-family: var(--sans);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink-2);
-}
-.axis-large .axis-name small {
-  display: block;
-  font-family: var(--mono);
-  font-size: 9.5px;
-  font-weight: 400;
-  color: var(--ink-4);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  margin-top: 1px;
-}
-.axis-large .axis-track {
-  display: flex; gap: 3px;
-}
-.axis-large .axis-track .seg {
-  flex: 1; height: 18px;
-  background: var(--paper-3);
-  border-radius: 3px;
-}
-.axis-large .axis-track .seg.on.interest { background: var(--interest); }
-.axis-large .axis-track .seg.on.ethics { background: var(--ethics); }
-.axis-large .axis-num {
-  font-family: var(--mono);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--ink);
-  text-align: right;
-}
-.axis-large .axis-num small { font-size: 10px; color: var(--ink-4); }
-
-
 /* Co-readers / echoed */
 .coread { display: flex; flex-direction: column; gap: 8px; }
 .coread-row {
@@ -1916,8 +1829,7 @@ a { color: inherit; }
 .coread-row .who small { font-family: var(--mono); font-size: 10px; color: var(--ink-4); margin-left: 6px; letter-spacing: 0.04em; }
 .coread-row .mini-glyph { display: flex; gap: 6px; align-items: center; }
 .coread-row .mini-bar { width: 4px; height: 10px; background: var(--paper-3); border-radius: 1px; }
-.coread-row .mini-bar.on.interest { background: var(--interest); }
-.coread-row .mini-bar.on.ethics { background: var(--ethics); }
+.coread-row .mini-bar.on { background: var(--signal); }
 .coread-row .mini-set { display: flex; gap: 1.5px; }
 .coread-row .verb {
   font-family: var(--mono); font-size: 9.5px;
@@ -2166,8 +2078,7 @@ a { color: inherit; }
   font-size: 14px;
   font-style: italic;
 }
-.letter-grade .lg-axis.interest { background: var(--interest); color: var(--paper); }
-.letter-grade .lg-axis.ethics { background: var(--ethics); color: var(--paper); }
+.letter-grade .lg-axis.signal { background: var(--signal); color: var(--paper); }
 .letter-grade .lg-axis.category {
   background: transparent; border: 1px solid var(--rule);
   color: var(--ink-2); font-size: 11px;

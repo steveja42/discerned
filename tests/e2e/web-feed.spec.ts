@@ -14,17 +14,17 @@ function buildFixtureEvent() {
     created_at: Math.floor(Date.now() / 1000),
     tags: [
       ['r', 'https://example.com/test-cast'],
-      ['L', 'online.discerned.interest'],
-      ['L', 'online.discerned.ethics'],
+      ['L', 'online.discerned.signal'],
+      ['l', 'Masterpiece', 'online.discerned.signal'],
+      ['L', 'online.discerned.qualifier'],
+      ['l', 'Timeless', 'online.discerned.qualifier'],
       ['L', 'online.discerned.category'],
-      ['l', 'Wise', 'online.discerned.interest'],
-      ['l', 'Honest', 'online.discerned.ethics'],
       ['l', 'Science', 'online.discerned.category'],
       ['t', 'discerned'],
       ['format', 'article'],
       ['client', 'discerned'],
     ],
-    content: 'Discerned: Wise / Honest — Science\n\nA Mocked Cast Title\nhttps://example.com/test-cast',
+    content: 'Discerned: ★★★★★ Masterpiece in Science\n\nA Mocked Cast Title\nhttps://example.com/test-cast',
   };
   return { event: finalizeEvent(template, sk), pk };
 }

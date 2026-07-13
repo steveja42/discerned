@@ -2,13 +2,18 @@
 // Hue values drive oklch() colour generation for category swatches in the UI.
 
 import { LL, log } from '@/lib/logger';
+import type { ClipData } from '@/lib/types';
 
 // Signal rating vocabulary (low → high) — mirrors SIGNAL_LEVELS in the extension's shared/types.ts.
 export const SIGNAL_LEVELS = ['Toxic', 'Noise', 'Passable', 'Worthwhile', 'Masterpiece'] as const;
 
-// Legacy axes — still used to render/filter old casts and old local clips.
-export const INTEREST_LEVELS = ['Noise', 'Neutral', 'Interesting', 'Insightful', 'Wise'] as const;
-export const ETHICS_LEVELS = ['Malicious', 'Misleading', 'Neutral', 'Honest', 'Exemplary'] as const;
+// Built-in qualifier chips — mirrors QUALIFIER_GROUPS in the extension's shared/types.ts. Keep in sync.
+export const QUALIFIER_GROUPS: readonly { label: string; items: readonly string[] }[] = [
+  { label: 'Tone & Style',     items: ['Humorous / Satire', 'Academic / Dense', 'Opinion / Essay'] },
+  { label: 'Utility & Format', items: ['Practical Tool', 'Primary Source', 'Quick Read'] },
+  { label: 'Longevity',        items: ['Timeless', 'Current Event', 'Passing Trend'] },
+] as const;
+export const BUILTIN_QUALIFIERS: readonly string[] = QUALIFIER_GROUPS.flatMap((g) => g.items);
 
 export const CATEGORIES: Record<string, { label: string; hue: number }> = {
   General:    { label: 'General',    hue: 60 },
@@ -25,11 +30,26 @@ export const CATEGORIES: Record<string, { label: string; hue: number }> = {
 export const signalRank = (lvl: string | undefined): number =>
   lvl ? SIGNAL_LEVELS.indexOf(lvl as typeof SIGNAL_LEVELS[number]) + 1 : 0;
 
-export const interestRank = (lvl: string): number =>
-  INTEREST_LEVELS.indexOf(lvl as typeof INTEREST_LEVELS[number]);
+// Union of built-ins (canonical order) with any custom qualifiers on loaded clips, deduped.
+export function deriveQualifierOptions(clips: ClipData[]): string[] {
+  const seen = new Set(BUILTIN_QUALIFIERS);
+  const extras = new Set<string>();
+  for (const c of clips) for (const q of c.evaluation.qualifiers ?? []) if (!seen.has(q)) extras.add(q);
+  return [...BUILTIN_QUALIFIERS, ...[...extras].sort()];
+}
 
-export const ethicsRank = (lvl: string): number =>
-  ETHICS_LEVELS.indexOf(lvl as typeof ETHICS_LEVELS[number]);
+// OR match: clip passes if it has at least one selected qualifier. Empty selection = no filter.
+export function matchesQualifiers(clipQuals: string[] | undefined, selected: string[]): boolean {
+  if (selected.length === 0) return true;
+  const have = clipQuals ?? [];
+  return selected.some((q) => have.includes(q));
+}
+
+// OR match: clip passes if its exact signal level is one of the selected. Empty = no filter.
+export function matchesSignal(clipSignal: string | undefined, selected: string[]): boolean {
+  if (selected.length === 0) return true;
+  return clipSignal !== undefined && selected.includes(clipSignal);
+}
 
 export const DEFAULT_RELAYS = [
   'wss://relay.damus.io',

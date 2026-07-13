@@ -13,7 +13,7 @@ export const MOCK_CLIPS: ClipData[] = [
       timestamp: Date.now() - 5 * 3600_000,
       selectionText: 'The argument is not that the numbers are wrong, but that the categories were chosen by people who would never appear in them.',
     },
-    evaluation: { interest: 'Insightful', ethics: 'Exemplary', category: 'Politics' },
+    evaluation: { signal: 'Worthwhile', qualifiers: ['Opinion / Essay'], category: 'Politics' },
     encrypted: '',
   },
   {
@@ -25,7 +25,7 @@ export const MOCK_CLIPS: ClipData[] = [
       timestamp: Date.now() - 24 * 3600_000,
       selectionText: 'It is no longer possible to write about climate without writing about debt — moral, generational, intercontinental. The accountants have arrived.',
     },
-    evaluation: { interest: 'Wise', ethics: 'Exemplary', category: 'Science' },
+    evaluation: { signal: 'Masterpiece', qualifiers: ['Timeless', 'Opinion / Essay'], category: 'Science' },
     encrypted: '',
   },
   {
@@ -37,7 +37,7 @@ export const MOCK_CLIPS: ClipData[] = [
       timestamp: Date.now() - 3 * 24 * 3600_000,
       selectionText: 'A project sustaining one billion devices is currently maintained by two people, one of whom is on parental leave.',
     },
-    evaluation: { interest: 'Insightful', ethics: 'Honest', category: 'Tech' },
+    evaluation: { signal: 'Worthwhile', qualifiers: ['Current Event', 'Primary Source'], category: 'Tech' },
     encrypted: '',
   },
   {
@@ -49,7 +49,7 @@ export const MOCK_CLIPS: ClipData[] = [
       timestamp: Date.now() - 4 * 24 * 3600_000,
       selectionText: 'The proof, when it finally came, was so short it could be written on a postcard. It had taken thirty years to find the postcard.',
     },
-    evaluation: { interest: 'Insightful', ethics: 'Neutral', category: 'Science' },
+    evaluation: { signal: 'Masterpiece', qualifiers: ['Timeless', 'Academic / Dense'], category: 'Science' },
     encrypted: '',
   },
 ];

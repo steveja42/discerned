@@ -30,7 +30,7 @@ export function exportClipsJson(clips: ClipData[]): void {
 }
 
 export function exportClipsCsv(clips: ClipData[]): void {
-  const header = 'title,url,category,signal,qualifiers,interest,ethics,note,date';
+  const header = 'title,url,category,signal,qualifiers,note,date';
   const rows = clips.map((c) => {
     const fields = [
       c.capture.title ?? '',
@@ -38,8 +38,6 @@ export function exportClipsCsv(clips: ClipData[]): void {
       c.evaluation.category ?? '',
       c.evaluation.signal ?? '',
       (c.evaluation.qualifiers ?? []).join('; '),
-      c.evaluation.interest ?? '',
-      c.evaluation.ethics ?? '',
       c.capture.note ?? '',
       new Date(c.capture.timestamp).toISOString(),
     ];

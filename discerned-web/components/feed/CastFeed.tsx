@@ -1,29 +1,29 @@
 // Main public Cast feed shell — the home page's primary content area.
-// Owns all filter state (category, interest/ethics minimums, active follow) and
+// Owns all filter state (category, signal minimum, qualifiers, active follow) and
 // derives the filtered clip list. Renders the three-column layout: Sidebar / feed list / DetailPanel.
 
 'use client';
 
 import { useState, useMemo } from 'react';
 import { npubEncode } from 'nostr-tools/nip19';
-import { CATEGORIES, INTEREST_LEVELS, ETHICS_LEVELS, interestRank, ethicsRank } from '@/lib/constants';
+import { CATEGORIES, SIGNAL_LEVELS, deriveQualifierOptions, matchesQualifiers, matchesSignal } from '@/lib/constants';
 import type { ClipData } from '@/lib/types';
 import type { FollowProfile } from '@/lib/nostr/follows';
 import type { AuthorProfile } from '@/lib/nostr/profiles';
-import type { GlyphVariant } from '@/components/glyph/Glyph';
 import ClipRow from './ClipRow';
 import DetailPanel from './DetailPanel';
 import FilterStrip from './FilterStrip';
 import ResizableLayout from '@/components/layout/ResizableLayout';
 
-// Left sidebar: View shortcuts, follows list, and axis/category filter controls.
+// Left sidebar: View shortcuts, follows list, and signal/qualifier/category filter controls.
 interface SidebarProps {
   activeCat: string | null;
   setActiveCat: (c: string | null) => void;
-  interestMin: number;
-  setInterestMin: (n: number) => void;
-  ethicsMin: number;
-  setEthicsMin: (n: number) => void;
+  activeSignals: string[];
+  toggleSignal: (s: string) => void;
+  activeQuals: string[];
+  toggleQual: (q: string) => void;
+  qualOptions: string[];
   activeFollow: string;
   setActiveFollow: (f: string) => void;
   count: number;
@@ -44,8 +44,8 @@ function followInitial(f: FollowProfile): string {
 
 function Sidebar({
   activeCat, setActiveCat,
-  interestMin, setInterestMin,
-  ethicsMin, setEthicsMin,
+  activeSignals, toggleSignal,
+  activeQuals, toggleQual, qualOptions,
   activeFollow, setActiveFollow,
   count,
   unreadCount,
@@ -99,24 +99,19 @@ function Sidebar({
       </div>
 
       <div className="filters">
-        <div className="side-section-label">Filter by dimension</div>
+        <div className="side-section-label">Filter</div>
 
         <div className="axis-filter">
           <div className="axis-filter-head">
-            <span>
-              Interest{' '}
-              <span style={{ color: 'var(--ink-4)', fontWeight: 400, fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                ≥ {interestMin === 0 ? '—' : INTEREST_LEVELS[interestMin - 1]}
-              </span>
-            </span>
-            <span className="axis-letter">I</span>
+            <span>Signal</span>
+            <span className="axis-letter">S</span>
           </div>
           <div className="axis-range">
-            {INTEREST_LEVELS.map((lvl, i) => (
+            {SIGNAL_LEVELS.map((lvl) => (
               <div
                 key={lvl}
-                className={`pip ${i + 1 <= interestMin ? 'active interest' : ''}`}
-                onClick={() => setInterestMin(i + 1 === interestMin ? 0 : i + 1)}
+                className={`pip ${activeSignals.includes(lvl) ? 'active signal' : ''}`}
+                onClick={() => toggleSignal(lvl)}
                 title={lvl}
               >
                 {lvl[0]}
@@ -125,29 +120,25 @@ function Sidebar({
           </div>
         </div>
 
-        <div className="axis-filter">
-          <div className="axis-filter-head">
-            <span>
-              Ethics{' '}
-              <span style={{ color: 'var(--ink-4)', fontWeight: 400, fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                ≥ {ethicsMin === 0 ? '—' : ETHICS_LEVELS[ethicsMin - 1]}
-              </span>
-            </span>
-            <span className="axis-letter">E</span>
+        {qualOptions.length > 0 && (
+          <div className="axis-filter">
+            <div className="axis-filter-head">
+              <span>Qualifiers</span>
+              <span className="axis-letter">Q</span>
+            </div>
+            <div className="cat-filter">
+              {qualOptions.map((qual) => (
+                <button
+                  key={qual}
+                  className={`cat-chip ${activeQuals.includes(qual) ? 'active' : ''}`}
+                  onClick={() => toggleQual(qual)}
+                >
+                  {qual}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="axis-range">
-            {ETHICS_LEVELS.map((lvl, i) => (
-              <div
-                key={lvl}
-                className={`pip ${i + 1 <= ethicsMin ? 'active ethics' : ''}`}
-                onClick={() => setEthicsMin(i + 1 === ethicsMin ? 0 : i + 1)}
-                title={lvl}
-              >
-                {lvl[0]}
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
 
         <div className="axis-filter">
           <div className="axis-filter-head">
@@ -186,7 +177,6 @@ function Icon({ name }: { name: string }) {
 }
 
 interface CastFeedProps {
-  glyphVariant?: GlyphVariant;
   status: 'connecting' | 'live' | 'error';
   clips: ClipData[];
   searchQuery?: string;
@@ -204,15 +194,21 @@ const EMPTY_READ: Set<string> = new Set();
 
 const EMPTY_AUTHORS: Map<string, AuthorProfile> = new Map();
 
-export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQuery, follows = [], authors = EMPTY_AUTHORS, isSignedIn = false, read, markRead }: CastFeedProps) {
+export default function CastFeed({ status, clips, searchQuery, follows = [], authors = EMPTY_AUTHORS, isSignedIn = false, read, markRead }: CastFeedProps) {
   const readSet = read ?? EMPTY_READ;
   const [activeCat, setActiveCat] = useState<string | null>(null);
-  const [interestMin, setInterestMin] = useState(0);
-  const [ethicsMin, setEthicsMin] = useState(0);
+  const [activeSignals, setActiveSignals] = useState<string[]>([]);
+  const [activeQuals, setActiveQuals] = useState<string[]>([]);
   const [activeFollow, setActiveFollow] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const q = searchQuery?.trim().toLowerCase() ?? '';
+
+  const qualOptions = useMemo(() => deriveQualifierOptions(clips), [clips]);
+  const toggleSignal = (sig: string) =>
+    setActiveSignals((prev) => (prev.includes(sig) ? prev.filter((x) => x !== sig) : [...prev, sig]));
+  const toggleQual = (qual: string) =>
+    setActiveQuals((prev) => (prev.includes(qual) ? prev.filter((x) => x !== qual) : [...prev, qual]));
 
   const unreadCount = useMemo(
     () => clips.reduce((n, c) => (readSet.has(c.capture.id) ? n : n + 1), 0),
@@ -221,8 +217,8 @@ export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQ
 
   const filtered = useMemo(() => clips.filter((c) => {
     if (activeCat && c.evaluation.category !== activeCat) return false;
-    if (interestRank(c.evaluation.interest ?? 'Neutral') + 1 < interestMin) return false;
-    if (ethicsRank(c.evaluation.ethics ?? 'Neutral') + 1 < ethicsMin) return false;
+    if (!matchesSignal(c.evaluation.signal, activeSignals)) return false;
+    if (!matchesQualifiers(c.evaluation.qualifiers, activeQuals)) return false;
     if (activeFollow === 'unread' && readSet.has(c.capture.id)) return false;
     if (isPubkey(activeFollow) && c.capture.authorPubkey !== activeFollow) return false;
     if (q) {
@@ -237,7 +233,7 @@ export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQ
       if (!hay.includes(q)) return false;
     }
     return true;
-  }), [clips, activeCat, interestMin, ethicsMin, activeFollow, q, readSet]);
+  }), [clips, activeCat, activeSignals, activeQuals, activeFollow, q, readSet]);
 
   const selected = filtered.find((c) => c.capture.id === selectedId) ?? filtered[0] ?? null;
 
@@ -269,13 +265,13 @@ export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQ
       </div>
 
       <FilterStrip
-        interestMin={interestMin}
-        ethicsMin={ethicsMin}
+        activeSignals={activeSignals}
+        activeQuals={activeQuals}
         activeCat={activeCat}
-        onClearInterest={() => setInterestMin(0)}
-        onClearEthics={() => setEthicsMin(0)}
+        onClearSignal={(sig) => setActiveSignals((prev) => prev.filter((x) => x !== sig))}
+        onClearQual={(qual) => setActiveQuals((prev) => prev.filter((x) => x !== qual))}
         onClearCat={() => setActiveCat(null)}
-        onClearAll={() => { setInterestMin(0); setEthicsMin(0); setActiveCat(null); setActiveFollow('all'); }}
+        onClearAll={() => { setActiveSignals([]); setActiveQuals([]); setActiveCat(null); setActiveFollow('all'); }}
       />
 
       <div className="feed-scroll">
@@ -291,7 +287,6 @@ export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQ
                 clip={clip}
                 selected={selected?.capture.id === clip.capture.id}
                 onClick={() => handleSelectClip(clip.capture.id)}
-                glyphVariant={glyphVariant}
                 author={clip.capture.authorPubkey ? authors.get(clip.capture.authorPubkey) : undefined}
               />
             ))
@@ -307,8 +302,8 @@ export default function CastFeed({ glyphVariant = 'bars', status, clips, searchQ
         sidebar={
           <Sidebar
             activeCat={activeCat} setActiveCat={setActiveCat}
-            interestMin={interestMin} setInterestMin={setInterestMin}
-            ethicsMin={ethicsMin} setEthicsMin={setEthicsMin}
+            activeSignals={activeSignals} toggleSignal={toggleSignal}
+            activeQuals={activeQuals} toggleQual={toggleQual} qualOptions={qualOptions}
             activeFollow={activeFollow} setActiveFollow={setActiveFollow}
             count={clips.length}
             unreadCount={unreadCount}

@@ -134,7 +134,7 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
   await libPage.evaluate((capture) => {
     const clip = {
       capture,
-      evaluation: { interest: 'Interesting', ethics: 'Honest', category: 'General' },
+      evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' },
       encrypted: '',
     };
     window.postMessage(

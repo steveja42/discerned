@@ -52,8 +52,7 @@ All tokens live in `app/globals.css` under `body.style-studio` (the active **Stu
 --ink / --ink-2 / --ink-3 / --ink-4  /* text scale (#0d0d0d → #b0b0b0) */
 --accent: #2563eb                  /* Discerned blue */
 --accent-ink: #1d4ed8              /* deeper blue for links/emphasis */
---interest: #2563eb
---ethics: #059669
+--signal: #d99814                  /* signal-star gold (rating pips + stars) */
 --category: #7c3aed
 --serif / --sans / --mono          /* Plus Jakarta Sans / Plus Jakarta Sans / JetBrains Mono */
 ```
@@ -95,7 +94,7 @@ components/
   clips/               ← Library, LibraryEmpty
 lib/
   types.ts             ← ClipData, Capture, Evaluation, AuthState
-  constants.ts         ← INTEREST_LEVELS, ETHICS_LEVELS, CATEGORIES, DEFAULT_RELAYS
+  constants.ts         ← SIGNAL_LEVELS, QUALIFIER_GROUPS, CATEGORIES, DEFAULT_RELAYS
   mockData.ts          ← seed clips shown while Nostr connects
   nostr/               ← feed.ts, parse.ts, auth.ts
   bridge/              ← extension-bridge.ts
@@ -145,7 +144,6 @@ Discerned casts use `kind:1` with these tags:
 ['l', '<value>', 'online.discerned.signal']     # optional — omitted when unrated
 ['l', '<value>', 'online.discerned.qualifier']  # repeated, one per qualifier
 ['l', '<value>', 'online.discerned.category']
-# legacy casts carry online.discerned.interest / .ethics instead — parse.ts still reads them
 ['r', '<url>']
 ['quote', '<selected text>']
 ['format', 'selection' | 'article' | ...]

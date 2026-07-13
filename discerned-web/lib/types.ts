@@ -4,9 +4,6 @@
 
 export type ClipFormat = 'selection' | 'article' | 'full-page' | 'bookmark';
 export type SignalLevel = 'Toxic' | 'Noise' | 'Passable' | 'Worthwhile' | 'Masterpiece';
-// Legacy axes — still parsed/rendered for old casts and old local clips.
-export type InterestLevel = 'Noise' | 'Neutral' | 'Interesting' | 'Insightful' | 'Wise';
-export type EthicsLevel = 'Malicious' | 'Misleading' | 'Neutral' | 'Honest' | 'Exemplary';
 export type Category = string;
 
 export interface Capture {
@@ -33,10 +30,8 @@ export interface Capture {
 }
 
 export interface Evaluation {
-  signal?: SignalLevel;      // absent = unrated (current extension model)
-  qualifiers?: string[];     // multi-select tags; absent on legacy data
-  interest?: InterestLevel;  // legacy — present only on old casts/clips
-  ethics?: EthicsLevel;      // legacy — present only on old casts/clips
+  signal?: SignalLevel;   // absent = unrated
+  qualifiers?: string[];  // multi-select tags
   category: Category;
 }
 

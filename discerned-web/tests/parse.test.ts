@@ -174,37 +174,7 @@ describe('parseEvent (web)', () => {
     expect(clip.capture.format).toBe('bookmark');
     expect(clip.evaluation.signal).toBeUndefined();
     expect(clip.evaluation.qualifiers).toEqual([]);
-    expect(clip.evaluation.interest).toBe('Neutral');
-    expect(clip.evaluation.ethics).toBe('Neutral');
     expect(clip.evaluation.category).toBe('General');
-  });
-
-  it('parses legacy interest/ethics casts (no signal tags)', () => {
-    const ev = finalizeEvent({
-      kind: 1,
-      created_at: 1_700_000_000,
-      tags: [
-        ['r', 'https://example.com/legacy'],
-        ['L', 'online.discerned.interest'],
-        ['L', 'online.discerned.ethics'],
-        ['L', 'online.discerned.category'],
-        ['l', 'Wise', 'online.discerned.interest'],
-        ['l', 'Honest', 'online.discerned.ethics'],
-        ['l', 'Science', 'online.discerned.category'],
-        ['t', 'discerned'],
-        ['format', 'bookmark'],
-        ['title', 'A Legacy Cast'],
-      ],
-      content: 'Discerned: Wise / Honest — Science\n\nA Legacy Cast\nhttps://example.com/legacy',
-    }, SK);
-
-    const clip = parseEvent(ev);
-    expect(clip.evaluation.signal).toBeUndefined();
-    expect(clip.evaluation.qualifiers).toEqual([]);
-    expect(clip.evaluation.interest).toBe('Wise');
-    expect(clip.evaluation.ethics).toBe('Honest');
-    expect(clip.evaluation.category).toBe('Science');
-    expect(clip.capture.title).toBe('A Legacy Cast');
   });
 
   it('ignores an unrecognized signal level', () => {

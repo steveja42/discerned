@@ -1,6 +1,5 @@
-// Compact signal-rating pill (N filled stars) + qualifier chips, shared by all
-// three Glyph variants. Renders nothing when a clip is unrated and untagged, so
-// legacy interest/ethics clips are unaffected.
+// Compact signal-rating pill (N filled stars) + qualifier chips, shown in each
+// clip row and the detail panel. Renders nothing when a clip is unrated and untagged.
 
 import { signalRank } from '@/lib/constants';
 

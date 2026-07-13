@@ -10,7 +10,7 @@ A Chrome Extension that allows users to capture, evaluate, and cryptographically
 
 Discerned creates a new "value signal" protocol on Nostr, enabling users to:
 - **Capture** meaningful content from anywhere on the web
-- **Evaluate** it across three axes: Interest, Ethics, and Category
+- **Evaluate** it with a Signal rating, Qualifier tags, and a Category
 - **Signal** their assessment either privately (clipped) or publicly (cast to the network)
 
 Current social media amplifies engagement-driven signals (likes, shares) that often reward outrage over wisdom. Discerned enables a **curated value layer** where signal quality matters more than virality.
@@ -21,7 +21,7 @@ Current social media amplifies engagement-driven signals (likes, shares) that of
 
 ### Phase 1 (MVP) — Current
 - **Smart Capture**: Auto-detects selected-text quotes vs. full page resources
-- **Triple-Axis Evaluation**: Interest (5 levels), Ethics (6 levels), Category (8 predefined + custom)
+- **Evaluation**: Signal (5 levels, Toxic→Masterpiece, optional), Qualifiers (multi-select tags, built-in + custom), Category (8 predefined + custom)
 - **Dual Actions**:
   - **CLIP**: Save privately to local IndexedDB
   - **CAST**: Publish a signed Nostr event to the network
@@ -212,27 +212,32 @@ Forbidden:     scripts, styles, event handlers, all other tags
 | App Data | 30078 | Encrypted clips (planned) |
 
 ### Tag Structure
+Evaluation is emitted as NIP-32 label tags (namespaced `l` values):
 ```
 // Highlight (quote)
 ['r', url]
-['l', 'Wise', 'interest']         // InterestLevel
-['l', 'Honest', 'ethics']         // EthicsLevel
-['l', 'Tech', 'category']         // Category
+['L', 'online.discerned.signal']
+['l', 'Masterpiece', 'online.discerned.signal']       // optional — omitted when unrated
+['L', 'online.discerned.qualifier']
+['l', 'Primary Source', 'online.discerned.qualifier'] // repeated, one per qualifier
+['L', 'online.discerned.category']
+['l', 'Tech', 'online.discerned.category']
 ['context', '…surrounding text…']
 
 // Note (resource)
 ['r', url]
-['l', 'Insightful', 'interest']
-['l', 'Exemplary', 'ethics']
-['l', 'Science', 'category']
+['L', 'online.discerned.signal']
+['l', 'Worthwhile', 'online.discerned.signal']
+['L', 'online.discerned.category']
+['l', 'Science', 'online.discerned.category']
 ['image', thumbnailUrl]            // optional OG image
 ```
 
-### Evaluation Axes
-| Axis | Levels |
+### Evaluation
+| Field | Values |
 |---|---|
-| Interest | Wise · Insightful · Interesting · Neutral · Noise |
-| Ethics | Exemplary · Honest · Neutral · Misleading · Malicious |
+| Signal (optional; absent = unrated) | Toxic · Noise · Passable · Worthwhile · Masterpiece (1★ → 5★) |
+| Qualifiers (multi-select) | Humorous / Satire · Academic / Dense · Opinion / Essay · Practical Tool · Primary Source · Quick Read · Timeless · Current Event · Passing Trend · (custom) |
 | Category | General · Tech · Finance · Health · Politics · Philosophy · Science · Culture · (custom) |
 
 ### Default Relays

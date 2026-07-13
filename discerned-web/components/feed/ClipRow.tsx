@@ -6,14 +6,14 @@
 
 import type React from 'react';
 import type { ClipData } from '@/lib/types';
-import Glyph, { type GlyphVariant } from '@/components/glyph/Glyph';
+import SignalTag from '@/components/glyph/SignalTag';
+import { CATEGORIES } from '@/lib/constants';
 import { authorLabel, type AuthorProfile } from '@/lib/nostr/profiles';
 
 interface ClipRowProps {
   clip: ClipData;
   selected: boolean;
   onClick: (e: React.MouseEvent) => void;
-  glyphVariant?: GlyphVariant;
   author?: AuthorProfile;
   isSelectMode?: boolean;
   isSelected?: boolean;
@@ -62,7 +62,7 @@ function rowExcerpt(capture: ClipData['capture']): string | null {
 }
 
 export default function ClipRow({
-  clip, selected, onClick, glyphVariant = 'bars', author,
+  clip, selected, onClick, author,
   isSelectMode = false, isSelected = false, onSelect,
 }: ClipRowProps) {
   const { capture, evaluation } = clip;
@@ -100,14 +100,15 @@ export default function ClipRow({
             </>
           )}
         </div>
-        <Glyph
-          interest={evaluation.interest ?? 'Neutral'}
-          ethics={evaluation.ethics ?? 'Neutral'}
-          category={evaluation.category}
-          signal={evaluation.signal}
-          qualifiers={evaluation.qualifiers}
-          variant={glyphVariant}
-        />
+        <div className="clip-glyph-row">
+          {evaluation.category && (
+            <span className="cat-tag">
+              <span className="swatch" style={{ background: `oklch(0.50 0.08 ${CATEGORIES[evaluation.category]?.hue ?? 60})` }} />
+              {CATEGORIES[evaluation.category]?.label ?? evaluation.category}
+            </span>
+          )}
+          <SignalTag signal={evaluation.signal} qualifiers={evaluation.qualifiers} />
+        </div>
         <h3 className="clip-title">{capture.title}</h3>
         {(() => {
           const excerpt = rowExcerpt(capture);

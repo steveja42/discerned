@@ -1,12 +1,11 @@
 // Converts a raw Nostr kind:1 event into the app's ClipData shape.
-// Discerned events use `l` tags with namespaced values — current casts carry
-// online.discerned.signal (single, optional) + online.discerned.qualifier
-// (repeated) + online.discerned.category; legacy casts carry
-// online.discerned.interest / ethics instead. `r` is the source URL and
-// `quote` the clipped selection text.
+// Discerned events use `l` tags with namespaced values: online.discerned.signal
+// (single, optional) + online.discerned.qualifier (repeated) +
+// online.discerned.category. `r` is the source URL and `quote` the clipped
+// selection text.
 
 import type { Event } from 'nostr-tools';
-import type { ClipData, ClipFormat, InterestLevel, EthicsLevel, SignalLevel } from '@/lib/types';
+import type { ClipData, ClipFormat, SignalLevel } from '@/lib/types';
 import { SIGNAL_LEVELS } from '@/lib/constants';
 import { stripDiscernedSnippet } from './strip-snippet';
 
@@ -50,9 +49,6 @@ export function parseEvent(event: Event): ClipData {
     ? (rawSignal as SignalLevel)
     : undefined;
   const qualifiers = getTags(event, 'l', 'online.discerned.qualifier');
-  // Legacy axes keep their Neutral defaults so old casts render exactly as before.
-  const interest = (getTag(event, 'l', 'online.discerned.interest') ?? 'Neutral') as InterestLevel;
-  const ethics = (getTag(event, 'l', 'online.discerned.ethics') ?? 'Neutral') as EthicsLevel;
   const category = getTag(event, 'l', 'online.discerned.category') ?? 'General';
   const format = (getTag(event, 'format') ?? 'bookmark') as ClipFormat;
   const note = getTag(event, 'note') ?? undefined;
@@ -86,7 +82,7 @@ export function parseEvent(event: Event): ClipData {
         note,
         authorPubkey: event.pubkey,
       },
-      evaluation: { signal, qualifiers, interest, ethics, category },
+      evaluation: { signal, qualifiers, category },
       encrypted: '',
     };
   }
@@ -132,7 +128,7 @@ export function parseEvent(event: Event): ClipData {
       note,
       authorPubkey: event.pubkey,
     },
-    evaluation: { signal, qualifiers, interest, ethics, category },
+    evaluation: { signal, qualifiers, category },
     encrypted: '',
   };
 }

@@ -18,7 +18,7 @@ function makeClip(over: Partial<ClipData['capture']> = {}, evalOver: Partial<Cli
       bodyText: 'This is the body text of the cool thing that happened.',
       ...over,
     },
-    evaluation: { interest: 'Insightful', ethics: 'Honest', category: 'Science', ...evalOver },
+    evaluation: { signal: 'Worthwhile', qualifiers: ['Primary Source'], category: 'Science', ...evalOver },
     encrypted: '',
   };
 }

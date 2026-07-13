@@ -120,8 +120,7 @@ export function parseEnex(xmlText: string, notebookName: string): ClipData[] {
         bodyText: enmlToBodyText(contentEl),
       },
       evaluation: {
-        interest: 'Neutral',
-        ethics: 'Neutral',
+        qualifiers: [],
         category,
       },
       encrypted: '',
