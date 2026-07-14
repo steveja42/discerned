@@ -5,6 +5,14 @@
 // Mocks the Nostr relay (like web-feed.spec.ts) and drives the feed → detail
 // selection, then screenshots the rendered .clip-body.
 //
+// This is the kind-1 (imeta + body-tag) render path. The kind-30023 markdown
+// render path is covered by the always-on web-cast-render.spec.ts.
+//
+// Format note: these events use the CURRENT cast shape — the attribution
+// snippet is sentinel-wrapped at the top of content (stripped by the web
+// parser), the tweet body lives in the `body` tag, and images ride as imeta
+// tags. The retired "Discerned: …" + "--- body ---" markers are gone.
+//
 // Run with: TWEET_CAST=1 pnpm exec playwright test \
 //   -c tests/e2e/playwright.config.ts --project=tweet-cast-photos-visual
 
@@ -13,6 +21,13 @@ import { generateSecretKey, finalizeEvent } from 'nostr-tools/pure';
 import type { EventTemplate, NostrEvent } from 'nostr-tools/core';
 import { resolve } from 'node:path';
 import { mkdirSync } from 'node:fs';
+
+// Invisible snippet sentinels — mirror of SNIPPET_SENTINEL_* (ext shared/types,
+// web strip-snippet). The web parser strips everything between them before
+// render, so the visible attribution never reaches the feed.
+const SNIP_OPEN = '⁣⁡⁢⁣';
+const SNIP_CLOSE = '⁢⁡⁣⁢';
+const snippet = (line: string) => `${SNIP_OPEN}${line}${SNIP_CLOSE}`;
 
 const PHOTOS = [
   'https://pbs.twimg.com/media/HIUNHegXwAAVKkB?format=webp&name=medium',
@@ -58,7 +73,7 @@ function buildTweetCast(): NostrEvent {
       ['body', body],
       ...PHOTOS.map((u): string[] => ['imeta', `url ${u}`]),
     ],
-    `Discerned: General\n\nCIA on X: "Havana, Cuba\nhttps://x.com/CIA/status/2055074954375254084\n\n--- body ---\n${body}\n\n${PHOTOS.join('\n')}`,
+    `${snippet('Discerned → in General')}\n\nCIA on X: "Havana, Cuba\nhttps://x.com/CIA/status/2055074954375254084\n\n${body}`,
   );
 }
 
@@ -87,7 +102,7 @@ function buildQuoteTweetCast(): NostrEvent {
       ['body', body],
       ...allPhotos.map((u): string[] => ['imeta', `url ${u}`]),
     ],
-    `Discerned: General\n\nCoin Bureau on X\nhttps://x.com/coinbureau/status/2074913657469984786\n\n--- body ---\n${body}\n\n${allPhotos.join('\n')}`,
+    `${snippet('Discerned → in General')}\n\nCoin Bureau on X\nhttps://x.com/coinbureau/status/2074913657469984786\n\n${body}`,
   );
 }
 
@@ -121,7 +136,7 @@ function buildArticleCast(): NostrEvent {
       ['imeta', `url ${PHOTOS[0]}`],
       ['imeta', `url ${PHOTOS[1]}`],
     ],
-    `Discerned: General\n\nYour Home Server Deserves Better\nhttps://example.com/home-server-article\n\n--- body ---\n${body}`,
+    `${snippet('Discerned → in General')}\n\nYour Home Server Deserves Better\nhttps://example.com/home-server-article\n\n${body}`,
   );
 }
 

@@ -1,0 +1,139 @@
+// Guards htmlToMarkdown against the cast-rendering defects reported 2026-07-13:
+// tweet + primal casts published a kind-30023 whose markdown was malformed —
+// giant avatar images, "](https://…)" brace spills from block-content anchors,
+// smashed stat digits ("852862"), and duplicate/misplaced media. The published
+// markdown is what the PUBLIC feed renders (kind-30023 wins dedup over kind-1),
+// and nothing rendered it through a test — so a substring assertion in
+// long-form.test.ts passed while the real output was broken.
+//
+// These tests run the REAL converter over the exact card structures the tweet
+// (extractTweet) and primal (tagPrimal) capture paths produce, asserting the
+// markdown is well-formed and complete.
+
+import { describe, it, expect } from 'vitest';
+import { htmlToMarkdown } from '@/content/html-to-markdown';
+
+// A native tweet-card with a video (poster via data-dx-src), a photo, and a
+// full engagement footer — matches extractTweet's bodyHtml shape.
+const TWEET_CARD = `<div class="tweet-card tweet-card--native">
+  <div class="tweet-header">
+    <img class="tweet-avatar" src="data:image/png;base64,AAAA" alt="CIA" width="48" height="48">
+    <div class="tweet-author"><span class="tweet-name">CIA</span><span class="tweet-handle">@CIA</span></div>
+  </div>
+  <div class="tweet-text">Havana, Cuba</div>
+  <a class="tweet-video" href="https://x.com/CIA/status/123" style="max-width:100%">
+    <img src="data:image/jpeg;base64,BBBB" alt="Video thumbnail" class="tweet-video-poster" data-dx-src="https://pbs.twimg.com/poster.jpg">
+    <div class="tweet-video-play" aria-label="Play video"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+    <span class="tweet-video-duration">0:47</span>
+  </a>
+  <div class="tweet-photo"><img src="data:image/jpeg;base64,CCCC" alt="Image" data-dx-src="https://pbs.twimg.com/photo1.jpg"></div>
+  <div class="tweet-footer"><a class="tweet-date" href="https://x.com/CIA/status/123">11:57 PM · May 14, 2026</a><span class="tweet-date">4.1M Views</span><span class="tweet-stats"><span class="tweet-stat" aria-label="Reply"><svg><path/></svg><span class="tweet-stat-count">1.3K</span></span><span class="tweet-stat" aria-label="Repost"><svg><path/></svg><span class="tweet-stat-count">7K</span></span><span class="tweet-stat" aria-label="Like"><svg><path/></svg><span class="tweet-stat-count">43K</span></span></span></div>
+</div>`;
+
+// A primal note-card with an avatar header, an embedded quote-note (one big
+// <a class="dx-quote"> with block children), and a dx-stats row whose counts
+// live in separate whitespace-less leaf nodes — matches tagPrimal's shape.
+const PRIMAL_CARD = `<div class="dx-post">
+  <div class="dx-header"><img alt="avatar" src="data:image/png;base64,AAAA" width="42" height="42" data-dx-src="https://r2.primal.net/avatar.jpg"><span>Gigi</span></div>
+  <div>Terrible idea. Harmful concept. Users will get rekt.</div>
+  <a class="dx-quote" href="https://primal.net/e/note1">
+    <div class="dx-header"><img alt="avatar" src="data:image/png;base64,BBBB" width="26" height="26" data-dx-src="https://r2.primal.net/vitor.jpg"><span>Vitor Pamplona</span></div>
+    <div>The concept of a public wallet is very interesting and we need to explore more.</div>
+  </a>
+  <div class="dx-stats"><div><div>8</div></div><div><div>528</div></div><div><div>62</div></div></div>
+</div>`;
+
+// Structural invariants every well-formed cast markdown must satisfy. These are
+// the exact failure signatures from the bug report.
+function assertNoMarkdownDefects(md: string): void {
+  // 1. No literal link/image brace spill. A "](url)" is only valid when a "["
+  //    opener sits on the SAME line before it (possibly another "]("  from a
+  //    nested [![alt](img)](href) between them). If the nearest "[" before the
+  //    "](" is on an earlier line, an anchor with block content broke
+  //    turndown's link emission and the "](url)" spilled as literal text.
+  const lines = md.split('\n');
+  for (const line of lines) {
+    let searchFrom = 0;
+    let closeIdx: number;
+    while ((closeIdx = line.indexOf('](', searchFrom)) !== -1) {
+      const before = line.slice(0, closeIdx);
+      const hasOpener = before.includes('[');
+      expect(hasOpener, `brace spill in line "${line.trim()}" — "](" with no "[" opener on the same line`)
+        .toBe(true);
+      searchFrom = closeIdx + 2;
+    }
+  }
+  // 2. No data: URIs (private + oversize for relays).
+  expect(md).not.toContain('data:image');
+}
+
+describe('cast markdown — tweet card', () => {
+  const md = htmlToMarkdown(TWEET_CARD);
+
+  it('is free of markdown defects (brace spills, data URIs)', () => {
+    assertNoMarkdownDefects(md);
+  });
+
+  it('separates the author name from the handle', () => {
+    // "CIA@CIA" (glued) is the bug; "**CIA** @CIA" is correct.
+    expect(md).not.toMatch(/CIA@CIA/);
+    expect(md).toMatch(/CIA\*{0,2}\s+@CIA/);
+  });
+
+  it('renders the video poster as a nested linked image, no spill', () => {
+    // A linked poster is valid nested markdown: [![alt](img)](href).
+    expect(md).toContain('[![Video thumbnail](https://pbs.twimg.com/poster.jpg)](https://x.com/CIA/status/123)');
+  });
+
+  it('renders the photo inline after the tweet text', () => {
+    expect(md).toContain('![Image](https://pbs.twimg.com/photo1.jpg)');
+    expect(md.indexOf('Havana')).toBeLessThan(md.indexOf('photo1.jpg'));
+  });
+
+  it('keeps a stat row with separators, not smashed digits', () => {
+    expect(md).toContain('💬 1.3K');
+    expect(md).toContain('🔁 7K');
+    expect(md).toContain('❤️ 43K');
+    expect(md).toContain('4.1M Views');
+    expect(md).toContain('11:57 PM · May 14, 2026');
+    // The stats must not glue into "1.3K7K43K".
+    expect(md).not.toMatch(/1\.3K7K/);
+  });
+
+  it('drops the avatar (never a full-width markdown image)', () => {
+    // The only images are the poster + the photo, never the 48px avatar.
+    const images = md.match(/!\[[^\]]*\]\([^)]+\)/g) ?? [];
+    expect(images).toHaveLength(2);
+  });
+});
+
+describe('cast markdown — primal note card', () => {
+  const md = htmlToMarkdown(PRIMAL_CARD);
+
+  it('is free of markdown defects (brace spills, data URIs)', () => {
+    assertNoMarkdownDefects(md);
+  });
+
+  it('drops avatars — no images at all in a text-only note', () => {
+    expect(md).not.toMatch(/!\[/);
+    expect(md).not.toContain('r2.primal.net');
+  });
+
+  it('renders the embedded quote-note as a blockquote, not a broken link', () => {
+    expect(md).toContain('Vitor Pamplona');
+    expect(md).toContain('public wallet');
+    // The quote's paragraphs are blockquoted.
+    expect(md).toMatch(/^>\s*.*public wallet/m);
+    // No "](https://primal.net/e/note1)" spill from the card anchor.
+    expect(md).not.toContain('](https://primal.net/e/note1)');
+  });
+
+  it('emits the engagement counts separated, not glued ("852862")', () => {
+    expect(md).not.toContain('852862');
+    expect(md).toContain('8 · 528 · 62');
+  });
+
+  it('keeps the primary note body text', () => {
+    expect(md).toContain('Terrible idea. Harmful concept.');
+  });
+});

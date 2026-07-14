@@ -68,8 +68,8 @@ DetailPanel gallery, feed.ts/follows.ts.
       per clip fixture) from the REAL factory on every ext `pnpm test` (write-if-changed, committed).
       Web `parse.test.ts` signs + parses all of them; the old hand-mirrored block is kept as an explicit
       LEGACY-format test (old casts live forever on relays).
-      *Deferred:* tweet-cast-photos-visual still uses its legacy hand-built casts — migrate it to a
-      generated tweet-shaped template when touching that spec next.
+      *Resolved 2026-07-14:* tweet-cast-photos-visual migrated to the current kind-1 format (sentinel
+      snippet + `body` tag + imeta, no `--- body ---`). See Cast-rendering test layer below.
 - [x] 1.6 New unit tests (+42 total; suites now ext 119 / web 75):
       `tests/filters.test.ts` (matchesSignal/matchesQualifiers/deriveQualifierOptions/signalRank),
       `tests/enex-parser.test.ts` — **found + fixed a real bug**: `querySelector('parseerror')` typo
@@ -120,6 +120,37 @@ guard the generic passes; `matchExpected` gained a `bodyText.excludes` assertion
       `location` via history.replaceState, causing the `capture.url` mismatch) — fixture shrank 1.9 MB →
       619 KB and still captures. Note: the reddit-thread + youtube-watch extension.spec captures may
       still be network-sensitive; re-verify with the default e2e project.
+
+## Cast-rendering test layer  *(added 2026-07-14)*
+
+**The gap it closes:** every visual test verified the CLIP path (`bodyHtml` → `/clips`). Nothing rendered
+a PUBLISHED cast. The public feed prefers the kind-30023 long-form (dedup wins over the companion kind-1),
+and its body is `htmlToMarkdown(bodyHtml)` — a conversion no test exercised. That shipped four defects
+(tweet + primal casts): giant full-width avatars, `](url)` brace spills from block-content anchors
+(`tweet-video`, `dx-quote`), smashed stat digits (`852862`), and a duplicate hero above inline media. A
+substring assertion in `long-form.test.ts` passed while the rendered output was broken.
+
+Two new layers, both proven to fail on the pre-fix code (verified by disabling the fix rules):
+
+- **Unit — `discerned-ext/tests/nostr/cast-markdown.test.ts`**: runs the REAL `htmlToMarkdown` over
+  representative tweet-card and primal-note-card HTML; asserts no brace spills (a `](` with no `[` opener
+  on the same line), no data: URIs, name/handle separated, video poster as one nested linked image, photo
+  inline, stats separated (`8 · 528 · 62`, never glued), avatars dropped (never full-width images).
+- **Web e2e — `tests/e2e/web-cast-render.spec.ts`** (always-on `web` project): signs the generated
+  kind-30023 card fixtures, delivers them through the mocked relay, renders each in the real feed +
+  DetailPanel (ReactMarkdown), and asserts the rendered DOM — no literal `](`, exactly one poster image,
+  zero avatar images, blockquoted embedded note, hero inline exactly once (not duplicated as a top hero).
+
+**Fixtures:** `event-fixture-generation.test.ts` now also emits `card-{tweet-card,primal-note,article-
+inline-img}.kind30023.json` from real card HTML through the real `htmlToMarkdown` + `createLongFormEvent`.
+Regenerate via `pnpm test` in discerned-ext; commit the diff.
+
+**Converter fixes (`html-to-markdown.ts`):** avatar/icon-image drop (alt=avatar, dx-avatar, ≤72px);
+`safe-links` rule (never wrap multi-line anchor content → no spill; drop emptied links); `dx-quote` →
+blockquote; `tweet-video`/`tweet-header`/`tweet-footer`/`dx-header`/`dx-stats` rules that rebuild clean
+lines. Plus the extension capture fixes: `data-dx-src` plumbed through tweet photo/video builders (so the
+markdown keeps the real URL), bare `video[poster]` fallback for newest X DOM, and `number-flow-react`
+odometer count reading. Web: DetailPanel suppresses the top hero when the markdown already carries it inline.
 
 ## Phase 3 — Handle future site redesigns efficiently
 

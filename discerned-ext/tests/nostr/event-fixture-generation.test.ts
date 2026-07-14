@@ -23,6 +23,7 @@ import {
   buildDiscernedSnippet,
   type LongFormRef,
 } from '@/shared/nostr/events';
+import { htmlToMarkdown } from '@/content/html-to-markdown';
 import type { Capture, Evaluation } from '@/shared/types';
 import type { EventTemplate } from 'nostr-tools/core';
 
@@ -51,6 +52,88 @@ function loadClips(): Array<{ name: string; capture: Capture; evaluation: Evalua
         { capture: Capture; evaluation: Evaluation };
       return { name: basename(file, '.json'), ...data };
     });
+}
+
+// Rich-card fixtures: the kind-30023 body is the REAL htmlToMarkdown conversion
+// of representative capture bodyHtml (tweet-card, primal note-card, article with
+// an inline image). These exercise the exact conversion path that shipped the
+// 2026-07-13 cast-rendering bugs — the plain-text clip fixtures above never
+// touch htmlToMarkdown. discerned-web's cast-render e2e loads these and renders
+// them through the real feed. `image` (thumbnail) is set so DetailPanel's
+// hero-suppression logic is exercised (the image is also inline in the body).
+interface CardFixture { slug: string; title: string; url: string; heroUrl: string; bodyHtml: string }
+
+const CARD_FIXTURES: CardFixture[] = [
+  {
+    slug: 'tweet-card',
+    title: 'CIA on X: "Havana, Cuba"',
+    url: 'https://x.com/CIA/status/2055074954375254084',
+    heroUrl: 'https://pbs.twimg.com/poster.jpg',
+    bodyHtml: `<div class="tweet-card tweet-card--native">
+  <div class="tweet-header">
+    <img class="tweet-avatar" src="data:image/png;base64,AAAA" alt="CIA" width="48" height="48" data-dx-src="https://pbs.twimg.com/avatar.jpg">
+    <div class="tweet-author"><span class="tweet-name">CIA</span><span class="tweet-handle">@CIA</span></div>
+  </div>
+  <div class="tweet-text">Havana, Cuba</div>
+  <a class="tweet-video" href="https://x.com/CIA/status/2055074954375254084" style="max-width:100%">
+    <img src="data:image/jpeg;base64,BBBB" alt="Video thumbnail" class="tweet-video-poster" data-dx-src="https://pbs.twimg.com/poster.jpg">
+    <div class="tweet-video-play" aria-label="Play video"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+    <span class="tweet-video-duration">0:47</span>
+  </a>
+  <div class="tweet-footer"><a class="tweet-date" href="https://x.com/CIA/status/2055074954375254084">11:57 PM · May 14, 2026</a><span class="tweet-date">4.1M Views</span><span class="tweet-stats"><span class="tweet-stat" aria-label="Reply"><svg><path/></svg><span class="tweet-stat-count">1.3K</span></span><span class="tweet-stat" aria-label="Like"><svg><path/></svg><span class="tweet-stat-count">43K</span></span></span></div>
+</div>`,
+  },
+  {
+    slug: 'primal-note',
+    title: 'Gigi on primal.net',
+    url: 'https://primal.net/e/note1',
+    heroUrl: '',
+    bodyHtml: `<div class="dx-post">
+  <div class="dx-header"><img alt="avatar" src="data:image/png;base64,AAAA" width="42" height="42" data-dx-src="https://r2.primal.net/avatar.jpg"><span>Gigi</span></div>
+  <div>Terrible idea. Harmful concept. Users will get rekt, attacked, or worse.</div>
+  <a class="dx-quote" href="https://primal.net/e/note2">
+    <div class="dx-header"><img alt="avatar" src="data:image/png;base64,BBBB" width="26" height="26" data-dx-src="https://r2.primal.net/vitor.jpg"><span>Vitor Pamplona</span></div>
+    <div>The concept of a public wallet is very interesting and we need to explore more.</div>
+  </a>
+  <div class="dx-stats"><div><div>8</div></div><div><div>528</div></div><div><div>62</div></div></div>
+</div>`,
+  },
+  {
+    slug: 'article-inline-img',
+    title: 'Your Home Server Deserves Better',
+    url: 'https://example.com/home-server',
+    heroUrl: 'https://cdn.example.com/hero.jpg',
+    bodyHtml: `<article>
+  <p>Your home server deserves better than hand-me-down hardware.</p>
+  <img src="data:image/jpeg;base64,CCCC" alt="server rack" data-dx-src="https://cdn.example.com/hero.jpg">
+  <p>Treating it like a spare PC means spare-PC reliability: no ECC, no redundancy.</p>
+</article>`,
+  },
+];
+
+function buildCardFixtures(comment: string): GeneratedEventFixture[] {
+  const out: GeneratedEventFixture[] = [];
+  const evaluation: Evaluation = { signal: 'Worthwhile', qualifiers: [], category: 'General' } as unknown as Evaluation;
+  const ts = 1_700_000_000_000;
+  for (const cf of CARD_FIXTURES) {
+    const markdown = htmlToMarkdown(cf.bodyHtml);
+    const capture: Capture = {
+      id: `card-${cf.slug}`,
+      format: 'full-page',
+      url: cf.url,
+      title: cf.title,
+      timestamp: ts,
+      bodyHtml: cf.bodyHtml,
+      thumbnailUrl: cf.heroUrl || null,
+    } as unknown as Capture;
+    const snippet = buildDiscernedSnippet(evaluation);
+    out.push({
+      $comment: comment, source: `card-${cf.slug}`, variant: 'kind30023',
+      capture, evaluation,
+      template: createLongFormEvent(capture, evaluation, markdown, snippet),
+    });
+  }
+  return out;
 }
 
 function buildFixtures(): GeneratedEventFixture[] {
@@ -96,6 +179,7 @@ function buildFixtures(): GeneratedEventFixture[] {
       });
     }
   }
+  out.push(...buildCardFixtures(comment));
   return out;
 }
 

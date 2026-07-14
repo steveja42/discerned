@@ -141,6 +141,9 @@ describe('htmlToMarkdown (turndown)', () => {
     '<ul><li>First</li><li>Second</li></ul>',
     '<img src="https://cdn.example.com/photo.jpg" alt="a photo">',
     '<img src="data:image/png;base64,AAAABBBBCCCC">',
+    // A dx-stats row: icon glyphs + counts. The converter drops the glyphs but
+    // re-emits the counts as a "12 · 3" separator line (cast-markdown.test.ts
+    // covers the full behaviour).
     '<div class="dx-stats"><span>❤ 12</span><span>🔁 3</span></div>',
   ].join('');
 
@@ -154,11 +157,14 @@ describe('htmlToMarkdown (turndown)', () => {
     expect(md).toContain('![a photo](https://cdn.example.com/photo.jpg)');
   });
 
-  it('drops data: images and dx-* chrome rows', () => {
+  it('drops data: images and the raw dx-stats icon glyphs (keeping counts)', () => {
     const md = htmlToMarkdown(html);
     expect(md).not.toContain('data:image');
+    // Icon glyphs are dropped…
     expect(md).not.toContain('❤');
     expect(md).not.toContain('🔁');
+    // …but the counts survive as a separated stat line.
+    expect(md).toContain('12 · 3');
   });
 
   // The capture pipeline inlines images as base64 in `src` but preserves the
