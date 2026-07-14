@@ -11,6 +11,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
 import { screenshotClipBody } from './helpers/clipShot';
+import { castShotSafe } from './helpers/castShot';
 
 const YT_URL =
   process.env.YOUTUBE_URL ||
@@ -92,6 +93,10 @@ test('youtube-visual: capture watch page, render in /clips, screenshot', async (
     await libPage.waitForTimeout(1000);
 
     await screenshotClipBody(libPage, clipBody, out('youtube-rendered.png'));
+
+    // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
+    // extension's real BUILD_CAST path from this same capture.
+    await castShotSafe(page, cap as { title?: string }, out('youtube-cast.png'));
 
     const html = (await clipBody.evaluate((el) => el.innerHTML)) as string;
     const stripped = html.replace(/data:image\/[^"'\s]+/g, 'data:image/...(elided)...');

@@ -2,9 +2,35 @@
 // extension loaded. Used by extension.spec.ts and end-to-end.spec.ts.
 
 import { chromium, type BrowserContext } from '@playwright/test';
-import { mkdtempSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
+
+// A persistent profile caches the extension's MV3 service worker SCRIPT keyed by
+// extension id + version. Reloading the unpacked extension from disk does NOT
+// hot-swap a still-registered SW, so a persistent profile keeps answering with
+// the PREVIOUS background build after a `pnpm build:test` — silently breaking any
+// new background message handler (observed: BUILD_CAST → "Unknown message type"
+// on the `test` profile while a throwaway profile worked). Clearing these cache
+// dirs before launch forces Chrome to re-register the SW from the current
+// dist-test. Cookies / Login Data / Local Storage are left intact so site logins
+// (Cloudflare, etc.) survive.
+const SW_CACHE_DIRS = [
+  'Default/Service Worker',
+  'Default/Code Cache',
+  'Default/Extension State',
+  'Default/Extension Rules',
+  'Default/Extension Scripts',
+  'Default/GPUCache',
+];
+
+function clearServiceWorkerCache(userDataDir: string): void {
+  for (const rel of SW_CACHE_DIRS) {
+    try {
+      rmSync(resolve(userDataDir, rel), { recursive: true, force: true });
+    } catch { /* best effort — dir may not exist */ }
+  }
+}
 
 // Always load from dist-test/ so the e2e suite never touches your local dev
 // install in dist/. `pnpm build:test` (the e2e pretest hook) writes here.
@@ -31,6 +57,11 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
   const userDataDir = opts.profile
     ? (() => { const d = resolve(PROFILES_ROOT, opts.profile!); mkdirSync(d, { recursive: true }); return d; })()
     : mkdtempSync(join(tmpdir(), 'discerned-e2e-'));
+  // Persistent profiles cache a stale extension SW after a rebuild — clear it so
+  // the launch picks up the current dist-test background. Throwaway temp
+  // profiles are already fresh, so this only matters (and only runs) for named
+  // profiles, but it's cheap + harmless either way.
+  if (opts.profile) clearServiceWorkerCache(userDataDir);
   // Headed when explicitly requested OR when PWDEBUG_HEADED=1 is set; otherwise
   // use --headless=new (works on modern Chromium, suppresses windows on CI/local).
   const headed = opts.headed ?? !!process.env.PWDEBUG_HEADED;

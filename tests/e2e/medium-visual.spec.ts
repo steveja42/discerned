@@ -15,6 +15,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
 import { screenshotClipBody } from './helpers/clipShot';
+import { castShotSafe } from './helpers/castShot';
 
 const URL =
   process.env.MEDIUM_URL ||
@@ -164,6 +165,10 @@ test('medium-visual: capture article via headed Brave + render in /clips', async
     // Also a full-clip-body screenshot in case the byline is below the fold
     // (tall-safe: viewport-clipped beyond 8k px).
     await screenshotClipBody(libPage, clipBody, out('medium-rendered-full.png'));
+
+    // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
+    // extension's real BUILD_CAST path from this same capture.
+    await castShotSafe(page, cap as { title?: string }, out('medium-cast.png'));
 
     // Structural health checks (after screenshots so artifacts survive a fail).
     await assertClipBodyHealth(clipBody);

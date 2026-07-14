@@ -12,6 +12,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
 import { screenshotClipBody } from './helpers/clipShot';
+import { castShotSafe } from './helpers/castShot';
 
 const URL =
   process.env.BB_URL ||
@@ -113,6 +114,10 @@ test('breitbart-visual: capture live article via headed Brave', async () => {
       clip: { x: 0, y: 0, width: 1280, height: 1200 },
     });
     await screenshotClipBody(libPage, clipBody, out('bb-live-rendered-full.png'));
+
+    // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
+    // extension's real BUILD_CAST path from this same capture.
+    await castShotSafe(page, cap as { title?: string }, out('bb-live-cast.png'));
 
     // Structural health checks (after screenshots so artifacts survive a fail).
     await assertClipBodyHealth(clipBody);

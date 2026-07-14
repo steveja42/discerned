@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
 import { screenshotClipBody } from './helpers/clipShot';
+import { castShotSafe } from './helpers/castShot';
 
 const GOODREADS_URL =
   process.env.GOODREADS_URL ||
@@ -168,6 +169,10 @@ test('goodreads: capture clip, render in web app, screenshot card', async () => 
     await libPage.waitForTimeout(1000);
 
     await screenshotClipBody(libPage, clipBody, out('goodreads-rendered.png'));
+
+    // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
+    // extension's real BUILD_CAST path from this same capture.
+    await castShotSafe(page, cap as { title?: string }, out('goodreads-cast.png'));
 
     // Tight crop of the top of the rendered card (book hero area) so the
     // detail is legible — full clip body is way too tall to read.

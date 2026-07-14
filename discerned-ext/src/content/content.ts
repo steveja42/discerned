@@ -403,6 +403,32 @@ if (__DISCERNED_TEST_BUILD__) {
           window.location.origin,
         );
       }
+    } else if (data.type === '__DISCERNED_TEST_CAST' && data.capture && data.evaluation) {
+      // Run the REAL cast build path: derive the companion long-form markdown
+      // here (turndown needs the content-script DOM the SW lacks — same as
+      // handleCast), then ask the background to build the event templates the
+      // cast would publish (BUILD_CAST — no signing, no relay publish). This is
+      // exactly the production event-construction code; the e2e visual specs
+      // sign + render the returned kind-30023 to screenshot the public cast.
+      try {
+        const longFormMarkdown = deriveLongFormMarkdown(data.capture);
+        const castCapture: Capture = longFormMarkdown
+          ? { ...data.capture, longFormMarkdown }
+          : data.capture;
+        const response = await sendToBackground({
+          type: 'BUILD_CAST',
+          data: { capture: castCapture, evaluation: data.evaluation },
+        });
+        window.postMessage(
+          { type: '__DISCERNED_TEST_CAST_RESULT', result: response },
+          window.location.origin,
+        );
+      } catch (err) {
+        window.postMessage(
+          { type: '__DISCERNED_TEST_CAST_RESULT', error: err instanceof Error ? err.message : String(err) },
+          window.location.origin,
+        );
+      }
     }
   });
 }

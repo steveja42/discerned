@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
 import { screenshotClipBody } from './helpers/clipShot';
+import { castShotSafe } from './helpers/castShot';
 
 const PRIMAL_URL =
   process.env.PRIMAL_URL ||
@@ -164,6 +165,10 @@ test('primal: capture clip, render in web app, screenshot card', async () => {
 
     // 4. Screenshot just the clip body (tall-safe: viewport-clipped beyond 8k px).
     await screenshotClipBody(libPage, clipBody, out('primal-rendered.png'));
+
+    // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
+    // extension's real BUILD_CAST path from this same capture.
+    await castShotSafe(page, cap as { title?: string }, out('primal-cast.png'));
 
     // Also dump element box info for dx-* markers — find anything that's
     // sized 0 or out of view despite having content.

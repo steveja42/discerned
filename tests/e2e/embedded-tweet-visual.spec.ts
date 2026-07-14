@@ -14,6 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
 import { screenshotClipBody } from './helpers/clipShot';
+import { castShotSafe } from './helpers/castShot';
 
 const EMBED_URL =
   process.env.EMBED_URL ||
@@ -153,6 +154,10 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
       }
     }
 
+    // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
+    // extension's real BUILD_CAST path from this same capture.
+    await castShotSafe(page, cap as { title?: string }, out('embed-cast.png'));
+
     // Structural health checks (after screenshots so artifacts survive a fail).
     await assertClipBodyHealth(clipBody);
 
@@ -160,6 +165,7 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
     console.log('[probe] Artifacts written:');
     console.log('  test-output/embed-source.png        (source article screenshot)');
     console.log('  test-output/embed-rendered.png      (rendered clip-body in /clips)');
+    console.log('  test-output/embed-cast.png          (rendered PUBLIC cast in /discerns)');
     console.log('  test-output/embed-first-card.png    (close-up of first tweet card)');
     console.log('  test-output/embed-capture.json      (raw capture payload)');
   } finally {

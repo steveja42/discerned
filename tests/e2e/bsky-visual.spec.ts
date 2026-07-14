@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
 import { screenshotClipBody } from './helpers/clipShot';
+import { castShotSafe } from './helpers/castShot';
 
 const BSKY_URL =
   process.env.BSKY_URL ||
@@ -154,6 +155,10 @@ test('bsky: capture clip, render in web app, screenshot card', async () => {
         clip: { x: bodyBox.x, y: bodyBox.y, width: Math.min(bodyBox.width, 700), height: Math.min((box3.y + box3.height) - bodyBox.y, 3000) },
       });
     }
+
+    // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
+    // extension's real BUILD_CAST path from this same capture.
+    await castShotSafe(page, cap as { title?: string }, out('bsky-cast.png'));
 
     const imgInfo = await clipBody.evaluate((root) => {
       return Array.from(root.querySelectorAll('img')).map((img) => {

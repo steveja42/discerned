@@ -192,7 +192,12 @@ export type BackgroundMessage =
   | { type: 'RESOLVE_PENDING_SIGN'; id: string; signed: Record<string, unknown> }
   | { type: 'REJECT_PENDING_SIGN'; id: string; error: string }
   | { type: 'RELAY_MODE_CHANGED'; mode: RelayMode }
-  | { type: 'PUSH_RELAY_MODE'; mode: RelayMode };
+  | { type: 'PUSH_RELAY_MODE'; mode: RelayMode }
+  // Test-only (dev/test builds): build the cast event templates a cast WOULD
+  // publish (kind-1 note + companion kind-30023), without signing or publishing.
+  // Lets the e2e visual specs render the real published-cast output. The handler
+  // is gated on __DISCERNED_TEST_BUILD__ and tree-shaken from production.
+  | { type: 'BUILD_CAST'; data: { capture: Capture; evaluation: Evaluation } };
 
 export type BackgroundResponse =
   | { success: true; data?: unknown }

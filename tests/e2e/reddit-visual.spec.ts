@@ -8,6 +8,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
 import { screenshotClipBody } from './helpers/clipShot';
+import { castShotSafe } from './helpers/castShot';
 
 const RD_URL =
   process.env.REDDIT_URL ||
@@ -182,6 +183,10 @@ test('reddit-visual: capture post + comments, render in /clips, screenshot', asy
         clip: { x: bodyBox.x, y: bodyBox.y, width: Math.min(bodyBox.width, 800), height: 700 },
       });
     }
+
+    // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
+    // extension's real BUILD_CAST path from this same capture.
+    await castShotSafe(page, cap as { title?: string }, out('reddit-cast.png'));
 
     const html = (await clipBody.evaluate((el) => el.innerHTML)) as string;
     const stripped = html.replace(/data:image\/[^"'\s]+/g, 'data:image/...(elided)...');

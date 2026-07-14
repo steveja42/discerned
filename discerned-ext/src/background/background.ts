@@ -29,6 +29,7 @@ import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluat
 import { STORAGE_KEYS, relaysForMode, resolveRelayMode } from '@/shared/types';
 import { LL, log, setLogRelayTabs } from '@/shared/logger';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
+import type { EventTemplate } from 'nostr-tools/core';
 import { decode, nsecEncode, npubEncode, naddrEncode } from 'nostr-tools/nip19';
 import * as nip49 from 'nostr-tools/nip49';
 import type { BunkerPointer } from 'nostr-tools/nip46';
@@ -349,6 +350,18 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
 
     case 'CAST':
       return handleCast(message.data);
+
+    case 'BUILD_CAST':
+      // Test-only: return the cast event templates without signing/publishing.
+      // Tree-shaken from production builds (guard is a compile-time constant).
+      if (__DISCERNED_TEST_BUILD__) {
+        const { noteTemplate, longFormTemplate } = await buildCastTemplates(
+          message.data.capture,
+          message.data.evaluation,
+        );
+        return { success: true, data: { noteTemplate, longFormTemplate } };
+      }
+      return { success: false, error: 'BUILD_CAST is test-only' };
 
     case 'GET_AUTH_STATE':
       // For a stored key, report whether it's currently unlocked (the decrypted
@@ -1146,14 +1159,46 @@ function buildShortNote(
   return createResourceNoteEvent(capture, evaluation, inline, snippet, longFormRef);
 }
 
+// Build the kind-1 note + companion kind-30023 templates a cast would publish,
+// without signing or publishing. This is the exact event-construction path
+// handleCast uses — extracted so the dev test bridge (BUILD_CAST) can exercise
+// the real factory output for visual/contract tests. `longFormTemplate` is null
+// when the capture is not long-form-eligible (bookmark, plain selection, or the
+// content script didn't attach markdown).
+async function buildCastTemplates(
+  capture: Capture,
+  evaluation: Evaluation,
+): Promise<{ noteTemplate: EventTemplate; longFormTemplate: EventTemplate | null }> {
+  const relays = await resolveActiveRelays();
+  const authorPubkey = resolveAuthorPubkey();
+  const snippet = buildDiscernedSnippet(evaluation);
+
+  const markdown = longFormMarkdownFor(capture);
+  const hasLongForm = !!markdown;
+
+  // A companion long-form's coordinate is 30023:<pubkey>:<capture.id> — it
+  // needs only the author pubkey, NOT a signed event.
+  let longFormRef: LongFormRef | undefined;
+  if (hasLongForm && authorPubkey) {
+    longFormRef = {
+      coord: `30023:${authorPubkey}:${capture.id}`,
+      naddr: naddrEncode({ identifier: capture.id, pubkey: authorPubkey, kind: 30023, relays: relays.slice(0, 2) }),
+      relay: relays[0],
+    };
+  }
+
+  const noteTemplate = buildShortNote(capture, evaluation, snippet, longFormRef);
+  const longFormTemplate = hasLongForm
+    ? createLongFormEvent(capture, evaluation, markdown!, snippet)
+    : null;
+  return { noteTemplate, longFormTemplate };
+}
+
 async function handleCast(
   data: { capture: Capture; evaluation: Evaluation },
 ): Promise<BackgroundResponse> {
   try {
     const { capture, evaluation } = data;
-    const relays = await resolveActiveRelays();
-    const authorPubkey = resolveAuthorPubkey();
-    const snippet = buildDiscernedSnippet(evaluation);
 
     // NIP-07 kind-1/30023: always sign via the discerned web app so the wallet
     // only ever approves discerned.online, not each site the overlay is used on.
@@ -1164,38 +1209,24 @@ async function handleCast(
     const sign = (t: Parameters<typeof signEvent>[0]): Promise<any> =>
       currentAuthState.type === 'pro' ? signEventViaWebApp(t) : signEvent(t);
 
-    const markdown = longFormMarkdownFor(capture);
-    const hasLongForm = !!markdown;
-
-    // A companion long-form's coordinate is 30023:<pubkey>:<capture.id> — it
-    // needs only the author pubkey, NOT a signed event. Deriving the ref up front
-    // (when the pubkey is known) decouples the two signs: neither has to be
-    // signed before the other, so the order carries no meaning here.
-    let longFormRef: LongFormRef | undefined;
-    if (hasLongForm && authorPubkey) {
-      longFormRef = {
-        coord: `30023:${authorPubkey}:${capture.id}`,
-        naddr: naddrEncode({ identifier: capture.id, pubkey: authorPubkey, kind: 30023, relays: relays.slice(0, 2) }),
-        relay: relays[0],
-      };
-    }
+    // Build both templates via the shared, publish-free builder (same path the
+    // BUILD_CAST test bridge uses), then sign them here.
+    const { noteTemplate, longFormTemplate } = await buildCastTemplates(capture, evaluation);
 
     // Build + sign the kind-1 note. It references the long-form via longFormRef
     // when the pubkey was known up front.
-    const noteTemplate = buildShortNote(capture, evaluation, snippet, longFormRef);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const signedNote: any = await sign(noteTemplate);
 
-    // Build + sign the companion long-form (best-effort). A failure here never
-    // fails the cast — the note is the feed-of-record. (Note + long-form share
-    // the signer, so their pubkeys match; if the ref wasn't derived up front,
-    // the note simply carries no 'a' link and the feed dedups heuristically.)
+    // Sign the companion long-form (best-effort). A failure here never fails the
+    // cast — the note is the feed-of-record. (Note + long-form share the signer,
+    // so their pubkeys match; if the ref wasn't derived up front, the note
+    // simply carries no 'a' link and the feed dedups heuristically.)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let signedLongForm: any = null;
-    if (hasLongForm) {
+    if (longFormTemplate) {
       try {
-        const template = createLongFormEvent(capture, evaluation, markdown!, snippet);
-        signedLongForm = await sign(template);
+        signedLongForm = await sign(longFormTemplate);
       } catch (err) {
         signedLongForm = null;
         log(LL.WARN, 'Long-form build/sign failed — casting note only:', err, 'url:', capture.url);
