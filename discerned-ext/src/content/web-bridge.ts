@@ -57,19 +57,18 @@ async function getAuthInfo(): Promise<{ pubkey: string | null; authMethod: AuthM
   }
 }
 
-// For NIP-07 (pro) the pubkey is not stored in chrome.storage — it lives
-// in the wallet. We fetch it through the MAIN-world bridge instead.
+// Resolve the persisted pubkey for the current auth state. For NIP-07 (pro) the
+// pubkey IS persisted once the user signs in on the web app (the background's
+// NIP07_DETECTED handler writes it), so a signed-in pro identity bridges through
+// HELLO like nsec/nip46 ones. Returns null for guest or a pro user who hasn't
+// signed in yet (no pubkey stored).
 async function getNip07Pubkey(): Promise<string | null> {
   try {
-    // The nip07-bridge content script exposes window.nostr in MAIN world;
-    // we can't reach it directly from the isolated world, so we ask the
-    // background to sign a dummy request which resolves the pubkey via the
-    // same relay path used for casts.
     const stored = await chrome.storage.local.get(STORAGE_KEYS.AUTH_STATE);
     const auth = stored[STORAGE_KEYS.AUTH_STATE] as AuthState | undefined;
     if (auth?.type === 'nip46') return auth.pubkey;
     if (auth?.type === 'nsec')  return auth.pubkey;
-    // For pro/guest there is no persistent pubkey in storage.
+    if (auth?.type === 'pro')   return auth.pubkey ?? null;
     return null;
   } catch {
     return null;
@@ -97,20 +96,35 @@ async function fetchClips(): Promise<ClipData[] | null> {
 // the same count, skip sending DISCERNED_BRIDGE_CLIPS to avoid redundant transfers.
 // Pass 0 to force a full re-send (used on error recovery and cold load).
 // Returns true only if the background was reachable; caller retries on false.
+// Resolve the current auth identity, surfacing the persisted pubkey for pro
+// (NIP-07) too. Returns null only when the background couldn't be reached.
+async function resolveAuthInfo(): Promise<{ pubkey: string | null; authMethod: AuthMethod } | null> {
+  const info = await getAuthInfo();
+  if (info === null) return null;
+  // If pro (NIP-07), surface the pubkey from storage (populated after web sign-in).
+  if (info.authMethod === 'nip07' && info.pubkey === null) {
+    const stored = await getNip07Pubkey();
+    return { ...info, pubkey: stored };
+  }
+  return info;
+}
+
+// Post a fresh HELLO with the current identity — auth only, no clip/category
+// re-send. Used by the storage.onChanged listener so open discerned tabs update
+// the moment the extension's auth state changes (connect / disconnect / switch).
+async function sendAuthHello(): Promise<void> {
+  if (!isContextValid()) return;
+  const authInfo = await resolveAuthInfo();
+  if (authInfo === null) return;
+  post({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: authInfo.pubkey, authMethod: authInfo.authMethod });
+  log(LL.NORMAL, 'web-bridge: auth changed, sent HELLO', authInfo.authMethod, 'pubkey?', !!authInfo.pubkey, 'url:', window.location.href);
+}
+
 async function sendBridgeData(knownCount = 0): Promise<boolean> {
   if (!isContextValid()) return false;
   // Auth and clips can be fetched in parallel.
   const [authInfo, clips] = await Promise.all([
-    (async () => {
-      const info = await getAuthInfo();
-      if (info === null) return null;
-      // If pro (NIP-07), try to surface the pubkey from storage as a fallback.
-      if (info.authMethod === 'nip07' && info.pubkey === null) {
-        const stored = await getNip07Pubkey();
-        return { ...info, pubkey: stored };
-      }
-      return info;
-    })(),
+    resolveAuthInfo(),
     fetchClips(),
   ]);
 
@@ -166,8 +180,21 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
   if (message.type === 'PUSH_PENDING_SIGN') {
     // First-cast handoff from the background: surface a confirm UI in the
     // web app so the user provides a per-origin gesture for window.nostr.
-    post({ type: 'DISCERNED_BRIDGE_PENDING_SIGN', id: message.id, event: message.event });
+    // expectedPubkey lets the web app block the sign if the wallet's active
+    // identity has changed since the extension connected.
+    post({ type: 'DISCERNED_BRIDGE_PENDING_SIGN', id: message.id, event: message.event, expectedPubkey: message.expectedPubkey });
   }
+});
+
+// Push a fresh HELLO to the page whenever the extension's auth state changes,
+// so an open discerned tab reflects a connect / disconnect / identity switch
+// without a reload. Both a value change AND a removal (disconnect clears the
+// key) fire onChanged, so a signed-out identity propagates too. Fire-and-forget.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (!(STORAGE_KEYS.AUTH_STATE in changes)) return;
+  if (!isContextValid()) return;
+  void sendAuthHello();
 });
 
 // Two distinct concerns:

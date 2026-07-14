@@ -7,11 +7,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useRef, useEffect, useState } from 'react';
-import { npubEncode } from 'nostr-tools/nip19';
 import MiniBeacon from '@/components/brand/MiniBeacon';
 import StatusDot from '@/components/auth/StatusDot';
 import SettingsModal from '@/components/chrome/SettingsModal';
 import { getActiveRelays, onRelayModeChange } from '@/lib/constants';
+import { authorLabel } from '@/lib/nostr/profiles';
+import { useOwnProfile } from '@/hooks/useOwnProfile';
 import type { AuthState } from '@/lib/types';
 
 interface TopBarProps {
@@ -59,6 +60,9 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
   // default (SSR-safe and identical on first client render → no hydration drift).
   const [relayCount, setRelayCount] = useState(() => getActiveRelays().length);
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+  // Prefer a verified NIP-05 name over the bare npub in the account chip.
+  const ownProfile = useOwnProfile(auth.pubkey);
+  const identityLabel = auth.pubkey ? authorLabel(auth.pubkey, ownProfile ?? undefined) : '';
 
   useEffect(() => onRelayModeChange(() => setRelayCount(getActiveRelays().length)), []);
 
@@ -136,10 +140,10 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
                   auth.source === 'nip07' ? 'via NIP-07' :
                   auth.source === 'bridge' ? 'via extension' :
                   'read-only'
-                } · ${auth.pubkey ? npubEncode(auth.pubkey).slice(0, 12) : ''}… · ${relayCount} relay${relayCount === 1 ? '' : 's'}`
+                } · ${identityLabel} · ${relayCount} relay${relayCount === 1 ? '' : 's'}`
           }
           onClick={onSignIn}
-          label={auth.status === 'guest' ? 'Sign in with Nostr' : `Nostr connected · ${auth.pubkey ? npubEncode(auth.pubkey).slice(0, 12) : ''}`}
+          label={auth.status === 'guest' ? 'Sign in with Nostr' : `Nostr connected · ${identityLabel}`}
         />
         <StatusDot
           connected={!!extensionPresent}

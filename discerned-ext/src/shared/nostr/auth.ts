@@ -122,7 +122,7 @@ export async function signWithNIP07(event: object, timeoutMs = 30000): Promise<o
     window.postMessage({ type: 'DISCERNED_NIP07_SIGN', id: messageId, event }, '*');
     const timer = setTimeout(() => {
       window.removeEventListener('message', handler);
-      reject(new Error('NIP-07 signing timeout'));
+      reject(new Error('Signing extension did not respond — it may be locked. Unlock it and try again.'));
     }, timeoutMs);
   });
 }

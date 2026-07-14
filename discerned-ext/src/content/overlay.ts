@@ -7,7 +7,8 @@
 // Access: Shadow DOM (ShadowRoot); chrome.runtime.sendMessage for auth + stats; on-page DOM
 //         (only for the article highlight rectangle, drawn into document.body).
 
-import type { AuthState, Capture, ClipFormat, Evaluation, SignalLevel, Category, PublishMode, Theme, ResolvedTheme } from '@/shared/types';
+import type { AuthState, Capture, ClipFormat, Evaluation, SignalLevel, Category, PublishMode, Theme, ResolvedTheme, OwnProfile } from '@/shared/types';
+import { detectAuthState } from '@/shared/nostr/auth';
 import { STORAGE_KEYS, SIGNAL_LEVELS, SIGNAL_DESCRIPTIONS, QUALIFIER_GROUPS, signalRank, resolveRelayMode, relaysForMode, resolveThemePref, resolveEffectiveTheme } from '@/shared/types';
 import { themeVarsBlock, prefersDark, onSystemThemeChange } from '@/shared/theme';
 import { LL, log } from '@/shared/logger';
@@ -52,6 +53,9 @@ export class DiscernedOverlay {
   private note = '';
   private customCategories: string[] = [];
   private authState: AuthState = { type: 'guest' };
+  // Kind-0 profile (name / verified nip05) for the signed-in identity, fetched
+  // once per show() and shared by the settings identity block + footer tooltip.
+  private ownProfile: OwnProfile | null = null;
   private view: View = 'main';
   private identityBackTarget: View = 'main';
   private identityStep: 'choose' | 'existing' | 'create' = 'choose';
@@ -143,6 +147,7 @@ export class DiscernedOverlay {
     this.format = options.initialFormat;
     this.hasSelection = options.hasSelection;
     this.authState = options.authState;
+    this.ownProfile = null; // re-fetched per show() by loadOwnProfile
 
     // Refresh authState + re-render when the background persists a change
     // (e.g. user completed web-app sign-in in another tab → pubkey arrives), and
@@ -152,6 +157,9 @@ export class DiscernedOverlay {
       if (area !== 'local') return;
       const next = changes[STORAGE_KEYS.AUTH_STATE]?.newValue as AuthState | undefined;
       if (next) {
+        // Drop a cached profile whose identity no longer matches (switch / disconnect).
+        const nextPubkey = next.type === 'guest' ? undefined : next.pubkey;
+        if (this.ownProfile && this.ownProfile.pubkey !== nextPubkey) this.ownProfile = null;
         this.authState = next;
         this.render();
       }
@@ -671,6 +679,12 @@ ${themeVarsBlock(this.effectiveTheme)}
       const btn    = this.shadow.getElementById('btn-detect-nip07') as HTMLButtonElement | null;
       this.setIdentityStatus(status, 'Checking…', 'spin');
       if (btn) btn.disabled = true;
+      // Actually probe the live page for window.nostr (GET_AUTH_STATE alone only
+      // reads cached background state, which is stale right after a disconnect).
+      const probed = await detectAuthState().catch(() => null);
+      if (probed?.type === 'pro') {
+        await chrome.runtime.sendMessage({ type: 'NIP07_DETECTED', hasNIP07: true }).catch(() => { /* non-fatal */ });
+      }
       const res = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }).catch(() => null);
       if (btn) btn.disabled = false;
       if (res?.success && res.data?.type === 'pro') {
@@ -837,8 +851,17 @@ ${themeVarsBlock(this.effectiveTheme)}
     const formatPubkey = (pk: string) => {
       try { const npub = npubEncode(pk); return `${npub.slice(0, 16)}…${npub.slice(-8)}`; } catch { return pk; }
     };
+    // Primary name line (verified nip05 / display name) is patched in async by
+    // loadOwnProfile() once the kind-0 profile resolves; the npub always stays
+    // visible as the fallback + secondary identifier.
+    const nameLine = (): string => {
+      const p = this.ownProfile;
+      const label = p?.verified && p.nip05 ? p.nip05 : (p?.name ?? '');
+      const style = label ? '' : ' style="display:none"';
+      return `<div class="profile-name" id="profile-name"${style}>${ev(label)}</div>`;
+    };
     const identityBlock = (pk: string): string => {
-      return `<div class="profile-id"><span class="profile-id-label">npub:</span> ${ev(formatPubkey(pk))}</div>`;
+      return `<div class="profile-identity">${nameLine()}<div class="profile-id"><span class="profile-id-label">npub:</span> ${ev(formatPubkey(pk))}</div></div>`;
     };
 
     let authBlock = '';
@@ -1037,11 +1060,15 @@ ${themeVarsBlock(this.effectiveTheme)}
 
     this.shadow.getElementById('settings-disconnect')?.addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'DISCONNECT_AUTH' });
-      // Disconnect resets the background to guest and must STAY guest until the
-      // user actively reconnects — do NOT re-probe NIP-07 here, or a fresh
-      // NIP07_DETECTED would flip guest→pro in the same tick and the Disconnect
-      // link would never toggle to "Connect". NIP-07 is re-detected when the
-      // user opens the connect flow, which is the right time to reconnect.
+      // Re-probe NIP-07 immediately so a still-installed wallet is re-detected
+      // without dismissing + reopening the overlay. A promotion to pro carries
+      // NO pubkey, and this settings card renders pro-without-pubkey as "Signing
+      // extension detected — sign in to connect" while the Disconnect button only
+      // shows once a pubkey exists — so re-detecting here can't strand Disconnect.
+      const probed = await detectAuthState().catch(() => null);
+      if (probed?.type === 'pro') {
+        await chrome.runtime.sendMessage({ type: 'NIP07_DETECTED', hasNIP07: true }).catch(() => { /* non-fatal */ });
+      }
       const refreshed = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }).catch(() => null);
       if (refreshed?.success && refreshed.data) this.authState = refreshed.data as AuthState;
       this.render();
@@ -1100,6 +1127,28 @@ ${themeVarsBlock(this.effectiveTheme)}
 
     void this.loadStats();
     void this.loadCaptureToggles();
+    void this.loadOwnProfile();
+  }
+
+  // Fetch (once, cached) the kind-0 profile for the signed-in identity and patch
+  // the name line into the settings identity block. Fire-and-forget; a relay miss
+  // leaves the npub-only display in place.
+  private async loadOwnProfile() {
+    const a = this.authState;
+    if (a.type === 'guest' || !a.pubkey) return;
+    // Reuse an already-fetched profile for the same identity (shared with the tooltip).
+    if (!this.ownProfile || this.ownProfile.pubkey !== a.pubkey) {
+      const res = await chrome.runtime.sendMessage({ type: 'GET_PROFILE' }).catch(() => null);
+      this.ownProfile = (res?.success && res.data) ? res.data as OwnProfile : null;
+    }
+    const p = this.ownProfile;
+    const label = p?.verified && p.nip05 ? p.nip05 : (p?.name ?? '');
+    const nameEl = this.shadow.getElementById('profile-name');
+    if (nameEl && label) {
+      nameEl.textContent = label;
+      (nameEl as HTMLElement).style.display = '';
+    }
+    void this.updateNostrStatusTooltip();
   }
 
   private async loadCaptureToggles() {
@@ -1170,7 +1219,11 @@ ${themeVarsBlock(this.effectiveTheme)}
       const stored = await chrome.storage.local.get(STORAGE_KEYS.RELAYS);
       const relays = relaysForMode(resolveRelayMode(stored[STORAGE_KEYS.RELAYS] as string | undefined));
       const relayPart = `${relays.length} relay${relays.length === 1 ? '' : 's'}`;
-      tip.textContent = npubSlice ? `${npubSlice}… · ${relayPart}` : relayPart;
+      // Prefer the verified nip05 / display name over the bare npub when known.
+      const p = this.ownProfile;
+      const name = p && p.pubkey === pubkey ? (p.verified && p.nip05 ? p.nip05 : p.name) : undefined;
+      const idPart = name ? name : (npubSlice ? `${npubSlice}…` : '');
+      tip.textContent = idPart ? `${idPart} · ${relayPart}` : relayPart;
     } catch (err) {
       log(LL.WARN, 'Failed to set Nostr status tooltip', err);
     }
@@ -2427,6 +2480,8 @@ ${themeVarsBlock(this.effectiveTheme)}
       .card-desc  { font-size: 12px; color: var(--p-ink-2); line-height: 1.5; }
       .card-value { font-size: 13px; color: var(--p-ink); }
       .card-value.ok { color: var(--p-accent-ink); }
+      .profile-identity { display: flex; flex-direction: column; gap: 4px; }
+      .profile-name { font-size: 13px; font-weight: 600; color: var(--p-accent-ink); word-break: break-all; }
       .profile-id { font-size: 12px; color: var(--p-ink-2); font-family: var(--p-mono); background: var(--p-surface-2); padding: 6px 8px; word-break: break-all; }
       .profile-id + .profile-id { margin-top: 4px; }
       .profile-id-label { color: var(--p-ink-3); margin-right: 6px; font-family: var(--p-font-sans, inherit); }

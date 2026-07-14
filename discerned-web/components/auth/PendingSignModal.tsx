@@ -1,32 +1,95 @@
 'use client';
 
-// Silent NIP-07 signer for extension-routed casts.
+// NIP-07 signer for extension-routed casts.
 // The extension always signs kind-1 events on discerned.online so the wallet
-// only ever needs to approve this origin once. No UI is shown — the sign
-// happens automatically when the request arrives. If the wallet is locked or
-// rejects, the error is forwarded back to the extension.
+// only ever needs to approve this origin once. While a sign is in flight a small
+// banner is shown ("approve in your signing extension…"), because a locked
+// wallet may never surface its prompt. Three failure paths are guarded:
+//   - no window.nostr → reject immediately
+//   - the wallet's active identity ≠ the identity the extension connected as
+//     (multi-identity wallets) → reject WITHOUT signing, naming both identities
+//   - the wallet never responds (locked) → reject after a 30s timeout
+// 30s is below the extension's 120s pending-sign timeout, so the specific
+// web-side message always reaches the user before the generic one.
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { npubEncode } from 'nostr-tools/nip19';
 import { subscribeBridge, sendSignedToExtension, sendSignRejectedToExtension } from '@/lib/bridge/extension-bridge';
+import { LL, log } from '@/lib/logger';
+
+const SIGN_TIMEOUT_MS = 30_000;
+
+function npubShort(pk: string): string {
+  try { return `${npubEncode(pk).slice(0, 12)}…`; } catch { return `${pk.slice(0, 12)}…`; }
+}
 
 export default function PendingSignModal() {
+  const [pending, setPending] = useState(false);
+
   useEffect(() => {
     const cleanup = subscribeBridge(async (msg) => {
       if (msg.type !== 'DISCERNED_BRIDGE_PENDING_SIGN') return;
-      const { id, event } = msg;
+      const { id, event, expectedPubkey } = msg;
       if (!window.nostr) {
         sendSignRejectedToExtension(id, 'NIP-07 extension not available');
         return;
       }
+
+      setPending(true);
+      // Locked wallets never resolve getPublicKey()/signEvent() until unlocked —
+      // the call hangs with no rejection. Cap the whole sequence so the cast
+      // can't silently stall for the extension's full 2-minute timeout.
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        setPending(false);
+        sendSignRejectedToExtension(id, 'Your signing extension did not respond — it may be locked. Unlock it and try casting again.');
+      }, SIGN_TIMEOUT_MS);
+
       try {
+        // Guard multi-identity wallets: if the wallet's active identity differs
+        // from the one the extension connected as, the event would be signed by
+        // the wrong key (or rejected as a mismatch). Block it and explain.
+        if (expectedPubkey) {
+          const active = await window.nostr.getPublicKey();
+          if (settled) return;
+          if (active !== expectedPubkey) {
+            settled = true;
+            clearTimeout(timeout);
+            setPending(false);
+            log(LL.WARN, '[pending-sign] identity mismatch — active', npubShort(active), 'expected', npubShort(expectedPubkey));
+            sendSignRejectedToExtension(
+              id,
+              `Your signing extension is active as ${npubShort(active)} but you connected as ${npubShort(expectedPubkey)}. Switch identity in your wallet, or sign in again at discerned.online to cast as the new identity.`,
+            );
+            return;
+          }
+        }
+
         const signed = await window.nostr.signEvent(event);
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        setPending(false);
         sendSignedToExtension(id, signed);
       } catch (err) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        setPending(false);
         sendSignRejectedToExtension(id, err instanceof Error ? err.message : 'Wallet rejected the sign');
       }
     });
     return cleanup;
   }, []);
 
-  return null;
+  if (!pending) return null;
+
+  return (
+    <div className="pending-sign-banner" role="status" aria-live="polite">
+      <span className="pending-sign-spinner" aria-hidden="true" />
+      <span>Approve the signature in your signing extension… If nothing appears, unlock your wallet.</span>
+    </div>
+  );
 }

@@ -270,7 +270,10 @@ async function handleCast(capture: Capture, evaluation: Evaluation): Promise<str
 /**
  * Show a fixed-position error toast when a cast fails.
  * The host element is positioned directly (not inside the shadow) so it sits cleanly
- * above the overlay panel without shadow-DOM stacking ambiguity.
+ * above the overlay panel without shadow-DOM stacking ambiguity. It's placed just to
+ * the RIGHT of the 380px-wide left-docked overlay panel, near the bottom where the
+ * Cast button lives (not in the far corner), and stays up until the user dismisses
+ * it — a locked-wallet / mismatch message must not vanish before it's read.
  */
 async function showCastErrorToast(message: string) {
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -281,9 +284,15 @@ async function showCastErrorToast(message: string) {
     const stored = await chrome.storage.local.get(STORAGE_KEYS.THEME);
     theme = resolveEffectiveTheme(resolveThemePref(stored[STORAGE_KEYS.THEME] as string | undefined), prefersDark());
   } catch { /* use provisional theme */ }
+  // Remove any earlier toast so a rapid second failure doesn't stack.
+  document.querySelectorAll('.discerned-cast-error-toast').forEach((el) => el.remove());
   const host = document.createElement('div');
-  host.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:2147483647;display:block;';
-  host.attachShadow({ mode: 'closed' }).innerHTML = `
+  host.className = 'discerned-cast-error-toast';
+  // Sit next to the overlay panel (380px wide, left-docked), near the bottom.
+  // Fall back to the left edge on narrow viewports where the panel is 90vw.
+  host.style.cssText = 'position:fixed;bottom:24px;left:396px;max-width:calc(100vw - 420px);z-index:2147483647;display:block;';
+  const shadow = host.attachShadow({ mode: 'closed' });
+  shadow.innerHTML = `
     <style>
       :host {
 ${themeVarsBlock(theme)}
@@ -291,22 +300,47 @@ ${themeVarsBlock(theme)}
       * { box-sizing: border-box; margin: 0; padding: 0;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
       .toast {
+        position: relative;
         background: var(--p-card); border: 1px solid var(--p-danger); border-radius: 8px;
-        padding: 12px 16px; max-width: 300px; line-height: 1.4;
+        padding: 12px 34px 12px 16px; width: 300px; max-width: 100%; line-height: 1.4;
         box-shadow: 0 4px 16px var(--p-cta-shadow);
         animation: in .25s ease;
       }
       @keyframes in { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:none } }
       .title { font-size: 13px; font-weight: 600; color: var(--p-danger); margin-bottom: 4px; }
       .body  { font-size: 12px; color: var(--p-ink-3); }
+      .close {
+        position: absolute; top: 6px; right: 6px;
+        width: 22px; height: 22px; border: none; border-radius: 5px;
+        background: transparent; color: var(--p-ink-3); cursor: pointer;
+        font-size: 16px; line-height: 1; display: grid; place-items: center;
+      }
+      .close:hover { background: var(--p-surface-2); color: var(--p-ink); }
     </style>
     <div class="toast">
+      <button class="close" type="button" aria-label="Dismiss">×</button>
       <div class="title">📡 Broadcast failed</div>
       <div class="body">${esc(message)}</div>
     </div>
   `;
+  const dismiss = () => {
+    host.remove();
+    document.removeEventListener('pointerdown', onOutside, true);
+  };
+  // Dismiss on a click/tap outside the toast. Clicks inside the closed shadow
+  // retarget to `host` at the document level, so host.contains() distinguishes
+  // inside from outside. Capture phase so page handlers can't swallow it.
+  const onOutside = (e: PointerEvent) => {
+    // Self-clean if this toast was already replaced by a newer one (which removes
+    // the host from the DOM but can't reach this closure's listener).
+    if (!host.isConnected) { document.removeEventListener('pointerdown', onOutside, true); return; }
+    if (!host.contains(e.target as Node)) dismiss();
+  };
+  shadow.querySelector('.close')?.addEventListener('click', dismiss);
   document.body.appendChild(host);
-  setTimeout(() => host.remove(), 5000);
+  // Defer attaching so the pointerdown that opened/triggered this frame (if any)
+  // doesn't immediately close the toast.
+  setTimeout(() => document.addEventListener('pointerdown', onOutside, true), 0);
 }
 
 chrome.runtime.sendMessage({ type: 'REGISTER_LOG_TAB' }).catch(() => {});

@@ -27,7 +27,7 @@ function LibraryWithClipId({ searchQuery }: { searchQuery: string }) {
 
 export default function LibraryPage() {
   const router = useRouter();
-  const { auth, signInPubkey } = useNostrAuth();
+  const { auth, signInPubkey, setNip07Connected } = useNostrAuth();
   const { extensionPresent } = useBridgeAuth();
   const [signInOpen, setSignInOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,6 +50,7 @@ export default function LibraryPage() {
         <SignInModal
           onClose={() => setSignInOpen(false)}
           onSignedIn={(pubkey) => signInPubkey(pubkey)}
+          onNip07SignedIn={(pubkey) => setNip07Connected(pubkey)}
         />
       )}
     </div>

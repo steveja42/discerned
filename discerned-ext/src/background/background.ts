@@ -19,6 +19,7 @@ import {
 } from '@/shared/nostr/events';
 import { prepareClipPayload } from '@/shared/nostr/encryption';
 import { publishWithMinimum, getRelayHealth } from './relay-manager';
+import { fetchOwnProfile } from './profile-fetcher';
 import {
   connectFromBunkerUri,
   getOrCreateBunkerSigner,
@@ -384,8 +385,19 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
         currentAuthState = { ...currentAuthState, pubkey: message.pubkey };
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
         log(LL.NORMAL, '[auth] NIP-07 pubkey resolved:', npubEncode(message.pubkey).slice(0, 12));
+      } else if (message.hasNIP07 && currentAuthState.type === 'pro' && message.pubkey && currentAuthState.pubkey && message.pubkey !== currentAuthState.pubkey) {
+        // Explicit identity switch: a pubkey-bearing NIP07_DETECTED only comes from
+        // the web app's Sign In (DISCERNED_SET_NIP07_PUBKEY) — a user gesture on
+        // discerned.online — so adopting a differing pubkey here is sanctioned.
+        const prev = currentAuthState.pubkey;
+        currentAuthState = { ...currentAuthState, pubkey: message.pubkey };
+        await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
+        log(LL.NORMAL, '[auth] NIP-07 identity switched:', npubEncode(prev).slice(0, 12), '→', npubEncode(message.pubkey).slice(0, 12));
       }
       return { success: true };
+
+    case 'GET_PROFILE':
+      return handleGetProfile();
 
     case 'PUBLISH_KIND_ZERO':
       return handlePublishKind0(senderTabId);
@@ -1060,6 +1072,27 @@ function longFormMarkdownFor(capture: Capture): string | undefined {
   return md;
 }
 
+// Fetch the signed-in identity's kind-0 profile (name / verified nip05) for
+// display in the overlay. Returns null data for guest or a pro user who hasn't
+// signed in yet (no pubkey). Never rejects — a relay miss returns null data.
+async function handleGetProfile(): Promise<BackgroundResponse> {
+  let pubkey: string | undefined;
+  switch (currentAuthState.type) {
+    case 'pro':   pubkey = currentAuthState.pubkey; break;
+    case 'nsec':  pubkey = currentAuthState.pubkey; break;
+    case 'nip46': pubkey = currentAuthState.pubkey; break;
+    case 'guest': pubkey = undefined; break;
+  }
+  if (!pubkey) return { success: true, data: null };
+  try {
+    const profile = await fetchOwnProfile(pubkey);
+    return { success: true, data: profile };
+  } catch (err) {
+    log(LL.WARN, '[profile] handleGetProfile failed:', err instanceof Error ? err.message : String(err));
+    return { success: true, data: null };
+  }
+}
+
 // The casting user's hex pubkey, resolved per auth type. For guest we generate
 // the ephemeral key eagerly so the mention + naddr coordinate are available.
 // Returns undefined only when a pro/NIP-07 pubkey isn't known yet (rare).
@@ -1345,8 +1378,8 @@ async function signWithSigningTab(
 
 const PENDING_SIGN_TIMEOUT_MS = 120_000; // 2 min — user may not be at the keyboard
 
-async function pushPendingSignToWebApp(id: string, event: Record<string, unknown>, tabId: number): Promise<void> {
-  const msg: BackgroundMessage = { type: 'PUSH_PENDING_SIGN', id, event };
+async function pushPendingSignToWebApp(id: string, event: Record<string, unknown>, tabId: number, expectedPubkey?: string): Promise<void> {
+  const msg: BackgroundMessage = { type: 'PUSH_PENDING_SIGN', id, event, expectedPubkey };
   await chrome.tabs.sendMessage(tabId, msg).catch(() => { /* non-fatal */ });
 }
 
@@ -1398,7 +1431,10 @@ async function signEventViaWebApp(
       reject(new Error('User did not confirm the cast within 2 minutes'));
     }, PENDING_SIGN_TIMEOUT_MS);
     pendingSigns.set(id, { resolve, reject, timer });
-    void pushPendingSignToWebApp(id, template as unknown as Record<string, unknown>, tabId);
+    // Pass the identity the extension believes it's connected as so the web app
+    // can block the sign if the wallet's active identity has since changed.
+    const expectedPubkey = currentAuthState.type === 'pro' ? currentAuthState.pubkey : undefined;
+    void pushPendingSignToWebApp(id, template as unknown as Record<string, unknown>, tabId, expectedPubkey);
   });
   return signed;
 }

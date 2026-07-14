@@ -23,6 +23,7 @@ interface NostrAuthValue {
   auth: AuthState;
   nip07Available: boolean;
   signInNip07: () => Promise<void>;
+  setNip07Connected: (pubkey: string) => void;
   signInPubkey: (pubkey: string) => void;
   signOut: () => void;
   setBridgeAuth: (pubkey: string | null) => void;
@@ -152,6 +153,17 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
     sendPubkeyToExtension(pubkey);
   }, []);
 
+  // Marks the session as a live NIP-07 connection from a pubkey the caller has
+  // ALREADY obtained from the wallet (e.g. SignInModal just called getPublicKey).
+  // Unlike signInNip07(), this does NOT re-prompt the wallet — it only lifts the
+  // React state to 'connected' so the session can cast. Persistence + extension
+  // handoff already happened in the caller.
+  const setNip07Connected = useCallback((pubkey: string) => {
+    log(LL.NORMAL, '[auth] nip07 connected:', npubEncode(pubkey).slice(0, 12));
+    storePubkey(pubkey);
+    setAuth({ status: 'connected', pubkey, source: 'nip07' });
+  }, []);
+
   const signInPubkey = useCallback((pubkey: string) => {
     log(LL.NORMAL, '[auth] manual pubkey sign-in:', npubEncode(pubkey).slice(0, 12));
     storePubkey(pubkey);
@@ -163,20 +175,37 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
     setAuth({ status: 'guest', pubkey: null });
   }, []);
 
+  // Reflect the extension's auth state into this tab. The extension is the
+  // authority for a bridge-sourced session, so it can switch or sign out that
+  // identity live. It must NOT override a wallet ('connected') session — a real
+  // conflict there surfaces at cast time via the pending-sign identity check.
+  // Bridge identities are never persisted to localStorage (they're re-derived
+  // from the extension each load; persisting would strand a stale identity after
+  // the extension disconnects).
   const setBridgeAuth = useCallback((pubkey: string | null) => {
-    if (!pubkey) return;
     setAuth((prev) => {
-      if (prev.status === 'connected') {
-        log(LL.DEBUG, '[useNostrAuth] setBridgeAuth ignored — already connected');
+      if (!pubkey) {
+        // Extension signed out. Only clear a session that came FROM the bridge;
+        // leave manual (pasted-npub) and wallet (nip07) sessions untouched.
+        if (prev.source === 'bridge') {
+          log(LL.NORMAL, '[auth] bridge signed out — clearing bridge session');
+          return { status: 'guest', pubkey: null };
+        }
         return prev;
       }
+      if (prev.pubkey === pubkey && prev.source === 'bridge') return prev; // no-op
+      if (prev.status === 'connected') {
+        log(LL.DEBUG, '[useNostrAuth] setBridgeAuth ignored — wallet session outranks');
+        return prev;
+      }
+      // Adopt the extension's identity for guest / bridge / manual-readonly sessions.
       log(LL.NORMAL, '[auth] bridge pubkey:', npubEncode(pubkey).slice(0, 12));
       return { status: 'readonly', pubkey, source: 'bridge' };
     });
   }, []);
 
   return (
-    <NostrAuthContext.Provider value={{ auth, nip07Available, signInNip07, signInPubkey, signOut, setBridgeAuth }}>
+    <NostrAuthContext.Provider value={{ auth, nip07Available, signInNip07, setNip07Connected, signInPubkey, signOut, setBridgeAuth }}>
       {children}
     </NostrAuthContext.Provider>
   );

@@ -96,7 +96,7 @@ const steps: { title: string; body: React.ReactNode }[] = [
 ];
 
 export default function GetExtensionPage() {
-  const { auth, signInPubkey } = useNostrAuth();
+  const { auth, signInPubkey, setNip07Connected } = useNostrAuth();
   const { extensionPresent } = useBridgeAuth();
   const [signInOpen, setSignInOpen] = useState(false);
 
@@ -192,6 +192,7 @@ export default function GetExtensionPage() {
         <SignInModal
           onClose={() => setSignInOpen(false)}
           onSignedIn={(pubkey) => signInPubkey(pubkey)}
+          onNip07SignedIn={(pubkey) => setNip07Connected(pubkey)}
         />
       )}
     </div>

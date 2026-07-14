@@ -53,6 +53,25 @@ describe('extension-bridge listener', () => {
     cleanup();
   });
 
+  it('delivers a PENDING_SIGN message carrying expectedPubkey', () => {
+    const handler = vi.fn();
+    const cleanup = listenForBridge(handler);
+
+    const pendingMsg: BridgeMessage = {
+      type: 'DISCERNED_BRIDGE_PENDING_SIGN',
+      id: 'sign_1',
+      event: { kind: 1, content: 'hi' },
+      expectedPubkey: 'a'.repeat(64),
+    };
+    dispatchBridgeEvent(pendingMsg);
+
+    expect(handler).toHaveBeenCalledWith(pendingMsg);
+    // expectedPubkey survives the round-trip so the modal can pre-check identity.
+    expect(handler.mock.calls[0][0].expectedPubkey).toBe('a'.repeat(64));
+
+    cleanup();
+  });
+
   it('ignores DISCERNED_WEB_READY echoes (own-side messages)', () => {
     const handler = vi.fn();
     const cleanup = listenForBridge(handler);

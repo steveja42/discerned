@@ -9,7 +9,7 @@ import { useNostrAuth } from '@/hooks/useNostrAuth';
 import { useBridgeAuth } from '@/hooks/useBridgeAuth';
 
 export default function AboutPage() {
-  const { auth, signInPubkey } = useNostrAuth();
+  const { auth, signInPubkey, setNip07Connected } = useNostrAuth();
   const { extensionPresent } = useBridgeAuth();
   const [signInOpen, setSignInOpen] = useState(false);
 
@@ -68,6 +68,7 @@ export default function AboutPage() {
         <SignInModal
           onClose={() => setSignInOpen(false)}
           onSignedIn={(pubkey) => signInPubkey(pubkey)}
+          onNip07SignedIn={(pubkey) => setNip07Connected(pubkey)}
         />
       )}
     </div>

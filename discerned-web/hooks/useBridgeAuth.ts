@@ -34,7 +34,10 @@ export function useBridgeAuth() {
         gotHello = true;
         log(LL.DEBUG, '[useBridgeAuth] HELLO authMethod=', msg.authMethod, 'pubkey?=', !!msg.pubkey, elapsed());
         setBridgePresent(msg.pubkey, msg.authMethod);
-        if (msg.pubkey) setBridgeAuth(msg.pubkey);
+        // Always forward the pubkey — including null. A HELLO with pubkey=null
+        // means the extension signed out; setBridgeAuth clears a bridge-sourced
+        // session so the sign-out propagates to this tab.
+        setBridgeAuth(msg.pubkey);
       }
       if (msg.type === 'DISCERNED_BRIDGE_CLIPS') {
         setClips(msg.clips);

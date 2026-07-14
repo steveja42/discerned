@@ -120,6 +120,18 @@ export type AuthState =
   // response so the overlay can show a locked indicator and prompt for the PIN.
   | { type: 'nsec'; pubkey: string; ncryptsec: string; unlocked?: boolean }; // NIP-49 encrypted blob
 
+// Kind-0 profile metadata for the signed-in identity, fetched from relays and
+// cached in chrome.storage.local (STORAGE_KEYS.PROFILE_CACHE). `verified` is
+// true only when the nip05 has been checked against its domain's
+// /.well-known/nostr.json. `fetchedAt` drives the cache TTL.
+export interface OwnProfile {
+  pubkey: string;
+  name?: string;
+  nip05?: string;
+  verified?: boolean;
+  fetchedAt: number;
+}
+
 /**
  * Embedded-tweet data harvested from a third-party page that embeds a tweet.
  * Sourced either from the rendered platform.twitter.com iframe (rich, with
@@ -154,6 +166,7 @@ export type BackgroundMessage =
   | { type: 'SYNC_CATEGORIES_TO_WEB' }
   | { type: 'PUSH_CATEGORIES'; categories: string[] }
   | { type: 'NIP07_DETECTED'; hasNIP07: boolean; pubkey?: string }
+  | { type: 'GET_PROFILE' }
   | { type: 'PUBLISH_KIND_ZERO' }
   | { type: 'CONNECT_NIP46'; bunkerUri: string }
   | { type: 'CONNECT_NSEC'; rawNsec: string; pin: string }
@@ -175,7 +188,7 @@ export type BackgroundMessage =
   | { type: 'REGISTER_LOG_TAB' }
   | { type: 'EXTRACT_EMBEDDED_TWEETS' }
   | { type: 'GET_CLIP_BODY'; id: string }
-  | { type: 'PUSH_PENDING_SIGN'; id: string; event: Record<string, unknown> }
+  | { type: 'PUSH_PENDING_SIGN'; id: string; event: Record<string, unknown>; expectedPubkey?: string }
   | { type: 'RESOLVE_PENDING_SIGN'; id: string; signed: Record<string, unknown> }
   | { type: 'REJECT_PENDING_SIGN'; id: string; error: string }
   | { type: 'RELAY_MODE_CHANGED'; mode: RelayMode }
@@ -204,6 +217,7 @@ export const STORAGE_KEYS = {
   CUSTOM_CATEGORIES:       'customCategories', // legacy key — superseded by CATEGORIES
   CATEGORIES:              'categories',
   THEME:                   'theme', // 'system' | 'light' | 'dark' — see resolveThemePref
+  PROFILE_CACHE:           'profileCache', // { [pubkey]: OwnProfile } — kind-0 name/nip05, 24h TTL
 } as const;
 
 // Messages posted between the extension's web-bridge content script and the
@@ -220,7 +234,7 @@ export type WebBridgeOutbound =
   | { type: 'DISCERNED_BRIDGE_FOCUS_CLIP'; clipId: string }
   | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] }
   | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null }
-  | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown> }
+  | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown>; expectedPubkey?: string }
   | { type: 'DISCERNED_BRIDGE_RELAYS'; mode: RelayMode };
 
 export type WebBridgeInbound =

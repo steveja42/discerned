@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Discerned Relay Viewer</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 0; background: #0f0f11; color: #e7e7ea; }
+  header { position: sticky; top: 0; background: #16161a; border-bottom: 1px solid #2a2a30;
+           padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  input, select, button { font: inherit; background: #202027; color: inherit;
+           border: 1px solid #3a3a42; border-radius: 6px; padding: 5px 9px; }
+  button { cursor: pointer; }
+  #status { font-size: 13px; color: #9a9aa2; margin-left: auto; }
+  #status.ok { color: #6ee787; } #status.err { color: #ff8a8a; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  .note { border: 1px solid #2a2a30; border-radius: 10px; padding: 12px 14px; margin: 10px 0; background: #161619; }
+  .note .meta { font-size: 12px; color: #8a8a92; margin-bottom: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .note .kind { color: #7aa2ff; }
+  .note .body { white-space: pre-wrap; word-break: break-word; }
+  .note.article .title { font-weight: 600; font-size: 16px; margin-bottom: 4px; }
+  .pk { font-family: ui-monospace, monospace; }
+  code { background: #202027; padding: 1px 4px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Relay Viewer</h1>
+  <input id="url" size="34" value="ws://localhost:7777" />
+  <select id="kind">
+    <option value="all">all kinds</option>
+    <option value="1">kind 1 (notes)</option>
+    <option value="30023">kind 30023 (articles)</option>
+  </select>
+  <input id="author" size="20" placeholder="author npub/hex (optional)" />
+  <button id="go">Load</button>
+  <span id="status">idle</span>
+</header>
+<main id="out"></main>
+<script type="module">
+import { nip19 } from 'https://esm.sh/nostr-tools@2.7.2';
+
+const $ = (id) => document.getElementById(id);
+const out = $('out'), status = $('status');
+let ws;
+
+function setStatus(msg, cls = '') { status.textContent = msg; status.className = cls; }
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function render(events) {
+  events.sort((a, b) => b.created_at - a.created_at);
+  out.innerHTML = '';
+  for (const e of events) {
+    const div = document.createElement('div');
+    div.className = 'note' + (e.kind === 30023 ? ' article' : '');
+    let npub; try { npub = nip19.npubEncode(e.pubkey).slice(0, 16) + '…'; } catch { npub = e.pubkey.slice(0, 12); }
+    const when = new Date(e.created_at * 1000).toLocaleString();
+    const title = e.kind === 30023 ? (e.tags.find(t => t[0] === 'title')?.[1] ?? '(untitled)') : '';
+    div.innerHTML =
+      `<div class="meta"><span class="kind">kind ${e.kind}</span>` +
+      `<span class="pk">${esc(npub)}</span><span>${esc(when)}</span></div>` +
+      (title ? `<div class="title">${esc(title)}</div>` : '') +
+      `<div class="body">${esc(e.content.slice(0, 4000))}</div>`;
+    out.appendChild(div);
+  }
+  setStatus(`${events.length} events`, 'ok');
+}
+
+function load() {
+  const url = $('url').value.trim();
+  const kindSel = $('kind').value;
+  let author = $('author').value.trim();
+  if (author.startsWith('npub')) { try { author = nip19.decode(author).data; } catch {} }
+
+  const filter = { limit: 500 };
+  if (kindSel !== 'all') filter.kinds = [Number(kindSel)];
+  if (author) filter.authors = [author];
+
+  if (ws) try { ws.close(); } catch {}
+  const events = [];
+  setStatus('connecting…');
+  ws = new WebSocket(url);
+  const timer = setTimeout(() => { setStatus('timeout — is the relay running?', 'err'); try { ws.close(); } catch {} }, 8000);
+  ws.onopen = () => { setStatus('subscribing…'); ws.send(JSON.stringify(['REQ', 'view', filter])); };
+  ws.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m[0] === 'EVENT') events.push(m[2]);
+    else if (m[0] === 'EOSE') { clearTimeout(timer); render(events); ws.close(); }
+  };
+  ws.onerror = () => { clearTimeout(timer); setStatus('connection error — check relay URL / that it is running', 'err'); };
+}
+
+$('go').onclick = load;
+load();
+</script>
+</body>
+</html>

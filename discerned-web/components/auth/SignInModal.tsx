@@ -7,35 +7,73 @@
 
 import { useState } from 'react';
 import { generateSecretKey, getPublicKey } from 'nostr-tools';
-import { decode as nip19Decode } from 'nostr-tools/nip19';
+import { decode as nip19Decode, npubEncode } from 'nostr-tools/nip19';
 import { hasNip07, nip07GetPubkey, storePubkey } from '@/lib/nostr/auth';
 import { sendPubkeyToExtension } from '@/lib/bridge/extension-bridge';
+import { useNostrAuth } from '@/hooks/useNostrAuth';
+import { useOwnProfile } from '@/hooks/useOwnProfile';
+import { authorLabel } from '@/lib/nostr/profiles';
+import { LL, log } from '@/lib/logger';
 
 interface SignInModalProps {
   onClose: () => void;
   onSignedIn?: (pubkey: string) => void;
+  // Distinct from onSignedIn: a NIP-07 wallet sign-in yields a live signer, so
+  // the session should become 'connected' (can cast), not the read-only state
+  // that pasted-npub / nsec sign-ins produce. Callers wire this to signInNip07().
+  // Falls back to onSignedIn when not provided.
+  onNip07SignedIn?: (pubkey: string) => void;
 }
 
-type Step = 'menu' | 'nsec' | 'generate';
+type Step = 'account' | 'menu' | 'nsec' | 'generate';
 
-export default function SignInModal({ onClose, onSignedIn }: SignInModalProps) {
-  const [step, setStep] = useState<Step>('menu');
+export default function SignInModal({ onClose, onSignedIn, onNip07SignedIn }: SignInModalProps) {
+  const { auth, signOut } = useNostrAuth();
+  // Open on the account view when a session already exists; otherwise the menu.
+  const [step, setStep] = useState<Step>(auth.pubkey ? 'account' : 'menu');
   const [nsecInput, setNsecInput] = useState('');
   const [error, setError] = useState('');
+  const [nip07Busy, setNip07Busy] = useState(false);
   const [generated, setGenerated] = useState<{ nsec: string; pubkey: string } | null>(null);
   const nip07 = hasNip07();
+  const ownProfile = useOwnProfile(auth.pubkey);
+  const identityLabel = auth.pubkey ? authorLabel(auth.pubkey, ownProfile ?? undefined) : '';
+  const npubFull = auth.pubkey ? npubEncode(auth.pubkey) : '';
 
   const handleNip07 = async () => {
+    if (nip07Busy) return;
+    setError('');
+    setNip07Busy(true);
+    // Locked wallets (Alby, nos2x) never resolve getPublicKey() until the user
+    // unlocks — the call hangs with no rejection. Time out so the button can't
+    // look permanently dead, and tell the user to unlock and retry.
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      setNip07Busy(false);
+      setError('No response from your wallet. Is it unlocked? Unlock it, then try again.');
+    }, 20_000);
     try {
       const pubkey = await nip07GetPubkey();
+      if (settled) return; // timed out already — ignore the late resolve
+      settled = true;
+      clearTimeout(timeout);
+      if (auth.pubkey && auth.pubkey !== pubkey) {
+        log(LL.NORMAL, '[auth] identity switched:', npubEncode(auth.pubkey).slice(0, 12), '→', npubEncode(pubkey).slice(0, 12));
+      }
       storePubkey(pubkey);
       // Share with the extension (if installed) so it can sign casts without
       // a second wallet approval. No-op when the extension isn't there.
       sendPubkeyToExtension(pubkey);
-      onSignedIn?.(pubkey);
+      (onNip07SignedIn ?? onSignedIn)?.(pubkey);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Extension error');
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      setNip07Busy(false);
+      setError(e instanceof Error ? e.message : 'Your wallet declined or is unavailable. Is it unlocked?');
     }
   };
 
@@ -74,6 +112,60 @@ export default function SignInModal({ onClose, onSignedIn }: SignInModalProps) {
           </svg>
         </button>
 
+        {step === 'account' && (
+          <>
+            <h2>Your <em>identity</em></h2>
+            <div className="account-identity">
+              <div className="account-name">{identityLabel}</div>
+              <div className="account-npub">{npubFull}</div>
+              <div className="account-status">
+                {auth.status === 'connected' && auth.source === 'nip07'
+                  ? 'Connected via signing extension — you can cast'
+                  : auth.source === 'bridge'
+                  ? 'Connected via your Discerned extension'
+                  : 'Read-only — public key only, cannot cast'}
+              </div>
+            </div>
+
+            <button
+              className={`signin-method ${nip07 ? 'featured' : ''}`}
+              onClick={handleNip07}
+              disabled={!nip07 || nip07Busy}
+            >
+              <span className="glyph-mini">N</span>
+              <div>
+                <div className="label">Re-sign in with extension</div>
+                <div className="sub">NIP-07 · {nip07Busy ? 'WAITING FOR WALLET…' : nip07 ? 'REFRESH OR SWITCH IDENTITY' : 'NOT FOUND'}</div>
+              </div>
+              <span className="arrow">{nip07Busy ? '…' : '→'}</span>
+            </button>
+
+            {error && (
+              <p style={{ color: 'oklch(0.50 0.14 25)', fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.02em', margin: '4px 0 12px' }}>
+                {error}
+              </p>
+            )}
+
+            <button className="signin-method" onClick={() => { setError(''); setStep('menu'); }}>
+              <span className="glyph-mini" style={{ background: 'var(--paper-3)', color: 'var(--ink)' }}>⇄</span>
+              <div>
+                <div className="label">Sign in as a different user</div>
+                <div className="sub">EXTENSION · NSEC · OR NEW IDENTITY</div>
+              </div>
+              <span className="arrow">→</span>
+            </button>
+
+            <button className="signin-method" onClick={() => { signOut(); onClose(); }}>
+              <span className="glyph-mini" style={{ background: 'var(--paper-3)', color: 'var(--ink)' }}>⏻</span>
+              <div>
+                <div className="label">Sign out</div>
+                <div className="sub">CLEAR THIS SESSION</div>
+              </div>
+              <span className="arrow">→</span>
+            </button>
+          </>
+        )}
+
         {step === 'menu' && (
           <>
             <h2>Sign in with <em>your own keys</em></h2>
@@ -82,15 +174,21 @@ export default function SignInModal({ onClose, onSignedIn }: SignInModalProps) {
             <button
               className={`signin-method ${nip07 ? 'featured' : ''}`}
               onClick={handleNip07}
-              disabled={!nip07}
+              disabled={!nip07 || nip07Busy}
             >
               <span className="glyph-mini">N</span>
               <div>
                 <div className="label">Use browser extension</div>
-                <div className="sub">NIP-07 · {nip07 ? 'DETECTED' : 'NOT FOUND'}</div>
+                <div className="sub">NIP-07 · {nip07Busy ? 'WAITING FOR WALLET…' : nip07 ? 'DETECTED' : 'NOT FOUND'}</div>
               </div>
-              <span className="arrow">→</span>
+              <span className="arrow">{nip07Busy ? '…' : '→'}</span>
             </button>
+
+            {error && (
+              <p style={{ color: 'oklch(0.50 0.14 25)', fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.02em', margin: '4px 0 12px' }}>
+                {error}
+              </p>
+            )}
 
             <button className="signin-method" onClick={() => setStep('nsec')}>
               <span className="glyph-mini" style={{ background: 'var(--paper-3)', color: 'var(--ink)' }}>K</span>

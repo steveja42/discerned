@@ -14,7 +14,7 @@ export type BridgeMessage =
   | { type: 'DISCERNED_BRIDGE_FOCUS_CLIP'; clipId: string }
   | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] }
   | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null }
-  | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown> }
+  | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown>; expectedPubkey?: string }
   | { type: 'DISCERNED_BRIDGE_RELAYS'; mode: RelayMode };
 
 export function listenForBridge(

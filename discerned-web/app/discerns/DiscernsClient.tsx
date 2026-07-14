@@ -20,7 +20,7 @@ import { useReadCasts } from '@/hooks/useReadCasts';
 
 export default function DiscernsClient() {
   const router = useRouter();
-  const { auth, signInPubkey } = useNostrAuth();
+  const { auth, signInPubkey, setNip07Connected } = useNostrAuth();
   const { showPopover, dismiss: dismissPopover } = useFirstVisit();
   const { clips, status } = useCastFeed();
   const { extensionPresent } = useBridgeAuth();
@@ -75,6 +75,7 @@ export default function DiscernsClient() {
         <SignInModal
           onClose={() => setSignInOpen(false)}
           onSignedIn={(pubkey) => signInPubkey(pubkey)}
+          onNip07SignedIn={(pubkey) => setNip07Connected(pubkey)}
         />
       )}
     </div>
