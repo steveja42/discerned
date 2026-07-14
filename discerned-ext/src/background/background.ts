@@ -1389,6 +1389,20 @@ async function pushPendingSignToWebApp(id: string, event: Record<string, unknown
  * event through the bridge, and waits for the signed event to come back.
  * Throws on timeout or rejection.
  */
+// True until the connected identity has approved discerned.online (a cast sign
+// resolved). Keyed on pubkey so an identity switch re-arms the focus.
+async function needsSigningTabFocus(): Promise<boolean> {
+  const pubkey = currentAuthState.type === 'pro' ? currentAuthState.pubkey : undefined;
+  if (!pubkey) return true; // unknown identity — err toward showing the popup
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.SIGN_APPROVED_PUBKEY);
+  return stored[STORAGE_KEYS.SIGN_APPROVED_PUBKEY] !== pubkey;
+}
+
+async function markSignApproved(): Promise<void> {
+  const pubkey = currentAuthState.type === 'pro' ? currentAuthState.pubkey : undefined;
+  if (pubkey) await chrome.storage.local.set({ [STORAGE_KEYS.SIGN_APPROVED_PUBKEY]: pubkey });
+}
+
 async function signEventViaWebApp(
   template: Parameters<typeof finalizeEvent>[0],
 ): Promise<Record<string, unknown>> {
@@ -1404,6 +1418,9 @@ async function signEventViaWebApp(
   let tabId: number;
   if (live?.id !== undefined) {
     tabId = live.id;
+    // Popup-per-sign wallets (nostr-wot) only surface their approval on the
+    // active tab, so focus it until this identity has approved discerned.online.
+    if (await needsSigningTabFocus()) await focusTab(tabId);
   } else {
     // Cold start — no discerned tab open yet. This is the first cast of the
     // session (and often the wallet's first-ever approval of this origin).
@@ -1436,6 +1453,9 @@ async function signEventViaWebApp(
     const expectedPubkey = currentAuthState.type === 'pro' ? currentAuthState.pubkey : undefined;
     void pushPendingSignToWebApp(id, template as unknown as Record<string, unknown>, tabId, expectedPubkey);
   });
+  // The signer surfaced its approval for this identity — later casts can skip
+  // the focus-steal and stay on the page being cast.
+  void markSignApproved();
   return signed;
 }
 

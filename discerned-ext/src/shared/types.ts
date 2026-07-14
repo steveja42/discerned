@@ -218,6 +218,11 @@ export const STORAGE_KEYS = {
   CATEGORIES:              'categories',
   THEME:                   'theme', // 'system' | 'light' | 'dark' — see resolveThemePref
   PROFILE_CACHE:           'profileCache', // { [pubkey]: OwnProfile } — kind-0 name/nip05, 24h TTL
+  // Hex pubkey for which a NIP-07 signer has already surfaced its approval popup
+  // (a cast sign succeeded). While the connected identity ≠ this, the cast flow
+  // focuses the signing tab so popup-per-sign wallets (nostr-wot) can prompt.
+  // Reset implicitly by identity switch (the pubkey no longer matches).
+  SIGN_APPROVED_PUBKEY:    'signApprovedPubkey',
 } as const;
 
 // Messages posted between the extension's web-bridge content script and the
