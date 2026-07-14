@@ -138,6 +138,20 @@ function urlBase(u: string): string {
   return u.split('?')[0].toLowerCase();
 }
 
+// Is this capture a tweet (twitter.com / x.com status page)? For tweets, X's
+// page <title> *is* the tweet text ("<name> on X: \"<body>\""), which the note's
+// author+text body already carries — so the note omits the title line to avoid
+// showing the tweet text twice. The `title` TAG is kept (clients/web-app use it
+// for the card heading).
+function isTweetUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    return host === 'twitter.com' || host === 'x.com' || host === 'mobile.twitter.com';
+  } catch {
+    return false;
+  }
+}
+
 // NIP-23 clients render the `title` and `image` tags as a heading + hero banner
 // ABOVE the article body. If the markdown ALSO leads with its own `# title` and
 // hero `![](image)`, they show twice. Strip a leading title heading (matching
@@ -278,12 +292,22 @@ export function createResourceNoteEvent(
   // body. With a companion long-form the body is a short TEASER (first few
   // paragraphs) plus a "Read the full article →" link — keeping the note small.
   // Without one, the note inlines the (relay-safe) body as before.
-  const body = longFormRef ? bodyTeaser(dedupedBody) : dedupedBody;
+  //
+  // Tweets are the exception: they're short (no teasering needed) AND their body
+  // interleaves image URLs as their own paragraphs so the web app renders them
+  // inline in position — bodyTeaser DROPS bare-image-URL paragraphs (line "Bare
+  // image-URL lines … dropped"), which would gut a tweet's media. So tweets keep
+  // the full body regardless of the long-form ref.
+  const isTweet = isTweetUrl(capture.url);
+  const body = (longFormRef && !isTweet) ? bodyTeaser(dedupedBody) : dedupedBody;
 
-  const lines = [
-    capture.title,
-    capture.url,
-  ];
+  // For a tweet, X's page <title> IS the tweet text ("<name> on X: \"<body>\""),
+  // which `body` already carries as "<name> @<handle>\n<text>" — so omit the
+  // title CONTENT line to avoid showing the tweet text twice. The `title` TAG is
+  // still emitted below (clients/web-app render the card heading from it).
+  const omitTitleLine = isTweet && !!body && body.length > 0;
+
+  const lines = omitTitleLine ? [capture.url] : [capture.title, capture.url];
   if (body && body.length > 0) {
     lines.push('', body);
   }

@@ -693,7 +693,7 @@ async function extractTweetBlock(root: Element) {
     : [];
   const photoContainers = photoContainersLegacy.length > 0 ? photoContainersLegacy : photoContainersNew;
 
-  const videoInfos: VideoInfo[] = photoContainers
+  let videoInfos: VideoInfo[] = photoContainers
     .filter(c => c.querySelector('[data-testid="videoPlayer"], video[poster]'))
     .flatMap(container => {
       const videoEl = container.querySelector<HTMLVideoElement>('[data-testid="videoPlayer"] video[poster], video[poster]');
@@ -707,6 +707,25 @@ async function extractTweetBlock(root: Element) {
       const aspectPct = (() => { const v = parseFloat(pb); return Number.isFinite(v) && v > 0 ? v : null; })();
       return [{ poster, duration, aspectPct }];
     });
+  // Newest shape: video tweets have NO tweetPhoto / aria-label container at
+  // all — the player is a bare <video poster="https://pbs.twimg.com/…"> in the
+  // block (its src is a blob: URL). Scan for it directly when the container
+  // pass found nothing, walking up a few levels for the "0:47" duration badge.
+  if (videoInfos.length === 0) {
+    videoInfos = Array.from(root.querySelectorAll<HTMLVideoElement>('video[poster]')).flatMap(videoEl => {
+      const poster = videoEl.getAttribute('poster');
+      if (!poster || !isSafeImageSrc(poster)) return [];
+      let duration: string | null = null;
+      let scope: Element | null = videoEl;
+      for (let i = 0; i < 4 && scope && !duration; i++) {
+        duration = Array.from(scope.querySelectorAll<HTMLElement>('span'))
+          .find(s => /^\d+:\d+$/.test(s.textContent?.trim() ?? ''))
+          ?.textContent?.trim() ?? null;
+        scope = scope.parentElement;
+      }
+      return [{ poster, duration, aspectPct: null }];
+    }).filter((v, i, arr) => arr.findIndex(x => x.poster === v.poster) === i);
+  }
 
   // Photo srcs: only from containers that do NOT contain a video player.
   const photoSrcs = photoContainers
@@ -719,7 +738,17 @@ async function extractTweetBlock(root: Element) {
 
 type VideoInfo = { poster: string; duration: string | null; aspectPct: number | null };
 
-function buildSingleVideoHtml(poster: string, duration: string | null, aspectPct: number | null, href: string): string {
+// data-dx-src carries the REAL http(s) URL alongside the inlined base64 src.
+// Without it htmlToMarkdown silently DROPS the image from the published
+// kind-30023 markdown (it refuses data: URIs), which is how tweet photos and
+// video posters vanished from casts.
+function dxSrcAttr(rawUrl: string | undefined): string {
+  return rawUrl && /^https?:/i.test(rawUrl)
+    ? ` data-dx-src="${rawUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`
+    : '';
+}
+
+function buildSingleVideoHtml(poster: string, rawPoster: string | undefined, duration: string | null, aspectPct: number | null, href: string): string {
   const maxWidth = aspectPct && aspectPct > 100
     ? `${Math.round(100 / (aspectPct / 100))}%`
     : '100%';
@@ -727,16 +756,16 @@ function buildSingleVideoHtml(poster: string, duration: string | null, aspectPct
     ? duration.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     : null;
   return `<a class="tweet-video" href="${href}" target="_blank" rel="noopener noreferrer" style="max-width:${maxWidth}">
-  <img src="${poster}" alt="Video thumbnail" class="tweet-video-poster">
+  <img src="${poster}" alt="Video thumbnail" class="tweet-video-poster"${dxSrcAttr(rawPoster)}>
   <div class="tweet-video-play" aria-label="Play video">
     <svg viewBox="0 0 24 24" width="48" height="48"><path d="M8 5v14l11-7z"/></svg>
   </div>${safeDuration ? `<span class="tweet-video-duration">${safeDuration}</span>` : ''}
 </a>`;
 }
 
-function buildVideoHtml(inlinedVideos: Array<{ poster: string; duration: string | null; aspectPct: number | null }>, href: string): string {
+function buildVideoHtml(inlinedVideos: Array<{ poster: string; rawPoster?: string; duration: string | null; aspectPct: number | null }>, href: string): string {
   if (inlinedVideos.length === 0) return '';
-  const items = inlinedVideos.map(v => buildSingleVideoHtml(v.poster, v.duration, v.aspectPct, href));
+  const items = inlinedVideos.map(v => buildSingleVideoHtml(v.poster, v.rawPoster, v.duration, v.aspectPct, href));
   if (items.length === 1) return items[0];
   // Multiple videos: render in a grid row matching how X shows side-by-side videos.
   return `<div class="tweet-video-grid">${items.join('')}</div>`;
@@ -751,11 +780,11 @@ function buildVideoHtml(inlinedVideos: Array<{ poster: string; duration: string 
  * Each photo gets the same <div class="tweet-photo"><img></div> shell as
  * before, so single-photo behaviour is unchanged.
  */
-function buildPhotosHtml(srcs: string[]): string {
-  const valid = srcs.filter(Boolean);
+function buildPhotosHtml(photos: Array<{ src: string; dxSrc?: string }>): string {
+  const valid = photos.filter(p => p.src);
   if (valid.length === 0) return '';
   const safe = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-  const items = valid.map(src => `<div class="tweet-photo"><img src="${safe(src)}" alt="Image"></div>`);
+  const items = valid.map(p => `<div class="tweet-photo"><img src="${safe(p.src)}" alt="Image"${dxSrcAttr(p.dxSrc)}></div>`);
   if (items.length === 1) return items[0];
   const n = Math.min(items.length, 4);
   return `<div class="tweet-photo-grid tweet-photo-grid-${n}">${items.join('')}</div>`;
@@ -840,9 +869,9 @@ async function extractTweet(
     const qSafeName = qb.displayName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const qSafeHandle = qb.handle.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const qSafeTime = qb.quoteTime.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const qPhotosHtml = buildPhotosHtml(qPhotos);
+    const qPhotosHtml = buildPhotosHtml(qPhotos.map((src, i) => ({ src, dxSrc: qb.photoSrcs[i] })));
     const qInlinedVideoInfos = qb.videoInfos
-      .map((v, i) => ({ poster: qInlinedVideoPosters[i] || v.poster, duration: v.duration, aspectPct: v.aspectPct }))
+      .map((v, i) => ({ poster: qInlinedVideoPosters[i] || v.poster, rawPoster: v.poster, duration: v.duration, aspectPct: v.aspectPct }))
       .filter(v => v.poster);
     const qVideoHtml = buildVideoHtml(qInlinedVideoInfos, base.url);
     quotedHtml = `<div class="tweet-quote">
@@ -931,14 +960,47 @@ async function extractTweet(
     const svgClone = svgEl.cloneNode(true) as SVGElement;
     svgClone.removeAttribute('class');
     svgClone.querySelectorAll('[class]').forEach(el => el.removeAttribute('class'));
-    // Legacy: count lives inside the same button. New shape: count is a
-    // separate sibling <button aria-label="<digits>">.
+    // Legacy: count lives inside the same button. Mid-2026 shape: a sibling
+    // <button aria-label="<digits>">. Newest shape: a sibling <button> with NO
+    // aria-label wrapping a <number-flow-react> element whose textContent is
+    // the animated count ("1,330" / "4.1K").
     const countElLegacy = btn.querySelector('[data-testid="app-text-transition-container"] span span');
+    const siblingBtns = Array.from(btn.parentElement?.querySelectorAll<HTMLElement>('button') ?? [])
+      .filter(b => b !== btn);
     const countBtnNew = !countElLegacy
-      ? Array.from(btn.parentElement?.querySelectorAll<HTMLElement>('button[aria-label]') ?? [])
-          .find(b => b !== btn && /^\d+$/.test(b.getAttribute('aria-label') ?? ''))
+      ? siblingBtns.find(b => /^[\d,.]+[KMB]?$/i.test(b.getAttribute('aria-label') ?? ''))
       : null;
-    const count = countElLegacy?.textContent?.trim() ?? countBtnNew?.getAttribute('aria-label') ?? '';
+    // number-flow-react is an animated odometer: its open shadow root holds a
+    // FULL 0-9 glyph strip per digit slot (textContent is useless — it reads
+    // "0123456789"). The actual value lives on each digit slot as the
+    // `--current` CSS custom property; separators ("." "," "K") are
+    // [part~="symbol"] nodes whose visible glyph is the non-inert child.
+    const readNumberFlow = (el: Element): string => {
+      const sr = (el as Element & { shadowRoot?: ShadowRoot | null }).shadowRoot;
+      if (!sr) return (el.textContent ?? '').trim();
+      let out = '';
+      sr.querySelectorAll('[part~="digit"], [part~="symbol"], [part~="prefix"], [part~="suffix"]').forEach(node => {
+        const part = node.getAttribute('part') ?? '';
+        if (/\bdigit\b/.test(part)) {
+          out += (node as HTMLElement).style.getPropertyValue('--current').trim();
+        } else {
+          const vis = Array.from(node.children).find(c => !c.hasAttribute('inert')) ?? node;
+          out += (vis.textContent ?? '').trim();
+        }
+      });
+      return out.trim();
+    };
+    const countFlowNew = !countElLegacy && !countBtnNew
+      ? siblingBtns
+          .map(b => b.querySelector('number-flow-react'))
+          .filter((el): el is Element => !!el)
+          .map(readNumberFlow)
+          .find(t => /^[\d,.]+[KMB]?$/i.test(t))
+      : undefined;
+    const count = countElLegacy?.textContent?.trim()
+      ?? countBtnNew?.getAttribute('aria-label')
+      ?? countFlowNew
+      ?? '';
     statItems.push({
       svg: svgClone.outerHTML,
       count,
@@ -974,11 +1036,11 @@ async function extractTweet(
     : '';
 
   const inlinedVideoInfos = outerBlock.videoInfos
-    .map((v, i) => ({ poster: inlinedVideoPosters[i] || v.poster, duration: v.duration, aspectPct: v.aspectPct }))
+    .map((v, i) => ({ poster: inlinedVideoPosters[i] || v.poster, rawPoster: v.poster, duration: v.duration, aspectPct: v.aspectPct }))
     .filter(v => v.poster);
   const videoHtml = buildVideoHtml(inlinedVideoInfos, base.url);
 
-  const photosHtml = buildPhotosHtml(inlinedPhotos);
+  const photosHtml = buildPhotosHtml(inlinedPhotos.map((src, i) => ({ src, dxSrc: tweetPhotoSrcs[i] })));
 
   // Footer: date link + stat buttons (SVG icon + count lifted from Twitter's DOM)
   const safeDate = dateText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -1043,21 +1105,39 @@ async function extractTweet(
         ...quotedCastMeta.plainText.split('\n').map(l => `> ${l}`),
       ].join('\n')
     : '';
-  const plainText = [
-    `${displayName} @${handle}`,
-    '',
-    outerBlock.plainText,
-    quotedBlock,
-    metaLine ? `\n${metaLine}` : '',
-  ].filter(s => s !== '').join('\n').trim();
 
-  // Photo URLs for the cast (original http(s), not the inlined base64) — outer
-  // tweet's photos first, then the quoted tweet's, deduped. Deliberately
-  // uncapped: tweet + quoted tweet can carry up to 8 photos.
+  // Media URLs (real pbs.twimg.com links, not base64) in the same order they sit
+  // on the card: outer tweet's video posters, then its photos, then the quoted
+  // tweet's photos, deduped. Cast as imeta tags AND woven into the body text at
+  // the media's position (right after the tweet text, where it sits on the card),
+  // so the web app renders each image inline where it appeared instead of
+  // stacking them in a top gallery.
+  const videoPosterUrls = outerBlock.videoInfos
+    .map(v => v.poster)
+    .filter(p => /^https?:/i.test(p));
   const imageUrls = [
+    ...videoPosterUrls,
     ...tweetPhotoSrcs.filter(src => /^https?:/i.test(src)),
     ...(quotedCastMeta?.photoUrls ?? []),
   ].filter((src, i, arr) => arr.indexOf(src) === i);
+  // Only the outer tweet's media go inline before the quote block; the quoted
+  // tweet's photos stay in imeta (its blockquote is compact — top-of-quote is
+  // close enough) so they don't break the outer tweet's inline flow.
+  const outerMediaUrls = imageUrls.filter(u => !(quotedCastMeta?.photoUrls ?? []).includes(u));
+
+  // Assemble the body as blank-line-separated PARAGRAPHS. The web app's inline
+  // image rule (renderTextWithBreaks) only swaps a paragraph for its <img> when
+  // the whole paragraph is exactly a known image URL — so each media URL must be
+  // its own paragraph (blank line above and below), using the SAME string that
+  // went into imageUrls so bodyText.includes(url) matches.
+  const paragraphs = [
+    `${displayName} @${handle}`,
+    outerBlock.plainText,
+    ...outerMediaUrls,          // one URL per paragraph
+    quotedBlock,
+    metaLine,
+  ].filter(s => s.trim() !== '');
+  const plainText = paragraphs.join('\n\n').trim();
 
   if (format === 'selection') {
     return {
@@ -1066,6 +1146,7 @@ async function extractTweet(
       format: 'selection',
       selectionText: bodyHtml,
       selectionContext: '',
+      thumbnailUrl: imageUrls[0] ?? null,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
   }
@@ -1238,11 +1319,11 @@ async function buildEmbeddedTweetCard(data: EmbeddedTweetData): Promise<HTMLElem
     : '';
 
   const inlinedVideoInfos = data.videoInfos
-    .map((v, i) => ({ poster: inlinedVideoPosters[i] || v.poster, duration: v.duration, aspectPct: v.aspectPct }))
+    .map((v, i) => ({ poster: inlinedVideoPosters[i] || v.poster, rawPoster: v.poster, duration: v.duration, aspectPct: v.aspectPct }))
     .filter(v => v.poster);
   const videoHtml = buildVideoHtml(inlinedVideoInfos, data.statusUrl);
 
-  const photosHtml = buildPhotosHtml(inlinedPhotos);
+  const photosHtml = buildPhotosHtml(inlinedPhotos.map((src, i) => ({ src, dxSrc: data.photoSrcs[i] })));
 
   // Sanitise the embed-iframe's tweetText HTML through the existing
   // sanitiser before injecting it as a string. The card itself is built as

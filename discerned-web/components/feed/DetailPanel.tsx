@@ -275,9 +275,15 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
         // need to render the hero image (from the `image` tag → thumbnail) here,
         // above the body.
         if (capture.markdown) {
+          // Tweet casts (and any article whose media sits mid-body) carry the
+          // thumbnail INSIDE the markdown as ![](url) at its original position
+          // — rendering the hero on top of that would show the same image
+          // twice, in the wrong place first. Only render the hero when the
+          // markdown does not already contain it.
+          const heroInBody = !!thumbnail && capture.markdown.includes(thumbnail);
           return (
             <div className="clip-body">
-              {thumbnail && <img className="longform-hero" src={thumbnail} alt="" />}
+              {thumbnail && !heroInBody && <img className="longform-hero" src={thumbnail} alt="" />}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{capture.markdown}</ReactMarkdown>
             </div>
           );
