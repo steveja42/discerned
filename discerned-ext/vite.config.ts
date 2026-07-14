@@ -31,7 +31,16 @@ export default defineConfig(({ mode }) => ({
     emptyOutDir: true,
     minify: mode === 'production' ? 'terser' : false,
     sourcemap: mode !== 'production',
-    rollupOptions: {},
+    rollupOptions: {
+      // Register standalone pages as HTML entries so crxjs bundles their <script>
+      // and rewrites ./*.ts → the emitted .js. crxjs auto-discovers HTML the manifest
+      // points at (default_popup, options_ui) but NOT web_accessible_resources-only
+      // pages, so without this the raw ./onboarding.ts 404s and the page's JS never runs.
+      input: {
+        onboarding: resolve(__dirname, 'src/onboarding/onboarding.html'),
+        popup: resolve(__dirname, 'src/popup/popup.html'),
+      },
+    },
   },
   // Test-only message hooks in content.ts/background.ts are gated on this flag.
   // `pnpm build:test` runs with --mode test, which keeps them; `pnpm build`
