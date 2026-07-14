@@ -160,4 +160,20 @@ test.describe('public cast rendering — kind-30023 markdown', () => {
 
     await clipBody.screenshot({ path: resolve(__dirname, '..', '..', 'test-output', 'cast-render-article.png') });
   });
+
+  test('article cast: hero once even when image-tag and inline URL differ by query params', async ({ page }) => {
+    const { event, title } = loadCardEvent('article-hero-qsdelta');
+    await mockRelayWith(page, event);
+    const clipBody = await openDetail(page, title);
+
+    await assertNoBraceSpill(clipBody);
+    await expect(clipBody).toContainText('Boring infrastructure is a feature');
+
+    // The hero appears exactly once. The `image` tag was suppressed (its URL
+    // matches the inline one by url-base), so no top banner is added — only the
+    // inline occurrence renders. A CDN query-param delta must not defeat this.
+    await expect(clipBody.locator('img[src*="hero.jpg"]')).toHaveCount(1);
+
+    await clipBody.screenshot({ path: resolve(__dirname, '..', '..', 'test-output', 'cast-render-article-qsdelta.png') });
+  });
 });

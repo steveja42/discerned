@@ -32,6 +32,15 @@ describe('generic chrome removal + flex separation (bodyHtml level)', () => {
     expect(html).not.toContain('Open comment sort options');
     expect(html).not.toContain('Controversial');
 
+    // "More <topic> stories on <site>" recirculation module removed structurally.
+    expect(html).not.toContain('More Geopolitical Stories On ExampleWire');
+    expect(html).not.toContain('Ceasefire Talks Falter Again');
+
+    // Trailing tag/category link strip removed (short-link-dominant list).
+    expect(html).not.toContain('/t/tariffs');
+    expect(html).not.toMatch(/>Tariffs</);
+    expect(html).not.toMatch(/>Geneva</);
+
     // Screen-reader-only duplicates dropped; visible values survive.
     expect(html).not.toContain('gold badges');
     expect(html).toContain('28.1k');

@@ -152,6 +152,19 @@ function isTweetUrl(url: string): boolean {
   }
 }
 
+// Does the markdown embed this image (as ![alt](url)) anywhere? Compared by URL
+// base path so a CDN query-param delta between the `image` tag and the inline
+// occurrence doesn't defeat the match.
+function markdownEmbedsImage(markdown: string, imageUrl: string): boolean {
+  const base = urlBase(imageUrl);
+  const re = /!\[[^\]]*\]\(([^)\s]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(markdown)) !== null) {
+    if (urlBase(m[1]) === base) return true;
+  }
+  return false;
+}
+
 // NIP-23 clients render the `title` and `image` tags as a heading + hero banner
 // ABOVE the article body. If the markdown ALSO leads with its own `# title` and
 // hero `![](image)`, they show twice. Strip a leading title heading (matching
@@ -371,12 +384,19 @@ export function createLongFormEvent(
   // clients derive their own preview from the content anyway.
   tags.push(['published_at', String(Math.floor(capture.timestamp / 1000))]);
   const imageUrl = pickImageUrl(capture);
-  if (imageUrl) tags.push(['image', imageUrl]);
 
   // NIP-23 clients render the title + image tags as heading + hero above the
-  // body; strip a duplicate leading heading/hero from the markdown so they don't
+  // body; strip a duplicate LEADING heading/hero from the markdown so they don't
   // appear twice.
   const dedupedMarkdown = stripLeadingArticleChrome(markdownBody, capture.title, imageUrl);
+
+  // Emit the `image` tag (rendered as a banner ABOVE the body by clients) only
+  // when the hero is NOT still embedded inline in the body. When the authored
+  // image sits mid-body, the inline occurrence IS the hero — a banner on top
+  // would duplicate it (and in the wrong position). The body position wins.
+  if (imageUrl && !markdownEmbedsImage(dedupedMarkdown, imageUrl)) {
+    tags.push(['image', imageUrl]);
+  }
 
   const contentLines = withSnippet(dedupedMarkdown, snippet).split('\n');
   appendImageUrls(tags, contentLines, capture);

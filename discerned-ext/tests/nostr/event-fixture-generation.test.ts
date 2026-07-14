@@ -109,6 +109,22 @@ const CARD_FIXTURES: CardFixture[] = [
   <p>Treating it like a spare PC means spare-PC reliability: no ECC, no redundancy.</p>
 </article>`,
   },
+  {
+    // The `image` tag (thumbnailUrl) and the inline body image point at the SAME
+    // photo but differ by a CDN resize/cache query param — a plain substring
+    // check would miss it and render the hero twice (once as a top banner). The
+    // urlBase-insensitive suppression (events.ts + DetailPanel) must still drop
+    // the top hero and keep the single inline occurrence.
+    slug: 'article-hero-qsdelta',
+    title: 'The Quiet Case For Boring Infrastructure',
+    url: 'https://example.com/boring-infra',
+    heroUrl: 'https://cdn.example.com/hero.jpg?w=1200&auto=format',
+    bodyHtml: `<article>
+  <p>Boring infrastructure is a feature, not a bug — predictability compounds.</p>
+  <img src="data:image/jpeg;base64,DDDD" alt="server room" data-dx-src="https://cdn.example.com/hero.jpg?w=640&q=80">
+  <p>The most reliable systems are the ones nobody has to think about at 3am.</p>
+</article>`,
+  },
 ];
 
 function buildCardFixtures(comment: string): GeneratedEventFixture[] {

@@ -4197,7 +4197,9 @@ const CHROME_LINK_TEXT_RE = new RegExp(
   '|improve this (question|answer)|add a comment|follow this (question|answer).*' +
   '|share a link to this (question|answer)|short permalink.*' +
   '|add as preferred.*|choose .{0,40} as a preferred source.*|add us on google' +
-  '|open comment sort options|expand comment search)$', 'i');
+  '|open comment sort options|expand comment search' +
+  '|continue this thread.*|continue reading.*|view (all|more) comments.*' +
+  '|see more (posts|comments).*|load more comments.*|more replies.*)$', 'i');
 // Skip-navigation links ("Skip to content", "Jump to ratings and reviews").
 const SKIP_LINK_RE = /^(skip to|jump to)\b/i;
 // Headings that UNAMBIGUOUSLY introduce a recirculation module — removed
@@ -4206,12 +4208,14 @@ const SKIP_LINK_RE = /^(skip to|jump to)\b/i;
 const STRONG_RELATED_RE = new RegExp(
   '^(discover more|want to know more\\??|you might also like|recommended for you' +
   '|suggested for you|most (read|popular)|trending now|up next' +
-  '|related (articles|stories|posts))$', 'i');
+  '|related (articles|stories|posts)|readers also enjoyed' +
+  '|more (\\w+ )?stories on \\w.*)$', 'i');
 // Weaker headings that also occur in real prose — these additionally require
 // the container to be link-dominant before anything is removed.
 const RELATED_HEADING_RE = new RegExp(
   '^(discover more|want to know more\\??|related(:| articles| stories| posts| topics)?' +
   '|recommended( for you)?|read (next|more)|more from\\b.*|you might also like' +
+  '|readers also enjoyed|more (\\w+ )?stories on \\w.*' +
   '|most (read|popular)|trending( now)?|suggested for you|up next|popular in\\b.*)$', 'i');
 // Newsletter signup copy.
 const NEWSLETTER_RE =
@@ -4350,6 +4354,33 @@ function removeGenericChrome(root: Element): void {
     if (key.length === 0) { el.remove(); return; }
     if (seenStats.has(key)) { el.remove(); return; }
     seenStats.add(key);
+  });
+
+  // (7) Tag / category link lists (Breitbart's trailing category strip, WP tag
+  // clouds): a <ul>/<ol>/<nav> that is almost entirely short category links —
+  // ≥4 links, each short, links make up nearly all the text, and no real prose
+  // paragraph inside. These are navigation, not article content, and the cast
+  // has no CSS to hide them (the clip does), so they leak as a stacked link
+  // list. Conservative: a real in-article list has longer items or prose.
+  root.querySelectorAll('ul, ol, nav').forEach(el => {
+    if (!root.contains(el) || inTweetCard(el)) return;
+    const anchors = Array.from(el.querySelectorAll('a'));
+    if (anchors.length < 4) return;
+    const anchorText = anchors
+      .map(a => (a.textContent ?? '').replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    if (anchorText.length < 4) return;
+    // Every link is short (a category/tag label, never a teaser sentence).
+    if (anchorText.some(t => t.length > 40)) return;
+    // Links dominate the container's text (≥80%) — nothing but the link labels
+    // (list-item whitespace / bullets keep the ratio just under 1).
+    const totalLen = (el.textContent ?? '').replace(/\s+/g, ' ').trim().length;
+    const linkLen = anchorText.reduce((n, t) => n + t.length, 0);
+    if (totalLen === 0 || linkLen / totalLen < 0.8) return;
+    // No real prose paragraph (a references/footnotes list can carry sentences).
+    if (Array.from(el.querySelectorAll('p, li')).some(n => (n.textContent ?? '').trim().length > 80)) return;
+    el.remove();
+    log(LL.DEBUG, 'Discerned: removeGenericChrome dropped tag/category link list', 'url:', window.location.href);
   });
 }
 

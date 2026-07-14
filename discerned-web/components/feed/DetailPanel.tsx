@@ -40,6 +40,30 @@ function formatDate(ts: number): string {
   return new Date(ts).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+// The path portion of a URL (before '?'), lowercased — mirrors events.ts
+// urlBase. Used to compare two URLs that point at the SAME image but differ in
+// query params (CDN resize/cache tokens).
+function urlBase(u: string): string {
+  return u.split('?')[0].toLowerCase();
+}
+
+// Does the cast markdown already embed this image (as ![](url))? A plain
+// substring check on the full thumbnail URL misses when the inline URL differs
+// only by CDN query params, so we compare every markdown image URL by url-base
+// (query strings stripped on both sides). When true, DetailPanel must NOT also
+// render the thumbnail as a top hero — that showed the same image twice, with
+// the duplicate on top and in the wrong position.
+function markdownHasImage(markdown: string, imageUrl: string): boolean {
+  if (markdown.includes(imageUrl)) return true;
+  const target = urlBase(imageUrl);
+  const re = /!\[[^\]]*\]\(([^)\s]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(markdown)) !== null) {
+    if (urlBase(m[1]) === target) return true;
+  }
+  return false;
+}
+
 function NoteEditor({
   note,
   clipId,
@@ -280,7 +304,8 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
           // — rendering the hero on top of that would show the same image
           // twice, in the wrong place first. Only render the hero when the
           // markdown does not already contain it.
-          const heroInBody = !!thumbnail && capture.markdown.includes(thumbnail);
+          const heroInBody =
+            !!thumbnail && markdownHasImage(capture.markdown, thumbnail);
           return (
             <div className="clip-body">
               {thumbnail && !heroInBody && <img className="longform-hero" src={thumbnail} alt="" />}
