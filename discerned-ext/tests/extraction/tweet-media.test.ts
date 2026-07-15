@@ -54,6 +54,25 @@ function buildTweetDom(opts: { photo?: boolean; video?: boolean }): void {
     </article>`;
 }
 
+/**
+ * Newest-shape tweet where each photo sits under an <a aria-label="Image">
+ * wrapper. `imgs` is a list of {src} arrays — one array per wrapper, so a
+ * wrapper with two entries reproduces X's blur-up placeholder + full-image
+ * pair for a SINGLE photo.
+ */
+function buildNewShapeTweetDom(wrappers: string[][]): void {
+  const media = wrappers
+    .map(imgs => `<a aria-label="Image">${imgs.map(src => `<img src="${src}">`).join('')}</a>`)
+    .join('');
+  document.body.innerHTML = `
+    <article data-tweet-id="12345">
+      <a href="/testuser"><span>Test User</span></a>
+      <div data-testid="tweetText">Sample tweet text about interesting things.</div>
+      ${media}
+      <a href="/testuser/status/12345"><time datetime="2026-05-14T23:57:00.000Z">11:57 PM · May 14, 2026</time></a>
+    </article>`;
+}
+
 beforeEach(() => {
   resetDocument(TWEET_URL);
   __setTestHostOverride('x.com');
@@ -118,5 +137,33 @@ describe('tweet media → cast pipeline', () => {
     expect(cap.imageUrls).toEqual([POSTER_URL, PHOTO_URL]);
     const md = htmlToMarkdown(cap.bodyHtml ?? '');
     expect(md.indexOf(POSTER_URL)).toBeLessThan(md.indexOf(PHOTO_URL));
+  });
+
+  // Regression for the VigilantFox single-image report (2026-07-14): both the
+  // clip and the cast showed the same photo twice. X ships a single photo as a
+  // blur-up placeholder <img> plus the full <img> in one wrapper; the raw
+  // wrapper-scan collected both, so a one-photo tweet rendered two identical
+  // cells. Dedup by the /media/<ID> stem collapses them (blur-up = name=small,
+  // full = name=medium) while leaving genuinely distinct photos alone.
+  it('single photo shipped as blur-up + full pair renders ONCE (no duplicate)', async () => {
+    const stem = 'https://pbs.twimg.com/media/SAMEID';
+    buildNewShapeTweetDom([[`${stem}?format=jpg&name=small`, `${stem}?format=webp&name=medium`]]);
+    const cap = await captureContext('article');
+
+    // Only the first-seen src survives into imeta — one image, not two.
+    expect(cap.imageUrls).toEqual([`${stem}?format=jpg&name=small`]);
+    // …and exactly one photo cell lands in the card body. Count the photo
+    // <img> by its data-dx-src carrying the media URL (avatar/badge imgs are
+    // inlined data: URIs with no dx-src), so this ignores chrome images.
+    const photoImgCount = (cap.bodyHtml?.match(/data-dx-src="https:\/\/pbs\.twimg\.com\/media\//g) ?? []).length;
+    expect(photoImgCount, 'blur-up + full collapse to a single card photo').toBe(1);
+  });
+
+  it('two genuinely different photos both survive the dedup', async () => {
+    const a = 'https://pbs.twimg.com/media/PHOTOA?format=webp&name=medium';
+    const b = 'https://pbs.twimg.com/media/PHOTOB?format=webp&name=medium';
+    buildNewShapeTweetDom([[a], [b]]);
+    const cap = await captureContext('article');
+    expect(cap.imageUrls).toEqual([a, b]);
   });
 });

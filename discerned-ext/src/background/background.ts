@@ -732,11 +732,23 @@ function extractFromTweetEmbed(): unknown {
     const dateText = time?.textContent?.trim() ?? '';
 
     // Photos: <img> tags inside any link whose href contains /photo/. May
-    // include duplicates if widgets.js renders multiple sizes; dedupe by URL.
+    // include duplicates if widgets.js renders multiple sizes (a blur-up
+    // placeholder + the full image), so dedupe by the pbs.twimg.com /media/<ID>
+    // stem — those share a stem but differ in the ?format=/name= query. Non-twimg
+    // URLs dedupe on the full string. (Mirrors dedupTweetPhotoSrcs in capture.ts;
+    // this extractor is injected into the iframe and can't import it.)
     const photoSrcsRaw = (Array.from(article.querySelectorAll('a[href*="/photo/"] img')) as HTMLImageElement[])
       .map(img => img.getAttribute('src') ?? '')
       .filter(s => s.length > 0);
-    const photoSrcs = Array.from(new Set(photoSrcsRaw));
+    const seenPhotoKeys = new Set<string>();
+    const photoSrcs: string[] = [];
+    for (const src of photoSrcsRaw) {
+      const m = src.match(/pbs\.twimg\.com\/media\/([^?&#/]+)/i);
+      const key = m ? `media:${m[1]}` : src;
+      if (seenPhotoKeys.has(key)) continue;
+      seenPhotoKeys.add(key);
+      photoSrcs.push(src);
+    }
 
     // Videos in the embed page render as <video> with a poster, OR (more
     // commonly) as a still poster image inside a link. Embed iframes typically

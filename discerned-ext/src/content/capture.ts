@@ -728,10 +728,12 @@ async function extractTweetBlock(root: Element) {
   }
 
   // Photo srcs: only from containers that do NOT contain a video player.
-  const photoSrcs = photoContainers
+  // Dedup by media stem — a single photo ships a blur-up placeholder <img> plus
+  // the full <img> in the same wrapper, which would otherwise render twice.
+  const photoSrcs = dedupTweetPhotoSrcs(photoContainers
     .filter(container => !container.querySelector('[data-testid="videoPlayer"], video[poster]'))
     .flatMap(container => Array.from(container.querySelectorAll<HTMLImageElement>('img')))
-    .map(img => img.src).filter(isSafeImageSrc);
+    .map(img => img.src).filter(isSafeImageSrc));
 
   return { displayName, handle, quoteTime, badgesHtml: badgeHtmlParts.join(''), sanitisedText, plainText, photoSrcs, videoInfos };
 }
@@ -769,6 +771,36 @@ function buildVideoHtml(inlinedVideos: Array<{ poster: string; rawPoster?: strin
   if (items.length === 1) return items[0];
   // Multiple videos: render in a grid row matching how X shows side-by-side videos.
   return `<div class="tweet-video-grid">${items.join('')}</div>`;
+}
+
+/**
+ * Dedup tweet photo srcs that point at the SAME underlying media.
+ *
+ * X renders a single photo as several <img> in one wrapper — a low-res blur-up
+ * placeholder plus the full image (the generic blur-up/LQIP pattern the pipeline
+ * already handles for other sites in `dedupAdjacentImages`). But the tweet card
+ * is a hand-built HTML string assembled directly from a raw wrapper-scan, so it
+ * never passes through that sanitise-clone dedup — a one-photo tweet emitted two
+ * (or three) identical cells, so the same image showed twice in BOTH the clip
+ * and the cast (they derive from this same array).
+ *
+ * Two pbs.twimg.com URLs are the same photo when their /media/<ID> stem matches
+ * even if the ?format=/name= query differs (blur-up = name=small, full =
+ * name=medium|large|orig) — the same filename-stem keying `dedupAdjacentImages`
+ * uses. Keep the first occurrence of each stem; non-twimg URLs dedup on the full
+ * string.
+ */
+function dedupTweetPhotoSrcs(srcs: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const src of srcs) {
+    const m = src.match(/pbs\.twimg\.com\/media\/([^?&#/]+)/i);
+    const key = m ? `media:${m[1]}` : src;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(src);
+  }
+  return out;
 }
 
 /**
@@ -913,10 +945,12 @@ async function extractTweet(
     .map(img => img.src).filter(isSafeImageSrc);
   // New shape: no [data-testid="tweetPhoto"] grouping — photos sit under
   // <a aria-label="Image"|"View media"> wrappers instead.
-  const tweetPhotoSrcs = tweetPhotoSrcsLegacy.length > 0 ? tweetPhotoSrcsLegacy
+  // Dedup by media stem — a single photo ships a blur-up placeholder <img> plus
+  // the full <img> in the same wrapper, which would otherwise render twice.
+  const tweetPhotoSrcs = dedupTweetPhotoSrcs(tweetPhotoSrcsLegacy.length > 0 ? tweetPhotoSrcsLegacy
     : Array.from(article.querySelectorAll<HTMLImageElement>('a[aria-label="Image"] img, a[aria-label="View media"] img'))
         .filter(img => !quoteContainer?.contains(img))
-        .map(img => img.src).filter(isSafeImageSrc);
+        .map(img => img.src).filter(isSafeImageSrc));
 
   // Date/time — legacy: the <time> element and its parent link href.
   // New shape: no <time> element — the date is plain text inside the first
