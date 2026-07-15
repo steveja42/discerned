@@ -2,7 +2,7 @@
 
 > **Value Attribution Layer for the Web**
 
-A Chrome Extension that allows users to capture, evaluate, and cryptographically sign content to the Nostr network. Built for frictionless onboarding of non-crypto users.
+A Chrome Extension that allows users to capture, evaluate, and store clips locally as well as cryptographically sign content to the Nostr network. Built for frictionless onboarding of non-crypto users.
 
 ---
 
