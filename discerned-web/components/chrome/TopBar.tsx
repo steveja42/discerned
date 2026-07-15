@@ -83,8 +83,8 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
     return () => document.removeEventListener('keydown', handler);
   }, [isMac]);
 
-  const navLink = (href: string, label: string) => (
-    <Link href={href} className={`topbar-link ${path === href ? 'topbar-link-active' : ''}`}>{label}</Link>
+  const navLink = (href: string, label: string, title?: string) => (
+    <Link href={href} className={`topbar-link ${path === href ? 'topbar-link-active' : ''}`} title={title}>{label}</Link>
   );
 
   return (
@@ -115,8 +115,8 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
       </div>
 
       <div className="topbar-right">
-        {navLink('/discerns', 'Discerns')}
-        {extensionPresent && navLink('/clips', 'My Clips')}
+        {navLink('/discerns', 'Discerns', 'Clips that have been broadcast on Nostr')}
+        {extensionPresent && navLink('/clips', 'My Clips', 'Clips stored only on this device')}
         {navLink('/about', 'About')}
         <a
           href="https://github.com/steveja42/discerned/tree/main/discerned-web"

@@ -29,10 +29,12 @@ export default function AboutPage() {
           <div className="hero-eyebrow">A value-attribution layer for the web</div>
           <h1 className="hero-title">Signal,<br /><em>not noise.</em></h1>
           <p className="hero-lede">
-            Discerned is a best in class web clipper and global curation platform. Clip what matters,
+            Discerned is a web clipper and global curation platform. Come to the site for curated signal- see what your friends and follows love and hate on the web.
+            <br></br> <br></br>Use the browser extension to Clip what matters,
             rate its <strong>Signal</strong>, tag it with <strong>Qualifiers</strong>, file it under a <strong>Category</strong>,
             and broadcast — or don&apos;t. Your clips are yours; the signal is shared.
           </p>
+         
           <div className="hero-cta">
             <Link href="/get-extension" className="btn primary" style={{ textDecoration: 'none' }}>
               Get the extension
@@ -47,21 +49,17 @@ export default function AboutPage() {
         </h2>
         <p style={{ margin: '0 0 16px' }}>
           Most platforms reward the loudest voice. Discerned rewards the most honest one.
-          Every clip carries a structured assessment — a <em>Signal</em> rating, <em>Qualifier</em> tags, and a <em>Category</em> —
-          recorded with the same care a librarian gives an accession.
+          Every clip can carry a structured assessment — a <em>Signal</em> rating, <em>Qualifier</em> tags, and a <em>Category</em>.
+         
         </p>
         <p style={{ margin: '0 0 16px' }}>
           Your reading is yours. The app stores everything locally first. When you choose to
-          cast a clip, it&apos;s signed in your browser and broadcast to relays you trust — never
-          ours, because we don&apos;t run any.
+          cast a clip, it&apos;s signed in your browser and broadcast to relays you trust.
         </p>
         <h3 style={{ fontFamily: 'var(--serif)', fontSize: 19, fontWeight: 500, color: 'var(--ink)', margin: '32px 0 10px' }}>
           Sovereignty, not gamification.
         </h3>
-        <p style={{ margin: '0 0 16px' }}>
-          No likes. No streaks. No engagement loops. The interface slows you down on purpose —
-          because considered judgment cannot be rushed.
-        </p>
+    
       </section>
 
       {signInOpen && (
