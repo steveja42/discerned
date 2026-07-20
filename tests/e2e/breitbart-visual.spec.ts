@@ -11,8 +11,10 @@ import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
-import { screenshotClipBody } from './helpers/clipShot';
+import { screenshotClipBody, screenshotSourcePage } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
+import { liveArtifacts } from './helpers/liveArtifacts';
+import { refreshLiveGallery } from './helpers/liveGallery';
 
 const URL =
   process.env.BB_URL ||
@@ -25,6 +27,7 @@ test('breitbart-visual: capture live article via headed Brave', async () => {
   const outDir = resolve(__dirname, '..', '..', 'test-output');
   mkdirSync(outDir, { recursive: true });
   const out = (n: string) => resolve(outDir, n);
+  const live = liveArtifacts('breitbart');
 
   const profile = process.env.PROFILE ?? 'test';
   const { ctx } = await launchWithExtension({ profile, headed: true });
@@ -62,7 +65,7 @@ test('breitbart-visual: capture live article via headed Brave', async () => {
     // eslint-disable-next-line no-console
     console.log(`[probe] Breitbart tweet wrapper iframes: ${iframeCount}`);
 
-    await page.screenshot({ path: out('bb-source.png'), fullPage: false });
+    await screenshotSourcePage(page, live.source());
 
     const cap = (await page.evaluate(async () => {
       return new Promise((resolveCap, rejectCap) => {
@@ -110,18 +113,19 @@ test('breitbart-visual: capture live article via headed Brave', async () => {
       await libPage.waitForTimeout(500);
     }
     await libPage.screenshot({
-      path: out('bb-live-rendered-top.png'),
+      path: live.clip('top'),
       clip: { x: 0, y: 0, width: 1280, height: 1200 },
     });
-    await screenshotClipBody(libPage, clipBody, out('bb-live-rendered-full.png'));
+    await screenshotClipBody(libPage, clipBody, live.clip('full'));
 
     // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
     // extension's real BUILD_CAST path from this same capture.
-    await castShotSafe(page, cap as { title?: string }, out('bb-live-cast.png'));
+    await castShotSafe(page, cap as { title?: string }, live.cast());
 
     // Structural health checks (after screenshots so artifacts survive a fail).
     await assertClipBodyHealth(clipBody);
   } finally {
     await ctx.close();
+    refreshLiveGallery();
   }
 });

@@ -13,8 +13,10 @@ import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
-import { screenshotClipBody } from './helpers/clipShot';
+import { screenshotClipBody, screenshotSourcePage } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
+import { liveArtifacts } from './helpers/liveArtifacts';
+import { refreshLiveGallery } from './helpers/liveGallery';
 
 const EMBED_URL =
   process.env.EMBED_URL ||
@@ -29,6 +31,7 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
   const outDir = resolve(__dirname, '..', '..', 'test-output');
   mkdirSync(outDir, { recursive: true });
   const out = (name: string) => resolve(outDir, name);
+  const live = liveArtifacts('embed');
 
   const { ctx } = await launchWithExtension();
   try {
@@ -64,7 +67,7 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
     console.log(`[probe] Found ${tweetIframeCount} twitter-widget iframe(s) on the source page`);
     expect(tweetIframeCount, 'source page should have at least one tweet embed').toBeGreaterThan(0);
 
-    await page.screenshot({ path: out('embed-source.png'), fullPage: false });
+    await screenshotSourcePage(page, live.source());
 
     // Capture via the dev test bridge (production-code path; __DISCERNED_TEST_BUILD__ enabled in dist-test).
     const cap = (await page.evaluate(async () => {
@@ -133,7 +136,7 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
     console.log(`[probe] Rendered .tweet-card count in /clips: ${renderedCardCount}`);
     expect(renderedCardCount, 'tweet cards should render in /clips').toBeGreaterThanOrEqual(1);
 
-    await screenshotClipBody(libPage, clipBody, out('embed-rendered.png'));
+    await screenshotClipBody(libPage, clipBody, live.clip());
 
     // Screenshot every tweet card for tight visual comparison.
     const allCards = clipBody.locator('.tweet-card');
@@ -156,19 +159,20 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
 
     // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
     // extension's real BUILD_CAST path from this same capture.
-    await castShotSafe(page, cap as { title?: string }, out('embed-cast.png'));
+    await castShotSafe(page, cap as { title?: string }, live.cast());
 
     // Structural health checks (after screenshots so artifacts survive a fail).
     await assertClipBodyHealth(clipBody);
 
     // eslint-disable-next-line no-console
     console.log('[probe] Artifacts written:');
-    console.log('  test-output/embed-source.png        (source article screenshot)');
-    console.log('  test-output/embed-rendered.png      (rendered clip-body in /clips)');
-    console.log('  test-output/embed-cast.png          (rendered PUBLIC cast in /discerns)');
-    console.log('  test-output/embed-first-card.png    (close-up of first tweet card)');
-    console.log('  test-output/embed-capture.json      (raw capture payload)');
+    console.log('  test-output/live-visual-run/embed--1-source.png  (source article screenshot)');
+    console.log('  test-output/live-visual-run/embed--2-clip.png    (rendered clip-body in /clips)');
+    console.log('  test-output/live-visual-run/embed--3-cast.png    (rendered PUBLIC cast in /discerns)');
+    console.log('  test-output/embed-card-N.png                     (close-up of each tweet card)');
+    console.log('  test-output/embed-capture.json                   (raw capture payload)');
   } finally {
     await ctx.close();
+    refreshLiveGallery();
   }
 });

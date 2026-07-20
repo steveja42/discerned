@@ -10,8 +10,10 @@ import { test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
-import { screenshotClipBody } from './helpers/clipShot';
+import { screenshotClipBody, screenshotSourcePage } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
+import { liveArtifacts } from './helpers/liveArtifacts';
+import { refreshLiveGallery } from './helpers/liveGallery';
 
 const BSKY_URL =
   process.env.BSKY_URL ||
@@ -27,6 +29,7 @@ test('bsky: capture clip, render in web app, screenshot card', async () => {
   const fs = await import('node:fs');
   fs.mkdirSync(outDir, { recursive: true });
   const out = (name: string) => resolve(outDir, name);
+  const live = liveArtifacts('bsky');
 
   const { ctx } = await launchWithExtension();
   try {
@@ -40,7 +43,7 @@ test('bsky: capture clip, render in web app, screenshot card', async () => {
     await page.goto(BSKY_URL, { waitUntil: 'load', timeout: 60_000 });
     // Bluesky hydrates client-side; give the feed/thread time to render.
     await page.waitForTimeout(5_000);
-    await page.screenshot({ path: out('bsky-source.png'), fullPage: false });
+    await screenshotSourcePage(page, live.source());
 
     // Generic structural describer: print tag + a few stable attributes so we
     // can discover Bluesky's selectors (data-testid, role, aria-label).
@@ -141,7 +144,7 @@ test('bsky: capture clip, render in web app, screenshot card', async () => {
     await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
     await libPage.waitForTimeout(1000);
 
-    await screenshotClipBody(libPage, clipBody, out('bsky-rendered.png'));
+    await screenshotClipBody(libPage, clipBody, live.clip());
     // Tight crop of the first few posts so the detail is legible: screenshot
     // just the first three dx-post elements stacked.
     const postCount = await libPage.locator('.clip-body .dx-post').count();
@@ -151,14 +154,14 @@ test('bsky: capture clip, render in web app, screenshot card', async () => {
     const bodyBox = await clipBody.boundingBox();
     if (box3 && bodyBox) {
       await libPage.screenshot({
-        path: out('bsky-rendered-top.png'),
+        path: live.clip('top'),
         clip: { x: bodyBox.x, y: bodyBox.y, width: Math.min(bodyBox.width, 700), height: Math.min((box3.y + box3.height) - bodyBox.y, 3000) },
       });
     }
 
     // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
     // extension's real BUILD_CAST path from this same capture.
-    await castShotSafe(page, cap as { title?: string }, out('bsky-cast.png'));
+    await castShotSafe(page, cap as { title?: string }, live.cast());
 
     const imgInfo = await clipBody.evaluate((root) => {
       return Array.from(root.querySelectorAll('img')).map((img) => {
@@ -194,7 +197,7 @@ test('bsky: capture clip, render in web app, screenshot card', async () => {
       }, find);
       if (region) {
         await libPage.screenshot({
-          path: out('bsky-rendered-find.png'),
+          path: live.clip('find'),
           clip: { x: region.x, y: region.y, width: Math.min(region.w, 700), height: Math.min(region.h, 1200) },
         });
       }
@@ -209,5 +212,6 @@ test('bsky: capture clip, render in web app, screenshot card', async () => {
     console.log(`\n✓ Saved bsky-* artifacts to ${outDir}\n`);
   } finally {
     await ctx.close();
+    refreshLiveGallery();
   }
 });

@@ -7,8 +7,10 @@ import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
-import { screenshotClipBody } from './helpers/clipShot';
+import { screenshotClipBody, screenshotSourcePage } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
+import { liveArtifacts } from './helpers/liveArtifacts';
+import { refreshLiveGallery } from './helpers/liveGallery';
 
 const SO_URL =
   process.env.SO_URL ||
@@ -23,6 +25,8 @@ test('stackoverflow-visual: capture Q+A, render in /clips, screenshot', async ()
   const outDir = resolve(__dirname, '..', '..', 'test-output');
   mkdirSync(outDir, { recursive: true });
   const out = (name: string) => resolve(outDir, name);
+  // The three hero images (source / clip / cast) go to test-output/live-visual-run/.
+  const live = liveArtifacts('stackoverflow');
 
   // Reuse the warmed-up 'test' profile by default (medium/breitbart established
   // it past Cloudflare). Override with PROFILE=foo for an isolated profile.
@@ -64,7 +68,7 @@ test('stackoverflow-visual: capture Q+A, render in /clips, screenshot', async ()
       console.warn('[probe] #question not detected after 180s — Cloudflare still blocking.');
     }
     await page.waitForTimeout(2_000);
-    await page.screenshot({ path: out('stackoverflow-source.png'), fullPage: false });
+    await screenshotSourcePage(page, live.source());
 
     const struct = await page.evaluate(() => {
       const lines: string[] = [];
@@ -110,11 +114,11 @@ test('stackoverflow-visual: capture Q+A, render in /clips, screenshot', async ()
     await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
     await libPage.waitForTimeout(1000);
 
-    await screenshotClipBody(libPage, clipBody, out('stackoverflow-rendered.png'));
+    await screenshotClipBody(libPage, clipBody, live.clip());
 
     // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
     // extension's real BUILD_CAST path from this same capture.
-    await castShotSafe(page, cap as { title?: string }, out('stackoverflow-cast.png'));
+    await castShotSafe(page, cap as { title?: string }, live.cast());
 
     const html = (await clipBody.evaluate((el) => el.innerHTML)) as string;
     const stripped = html.replace(/data:image\/[^"'\s]+/g, 'data:image/...(elided)...');
@@ -128,5 +132,6 @@ test('stackoverflow-visual: capture Q+A, render in /clips, screenshot', async ()
     console.log(`\n✓ Saved stackoverflow-* artifacts to ${outDir}\n`);
   } finally {
     await ctx.close();
+    refreshLiveGallery();
   }
 });

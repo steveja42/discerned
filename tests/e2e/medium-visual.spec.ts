@@ -14,8 +14,10 @@ import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
-import { screenshotClipBody } from './helpers/clipShot';
+import { screenshotClipBody, screenshotSourcePage } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
+import { liveArtifacts } from './helpers/liveArtifacts';
+import { refreshLiveGallery } from './helpers/liveGallery';
 
 const URL =
   process.env.MEDIUM_URL ||
@@ -30,6 +32,8 @@ test('medium-visual: capture article via headed Brave + render in /clips', async
   const outDir = resolve(__dirname, '..', '..', 'test-output');
   mkdirSync(outDir, { recursive: true });
   const out = (name: string) => resolve(outDir, name);
+  // The three hero images (source / clip / cast) go to test-output/live-visual-run/.
+  const liveShot = liveArtifacts('medium');
 
   const profile = process.env.PROFILE ?? 'test';
   const { ctx } = await launchWithExtension({ profile, headed: true });
@@ -66,7 +70,7 @@ test('medium-visual: capture article via headed Brave + render in /clips', async
     }
     await page.waitForTimeout(2_000); // hydration
 
-    await page.screenshot({ path: out('medium-source.png'), fullPage: false });
+    await screenshotSourcePage(page, liveShot.source());
 
     // Dump the live byline + engagement DOM for reference.
     const live = await page.evaluate(() => {
@@ -159,16 +163,16 @@ test('medium-visual: capture article via headed Brave + render in /clips', async
     }
     // Top 800px of the clip — the byline + engagement row + first paragraphs.
     await libPage.screenshot({
-      path: out('medium-rendered-top.png'),
+      path: liveShot.clip('top'),
       clip: { x: 0, y: 0, width: 1280, height: 900 },
     });
     // Also a full-clip-body screenshot in case the byline is below the fold
     // (tall-safe: viewport-clipped beyond 8k px).
-    await screenshotClipBody(libPage, clipBody, out('medium-rendered-full.png'));
+    await screenshotClipBody(libPage, clipBody, liveShot.clip('full'));
 
     // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
     // extension's real BUILD_CAST path from this same capture.
-    await castShotSafe(page, cap as { title?: string }, out('medium-cast.png'));
+    await castShotSafe(page, cap as { title?: string }, liveShot.cast());
 
     // Structural health checks (after screenshots so artifacts survive a fail).
     await assertClipBodyHealth(clipBody);
@@ -189,5 +193,6 @@ test('medium-visual: capture article via headed Brave + render in /clips', async
     console.log('\n[probe] dx markers in rendered clip:', JSON.stringify(dxInfo, null, 2));
   } finally {
     await ctx.close();
+    refreshLiveGallery();
   }
 });

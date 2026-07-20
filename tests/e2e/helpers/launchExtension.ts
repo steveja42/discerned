@@ -51,17 +51,76 @@ export interface LaunchOptions {
   profile?: string;
   /** Visible window mode. Default: respects PWDEBUG_HEADED env var. */
   headed?: boolean;
+  /**
+   * Launch against a REAL browser user-data-dir (e.g. `…\Google\Chrome\User Data`)
+   * to inherit an existing Cloudflare `cf_clearance` cookie so CF-walled sites
+   * (Medium, Stack Overflow) load. The browser owning this dir MUST be fully
+   * closed (Chromium enforces a single-instance lock). Pair with
+   * `profileDirectory` to select the sub-profile and `channel: 'chrome'` to use
+   * the installed Chrome binary (matching the fingerprint CF cleared).
+   * The SW cache is NOT cleared for a raw dir — it's a real profile.
+   *
+   * Also settable via env: RAW_USER_DATA_DIR / PROFILE_DIR / BROWSER_CHANNEL,
+   * so any existing spec can be pointed at a warm profile without code changes.
+   */
+  rawUserDataDir?: string;
+  /** `--profile-directory` value (e.g. "Profile 3"). Only meaningful with rawUserDataDir. */
+  profileDirectory?: string;
+  /** Playwright browser channel, e.g. 'chrome' for the installed Chrome. */
+  channel?: 'chrome' | 'msedge' | 'chrome-beta';
+  /**
+   * The Discerned extension is ALREADY installed in this profile (you did
+   * chrome://extensions → Load unpacked → dist-test once, by hand). When true we
+   * launch a plain persistent context on the given `channel` and do NOT try to
+   * load the extension ourselves — neither the `--load-extension` flag (Chrome
+   * 137+ ignores it on branded builds) nor the CDP `Extensions.loadUnpacked` path
+   * (which loads the extension but never injects its content scripts). A
+   * manually-installed unpacked extension is exempt from both problems: its
+   * content scripts inject normally, and the launch carries none of the automation
+   * tells (`--enable-unsafe-extension-debugging`, a CDP-loaded extension) that
+   * Cloudflare flags. This is the ONLY combination that gets past Cloudflare AND
+   * runs the extension. Requires `channel` (real Chrome) + a persistent profile
+   * dir (via `profile` or `rawUserDataDir`).
+   *
+   * Also settable via env: PREINSTALLED_EXT=1.
+   */
+  preinstalledExtension?: boolean;
 }
 
 export async function launchWithExtension(opts: LaunchOptions = {}): Promise<ExtensionContext> {
-  const userDataDir = opts.profile
-    ? (() => { const d = resolve(PROFILES_ROOT, opts.profile!); mkdirSync(d, { recursive: true }); return d; })()
-    : mkdtempSync(join(tmpdir(), 'discerned-e2e-'));
+  // Env-var override so any spec can target a warm real-browser profile without
+  // editing it: RAW_USER_DATA_DIR="…\User Data" PROFILE_DIR="Profile 3" BROWSER_CHANNEL=chrome
+  if (process.env.RAW_USER_DATA_DIR) {
+    opts = {
+      ...opts,
+      rawUserDataDir: process.env.RAW_USER_DATA_DIR,
+      profileDirectory: process.env.PROFILE_DIR ?? opts.profileDirectory,
+      channel: (process.env.BROWSER_CHANNEL as LaunchOptions['channel']) ?? opts.channel,
+    };
+  }
+  // PREINSTALLED_EXT=1 opts into the manually-installed-extension path (see the
+  // option's doc comment) without editing the spec.
+  if (process.env.PREINSTALLED_EXT) opts = { ...opts, preinstalledExtension: true };
+  // On a real branded channel we ALWAYS use the preinstalled path. The only other
+  // real-channel option (CDP Extensions.loadUnpacked) loads the extension but never
+  // injects content scripts, so it's useless for capture — and worse, the
+  // flag-loaded path (--load-extension / --disable-extensions-except) actively
+  // DEREGISTERS a manually-installed extension from the persistent profile, so a
+  // single non-preinstalled run silently uninstalls it for every future run. Forcing
+  // preinstalled here makes it impossible to clobber the hand-installed extension.
+  const preinstalled = !!opts.preinstalledExtension || !!opts.channel;
+  const usingRawDir = !!opts.rawUserDataDir;
+  const userDataDir = usingRawDir
+    ? opts.rawUserDataDir!
+    : opts.profile
+      ? (() => { const d = resolve(PROFILES_ROOT, opts.profile!); mkdirSync(d, { recursive: true }); return d; })()
+      : mkdtempSync(join(tmpdir(), 'discerned-e2e-'));
   // Persistent profiles cache a stale extension SW after a rebuild — clear it so
   // the launch picks up the current dist-test background. Throwaway temp
   // profiles are already fresh, so this only matters (and only runs) for named
-  // profiles, but it's cheap + harmless either way.
-  if (opts.profile) clearServiceWorkerCache(userDataDir);
+  // profiles, but it's cheap + harmless either way. NEVER for a raw real-browser
+  // dir — we don't wipe caches out of the user's actual profile.
+  if (opts.profile && !usingRawDir) clearServiceWorkerCache(userDataDir);
   // Headed when explicitly requested OR when PWDEBUG_HEADED=1 is set; otherwise
   // use --headless=new (works on modern Chromium, suppresses windows on CI/local).
   const headed = opts.headed ?? !!process.env.PWDEBUG_HEADED;
@@ -70,33 +129,106 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
   // self-identifies as "HeadlessChrome".
   const REAL_UA =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-  const ctx = await chromium.launchPersistentContext(userDataDir, {
-    // headless: false with --headless=new in args is the Playwright-recommended
-    // shape for headless extension loading; Playwright's own headless mode
-    // (headless: true) uses a different binary that doesn't load extensions.
-    headless: false,
-    userAgent: REAL_UA,
-    locale: 'en-US',
-    args: [
-      `--disable-extensions-except=${EXTENSION_PATH}`,
-      `--load-extension=${EXTENSION_PATH}`,
-      ...(headed ? [] : ['--headless=new']),
-      '--no-sandbox',
-      '--no-first-run',
-      '--disable-features=DialMediaRouteProvider',
-      // Mute all tab audio so headed runs against YouTube / streaming sites
-      // don't blast the user's speakers.
-      '--mute-audio',
-      // Anti-detection: strip the Blink flag that exposes automation, drop
-      // the "Chrome is being controlled by automated test software" infobar
-      // fingerprint, and silence the testing-mode badge. Cloudflare's
-      // Turnstile reads these to flag the browser as a bot.
-      '--disable-blink-features=AutomationControlled',
-      '--exclude-switches=enable-automation',
-      '--disable-infobars',
-    ],
-    viewport: { width: 1280, height: 720 },
-  });
+  // Two launch shapes:
+  //  - Bundled Chromium (no channel): loads the extension via the --load-extension
+  //    flag, which bundled Chrome-for-Testing still honors. Used for the named
+  //    `test` profile + throwaway profiles.
+  //  - Real branded Chrome (channel set → preinstalled): Chrome 137+ ignores
+  //    --load-extension on branded builds, so the extension must be installed in the
+  //    profile by hand (chrome://extensions → Load unpacked) and we pass NO
+  //    extension-loading flags. Passing --load-extension here would actively
+  //    DEREGISTER that hand-installed extension, and --enable-unsafe-extension-
+  //    debugging is a Cloudflare automation tell — so neither is used.
+  const args = [
+    ...(preinstalled
+      ? []
+      : [
+          `--disable-extensions-except=${EXTENSION_PATH}`,
+          `--load-extension=${EXTENSION_PATH}`,
+        ]),
+    // Select the sub-profile inside a real …\User Data dir.
+    ...(opts.profileDirectory ? [`--profile-directory=${opts.profileDirectory}`] : []),
+    // A real, Google-signed-in profile kicks off sync + GCM registration on
+    // launch; that chatter (ERROR …registration_request… DEPRECATED_ENDPOINT,
+    // retried forever) stalls Playwright's launch handshake past its timeout.
+    // None of it is needed for a capture run.
+    ...(usingRawDir
+      ? [
+          '--disable-sync',
+          '--disable-background-networking',
+          '--disable-component-update',
+          '--no-default-browser-check',
+          '--disable-client-side-phishing-detection',
+        ]
+      : []),
+    ...(headed ? [] : ['--headless=new']),
+    // --no-sandbox is for Playwright's bundled Chromium / CI containers. On a
+    // REAL installed Chrome it raises the yellow "You are using an unsupported
+    // flag: no-sandbox" banner and the browser stalls instead of handing
+    // Playwright a usable context — never pass it with a real channel.
+    ...(opts.channel ? [] : ['--no-sandbox']),
+    '--no-first-run',
+    '--disable-features=DialMediaRouteProvider',
+    // Mute all tab audio so headed runs against YouTube / streaming sites
+    // don't blast the user's speakers.
+    '--mute-audio',
+    // Anti-detection: strip the Blink flag that exposes automation, drop
+    // the "Chrome is being controlled by automated test software" infobar
+    // fingerprint, and silence the testing-mode badge. Cloudflare's
+    // Turnstile reads these to flag the browser as a bot.
+    '--disable-blink-features=AutomationControlled',
+    // --exclude-switches is a chromedriver concept, not a Chrome flag; real
+    // Chrome flags it as unsupported. Only useful for bundled Chromium.
+    ...(opts.channel ? [] : ['--exclude-switches=enable-automation']),
+    '--disable-infobars',
+  ];
+
+  let ctx: BrowserContext;
+  if (preinstalled) {
+    // The extension is already installed in this persistent profile (manual
+    // chrome://extensions → Load unpacked). Just launch a plain persistent context
+    // on the real channel — no extension-loading flags, no CDP. This is the only
+    // shape that both (a) injects content scripts (a manually-installed unpacked
+    // extension is exempt from the Chrome-137 --load-extension block) and (b) gets
+    // past Cloudflare (real branded Chrome, persistent cf_clearance, none of the
+    // CDP/debugging automation tells). Requires channel + a persistent dir.
+    if (!opts.channel) throw new Error('preinstalledExtension requires a real channel (e.g. channel: "chrome")');
+    if (!opts.profile && !usingRawDir) throw new Error('preinstalledExtension requires a persistent profile dir (profile or rawUserDataDir)');
+    ctx = await chromium.launchPersistentContext(userDataDir, {
+      headless: false,
+      channel: opts.channel,
+      locale: 'en-US',
+      // ignoreDefaultArgs strips Playwright defaults that would break this path:
+      //  - --disable-extensions and --disable-component-extensions-with-background-
+      //    pages: Playwright injects these by default, which turns OFF every
+      //    extension in the profile — including the hand-installed Discerned one.
+      //    Removing them is what lets the preinstalled extension actually run
+      //    (verified: with them present, chrome://extensions shows ZERO extensions).
+      //  - --enable-automation: the "controlled by test software" banner + internal
+      //    automation flags Cloudflare reads. --exclude-switches doesn't work on a
+      //    real channel, so ignoreDefaultArgs is how it's suppressed on branded Chrome.
+      ignoreDefaultArgs: [
+        '--disable-extensions',
+        '--disable-component-extensions-with-background-pages',
+        '--enable-automation',
+      ],
+      args,
+      viewport: { width: 1280, height: 720 },
+    });
+  } else {
+    ctx = await chromium.launchPersistentContext(userDataDir, {
+      // headless: false with --headless=new in args is the Playwright-recommended
+      // shape for headless extension loading; Playwright's own headless mode
+      // (headless: true) uses a different binary that doesn't load extensions.
+      headless: false,
+      // Bundled Chromium self-reports "HeadlessChrome" in its UA — override with a
+      // realistic Stable-channel string so Cloudflare-protected sites don't bounce it.
+      userAgent: REAL_UA,
+      locale: 'en-US',
+      args,
+      viewport: { width: 1280, height: 720 },
+    });
+  }
 
   // Hide the most common automation tells from page JS:
   //   - navigator.webdriver should be undefined (Playwright sets it to true)

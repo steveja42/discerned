@@ -7,8 +7,10 @@ import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
-import { screenshotClipBody } from './helpers/clipShot';
+import { screenshotClipBody, screenshotSourcePage } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
+import { liveArtifacts } from './helpers/liveArtifacts';
+import { refreshLiveGallery } from './helpers/liveGallery';
 
 const RD_URL =
   process.env.REDDIT_URL ||
@@ -24,6 +26,7 @@ test('reddit-visual: capture post + comments, render in /clips, screenshot', asy
   const outDir = resolve(__dirname, '..', '..', 'test-output');
   mkdirSync(outDir, { recursive: true });
   const out = (name: string) => resolve(outDir, name);
+  const live = liveArtifacts('reddit');
 
   const profile = process.env.PROFILE ?? 'test';
   const headed = process.env.PWDEBUG_HEADED === '0' ? false : true;
@@ -41,7 +44,7 @@ test('reddit-visual: capture post + comments, render in /clips, screenshot', asy
     // New Reddit uses custom elements; wait for the main post.
     await page.waitForSelector('shreddit-post, [data-test-id="post-content"], article', { timeout: 30_000 }).catch(() => undefined);
     await page.waitForTimeout(4_000);
-    await page.screenshot({ path: out('reddit-source.png'), fullPage: false });
+    await screenshotSourcePage(page, live.source());
 
     const struct = await page.evaluate(() => {
       const lines: string[] = [];
@@ -171,7 +174,7 @@ test('reddit-visual: capture post + comments, render in /clips, screenshot', asy
     await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
     await libPage.waitForTimeout(1000);
 
-    await screenshotClipBody(libPage, clipBody, out('reddit-rendered.png'));
+    await screenshotClipBody(libPage, clipBody, live.clip());
 
     // Tight top-of-clip crop so byline + first image are legible without
     // downscaling the whole thread. Captures the first ~600px below the
@@ -179,14 +182,14 @@ test('reddit-visual: capture post + comments, render in /clips, screenshot', asy
     const bodyBox = await clipBody.boundingBox();
     if (bodyBox) {
       await libPage.screenshot({
-        path: out('reddit-rendered-top.png'),
+        path: live.clip('top'),
         clip: { x: bodyBox.x, y: bodyBox.y, width: Math.min(bodyBox.width, 800), height: 700 },
       });
     }
 
     // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
     // extension's real BUILD_CAST path from this same capture.
-    await castShotSafe(page, cap as { title?: string }, out('reddit-cast.png'));
+    await castShotSafe(page, cap as { title?: string }, live.cast());
 
     const html = (await clipBody.evaluate((el) => el.innerHTML)) as string;
     const stripped = html.replace(/data:image\/[^"'\s]+/g, 'data:image/...(elided)...');
@@ -200,5 +203,6 @@ test('reddit-visual: capture post + comments, render in /clips, screenshot', asy
     console.log(`\n✓ Saved reddit-* artifacts to ${outDir}\n`);
   } finally {
     await ctx.close();
+    refreshLiveGallery();
   }
 });

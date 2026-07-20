@@ -10,8 +10,10 @@ import { test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
-import { screenshotClipBody } from './helpers/clipShot';
+import { screenshotClipBody, screenshotSourcePage } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
+import { liveArtifacts } from './helpers/liveArtifacts';
+import { refreshLiveGallery } from './helpers/liveGallery';
 
 const GOODREADS_URL =
   process.env.GOODREADS_URL ||
@@ -27,6 +29,7 @@ test('goodreads: capture clip, render in web app, screenshot card', async () => 
   const fs = await import('node:fs');
   fs.mkdirSync(outDir, { recursive: true });
   const out = (name: string) => resolve(outDir, name);
+  const live = liveArtifacts('goodreads');
 
   const { ctx } = await launchWithExtension();
   try {
@@ -53,7 +56,7 @@ test('goodreads: capture clip, render in web app, screenshot card', async () => 
       });
     });
     await page.waitForTimeout(500);
-    await page.screenshot({ path: out('goodreads-source.png'), fullPage: false });
+    await screenshotSourcePage(page, live.source());
     // Capture viewport-sized chunks of the page rather than one fullPage
     // screenshot — Goodreads is very tall and Chromium can fail capturing
     // it in one shot.
@@ -168,11 +171,11 @@ test('goodreads: capture clip, render in web app, screenshot card', async () => 
     await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
     await libPage.waitForTimeout(1000);
 
-    await screenshotClipBody(libPage, clipBody, out('goodreads-rendered.png'));
+    await screenshotClipBody(libPage, clipBody, live.clip());
 
     // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
     // extension's real BUILD_CAST path from this same capture.
-    await castShotSafe(page, cap as { title?: string }, out('goodreads-cast.png'));
+    await castShotSafe(page, cap as { title?: string }, live.cast());
 
     // Tight crop of the top of the rendered card (book hero area) so the
     // detail is legible — full clip body is way too tall to read.
@@ -180,7 +183,7 @@ test('goodreads: capture clip, render in web app, screenshot card', async () => 
     if (bodyBox) {
       // Hero shot: roughly the top 800px at full width, large enough to read.
       await libPage.screenshot({
-        path: out('goodreads-rendered-hero.png'),
+        path: live.clip('hero'),
         clip: {
           x: Math.max(0, bodyBox.x - 8),
           y: bodyBox.y,
@@ -190,7 +193,7 @@ test('goodreads: capture clip, render in web app, screenshot card', async () => 
       });
       // Genres + stats: scroll a little further to see those.
       await libPage.screenshot({
-        path: out('goodreads-rendered-mid.png'),
+        path: live.clip('mid'),
         clip: {
           x: Math.max(0, bodyBox.x - 8),
           y: bodyBox.y + 400,
@@ -200,7 +203,7 @@ test('goodreads: capture clip, render in web app, screenshot card', async () => 
       });
       // Author card region.
       await libPage.screenshot({
-        path: out('goodreads-rendered-author.png'),
+        path: live.clip('author'),
         clip: {
           x: Math.max(0, bodyBox.x - 8),
           y: bodyBox.y + 1000,
@@ -267,5 +270,6 @@ test('goodreads: capture clip, render in web app, screenshot card', async () => 
     console.log(`\n✓ Saved goodreads-* artifacts to ${outDir}\n`);
   } finally {
     await ctx.close();
+    refreshLiveGallery();
   }
 });

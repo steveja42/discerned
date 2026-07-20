@@ -7,8 +7,10 @@ import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
-import { screenshotClipBody } from './helpers/clipShot';
+import { screenshotClipBody, screenshotSourcePage } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
+import { liveArtifacts } from './helpers/liveArtifacts';
+import { refreshLiveGallery } from './helpers/liveGallery';
 
 const BBC_URL =
   process.env.BBC_URL ||
@@ -23,6 +25,7 @@ test('bbc-visual: capture article, render in /clips, screenshot', async () => {
   const outDir = resolve(__dirname, '..', '..', 'test-output');
   mkdirSync(outDir, { recursive: true });
   const out = (name: string) => resolve(outDir, name);
+  const live = liveArtifacts('bbc');
 
   const profile = process.env.PROFILE ?? 'bbc';
   const { ctx } = await launchWithExtension({ profile, headed: !!process.env.PWDEBUG_HEADED });
@@ -38,7 +41,7 @@ test('bbc-visual: capture article, render in /clips, screenshot', async () => {
     await page.goto(BBC_URL, { waitUntil: 'load', timeout: 60_000 });
     await page.waitForSelector('article, main', { timeout: 30_000 }).catch(() => undefined);
     await page.waitForTimeout(3_000);
-    await page.screenshot({ path: out('bbc-source.png'), fullPage: false });
+    await screenshotSourcePage(page, live.source());
 
     const struct = await page.evaluate(() => {
       const lines: string[] = [];
@@ -84,11 +87,11 @@ test('bbc-visual: capture article, render in /clips, screenshot', async () => {
     await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
     await libPage.waitForTimeout(1000);
 
-    await screenshotClipBody(libPage, clipBody, out('bbc-rendered.png'));
+    await screenshotClipBody(libPage, clipBody, live.clip());
 
     // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
     // extension's real BUILD_CAST path from this same capture.
-    await castShotSafe(page, cap as { title?: string }, out('bbc-cast.png'));
+    await castShotSafe(page, cap as { title?: string }, live.cast());
 
     const html = (await clipBody.evaluate((el) => el.innerHTML)) as string;
     const stripped = html.replace(/data:image\/[^"'\s]+/g, 'data:image/...(elided)...');
@@ -102,5 +105,6 @@ test('bbc-visual: capture article, render in /clips, screenshot', async () => {
     console.log(`\n✓ Saved bbc-* artifacts to ${outDir}\n`);
   } finally {
     await ctx.close();
+    refreshLiveGallery();
   }
 });
