@@ -58,6 +58,11 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'corpus-sweep',
+      testMatch: /corpus-sweep\.spec\.ts/,
+      retries: 0,
+    },
+    {
       name: 'primal-visual',
       testMatch: /primal-visual\.spec\.ts/,
       retries: 0,

@@ -178,12 +178,59 @@ redesigned page → allDead). Full write-up in `discerned-ext/CLAUDE.md` → "Ta
 
 ## Phase 4 — Confidence across the broad web
 
-- [ ] 4.1 Corpus sweep harness: run article capture on ~100–200 popular domains, auto-score clips
-      (text-coverage %, blank-space ratio, aspect-distorted imgs, chrome-string hits), ranked report;
-      eyeball only the worst decile. Classify failures as *patterns*, fix generically with a fixture each
-      (per the capture-quality philosophy: general solutions over per-site ones).
+- [x] 4.1 Corpus sweep harness *(built + smoke-verified 2026-07-21)*: `tests/e2e/corpus-sweep.spec.ts`
+      (`SWEEP=1`, `--project=corpus-sweep`) runs article capture across `tests/fixtures/corpus-domains.json`
+      (~50 uncurated popular domains; `SWEEP_ONLY` / `SWEEP_LIMIT` / `SWEEP_URL_<NAME>` env filters), scores
+      each clip with four **content-free** heuristics (`helpers/sweepScorers.ts`: text-coverage %, blank-space
+      ratio, aspect-distorted imgs, chrome-string hits → weighted composite, worst = 1), writes three images
+      + a `score.json` per domain to `test-output/corpus-sweep-run/{domain}--{1-source,2-clip,3-cast}.png`
+      (`helpers/sweepArtifacts.ts`), and builds a worst-first / by-date sortable review gallery with an
+      "only flagged" filter (`helpers/sweepGallery.ts` + `tools/sweep-gallery.mjs`). Every per-domain stage
+      (load, capture, AND render/score/cast) is wrapped so any failure demotes that one domain to a SKIP and
+      the sweep continues — the whole run is a single serial test, so an un-caught throw would otherwise kill
+      every downstream domain (a stray reuters `.clip-body` timeout aborted 48). Load-vs-capture failures are
+      SKIPs, not scored findings (same split as the tagger canary). **Launches the warm branded-Chrome
+      profile** (`.vscode/browser-test-profiles/chrome` / `Profile 3`, extension hand-installed + valid
+      `cf_clearance`) via `launchWithExtension({ preinstalledExtension, channel:'chrome' })` — runs **headless**
+      (verified: StackOverflow clears Cloudflare and the capture bridge responds with no window on screen), so
+      it doesn't interfere with the user's machine. Calibration: high text-coverage on a minimal-chrome page
+      is the *healthy* case, so the high-coverage signal only feeds the composite when `chromeHits > 0`
+      (otherwise noted informationally, weight 0) — this keeps text-only pages (danluu, paulgraham, HN,
+      Wikipedia) out of the worst decile. This is a **discovery tool, not a CI gate**: it triages which unseen
+      sites are likely broken so a human can classify failures as *patterns* and fix them generically (per the
+      capture-quality philosophy: general solutions over per-site ones). The pixel-baseline fixture specs
+      remain the real regression floor.
+### 4.1 first-run findings *(50-domain headless sweep, 2026-07-21)*
+
+43/50 scored, 7 skipped (all clean challenge/error skips), no crash. The sweep triaged the worst decile
+into three buckets — only the first is a real pipeline defect:
+
+- **🔴 Hero-only capture (the real, generalizable finding)** — on 5 modern article layouts (**github-blog,
+  npr, arstechnica, aljazeera, css-tricks**) capture locked onto the article's **hero/header card** (hero
+  image + category + headline + dek + byline) and **stopped before the prose body**, giving text-coverage
+  2.7–4.0%. This is a *pattern*, not 5 site quirks: `findContentBlockByLayout` appears to score the large
+  visual hero block above the text body, and `maybeExpandToFeed` doesn't widen to include the body (or the
+  body is lazy-loaded below the fold at the 3.5 s capture mark). **Follow-on fix (generic, not per-site):**
+  make the layout finder prefer/expand to the block whose subtree maximises text density even when a
+  sibling hero card has larger visual area; add a github-blog or ars fixture as the guard. This is exactly
+  the kind of class-N defect the sweep exists to surface.
+- **🟠 Wrong corpus URL (fixture hygiene, not a capture bug)** — **cnn** and **vox** entries point at a
+  homepage/section feed, so capture correctly grabbed the headline grid. Fix the corpus URLs to single
+  articles; not a pipeline defect.
+- **🟡 Challenge / error interstitials** — 7 domains (politico, axios, economist, medium-generic = Cloudflare
+  "security verification"; imdb, goodreads-book = "403 Forbidden"; reuters = an "Access is temporarily
+  restricted" bot-block rendered *inside an iframe*) navigated fine but had no article. **Fixed in-harness**:
+  a post-load interstitial detector demotes them to load-vs-capture SKIPs so they no longer pollute the
+  scored set or worst decile. It matches CF / bot-check / 403 / access-denied signature text on a <1500-char
+  page, ALSO reads same-origin iframe bodies (Reuters' wall is in an iframe → top-doc `innerText` is empty),
+  and treats a near-empty body (<20 chars after the 3.5 s paint wait) as a skip outright — an empty page has
+  nothing to capture regardless of cause, and would otherwise fall through to a confusing "render/score
+  failed" when the empty clip never paints a `.clip-body`. (Note: these bot-blocks are IP/network-level, not
+  solvable CAPTCHAs — a headed run + manual click wouldn't clear them, so skipping is the correct handling.)
+
 - [ ] 4.2 Re-run sweep quarterly / after major pipeline changes; pixel-baseline fixture specs remain the
-      regression floor.
+      regression floor. **Open follow-on from the 4.1 first run: fix the hero-only capture defect
+      generically + add a fixture; correct the cnn/vox corpus URLs to single articles.**
 
 ## Known pre-existing failures  *(fixed 2026-07-21)*
 
