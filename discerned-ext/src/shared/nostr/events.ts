@@ -165,6 +165,14 @@ function markdownEmbedsImage(markdown: string, imageUrl: string): boolean {
   return false;
 }
 
+// Does the markdown embed ANY image (![alt](url)) at all? Used to tell a text-only
+// article (no body images → the og:image is a legit hero worth banner-ing) from an
+// article that already carries its own imagery (→ an og:image not among them is a
+// social-share card, not the article's visual lead, so don't add it as a hero).
+function markdownHasAnyImage(markdown: string): boolean {
+  return /!\[[^\]]*\]\([^)\s]+/.test(markdown);
+}
+
 // Does the markdown LEAD with an image — i.e. an ![alt](url) appears at the top,
 // before any real prose? Article/full-page captures put the hero first, so a
 // leading inline image IS the hero. We can't reliably URL-match it to the `image`
@@ -411,18 +419,24 @@ export function createLongFormEvent(
   const dedupedMarkdown = stripLeadingArticleChrome(markdownBody, capture.title, imageUrl);
 
   // Emit the `image` tag (rendered as a banner ABOVE the body by clients) only
-  // when the hero is NOT still embedded inline in the body. Two ways the body
-  // already carries it:
-  //  - it embeds the SAME image URL somewhere (markdownEmbedsImage), or
-  //  - it simply LEADS with an image (markdownLeadsWithImage) whose URL we can't
+  // when it's a genuine hero the reader would expect at the top. Suppress it when:
+  //  - the body already embeds the SAME image URL (markdownEmbedsImage), or
+  //  - the body LEADS with an image (markdownLeadsWithImage) whose URL we can't
   //    match to the tag because the inline copy is a base64 data URI or a
-  //    different-resolution crop of the same photo (the Breitbart case). A leading
-  //    image is the hero regardless of URL, so the banner would duplicate it.
-  // The body position wins in both cases.
+  //    different-resolution crop of the same photo (the Breitbart case) — a leading
+  //    image is the hero regardless of URL, so the banner would duplicate it, or
+  //  - the body already carries its OWN imagery, none of it matching the tag
+  //    (markdownHasAnyImage but not markdownEmbedsImage). Then the `image` URL is a
+  //    social-share card (og:image) that appears NOWHERE in the article the reader
+  //    saw — Substack's og:image is a generated share graphic, not the lead photo —
+  //    so banner-ing it prepends a phantom hero. Only when the body has NO images of
+  //    its own is the og:image a legit hero (a text article whose lead the extractor
+  //    dropped), and the banner is kept.
   if (
     imageUrl &&
     !markdownEmbedsImage(dedupedMarkdown, imageUrl) &&
-    !markdownLeadsWithImage(dedupedMarkdown)
+    !markdownLeadsWithImage(dedupedMarkdown) &&
+    !markdownHasAnyImage(dedupedMarkdown)
   ) {
     tags.push(['image', imageUrl]);
   }

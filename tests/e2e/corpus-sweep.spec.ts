@@ -274,6 +274,10 @@ test('corpus-sweep: capture + score ~50 domains, build ranked gallery', async ()
   // Cloudflare on the sites that clear at all (see project_real_chrome_extension_cdp_load).
   const { ctx } = await launchWithExtension({
     rawUserDataDir, profileDirectory, channel, preinstalledExtension: true, headed: false,
+    // Force the SW to re-register from current dist-test so background changes
+    // (createLongFormEvent cast logic, BUILD_CAST) aren't served stale from the
+    // cached MV3 worker. Clears SW/code cache only — cf_clearance + logins survive.
+    clearSwCacheForRawDir: true,
   });
   try {
     for (const d of DOMAINS) {
@@ -298,6 +302,7 @@ test('corpus-sweep: capture + score ~50 domains, build ranked gallery', async ()
     console.log(`\n── headed retry for ${cfDomains.length} CF-challenged domain(s): ${cfDomains.map(d => d.name).join(', ')} ──`);
     const { ctx: headedCtx } = await launchWithExtension({
       rawUserDataDir, profileDirectory, channel, preinstalledExtension: true, headed: true,
+      clearSwCacheForRawDir: true,
     });
     try {
       for (const d of cfDomains) {

@@ -15,19 +15,26 @@ import { resolve, join } from 'node:path';
 // dirs before launch forces Chrome to re-register the SW from the current
 // dist-test. Cookies / Login Data / Local Storage are left intact so site logins
 // (Cloudflare, etc.) survive.
-const SW_CACHE_DIRS = [
-  'Default/Service Worker',
-  'Default/Code Cache',
-  'Default/Extension State',
-  'Default/Extension Rules',
-  'Default/Extension Scripts',
-  'Default/GPUCache',
+// SW/cache subdirs, RELATIVE to a profile folder. Chrome nests them under the
+// profile dir — 'Default' for a fresh/throwaway profile, or a named sub-profile
+// like 'Profile 3' inside a real …\User Data dir.
+const SW_CACHE_SUBDIRS = [
+  'Service Worker',
+  'Code Cache',
+  'Extension State',
+  'Extension Rules',
+  'Extension Scripts',
+  'GPUCache',
 ];
 
-function clearServiceWorkerCache(userDataDir: string): void {
-  for (const rel of SW_CACHE_DIRS) {
+// Clear the SW/code cache under `userDataDir/<profileFolder>`. profileFolder
+// defaults to 'Default' (throwaway/named-under-PROFILES_ROOT profiles); pass the
+// real sub-profile ('Profile 3') for a rawUserDataDir. Cookies / Local Storage /
+// Network are NOT under these subdirs, so cf_clearance + logins survive.
+function clearServiceWorkerCache(userDataDir: string, profileFolder = 'Default'): void {
+  for (const sub of SW_CACHE_SUBDIRS) {
     try {
-      rmSync(resolve(userDataDir, rel), { recursive: true, force: true });
+      rmSync(resolve(userDataDir, profileFolder, sub), { recursive: true, force: true });
     } catch { /* best effort — dir may not exist */ }
   }
 }
@@ -85,6 +92,22 @@ export interface LaunchOptions {
    * Also settable via env: PREINSTALLED_EXT=1.
    */
   preinstalledExtension?: boolean;
+  /**
+   * Force the extension's service worker to re-register from the current
+   * dist-test even on a rawUserDataDir. By default the SW cache is NEVER touched
+   * for a raw dir (it's treated as the user's real profile). But the named test
+   * profiles under .vscode/browser-test-profiles/ ARE reached via rawUserDataDir
+   * (e.g. Profile 3), and MV3 caches the background SW script keyed by ext id +
+   * version — so after a `pnpm build:test` a background-code change (a new
+   * BUILD_CAST handler, a fix in createLongFormEvent) keeps being served STALE,
+   * silently. This clears ONLY the SW/Code-Cache dirs (Cookies / Local Storage /
+   * Network — including cf_clearance — are left intact), so a test profile picks
+   * up current background code. Only opt into this for the dedicated test
+   * profiles, never a genuine user profile.
+   *
+   * Also settable via env: CLEAR_SW_CACHE=1.
+   */
+  clearSwCacheForRawDir?: boolean;
 }
 
 export async function launchWithExtension(opts: LaunchOptions = {}): Promise<ExtensionContext> {
@@ -121,6 +144,12 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
   // profiles, but it's cheap + harmless either way. NEVER for a raw real-browser
   // dir — we don't wipe caches out of the user's actual profile.
   if (opts.profile && !usingRawDir) clearServiceWorkerCache(userDataDir);
+  // Named test profiles reached via rawUserDataDir (e.g. Profile 3) still cache a
+  // stale background SW after a rebuild — opt-in clear (SW/code cache only; cookies
+  // + cf_clearance preserved) so a build:test's background changes take effect.
+  if (usingRawDir && (opts.clearSwCacheForRawDir || process.env.CLEAR_SW_CACHE)) {
+    clearServiceWorkerCache(userDataDir, opts.profileDirectory ?? 'Default');
+  }
   // Headed when explicitly requested OR when PWDEBUG_HEADED=1 is set; otherwise
   // use --headless=new (works on modern Chromium, suppresses windows on CI/local).
   const headed = opts.headed ?? !!process.env.PWDEBUG_HEADED;
