@@ -165,6 +165,26 @@ function markdownEmbedsImage(markdown: string, imageUrl: string): boolean {
   return false;
 }
 
+// Does the markdown LEAD with an image — i.e. an ![alt](url) appears at the top,
+// before any real prose? Article/full-page captures put the hero first, so a
+// leading inline image IS the hero. We can't reliably URL-match it to the `image`
+// tag (the inline copy is often a base64 data URI, or a different-resolution crop
+// of the same photo — e.g. Breitbart's 640x335 tag vs 640x480 inline), so a
+// leading image means "the body already carries the hero" regardless of URL, and
+// the `image` tag banner must be suppressed to avoid showing it twice.
+function markdownLeadsWithImage(markdown: string): boolean {
+  const lines = markdown.split('\n');
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line === '') continue;
+    // A heading (the title) may precede the hero — skip it and keep looking.
+    if (/^#{1,3}\s+/.test(line)) continue;
+    // First non-blank, non-heading line: is it an image?
+    return /^!\[[^\]]*\]\([^)\s]+/.test(line);
+  }
+  return false;
+}
+
 // NIP-23 clients render the `title` and `image` tags as a heading + hero banner
 // ABOVE the article body. If the markdown ALSO leads with its own `# title` and
 // hero `![](image)`, they show twice. Strip a leading title heading (matching
@@ -391,10 +411,19 @@ export function createLongFormEvent(
   const dedupedMarkdown = stripLeadingArticleChrome(markdownBody, capture.title, imageUrl);
 
   // Emit the `image` tag (rendered as a banner ABOVE the body by clients) only
-  // when the hero is NOT still embedded inline in the body. When the authored
-  // image sits mid-body, the inline occurrence IS the hero — a banner on top
-  // would duplicate it (and in the wrong position). The body position wins.
-  if (imageUrl && !markdownEmbedsImage(dedupedMarkdown, imageUrl)) {
+  // when the hero is NOT still embedded inline in the body. Two ways the body
+  // already carries it:
+  //  - it embeds the SAME image URL somewhere (markdownEmbedsImage), or
+  //  - it simply LEADS with an image (markdownLeadsWithImage) whose URL we can't
+  //    match to the tag because the inline copy is a base64 data URI or a
+  //    different-resolution crop of the same photo (the Breitbart case). A leading
+  //    image is the hero regardless of URL, so the banner would duplicate it.
+  // The body position wins in both cases.
+  if (
+    imageUrl &&
+    !markdownEmbedsImage(dedupedMarkdown, imageUrl) &&
+    !markdownLeadsWithImage(dedupedMarkdown)
+  ) {
     tags.push(['image', imageUrl]);
   }
 

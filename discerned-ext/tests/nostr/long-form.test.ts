@@ -106,6 +106,27 @@ describe('createLongFormEvent (kind 30023)', () => {
     );
     expect(ev.content).toContain('# A Different Section Heading');
   });
+
+  it('suppresses the image tag when the body leads with a hero it cannot URL-match (Breitbart data-URI / different-crop case)', () => {
+    // The `image` tag is an http URL crop; the inline body hero is a base64 data
+    // URI (or a different-resolution crop) of the same photo — so the URL-based
+    // dedup can't match them. Without suppressing the tag, the client renders the
+    // banner AND the inline image = duplicate hero.
+    const heroTag = 'https://media.example.com/photo-640x335.jpg';
+    const inlineDataUri = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD';
+    const capture: Capture = { ...artFx.capture, title: 'Duplicate Hero Article', thumbnailUrl: heroTag };
+    const md = `# Duplicate Hero Article\n\n![hero](${inlineDataUri})\n\nBody prose follows.`;
+    const ev = finalizeEventWithPrivateKey(
+      createLongFormEvent(capture, artFx.evaluation, md),
+      DETERMINISTIC_SK,
+    );
+    // No image tag emitted — the inline leading hero is the one and only hero.
+    expect(extractTagValue(ev, 'image')).toBeNull();
+    // The inline hero survives in the body (it's not URL-matched, so not stripped).
+    expect(ev.content).toContain(inlineDataUri);
+    // ...exactly once.
+    expect(ev.content.split(inlineDataUri).length - 1).toBe(1);
+  });
 });
 
 describe('buildDiscernedSnippet', () => {

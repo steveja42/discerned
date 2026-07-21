@@ -21,7 +21,10 @@ import { refreshLiveGallery } from './helpers/liveGallery';
 
 const URL =
   process.env.MEDIUM_URL ||
-  'https://medium.com/cube-bitcoin/introducing-cube-8b3702e470a5';
+  // The old cube-bitcoin default now 410s (Medium account block). This
+  // python-in-plain-english article is live + non-paywalled and captures cleanly.
+  // Override with MEDIUM_URL=... if it ever goes away.
+  'https://medium.com/python-in-plain-english/is-python-worth-learning-in-2026-the-data-driven-truth-behind-programmings-unstoppable-force-c51b27625179';
 
 test.describe.configure({ mode: 'serial' });
 
