@@ -39,7 +39,7 @@ test.describe('extension capture pipeline', () => {
         // Wait briefly to make sure it's bound before we postMessage.
         await page.waitForTimeout(500);
 
-        const cap = await page.evaluate(async (format) => {
+        const cap = await page.evaluate(async ({ format, hostOverride }) => {
           return new Promise((resolve, reject) => {
             const timer = setTimeout(() => reject(new Error('capture timeout')), 10_000);
             const onMessage = (e: MessageEvent) => {
@@ -52,9 +52,12 @@ test.describe('extension capture pipeline', () => {
               else resolve(e.data.capture);
             };
             window.addEventListener('message', onMessage);
-            window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format }, window.location.origin);
+            // hostOverride (when set in the sidecar) fires the real per-site
+            // tagger against the 127.0.0.1-served fixture — taggers otherwise
+            // gate on window.location.hostname (= 127.0.0.1 here) and never run.
+            window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format, hostOverride }, window.location.origin);
           });
-        }, fx.expected.format);
+        }, { format: fx.expected.format, hostOverride: fx.hostOverride });
 
         matchExpected(cap as Parameters<typeof matchExpected>[0], fx.expected);
       } finally {

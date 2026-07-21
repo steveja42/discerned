@@ -185,9 +185,24 @@ redesigned page → allDead). Full write-up in `discerned-ext/CLAUDE.md` → "Ta
 - [ ] 4.2 Re-run sweep quarterly / after major pipeline changes; pixel-baseline fixture specs remain the
       regression floor.
 
-## Known pre-existing failures (don't chase as regressions)
+## Known pre-existing failures  *(fixed 2026-07-21)*
 
-- `reddit-thread` + `youtube-watch` in extension.spec fail on unmodified main (verified 2026-07-05,
-  re-verified 2026-07-12).
-- 9 fixture-visual pixel baselines fail on clean HEAD from a 625→610 px scrollbar-width drift; need a
-  deliberate re-record after visual confirmation.
+- [x] `reddit-thread` in extension.spec: the sidecar expected tagger-only content (`Fallout76` subreddit
+      byline) but the e2e ran the GENERIC pipeline — site taggers gate on the live hostname, which is
+      `127.0.0.1` under the fixture server, so `tagReddit` never fired. Fixed by threading an optional
+      `hostOverride` from the sidecar (`ExpectedCapture.hostOverride`) through `loadSiteFixtures` →
+      `extension.spec` → the `__DISCERNED_TEST_CAPTURE` bridge, and through `article.test.ts` via
+      `__setTestHostOverride`; `reddit-thread.expected.json` sets `hostOverride: "www.reddit.com"`. Also
+      fixed a genuine tagger leak the firing exposed: `tagReddit` now dx-excl's `shreddit-sort-dropdown`
+      wholesale (its "Open comment sort options" tooltip text lived in a slotted `<div>` the label pass
+      couldn't reach). `youtube-watch` was already passing (its `contains` needle is the video title, which
+      the generic path surfaces). extension.spec now 24/24.
+- [x] Fixture-visual pixel baselines: re-recorded after per-spec visual confirmation. Most were pure
+      sub-pixel/1px-height font drift or an *improved* render (primal −150 px of stale whitespace; reddit
+      now renders via the real tagger). One was a genuine defect, not drift: **bsky reply headers** crushed
+      into a one-word-per-line column because `.dx-header:has(img.dx-avatar) img.dx-avatar { float:left }`
+      lacked `!important` and lost to `.clip-body img { float:none !important }` — the avatar never floated,
+      so the deep-nested name/handle collapsed. Fixed the float `!important` + neutralised the inline
+      flex-shrink/max-width constraints on the floated header's descendants, and taught `assertClipBodyHealth`
+      to recognise the valid floated-avatar layout (name-beside-float) vs the crush (narrow name column).
+      All 18 fixture-visual specs green; extension.spec + ext (153) + web (88) unit suites green.

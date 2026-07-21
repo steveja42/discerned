@@ -1,6 +1,7 @@
 {
   "format": "article",
   "url": "http://127.0.0.1:4173/reddit-thread.html",
+  "hostOverride": "www.reddit.com",
   "bodyText": {
     "minLength": 100,
     "contains": ["Fallout76", "Commando Weps"]

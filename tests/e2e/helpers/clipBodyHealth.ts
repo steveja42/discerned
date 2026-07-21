@@ -75,13 +75,19 @@ export async function collectClipBodyViolations(
           const cs = getComputedStyle(h);
           const rect = h.getBoundingClientRect();
           if (rect.height === 0) continue; // hidden header — reply-height covers its post
-          if (cs.display !== 'flex') {
+          const avatar = h.querySelector('img.dx-avatar, img') as HTMLElement | null;
+          const avFloated = avatar ? getComputedStyle(avatar).cssFloat !== 'none' : false;
+          // Two valid layouts: (1) the flex-row split (avatar + name as flex
+          // children) and (2) the floated-avatar block (bsky deep-nested case —
+          // display:block with the avatar floated left and the name flowing
+          // beside it). Only flag display when it's NEITHER: a plain block
+          // header with a non-floated avatar is the "name wrapped under avatar"
+          // defect this check exists to catch.
+          if (cs.display !== 'flex' && !avFloated) {
             out.push(`header-layout: dx-header display is "${cs.display}", expected flex — ${brief(h)}`);
           }
-          // Find the avatar and the first text-bearing element; if both exist,
-          // assert their top edges are within ~24px (i.e. same row). A name
-          // stacked below the avatar shows a top delta of a full avatar height.
-          const avatar = h.querySelector('img.dx-avatar, img') as HTMLElement | null;
+          // Find the first text-bearing element (the name). The defect: the name
+          // is crushed into a narrow column instead of flowing beside the avatar.
           const nameEl = Array.from(h.querySelectorAll('a, span, div'))
             .find((el) => {
               const t = (el.textContent ?? '').trim();
@@ -91,7 +97,20 @@ export async function collectClipBodyViolations(
           if (avatar && nameEl) {
             const av = avatar.getBoundingClientRect();
             const nm = nameEl.getBoundingClientRect();
-            if (av.height > 0 && nm.height > 0 && nm.top - av.top > 24) {
+            if (avFloated) {
+              // Floated avatar: the name flows in the same block, so its top can
+              // legitimately differ. The real crush shows up as the name being
+              // squeezed into a narrow column beside the float — detect that by
+              // the name's rendered width, not its vertical offset.
+              if (av.height > 0 && nm.height > 0 && nm.width > 0 && nm.width < 120 &&
+                  (nameEl.textContent ?? '').replace(/\s+/g, ' ').trim().length > 12) {
+                out.push(
+                  `header-layout: author name crushed into a ${Math.round(nm.width)}px column ` +
+                  `beside the floated avatar — ${brief(h)}`,
+                );
+              }
+            } else if (av.height > 0 && nm.height > 0 && nm.top - av.top > 24) {
+              // Non-floated: name and avatar should share a row (tops within ~24px).
               out.push(
                 `header-layout: author name sits ${Math.round(nm.top - av.top)}px below the avatar ` +
                 `(should be beside it) — ${brief(h)}`,

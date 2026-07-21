@@ -1305,8 +1305,27 @@ a { color: inherit; }
   display: block;
 }
 .clip-body .dx-header:has(img.dx-avatar) img.dx-avatar {
-  float: left;
+  /* !important needed to beat `.clip-body img { float: none !important }`. */
+  float: left !important;
   margin: 2px 10px 2px 0 !important;
+}
+/* With the avatar floated out, the name/handle text in the bsky reply header
+   is nested inside wrapper <div>s that carry the live page's inline
+   flex-shrink/min-width/max-width — which, without the flex row that gave them
+   meaning, squeeze the text into a one-word-per-line column beside the float.
+   Neutralise those inline constraints and let every descendant flow inline so
+   "name @handle · 3h" reads as one strip. Scoped to the floated-avatar header
+   so the shallow flex-split path (top-level posts) is untouched. */
+.clip-body .dx-header:has(img.dx-avatar) > * {
+  display: block;
+  max-width: none !important;
+  min-width: 0 !important;
+  flex-shrink: 1 !important;
+}
+.clip-body .dx-header:has(img.dx-avatar) > * * {
+  display: inline;
+  max-width: none !important;
+  flex-shrink: 1 !important;
 }
 /* The avatar branch (first child with an img) shouldn't stretch. */
 .clip-body .dx-header > :first-child {

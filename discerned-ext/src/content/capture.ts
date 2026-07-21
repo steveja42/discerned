@@ -2656,6 +2656,12 @@ function tagReddit(root: Document | Element): Element | void {
     if (/^sort by:?$/i.test(t) && !el.querySelector('div, span')) appendClass(el, 'dx-excl');
   });
 
+  // Drop the comment sort/search custom elements wholesale — they're pure
+  // chrome and carry tooltip/aria text ("Open comment sort options", "Best")
+  // in slotted <div>s that the label-based pass below can't reach (it only
+  // walks a/button/[role=button], not shreddit-sort-dropdown's tooltip slot).
+  root.querySelectorAll('shreddit-sort-dropdown, shreddit-search-dropdown, shreddit-comments-sort-dropdown').forEach(el => appendClass(el, 'dx-excl'));
+
   // Drop noisy SPA chrome that sits inside <main>: sort dropdown, search box,
   // "Reply" / "Share" / "Report" comment-action buttons, the floating bottom
   // "Back to top" pill. Reddit names each via `aria-label` or `name=` attrs.

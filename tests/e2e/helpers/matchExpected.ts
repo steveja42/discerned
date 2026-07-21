@@ -9,6 +9,16 @@ export interface ExpectedCapture {
   format: 'selection' | 'article' | 'full-page' | 'bookmark';
   title?: { contains?: string; equals?: string; matches?: string };
   url: string;
+  /**
+   * Hostname to feed the capture pipeline so the matching per-site tagger fires
+   * against a 127.0.0.1-served fixture (taggers gate on window.location.hostname,
+   * which is 127.0.0.1 under the fixture server). Only meaningful for the e2e
+   * extension.spec, which forwards it to the __DISCERNED_TEST_CAPTURE bridge —
+   * the jsdom Vitest suite ignores it (jsdom can't produce dx-* tagger output;
+   * see project_jsdom_taggers_dont_produce_dx_classes). Set this for a fixture
+   * whose expected content is only produced by its real tagger (reddit, etc.).
+   */
+  hostOverride?: string;
   bodyText?: { minLength?: number; contains?: string[]; excludes?: string[] };
   bodyHtml?: { hasImgs?: boolean; noScripts?: true; allowsOnly?: string[]; containsClasses?: string[] };
   thumbnail?: 'present' | 'absent';

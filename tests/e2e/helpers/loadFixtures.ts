@@ -11,6 +11,7 @@ export const CLIPS_ROOT = resolve(__dirname, '..', '..', 'fixtures', 'clips');
 export interface SiteFixture {
   htmlName: string;        // e.g. "blog-post.html"
   url: string;             // http://127.0.0.1:4173/blog-post.html
+  hostOverride?: string;   // e.g. "www.reddit.com" — fires the real site tagger
   expected: ExpectedCapture;
 }
 
@@ -21,7 +22,7 @@ export function loadSiteFixtures(): SiteFixture[] {
       const htmlName = basename(file);
       const sidecar = resolve(FIXTURE_ROOT, `${htmlName.replace(/\.html$/, '')}.expected.json`);
       const expected = JSON.parse(readFileSync(sidecar, 'utf8')) as ExpectedCapture;
-      return { htmlName, url: expected.url, expected };
+      return { htmlName, url: expected.url, hostOverride: expected.hostOverride, expected };
     });
 }
 
