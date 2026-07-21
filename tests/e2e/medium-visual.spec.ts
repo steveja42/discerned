@@ -168,7 +168,7 @@ test('medium-visual: capture article via headed Brave + render in /clips', async
     });
     // Also a full-clip-body screenshot in case the byline is below the fold
     // (tall-safe: viewport-clipped beyond 8k px).
-    await screenshotClipBody(libPage, clipBody, liveShot.clip('full'));
+    await screenshotClipBody(libPage, clipBody, liveShot.clip());
 
     // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
     // extension's real BUILD_CAST path from this same capture.

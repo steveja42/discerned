@@ -35,7 +35,12 @@ function build() {
   for (const f of files) {
     const m = RE.exec(f);
     if (!m) continue;
-    const [, site, , type] = m;
+    const [, site, , type, variant] = m;
+    // Skip variant crops (goodreads --2-clip-hero/-mid/-author, breitbart
+    // --2-clip-top/-full etc.) — they're zoom-ins of the same clip and just clutter
+    // the column. The gallery shows only the plain {site}--N-{type}.png; the crop
+    // files still exist on disk.
+    if (variant) continue;
     if (!sites.has(site)) sites.set(site, { source: [], clip: [], cast: [], mtime: 0 });
     const entry = sites.get(site);
     entry[type].push(f);

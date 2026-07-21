@@ -116,7 +116,7 @@ test('breitbart-visual: capture live article via headed Brave', async () => {
       path: live.clip('top'),
       clip: { x: 0, y: 0, width: 1280, height: 1200 },
     });
-    await screenshotClipBody(libPage, clipBody, live.clip('full'));
+    await screenshotClipBody(libPage, clipBody, live.clip());
 
     // Third artifact: the PUBLIC cast render (kind-30023 markdown), built by the
     // extension's real BUILD_CAST path from this same capture.
