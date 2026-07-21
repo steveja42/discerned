@@ -4,7 +4,7 @@
 //              overlay rendering, and forwards Clip/Cast payloads back to the background.
 // Access: DOM (document.body), chrome.runtime.onMessage/sendMessage, chrome.storage.local
 
-import { captureContext, isCapturablePage, hasSelection, __setTestHostOverride } from './capture';
+import { captureContext, isCapturablePage, hasSelection, __setTestHostOverride, checkTaggerAnchors } from './capture';
 import type { CaptureOptions } from './capture';
 import { DiscernedOverlay } from './overlay';
 import { htmlToMarkdown } from './html-to-markdown';
@@ -366,7 +366,18 @@ if (__DISCERNED_TEST_BUILD__) {
     const data = e.data as { type?: string; format?: ClipFormat; opts?: CaptureOptions; capture?: Capture; evaluation?: Evaluation; hostOverride?: string | null };
     if (!data || typeof data.type !== 'string') return;
 
-    if (data.type === '__DISCERNED_TEST_CAPTURE') {
+    if (data.type === '__DISCERNED_TEST_ANCHORS') {
+      // Canary (Phase 3.1): run the matching site-tagger's selector-anchor
+      // manifest against the LIVE page and report per-selector match counts.
+      // hostOverride lets fixture pages exercise a specific tagger's anchors;
+      // production tree-shakes this whole branch out.
+      const host = typeof data.hostOverride === 'string' ? data.hostOverride : window.location.hostname;
+      const report = checkTaggerAnchors(host, document);
+      window.postMessage(
+        { type: '__DISCERNED_TEST_ANCHORS_RESULT', report },
+        window.location.origin,
+      );
+    } else if (data.type === '__DISCERNED_TEST_CAPTURE') {
       try {
         // Optional: pretend the page is served from another host so site
         // taggers fire against 127.0.0.1 fixtures. Test-only; tree-shaken.

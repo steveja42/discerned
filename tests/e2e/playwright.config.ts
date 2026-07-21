@@ -53,6 +53,11 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'tagger-canary',
+      testMatch: /tagger-canary\.spec\.ts/,
+      retries: 0,
+    },
+    {
       name: 'primal-visual',
       testMatch: /primal-visual\.spec\.ts/,
       retries: 0,

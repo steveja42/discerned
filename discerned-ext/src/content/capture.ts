@@ -393,11 +393,43 @@ export interface CaptureOptions {
  * parsing are async so this returns a Promise.
  */
 export async function captureContext(format: ClipFormat, opts: CaptureOptions = { smartArticleDetection: false, stripInlineStyles: false }): Promise<Capture> {
+  let capture: Capture;
   switch (format) {
-    case 'selection':           return extractSelection();
-    case 'article':             return extractArticle(opts);
-    case 'full-page':           return extractFullPage(opts);
-    case 'bookmark':            return extractBookmark();
+    case 'selection':           capture = await extractSelection(); break;
+    case 'article':             capture = await extractArticle(opts); break;
+    case 'full-page':           capture = await extractFullPage(opts); break;
+    case 'bookmark':            capture = await extractBookmark(); break;
+  }
+  selfCheckCapture(capture, format);
+  return capture;
+}
+
+/**
+ * Post-capture self-check (Phase 3.4). Logs a WARN — never throws or alters the
+ * capture — when a site-tagger capture came out suspiciously thin, so a broken
+ * tagger surfaces in the console / canary output instead of silently shipping a
+ * near-empty clip. Two signals, only meaningful when a tagger was active:
+ *   1. Zero dx-* markers survived into the body HTML (the tagger stamped
+ *      nothing that reached the clip).
+ *   2. The captured body text is a tiny fraction of the visible page text
+ *      (the tagger mis-scoped the root to a sliver).
+ * Cheap and side-effect-free; bookmark format is skipped (metadata-only by
+ * design, so "thin" is expected).
+ */
+function selfCheckCapture(capture: Capture, format: ClipFormat): void {
+  if (!siteTaggerActive || format === 'bookmark') return;
+  const body = capture.bodyHtml ?? capture.selectionText ?? '';
+  const dxMarkers = (body.match(/\bdx-[a-z-]+/g) ?? []).length;
+  if (dxMarkers === 0) {
+    log(LL.WARN, `Discerned: self-check — site tagger was active but the ${format} clip carries zero dx-* markers (tagger output may not have reached the clip)`, 'url:', capture.url);
+  }
+  const bodyText = (capture.bodyText ?? '').replace(/\s+/g, ' ').trim();
+  const pageText = (document.body?.innerText ?? '').replace(/\s+/g, ' ').trim();
+  // Only judge coverage on pages with enough text for the ratio to mean
+  // something; short pages (single tweet, one-line note) legitimately capture
+  // most of a small page and would trip a naive threshold.
+  if (pageText.length > 2000 && bodyText.length < pageText.length * 0.05) {
+    log(LL.WARN, `Discerned: self-check — ${format} clip body text (${bodyText.length} chars) is <5% of page text (${pageText.length} chars); site tagger may have mis-scoped the capture root`, 'url:', capture.url);
   }
 }
 
@@ -2834,14 +2866,104 @@ type SiteTagger = (root: Document | Element) => Element | void;
 // YouTube's #player breaks playback).
 type SitePostClone = (clone: Element) => void;
 
-const SITE_TAGGERS: Array<{ match: (host: string) => boolean; tag: SiteTagger; postClone?: SitePostClone; name: string }> = [
-  { name: 'primal', match: h => /(^|\.)primal\.net$/i.test(h), tag: tagPrimal },
-  { name: 'bsky', match: h => /(^|\.)bsky\.app$/i.test(h), tag: tagBsky },
-  { name: 'goodreads', match: h => /(^|\.)goodreads\.com$/i.test(h), tag: tagGoodreads },
-  { name: 'reddit', match: h => /(^|\.)reddit\.com$/i.test(h), tag: tagReddit, postClone: postCloneReddit },
-  { name: 'youtube', match: h => /(^|\.)youtube\.com$/i.test(h), tag: tagYoutube, postClone: postCloneYoutube },
-  { name: 'stackoverflow', match: h => /(^|\.)stackoverflow\.com$/i.test(h), tag: tagStackOverflow },
+// Selector-anchor manifest (Phase 3.2). Each tagger declares the load-bearing
+// live-DOM selectors it depends on — the ones a site redesign would silently
+// break. `checkTaggerAnchors(host, doc)` runs them against a page and reports
+// which matched zero elements, so a canary (or the graceful-degradation
+// self-check) can name the exact dead selector instead of just "clip looks
+// wrong". Keep this list to the selectors that anchor the tagger's core
+// output (the post container, the avatar/name hooks) — not every incidental
+// exclusion selector. If ALL anchors miss, the tagger produced nothing useful
+// for this page and the pipeline should fall back to the generic path.
+interface SiteTagger_Entry {
+  match: (host: string) => boolean;
+  tag: SiteTagger;
+  postClone?: SitePostClone;
+  name: string;
+  anchors: string[];
+}
+
+const SITE_TAGGERS: SiteTagger_Entry[] = [
+  {
+    name: 'primal',
+    match: h => /(^|\.)primal\.net$/i.test(h),
+    tag: tagPrimal,
+    anchors: ['[class*="_primaryNote_"]', '[class*="_noteThread_"]'],
+  },
+  {
+    name: 'bsky',
+    match: h => /(^|\.)bsky\.app$/i.test(h),
+    tag: tagBsky,
+    anchors: ['[data-testid^="feedItem-by-"], [data-testid^="postThreadItem-by-"]', '[data-testid="userAvatarImage"]'],
+  },
+  {
+    name: 'goodreads',
+    match: h => /(^|\.)goodreads\.com$/i.test(h),
+    tag: tagGoodreads,
+    // /review/list/ delegates to tagGoodreadsList (server-rendered table) which
+    // has a wholly different DOM, so its anchor is listed separately.
+    anchors: ['.BookPage, table.tableList', '.BookPageTitleSection, tr[id^="review_"]'],
+  },
+  {
+    name: 'reddit',
+    match: h => /(^|\.)reddit\.com$/i.test(h),
+    tag: tagReddit,
+    postClone: postCloneReddit,
+    anchors: ['shreddit-post', 'shreddit-comment'],
+  },
+  {
+    name: 'youtube',
+    match: h => /(^|\.)youtube\.com$/i.test(h),
+    tag: tagYoutube,
+    postClone: postCloneYoutube,
+    anchors: ['#primary-inner', 'ytd-video-owner-renderer, #owner'],
+  },
+  {
+    name: 'stackoverflow',
+    match: h => /(^|\.)stackoverflow\.com$/i.test(h),
+    tag: tagStackOverflow,
+    anchors: ['#mainbar', '#question, .answer', '.user-info, .post-signature'],
+  },
 ];
+
+/** One anchor selector's live-page match result. */
+export interface AnchorResult {
+  selector: string;
+  count: number;
+}
+
+/** A tagger's anchor-check outcome against a given page. */
+export interface TaggerAnchorReport {
+  name: string;
+  anchors: AnchorResult[];
+  /** Selectors that matched zero elements — the dead ones. */
+  dead: string[];
+  /** True when EVERY anchor missed: the tagger is effectively broken here. */
+  allDead: boolean;
+}
+
+/**
+ * Run the anchor manifest for the tagger matching `host` against `root`,
+ * reporting per-selector match counts. Used by the weekly canary (Phase 3.1)
+ * to name a dead selector on a site redesign, and by the post-capture
+ * self-check to decide whether the tagger degraded to noise. Returns null when
+ * no tagger matches the host. Shadow-DOM-aware via querySelectorAllDeep.
+ */
+export function checkTaggerAnchors(host: string, root: Document | Element): TaggerAnchorReport | null {
+  const entry = SITE_TAGGERS.find(t => t.match(host));
+  if (!entry) return null;
+  const anchors: AnchorResult[] = entry.anchors.map(selector => {
+    let count = 0;
+    try {
+      count = querySelectorAllDeep(root, selector).length;
+    } catch {
+      count = 0; // an invalid selector counts as dead, not a crash
+    }
+    return { selector, count };
+  });
+  const dead = anchors.filter(a => a.count === 0).map(a => a.selector);
+  return { name: entry.name, anchors, dead, allDead: dead.length === anchors.length };
+}
 
 /**
  * Apply the matching site tagger (if any) to the document. Called from
@@ -2920,6 +3042,21 @@ function applySiteTagger(): boolean {
   const host = testHostOverride ?? window.location.hostname;
   for (const t of SITE_TAGGERS) {
     if (t.match(host)) {
+      // Graceful degradation (Phase 3.4): before running the tagger, check its
+      // anchor manifest against the live page. If EVERY load-bearing selector
+      // matches zero elements the site has redesigned out from under us — the
+      // tagger would stamp nothing useful and only risk mis-scoping the clip.
+      // Skip it and let the generic pipeline (layout finder / Readability)
+      // handle the page, naming the dead selectors at WARN so a canary run or
+      // the user's console pinpoints exactly what broke.
+      const report = checkTaggerAnchors(host, document);
+      if (report && report.allDead) {
+        log(LL.WARN, `Discerned: ${t.name} tagger anchors all dead — falling back to generic pipeline. Dead selectors: ${report.dead.join(' | ')}`, 'url:', window.location.href);
+        return false;
+      }
+      if (report && report.dead.length > 0) {
+        log(LL.WARN, `Discerned: ${t.name} tagger has ${report.dead.length}/${report.anchors.length} dead anchor(s) (site may have partially redesigned): ${report.dead.join(' | ')}`, 'url:', window.location.href);
+      }
       log(LL.DEBUG, `Discerned: applying ${t.name} site tagger`, 'url:', window.location.href);
       try {
         const root = t.tag(document);

@@ -163,9 +163,28 @@ When adding a new site, **add a row here** and a visual spec under `tests/e2e/{s
 
 After regenerating baselines, run `python tests/e2e/tools/refresh-gallery.py` (requires Pillow: `pip install pillow`) to rebuild `test-output/baselines-gallery/` — it copies every committed baseline and crops the top 1200 px of each `*-fixture-rendered.png` for a quick side-by-side gallery in File Explorer.
 
+### Tagger canary / repair loop
+
+Site taggers depend on live-DOM selectors that a site can redesign away with no warning — capture then silently degrades to the generic pipeline (worse-looking clip, no crash). Two mechanisms catch this early and one recipe repairs it.
+
+**Selector-anchor manifest (`anchors`)** — each `SITE_TAGGERS` entry declares the load-bearing selectors it depends on (post container, avatar/name hooks). `checkTaggerAnchors(host, root)` (exported from `capture.ts`) runs them against a page and returns per-selector match counts + the `dead` (zero-match) list + `allDead`. Keep `anchors` to selectors that anchor the tagger's *core* output, not every incidental exclusion.
+
+**Graceful degradation (runtime, Phase 3.4)** — `applySiteTagger()` runs `checkTaggerAnchors` *before* the tagger; if `allDead` it skips the tagger entirely and falls back to the generic layout-finder/Readability path, logging the dead selectors at WARN (partial death logs a warning but still runs the tagger). A post-capture `selfCheckCapture()` in `captureContext()` additionally WARNs when a tagger-active clip carries zero `dx-*` markers or its body text is <5% of the page text — a mis-scoped or empty capture surfaces in the console instead of shipping silently.
+
+**Weekly canary (Phase 3.1)** — `tests/e2e/tagger-canary.spec.ts` (`CANARY=1`, `--project=tagger-canary`) visits each tagger's live target (`tests/e2e/helpers/taggerCanaryTargets.ts`) and runs its anchor manifest against the live DOM via the `__DISCERNED_TEST_ANCHORS` bridge (tree-shaken in production). A dead anchor **fails the run and names the exact selector**; a page that won't load (Cloudflare, network) is a SKIP, not a fail, so the canary never flakes on infra. Report → `test-output/tagger-canary.txt`.
+  - **Local (full coverage):** `pwsh -File scripts/tagger-canary-local.ps1` runs it against the warm branded-Chrome `test` profile (hand-installed extension + valid `cf_clearance`) — the only setup that gets Reddit/YouTube/StackOverflow to load. Register as a weekly Windows Scheduled Task (see the script header). This is the authoritative weekly run for the walled sites.
+  - **CI (open sites only):** `.github/workflows/tagger-canary.yml` runs Mondays 08:00 UTC on a GitHub runner. It covers the sites that load headless-unauthenticated (primal, bsky, goodreads) and SKIPs the walled ones — a free early-warning for the open sites.
+
+**Repair loop when the canary (or a live-visual spec) fails naming a dead selector:**
+1. `CANARY=1 … --project=tagger-canary` (or the local script) → read `test-output/tagger-canary.txt` for the exact dead selector(s).
+2. `SNAP=1` re-snapshot the site (`tools/snapshot-fixtures.spec.ts`) → fresh `tests/fixtures/sites/<site>.html`. (Primal/bsky use their dedicated snapshot tools; SO's fixture is hand-crafted — Cloudflare hard-deny.)
+3. Fix the tagger + its `anchors` list against the new snapshot; iterate offline with the `<site>-fixture-visual` spec (runs the tagger via `hostOverride`).
+4. `--update-snapshots` on the fixture-visual pixel baseline once the render looks right (only when the change is *intentionally* visual).
+5. `python tests/e2e/tools/refresh-gallery.py` to rebuild the baseline gallery; commit the tagger fix + new snapshot + baseline together.
+
 ### Per-site taggers + `dx-*` markers
 
-`SITE_TAGGERS` is a registry of `{ match: (host) => bool, tag: (root) => void, postClone?: (clone) => void }`. Each tagger walks the **live** DOM with selectors stable for that site (data attributes or class-name *prefixes* like `[class*="_primaryNote_"]`, since SPA class hashes change between builds) and stamps `dx-*` classes:
+`SITE_TAGGERS` is a registry of `{ match: (host) => bool, tag: (root) => void, postClone?: (clone) => void, anchors: string[] }`. Each tagger walks the **live** DOM with selectors stable for that site (data attributes or class-name *prefixes* like `[class*="_primaryNote_"]`, since SPA class hashes change between builds) and stamps `dx-*` classes. The `anchors` array is the tagger's selector manifest — see "Tagger canary / repair loop" above.
 
 | Marker | Meaning |
 |---|---|

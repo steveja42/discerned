@@ -152,17 +152,29 @@ lines. Plus the extension capture fixes: `data-dx-src` plumbed through tweet pho
 markdown keeps the real URL), bare `video[poster]` fallback for newest X DOM, and `number-flow-react`
 odometer count reading. Web: DetailPanel suppresses the top hero when the markdown already carries it inline.
 
-## Phase 3 — Handle future site redesigns efficiently
+## Phase 3 — Handle future site redesigns efficiently  *(done 2026-07-21)*
 
-- [ ] 3.1 Weekly scheduled canary run of all live visual specs (env vars on) with the Phase-1 structural
-      assertions — breakage detected within a week, named by failing assertion.
-- [ ] 3.2 Selector-anchor manifests per tagger (the selectors it depends on); canary asserts each anchor
-      matches ≥1 element on the live page before capture → failures name the exact dead selector.
-- [ ] 3.3 Document the repair loop in CLAUDE.md: canary fail → `SNAP=1` re-snapshot → fix tagger offline
-      → `--update-snapshots` → commit.
-- [ ] 3.4 Graceful degradation: tagger that stamps zero dx-post (or whose postClone leaves the clone
-      nearly empty) discards its work and falls back to the generic pipeline; post-capture self-check
-      (bodyText length vs page text, marker count) logs at WARN.
+Foundation is the **selector-anchor manifest** (3.2): each `SITE_TAGGERS` entry declares its load-bearing
+selectors, and `checkTaggerAnchors(host, root)` (exported from `capture.ts`) reports per-selector match
+counts + the dead list + `allDead`. 3.1 and 3.4 both consume it. Guarded by
+`discerned-ext/tests/extraction/tagger-anchors.test.ts` (unknown-host → null, real fixture → all live,
+redesigned page → allDead). Full write-up in `discerned-ext/CLAUDE.md` → "Tagger canary / repair loop".
+
+- [x] 3.1 Lightweight weekly canary `tests/e2e/tagger-canary.spec.ts` (`CANARY=1`, `--project=tagger-canary`):
+      visits each tagger's live target (`helpers/taggerCanaryTargets.ts`), runs its anchor manifest against
+      the live DOM via a new `__DISCERNED_TEST_ANCHORS` bridge (tree-shaken in prod), FAILS naming the exact
+      dead selector, page-load flakes are SKIPs not fails. Scheduled two ways: `scripts/tagger-canary-local.ps1`
+      (warm `test` Chrome profile → covers CF-walled Reddit/YT/SO — the authoritative run) and
+      `.github/workflows/tagger-canary.yml` (Mondays 08:00 UTC, open sites only). *Verified live 2026-07-21:*
+      reddit/youtube/bsky/goodreads anchors all matched; primal/SO skipped on infra as designed.
+- [x] 3.2 Selector-anchor manifests per tagger — the `anchors` field on every `SITE_TAGGERS` entry (see above).
+- [x] 3.3 Repair loop documented in `discerned-ext/CLAUDE.md` (+ root pointer): canary fail → read
+      `test-output/tagger-canary.txt` → `SNAP=1` re-snapshot → fix tagger + `anchors` offline against the
+      fixture-visual spec → `--update-snapshots` → refresh gallery → commit together.
+- [x] 3.4 Graceful degradation: `applySiteTagger()` runs the anchor check BEFORE the tagger — if `allDead`
+      it skips the tagger and falls back to the generic pipeline, logging the dead selectors at WARN (partial
+      death warns but still runs). Post-capture `selfCheckCapture()` in `captureContext()` WARNs when a
+      tagger-active clip carries zero dx-* markers or its body text is <5% of the visible page text.
 
 ## Phase 4 — Confidence across the broad web
 
