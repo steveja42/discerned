@@ -4074,33 +4074,76 @@ function dedupAdjacentImages(root: Element): void {
   const imgs = Array.from(root.querySelectorAll('img'));
   if (imgs.length < 2) return;
 
-  // Key: prefer alt-text (it's most stable across blur-preview + main + lightbox
-  // triplets), else a stable filename token from the URL. For data: URIs the
-  // src is base64 garbage that varies per byte — alt is the only useful key.
-  const keyOf = (img: Element): string => {
-    const alt = (img.getAttribute('alt') ?? '').trim();
-    if (alt.length > 10) return `alt:${alt.slice(0, 80).toLowerCase()}`;
-    const src = img.getAttribute('src') ?? '';
-    if (src.startsWith('data:')) return ''; // data + no alt = no reliable key
+  // Key priority — a shared SOURCE URL is the strongest "same image" signal and is
+  // independent of alt text, so it comes FIRST. This catches Reddit, which renders
+  // the post image twice with the SAME src but different alt (one alt="", one
+  // alt="r/... - <title>"); alt-first keying gave them different keys and left the
+  // duplicate. `data-dx-src` (the real URL preserved when images are inlined) is
+  // preferred, but note dedup runs BEFORE inlining, so the plain http(s) `src` is
+  // usually what's present here — both are handled via urlStem. Then alt-text (for
+  // blur-preview + main + lightbox triplets that share alt but not URL), then a
+  // byte-identical data: src.
+  const urlStem = (u: string): string | null => {
     // Pull the last path segment minus any extension/query for a stable id.
-    // For "cf.preview.redd.it/this-car-...jpg?width=640" → "this-car-".
-    const stem = src.match(/([^/?#]+?)(?:\.[a-z]{2,5})?(?:\?|#|$)/i);
-    if (stem && stem[1].length > 8) return `src:${stem[1].toLowerCase()}`;
-    return '';
+    // "preview.redd.it/this-car-...jpeg?width=640" → "this-car-...".
+    const m = u.match(/([^/?#]+?)(?:\.[a-z]{2,5})?(?:\?|#|$)/i);
+    return m && m[1].length > 8 ? m[1].toLowerCase() : null;
+  };
+  // Each image gets up to TWO keys — a URL key and an alt key — and two images
+  // are the same picture if they share EITHER. Reddit needs both: it renders the
+  // post image twice with (a) the SAME src but different alt, AND on other posts
+  // (b) DIFFERENT srcs (…-v0-….jpeg vs …hash.jpeg) but the SAME descriptive alt.
+  // A single key can't catch both; the union below does.
+  const keysOf = (img: Element): string[] => {
+    const keys: string[] = [];
+    const dxSrc = (img.getAttribute('data-dx-src') ?? '').trim();
+    const src = img.getAttribute('src') ?? '';
+    const urlForKey = dxSrc || (src.startsWith('data:') ? '' : src);
+    if (urlForKey) {
+      const stem = urlStem(urlForKey);
+      keys.push(`url:${stem ?? urlForKey.toLowerCase()}`);
+    } else if (src.startsWith('data:') && src.length > 200) {
+      // Byte-identical inlined data: URIs = unambiguously the same image.
+      keys.push(`data:${src.slice(0, 200)}`);
+    }
+    const alt = (img.getAttribute('alt') ?? '').trim();
+    // A descriptive alt is a reliable same-image key; short/blank alts (""/"image")
+    // are not (many distinct images share them), so require > 10 chars.
+    if (alt.length > 10) keys.push(`alt:${alt.slice(0, 80).toLowerCase()}`);
+    return keys;
   };
 
-  // Group by key alone, then within each key check that the imgs share an
-  // ancestor within 6 levels (catches Reddit's nested div soup where the
-  // <picture> / <post-media-image> wrappers have been sanitised away). Two
-  // avatars in distant comments share a much deeper ancestor (`<main>`),
-  // so the 6-level cap protects them from being treated as duplicates.
-  const groups = new Map<string, Element[]>();
+  // Union images that share ANY key into groups, via union-find. `parent` maps
+  // each img to a representative; two imgs are unioned when they share a key.
+  const parent = new Map<Element, Element>();
+  const find = (x: Element): Element => {
+    let r = x;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    // Path-compress.
+    let c = x;
+    while (parent.get(c) !== r) { const n = parent.get(c)!; parent.set(c, r); c = n; }
+    return r;
+  };
+  const union = (a: Element, b: Element) => { parent.set(find(a), find(b)); };
+
+  const firstImgForKey = new Map<string, Element>();
   imgs.forEach(img => {
-    const k = keyOf(img);
-    if (!k) return;
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k)!.push(img);
+    const keys = keysOf(img);
+    if (keys.length === 0) return;
+    if (!parent.has(img)) parent.set(img, img);
+    for (const k of keys) {
+      const prev = firstImgForKey.get(k);
+      if (prev) union(prev, img);
+      else firstImgForKey.set(k, img);
+    }
   });
+  // Collect each union-find set into a group.
+  const groups = new Map<Element, Element[]>();
+  for (const img of parent.keys()) {
+    const root = find(img);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root)!.push(img);
+  }
 
   // Two elements share an ancestor within N levels iff the closer-to-root one
   // is at most 2N levels above the shared ancestor.
@@ -4129,10 +4172,15 @@ function dedupAdjacentImages(root: Element): void {
     }
     clusters.forEach(cluster => {
       if (cluster.length < 2) return;
-      // Prefer the img with a non-empty alt as the keeper; among those, prefer
-      // an inlined data: src (already round-tripped) over an external URL.
-      const keeper = cluster.find(img => (img.getAttribute('src') ?? '').startsWith('data:'))
-        ?? cluster.find(img => (img.getAttribute('alt') ?? '').trim().length > 0)
+      const isData = (img: Element) => (img.getAttribute('src') ?? '').startsWith('data:');
+      const hasAlt = (img: Element) => (img.getAttribute('alt') ?? '').trim().length > 0;
+      // Keeper preference, best first: inlined (data:) AND descriptive alt, then
+      // any inlined, then any with an alt, then whatever's first. This keeps the
+      // copy that carries a real alt when duplicates differ only by alt text
+      // (Reddit's alt="" vs alt="r/... - <title>" pair — drop the alt-less one).
+      const keeper = cluster.find(img => isData(img) && hasAlt(img))
+        ?? cluster.find(isData)
+        ?? cluster.find(hasAlt)
         ?? cluster[0];
       cluster.forEach(img => {
         if (img !== keeper) { img.remove(); removed++; }
