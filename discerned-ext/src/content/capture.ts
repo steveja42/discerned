@@ -4424,7 +4424,11 @@ const CHROME_LINK_TEXT_RE = new RegExp(
   '|add as preferred.*|choose .{0,40} as a preferred source.*|add us on google' +
   '|open comment sort options|expand comment search' +
   '|continue this thread.*|continue reading.*|view (all|more) comments.*' +
-  '|see more (posts|comments).*|load more comments.*|more replies.*)$', 'i');
+  '|see more (posts|comments).*|load more comments.*|more replies.*' +
+  // E-commerce buy-box actions + Prime promos (Amazon-style product-page chrome).
+  '|join prime|try prime.*|add to cart|buy now|buy with 1-click|add to list' +
+  '|see all buying options|update location|gift options|add gift options' +
+  '|deliver to .{0,30}|other used.*collectible.*)$', 'i');
 // Skip-navigation links ("Skip to content", "Jump to ratings and reviews").
 const SKIP_LINK_RE = /^(skip to|jump to)\b/i;
 // Headings that UNAMBIGUOUSLY introduce a recirculation module — removed
@@ -4435,6 +4439,19 @@ const STRONG_RELATED_RE = new RegExp(
   '|suggested for you|most (read|popular)|trending now|up next' +
   '|related (articles|stories|posts)|readers also enjoyed' +
   '|more (\\w+ )?stories on \\w.*)$', 'i');
+
+// E-commerce cross-sell rail HEADINGS (Amazon "Frequently bought together",
+// "More items to explore", "Customers also bought or read", "Products related to
+// this item", …). Unlike news recirculation boxes, these headings are SIBLINGS
+// of their product carousel (not ancestors), so removeGenericChrome's climb-up
+// can't reach the products — removeCrossSellRails() handles them by dropping the
+// heading's whole enclosing section instead. Matched as a prefix (headings often
+// carry trailing "See more"/sponsored text), on product-ish pages only.
+const CROSS_SELL_HEADING_RE = new RegExp(
+  '^(frequently bought together|more items to explore|products? related to this item' +
+  '|customers (who (bought|viewed)|also (bought|viewed|read))' +
+  '|compare with similar items|what other items do customers buy' +
+  '|4 stars and above|explore (similar|more) (items|products)|related products)', 'i');
 // Weaker headings that also occur in real prose — these additionally require
 // the container to be link-dominant before anything is removed.
 const RELATED_HEADING_RE = new RegExp(
@@ -4448,6 +4465,11 @@ const NEWSLETTER_RE =
 // "Make us your preferred source" promos (Google preferred-source pitch) that
 // render as plain text next to an icon link rather than as a labelled link.
 const PREFERRED_SOURCE_RE = /(preferred source of news|add us on google|make .{0,40} your preferred source)/i;
+// E-commerce buy-box / shipping / Prime promo copy (Amazon-style) that renders as
+// plain-text blocks above the product content — a shipping pitch, delivery ETA,
+// Prime upsell, or a sponsored ad strip, none of it product information.
+const COMMERCE_PROMO_RE =
+  /(get fast,? free shipping|free delivery |prime members get |enjoy fast,? free delivery|order within \d|deliver(ing)? to .{0,30}\d|free 30-day refund|new on amazon)/i;
 
 /**
  * Drop page chrome that the landmark stripper can't see: it identifies chrome
@@ -4520,6 +4542,11 @@ function removeGenericChrome(root: Element): void {
     }
   }
 
+  // (2b) E-commerce cross-sell rails (Amazon-style): heading is a SIBLING of its
+  // product carousel, so (2)'s climb-up misses the products. Remove the heading's
+  // enclosing section instead.
+  removeCrossSellRails(root);
+
   // (3) Newsletter signup blocks: smallest text match, then climb to the
   // enclosing short container.
   const newsletterSeeds = Array.from(root.querySelectorAll('*')).filter(el =>
@@ -4535,6 +4562,26 @@ function removeGenericChrome(root: Element): void {
     }
     box.remove();
     log(LL.DEBUG, 'Discerned: removeGenericChrome dropped newsletter block', 'url:', window.location.href);
+  }
+
+  // (3a) E-commerce buy-box / shipping / Prime promo blocks: plain-text pitches
+  // (shipping, delivery ETA, Prime upsell, sponsored ad strip) above the product
+  // content. Same shape as newsletter blocks — deepest text match, climb to the
+  // enclosing short container, drop it. A real product description is a long
+  // paragraph, well over the 400-char container cap, so it's never eaten.
+  const commerceSeeds = Array.from(root.querySelectorAll('*')).filter(el =>
+    COMMERCE_PROMO_RE.test(el.textContent ?? '') &&
+    !Array.from(el.children).some(c => COMMERCE_PROMO_RE.test(c.textContent ?? '')));
+  for (const seed of commerceSeeds) {
+    if (!root.contains(seed) || seed === root) continue;
+    let box: Element = seed;
+    for (let i = 0; i < 3; i++) {
+      const p = box.parentElement;
+      if (!p || p === root || (p.textContent ?? '').replace(/\s+/g, ' ').length > 400) break;
+      box = p;
+    }
+    box.remove();
+    log(LL.DEBUG, 'Discerned: removeGenericChrome dropped commerce promo block', 'url:', window.location.href);
   }
 
   // (3b) "Preferred source" promo strips — text pitch + icon link, not a
@@ -4607,6 +4654,56 @@ function removeGenericChrome(root: Element): void {
     el.remove();
     log(LL.DEBUG, 'Discerned: removeGenericChrome dropped tag/category link list', 'url:', window.location.href);
   });
+}
+
+/**
+ * Drop e-commerce cross-sell rails ("Frequently bought together", "More items to
+ * explore", "Customers also bought or read", "Products related to this item", …).
+ * Unlike news recirculation boxes — whose heading sits INSIDE the link box, so
+ * removeGenericChrome's climb-up reaches it — a product-carousel heading is a
+ * SIBLING of its carousel. So instead of climbing from the heading, we find the
+ * nearest ancestor "module card" that encloses BOTH the heading and its product
+ * links, and whose content is cross-sell (link/image dominant, no real prose),
+ * then remove that. Bounded so it can never eat the product's own description.
+ */
+function removeCrossSellRails(root: Element): void {
+  const seeds = Array.from(root.querySelectorAll('h1, h2, h3, h4, [role="heading"]')).filter(el => {
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    return t.length > 0 && t.length <= 60 && CROSS_SELL_HEADING_RE.test(t);
+  });
+  // A carousel is products (links + images + short titles/prices), never a
+  // paragraph of prose — a ≥200-char <p> means we've climbed into real content.
+  const hasLongProse = (el: Element): boolean =>
+    Array.from(el.querySelectorAll('p')).some(p => (p.textContent ?? '').trim().length >= 200);
+
+  for (const seed of seeds) {
+    if (!root.contains(seed)) continue;
+    // Climb to the largest ancestor that still (a) has no long prose and (b) is
+    // link/image dominant — that's the module card wrapping heading + carousel.
+    let box: Element = seed;
+    let cursor: Element | null = seed.parentElement;
+    for (let i = 0; i < 5 && cursor && cursor !== root; i++) {
+      if (hasLongProse(cursor)) break;
+      const text = (cursor.textContent ?? '').replace(/\s+/g, ' ').trim();
+      // A module card is heavy on links/images relative to its text. Require at
+      // least a couple of links and either several images or many links, so a
+      // lone heading wrapper (few links) doesn't get promoted past the real card.
+      const links = cursor.querySelectorAll('a').length;
+      const imgs = cursor.querySelectorAll('img').length;
+      // Cap high enough to swallow a full product carousel (a real Amazon rail is
+      // ~5k chars / ~100 links / ~30 imgs) but below a whole page section, so the
+      // product's own column is never eaten. The link/image dominance + no-prose
+      // guards are the real safety; the cap just stops a runaway climb.
+      if (text.length <= 12000 && links >= 2 && (imgs >= 2 || links >= 4)) {
+        box = cursor;
+      }
+      cursor = cursor.parentElement;
+    }
+    if (box !== seed || (box === seed && seed.querySelectorAll('a').length >= 2)) {
+      box.remove();
+      log(LL.DEBUG, 'Discerned: removeCrossSellRails dropped cross-sell rail', 'url:', window.location.href);
+    }
+  }
 }
 
 /**

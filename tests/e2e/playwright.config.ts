@@ -59,7 +59,12 @@ export default defineConfig({
     },
     {
       name: 'corpus-sweep',
-      testMatch: /corpus-sweep\.spec\.ts/,
+      testMatch: /corpus-sweep\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'corpus-sweep-manual',
+      testMatch: /corpus-sweep-manual\.spec\.ts$/,
       retries: 0,
     },
     {

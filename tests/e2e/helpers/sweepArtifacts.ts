@@ -51,8 +51,26 @@ export interface SweepRecord {
   status: 'ok' | 'skip';
   /** Present when status === 'skip': why the page didn't load. */
   skipReason?: string;
+  /** Free-text provenance note (e.g. "manual headed capture …"). */
+  note?: string;
   /** The four heuristic scores + composite (present when status === 'ok'). */
   scores?: SweepScores;
+}
+
+/**
+ * A human visual-review verdict for a domain, kept SEPARATE from the auto-scored
+ * SweepRecord so re-running the sweep never overwrites it. Stored in
+ * `visual-findings.json` (domain → verdict) and merged into the gallery, which can
+ * sort by verdict severity. The heuristic composite is a cheap triage signal; this
+ * is the ground truth a person confirmed by eyeballing the clip/cast.
+ */
+export interface VisualFinding {
+  /** worst → best: 'critical' (no real content) · 'flaw' (partial/chrome/layout) · 'clean'. */
+  verdict: 'critical' | 'flaw' | 'clean';
+  /** Which render(s) the verdict is about. */
+  where?: 'clip' | 'cast' | 'clip+cast';
+  /** One-line human summary of what's wrong (or right). */
+  note?: string;
 }
 
 export interface SweepScores {

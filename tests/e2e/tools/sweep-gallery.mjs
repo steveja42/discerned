@@ -58,10 +58,23 @@ function build() {
   }
   if (sites.size === 0) return null;
 
+  // Human visual-review verdicts (visual-findings.json) — merged in + sortable.
+  // Kept separate from the auto-scored *--score.json so a re-run never clobbers
+  // them. worst→best rank so "sort by finding" surfaces the real problems first.
+  const VERDICT_RANK = { critical: 0, flaw: 1, clean: 2 };
+  let findings = {};
+  try {
+    findings = JSON.parse(readFileSync(resolve(RUN_DIR, 'visual-findings.json'), 'utf8')).findings ?? {};
+  } catch { /* no findings file yet */ }
+
   // Build a plain data array the client sorts; default worst-score-first.
   const data = [...sites.entries()].map(([site, e]) => {
     const rec = e.rec ?? {};
     const scored = rec.status === 'ok' && rec.scores;
+    const finding = findings[site] ?? null;
+    // Numeric rank for "sort by finding": reviewed verdicts first (0..2), then
+    // un-reviewed domains (3) last.
+    const findingRank = finding ? VERDICT_RANK[finding.verdict] ?? 3 : 3;
     // An 'ok' record WITHOUT a scores object is a manual headed capture
     // (tools/sweep-headed-manual.mjs writes source+clip images but doesn't run
     // the heuristics). Mark it so the badge reads "unscored", not a bogus -1.
@@ -76,6 +89,8 @@ function build() {
       composite: scored ? rec.scores.composite : -1, // skips + unscored sort last
       flags: scored ? rec.scores.flags : [],
       scores: scored ? rec.scores : null,
+      finding,
+      findingRank,
       url: rec.url ?? '',
       source: e.source.sort(),
       clip: e.clip.sort(),
@@ -118,18 +133,31 @@ function build() {
     return `<span class="metrics">cov ${(s.textCoverage * 100).toFixed(0)}% · blank ${(s.blankRatio * 100).toFixed(0)}% · distort ${s.aspectDistorted} · chrome ${s.chromeHits}</span> ${flags}`;
   };
 
+  // Human visual verdict pill (critical / flaw / clean) + its note. Distinct from
+  // the numeric heuristic badge — this is the reviewed ground truth.
+  const verdictPill = (d) => {
+    if (!d.finding) return '';
+    const v = d.finding.verdict;
+    const where = d.finding.where ? ` <span class="vwhere">${escapeHtml(d.finding.where)}</span>` : '';
+    return `<span class="verdict v-${v}" title="visual review">${v}${where}</span>`;
+  };
+  const verdictNote = (d) => d.finding?.note
+    ? `<div class="vnote v-${d.finding.verdict}">${escapeHtml(d.finding.note)}</div>` : '';
+
   // Clickable overview rows. Scored domains link to their detail view; skip rows
   // are compact (no images to expand) so they render as a plain, non-link block.
   const rows = data.map((d) => {
     const head = `<h2>
         ${badge(d)}
+        ${verdictPill(d)}
         <span class="name">${d.site}</span>
         ${d.url ? `<a class="src-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">source ↗</a>` : ''}
         <span class="ts">${d.mtime ? new Date(d.mtime).toLocaleString() : ''}</span>
         ${d.status === 'skip' ? '' : '<span class="open-hint">click to expand →</span>'}
       </h2>
+      ${verdictNote(d)}
       <div class="detail-line">${scoreDetail(d)}</div>`;
-    const dataAttrs = `data-composite="${d.composite}" data-mtime="${d.mtime}" data-status="${d.status}"`;
+    const dataAttrs = `data-composite="${d.composite}" data-mtime="${d.mtime}" data-status="${d.status}" data-finding="${d.findingRank}"`;
     if (d.status === 'skip') {
       return `<div class="site skip-row" ${dataAttrs}>${head}</div>`;
     }
@@ -209,6 +237,18 @@ function build() {
   .badge.skip { background: #8883; color: #999; }
   .badge.unk  { background: #8883; color: #999; }
 
+  /* Human visual-review verdict pill + note. */
+  .verdict { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 20px; }
+  .verdict .vwhere { font-weight: 400; text-transform: none; opacity: .7; letter-spacing: 0; }
+  .verdict.v-critical { background: #c6282822; color: #e05555; }
+  .verdict.v-flaw     { background: #f9a82522; color: #f9a825; }
+  .verdict.v-clean    { background: #2e7d3222; color: #4caf50; }
+  .vnote { font-size: 12.5px; margin: 0 0 6px; padding-left: 2px; border-left: 3px solid transparent; padding-left: 8px; }
+  .vnote.v-critical { color: #e05555; border-color: #e05555; }
+  .vnote.v-flaw     { color: #cc9a3d; border-color: #f9a825; }
+  .vnote.v-clean    { color: #7aa; border-color: #4caf5066; }
+
   .cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
   .col { min-width: 0; }
   .col-label { font-size: 12px; color: #888; margin-bottom: 4px; }
@@ -258,8 +298,9 @@ function build() {
 <body>
   <div class="toolbar">
     <span>Sort:</span>
-    <button id="sort-score" class="active">worst score first</button>
-    <button id="sort-date">newest run first</button>
+    <button id="sort-finding" class="active">visual finding</button>
+    <button id="sort-score">worst score</button>
+    <button id="sort-date">newest run</button>
     <button id="filter-flagged">only flagged</button>
     <span class="count">${countLabel}</span>
   </div>
@@ -275,14 +316,23 @@ function build() {
     // ---- overview: sort + filter (the sweep's extras over live-gallery) ----
     const list = document.getElementById('list');
     const sites = () => [...list.querySelectorAll('.site')];
+    const byFinding = document.getElementById('sort-finding');
     const byScore = document.getElementById('sort-score');
     const byDate = document.getElementById('sort-date');
     const flaggedBtn = document.getElementById('filter-flagged');
+    const sortBtns = [byFinding, byScore, byDate];
     let flaggedOnly = false;
 
     function resort(key) {
       const els = sites();
       els.sort((a, b) => {
+        if (key === 'finding') {
+          // Reviewed verdict severity (critical→flaw→clean→unreviewed), then
+          // worst composite within the same verdict as a tie-breaker.
+          const fr = Number(a.dataset.finding) - Number(b.dataset.finding);
+          if (fr !== 0) return fr;
+          return Number(b.dataset.composite) - Number(a.dataset.composite);
+        }
         if (key === 'score') return Number(b.dataset.composite) - Number(a.dataset.composite);
         return Number(b.dataset.mtime) - Number(a.dataset.mtime);
       });
@@ -290,14 +340,22 @@ function build() {
     }
     function applyFilter() {
       for (const el of sites()) {
-        const flagged = Number(el.dataset.composite) >= 0.25 || el.dataset.status === 'skip';
+        // "Only flagged" now respects the human verdict too: show anything the
+        // review marked critical/flaw, plus high-composite + skips.
+        const fr = Number(el.dataset.finding);
+        const flagged = fr <= 1 || Number(el.dataset.composite) >= 0.25 || el.dataset.status === 'skip';
         el.classList.toggle('hidden', flaggedOnly && !flagged);
       }
     }
-    byScore.addEventListener('click', () => { byScore.classList.add('active'); byDate.classList.remove('active'); resort('score'); });
-    byDate.addEventListener('click', () => { byDate.classList.add('active'); byScore.classList.remove('active'); resort('date'); });
+    const setSort = (btn, key) => {
+      sortBtns.forEach(b => b.classList.toggle('active', b === btn));
+      resort(key);
+    };
+    byFinding.addEventListener('click', () => setSort(byFinding, 'finding'));
+    byScore.addEventListener('click', () => setSort(byScore, 'score'));
+    byDate.addEventListener('click', () => setSort(byDate, 'date'));
     flaggedBtn.addEventListener('click', () => { flaggedOnly = !flaggedOnly; flaggedBtn.classList.toggle('active', flaggedOnly); applyFilter(); });
-    resort('score'); // default: worst score first
+    resort('finding'); // default: worst visual finding first
 
     // Click a row anywhere → open its detail (except when clicking the source↗ link).
     list.addEventListener('click', (e) => {
