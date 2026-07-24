@@ -180,7 +180,7 @@ function build() {
   const details = data.filter(d => d.status !== 'skip').map((d) => `
     <section class="detail" id="site-${d.site}">
       <div class="detail-bar">
-        <a class="back" href="#">← back</a>
+        <button class="back" type="button">← back</button>
         ${badge(d)}
         <h2>${d.site}</h2>
         ${d.url ? `<a class="src-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">source ↗</a>` : ''}
@@ -258,16 +258,19 @@ function build() {
   .site.hidden { display: none; }
 
   /* ---- detail (shown when a #site-* hash is active) ---- */
+  /* Detail visibility is driven by real history navigation (pushState), NOT the
+     CSS :target hack — so browser Back restores the overview scroll position for
+     free. JS toggles .active on the open detail + .detail-open on <body>. */
   .detail { display: none; }
-  .detail:target { display: block; }
-  /* When any detail is targeted, hide the overview + toolbar so the site fills the page. */
-  body:has(.detail:target) #overview,
-  body:has(.detail:target) .toolbar { display: none; }
+  .detail.active { display: block; }
+  body.detail-open #overview,
+  body.detail-open .toolbar { display: none; }
   .detail-bar { position: sticky; top: 0; background: Canvas; padding: 8px 0 12px;
     display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #8884; margin-bottom: 12px; z-index: 2; flex-wrap: wrap; }
   .detail-bar h2 { font-size: 18px; margin: 0; text-transform: capitalize; }
   .detail-bar .detail-flags { font-size: 12.5px; color: #999; display: flex; gap: 12px; flex-wrap: wrap; }
-  .back { font-size: 14px; color: #4a90d9; border: 1px solid #4a90d966; border-radius: 6px; padding: 4px 10px; }
+  .back { font: inherit; font-size: 14px; color: #4a90d9; border: 1px solid #4a90d966;
+    border-radius: 6px; padding: 4px 10px; background: none; cursor: pointer; }
   .back:hover { background: #4a90d922; }
   .restore-wrap { margin-left: auto; }
   .restore-cols { font-size: 13px; color: #4a90d9; border: 1px solid #4a90d966; border-radius: 6px; padding: 4px 10px; background: none; cursor: pointer; }
@@ -357,13 +360,43 @@ function build() {
     flaggedBtn.addEventListener('click', () => { flaggedOnly = !flaggedOnly; flaggedBtn.classList.toggle('active', flaggedOnly); applyFilter(); });
     resort('finding'); // default: worst visual finding first
 
+    // ---- Real history navigation (pushState), not the CSS :target hack ----
+    // Each row-open pushes a history entry; browser Back pops it and natively
+    // restores the overview scroll position. popstate syncs the DOM to whichever
+    // state we're on, so Back/Forward and the ← back button all go through one path.
+    const details = new Map([...document.querySelectorAll('.detail')].map(d => [d.id, d]));
+    function render(siteId) {
+      // siteId = 'site-x' to show that detail, or null/'' for the overview.
+      let shown = null;
+      details.forEach((el, id) => { const on = id === siteId; el.classList.toggle('active', on); if (on) shown = el; });
+      document.body.classList.toggle('detail-open', !!shown);
+      if (shown) { window.scrollTo(0, 0); shown.__sizeDriver?.(); }
+    }
+    function openDetail(siteId) {
+      history.pushState({ siteId }, '', '#' + siteId);
+      render(siteId);
+    }
+    window.addEventListener('popstate', (e) => render(e.state?.siteId ?? null));
+
     // Click a row anywhere → open its detail (except when clicking the source↗ link).
     list.addEventListener('click', (e) => {
       if (e.target.closest('a')) return;              // let the source↗ link work
       const row = e.target.closest('.site[data-target]');
       if (!row) return;
-      location.hash = row.dataset.target;
+      openDetail(row.dataset.target.slice(1)); // strip leading '#'
     });
+
+    // ← back button → history.back() so the browser restores the overview scroll.
+    document.querySelectorAll('.back').forEach(btn =>
+      btn.addEventListener('click', () => history.back()));
+
+    // Deep-link support: if the page loads already at #site-x, show that detail.
+    if (location.hash.startsWith('#site-')) {
+      history.replaceState({ siteId: location.hash.slice(1) }, '', location.hash);
+      render(location.hash.slice(1));
+    } else {
+      history.replaceState({ siteId: null }, '', location.pathname + location.search);
+    }
 
     // ---- detail: hide/restore columns + scroll all visible columns together ----
     // (Identical model to tools/live-gallery.mjs so the scroll behavior matches.)
@@ -397,7 +430,10 @@ function build() {
         const maxOverflow = Math.max(0, ...panels.map((p) => p.scrollHeight - p.clientHeight));
         driver.style.height = maxOverflow + 'px';
       }
-      const active = () => location.hash === '#' + detail.id;
+      // Expose sizeDriver to the nav controller so it can (re)size on show.
+      detail.__sizeDriver = sizeDriver;
+      // "Active" = this detail is the one currently shown (nav toggles .active).
+      const active = () => detail.classList.contains('active');
 
       // ALIGNMENT PRESERVATION: each panel keeps a manual offset. Page scroll sets
       // panel.scrollTop = scrollY + offset, so a nudge you gave one column with its
@@ -429,7 +465,9 @@ function build() {
         window.scrollBy(0, e.deltaY);
       }, { passive: false });
 
-      window.addEventListener('hashchange', () => { if (active()) { window.scrollTo(0, 0); sizeDriver(); } });
+      // Re-size the driver when this detail is shown (nav calls __sizeDriver),
+      // on window resize, and once images finish loading (scrollHeight grows).
+      window.addEventListener('resize', () => { if (active()) sizeDriver(); });
       window.addEventListener('load', () => { if (active()) sizeDriver(); });
     });
   </script>
