@@ -73,6 +73,14 @@ export const TAGGER_CANARY_TARGETS: TaggerCanaryTarget[] = [
     renderWait: '#mainbar',
     urlEnv: 'STACKOVERFLOW_URL',
   },
+  {
+    name: 'hackernews',
+    // A high-comment story so table.fatitem + tr.athing.comtr both render.
+    url: 'https://news.ycombinator.com/item?id=38710709',
+    hostOverride: 'news.ycombinator.com',
+    renderWait: '#hnmain, table.fatitem',
+    urlEnv: 'HACKERNEWS_URL',
+  },
 ];
 
 /** Shape returned by the __DISCERNED_TEST_ANCHORS bridge (mirrors capture.ts). */

@@ -1,0 +1,14 @@
+{
+  "format": "article",
+  "url": "https://www.youtube.com/watch?v=YE7VzlLtp-4",
+  "hostOverride": "www.youtube.com",
+  "title": { "contains": "Big Buck Bunny" },
+  "bodyText": {
+    "contains": ["Big Buck Bunny"]
+  },
+  "bodyHtml": {
+    "noScripts": true,
+    "hasImgs": true,
+    "containsClasses": ["dx-stats", "dx-byline-col"]
+  }
+}

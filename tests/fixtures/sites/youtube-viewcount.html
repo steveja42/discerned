@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Big Buck Bunny — YouTube</title>
+<style>
+  body { font-family: Roboto, Arial, sans-serif; margin: 0; }
+  ytd-watch-flexy { display: block; }
+  #primary-inner { display: block; width: 1280px; margin: 0 auto; }
+  #player { width: 1280px; height: 720px; background: #000; }
+  ytd-video-owner-renderer { display: flex; align-items: center; gap: 12px; }
+  /* The odometer: each digit is an absolutely-positioned span — exactly the
+     shape that collapses to one-digit-per-line after sanitisation strips the
+     positioning. Reproduces the P2 defect faithfully. */
+  yt-animated-rolling-number { position: relative; display: inline-block; height: 20px; }
+  yt-animated-rolling-number .digit { position: absolute; top: 0; }
+</style>
+</head>
+<body>
+<ytd-app>
+<div id="content">
+<ytd-page-manager>
+<ytd-watch-flexy class="style-scope ytd-page-manager" role="main">
+  <div id="columns">
+    <div id="primary">
+      <div id="primary-inner">
+        <div id="player" class="style-scope ytd-watch-flexy">
+          <video poster="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="1280" height="720"></video>
+        </div>
+
+        <div id="above-the-fold" class="style-scope ytd-watch-metadata">
+          <div id="title" class="style-scope ytd-watch-metadata">
+            <h1><yt-formatted-string class="style-scope ytd-watch-metadata">Big Buck Bunny — the classic open-source animated short</yt-formatted-string></h1>
+          </div>
+
+          <div id="bottom-row" class="style-scope ytd-watch-metadata">
+            <div id="owner" class="style-scope ytd-watch-metadata">
+              <ytd-video-owner-renderer class="style-scope ytd-watch-metadata">
+                <a href="/@blender" class="yt-simple-endpoint">
+                  <yt-img-shadow><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="48" height="48" alt="Blender"></yt-img-shadow>
+                </a>
+                <div id="upload-info">
+                  <ytd-channel-name id="channel-name"><a href="/@blender" class="yt-simple-endpoint">Blender Foundation</a></ytd-channel-name>
+                  <yt-formatted-string id="owner-sub-count">1.2M subscribers</yt-formatted-string>
+                </div>
+                <ytd-subscribe-button-renderer class="style-scope ytd-video-owner-renderer">
+                  <yt-button-shape><button aria-label="Subscribe to Blender Foundation">
+                    <div class="yt-spec-button-shape-next__icon"><yt-icon><span class="yt-icon-shape"><div><svg viewBox="0 0 24 24" width="24" height="24"><path d="M10 0 L20 20 L0 20 Z"></path></svg></div></span></yt-icon></div>
+                    <div class="yt-spec-button-shape-next__button-text-content">Subscribe</div>
+                  </button></yt-button-shape>
+                </ytd-subscribe-button-renderer>
+              </ytd-video-owner-renderer>
+            </div>
+
+            <div id="actions" class="style-scope ytd-watch-metadata">
+              <div id="menu">
+                <ytd-menu-renderer class="style-scope ytd-watch-metadata">
+                  <div id="top-level-buttons-computed">
+                    <segmented-like-dislike-button-view-model class="ytSegmentedLikeDislikeButtonViewModelHost">
+                      <like-button-view-model>
+                        <button aria-label="like this video along with 1,284,003 other people">
+                          <div class="yt-spec-button-shape-next__icon"><yt-icon style="width:24px;height:24px"><span class="yt-icon-shape"><div><svg viewBox="0 0 24 24" width="24" height="24"><path d="M1 21 L1 9 L7 9 L7 21 Z M9 9 L14 2 L16 4 L14 9 L22 9 L20 21 L9 21 Z"></path></svg></div></span></yt-icon></div>
+                          <div class="yt-spec-button-shape-next__button-text-content">1.2M</div>
+                        </button>
+                      </like-button-view-model>
+                      <dislike-button-view-model>
+                        <button aria-label="Dislike this video"><yt-icon><span class="yt-icon-shape"><div><svg viewBox="0 0 24 24" width="24" height="24"><path d="M23 3 L23 15 L17 15 L17 3 Z"></path></svg></div></span></yt-icon></button>
+                      </dislike-button-view-model>
+                    </segmented-like-dislike-button-view-model>
+                    <yt-button-view-model><button aria-label="Share"><yt-icon><span class="yt-icon-shape"><div><svg viewBox="0 0 24 24" width="24" height="24"><path d="M18 16 L6 9 M6 15 L18 8"></path></svg></div></span></yt-icon>Share</button></yt-button-view-model>
+                    <ytd-download-button-renderer><button aria-label="Download"><yt-icon><span class="yt-icon-shape"><div><svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 3 L12 15 M6 11 L12 17 L18 11"></path></svg></div></span></yt-icon>Download</button></ytd-download-button-renderer>
+                  </div>
+                </ytd-menu-renderer>
+              </div>
+            </div>
+          </div>
+
+          <div id="description-inline-expander" class="style-scope ytd-watch-metadata">
+            <div id="info-container" class="style-scope ytd-watch-info-text">
+              <ytd-watch-info-text id="ytd-watch-info-text" class="style-scope ytd-watch-metadata">
+                <div id="info-container" class="style-scope ytd-watch-info-text">
+                  <!-- The odometer renders a full 0-9 strip per digit column, so
+                       textContent is a long garbage run; the clean value lives in
+                       aria-label. This reproduces the real live-page shape. -->
+                  <div id="view-count" class="style-scope ytd-watch-info-text" aria-label="399,124,001 views">
+                    <yt-animated-rolling-number class="animatedRollingNumberHost" dir="ltr" aria-hidden="true"><span class="digit" style="left:0">12345678901234567890123456789</span><span class="digit" style="left:8px">12345678901234567890123456789</span><span class="digit" style="left:16px">12345678901234567890123456789</span></yt-animated-rolling-number>
+                    <yt-formatted-string class="style-scope ytd-watch-info-text">views</yt-formatted-string>
+                  </div>
+                  <div id="date-text" class="style-scope ytd-watch-info-text" aria-label="17 years ago">12345678901234567890123456789 years ago</div>
+                </div>
+              </ytd-watch-info-text>
+            </div>
+            <yt-attributed-string id="attributed-snippet-text">Big Buck Bunny tells the story of a giant rabbit with a heart bigger than himself. When one sunny day three rodents rudely harass him, something snaps and the rabbit takes matters into his own paws. Created entirely with open-source software using the Blender production pipeline.</yt-attributed-string>
+          </div>
+        </div>
+
+        <div id="below" class="style-scope ytd-watch-flexy">
+          <ytd-comments id="comments" class="style-scope ytd-watch-flexy"></ytd-comments>
+        </div>
+      </div>
+    </div>
+    <div id="secondary" class="style-scope ytd-watch-flexy">
+      <ytd-watch-next-secondary-results-renderer>Up next sidebar — should be dropped.</ytd-watch-next-secondary-results-renderer>
+    </div>
+  </div>
+</ytd-watch-flexy>
+</ytd-page-manager>
+</div>
+</ytd-app>
+</body>
+</html>

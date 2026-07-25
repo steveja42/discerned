@@ -193,6 +193,16 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'hackernews-thread-fixture-visual',
+      testMatch: /hackernews-thread-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'youtube-viewcount-fixture-visual',
+      testMatch: /youtube-viewcount-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
       name: 'news-article-fixture-visual',
       testMatch: /news-article-fixture-visual\.spec\.ts/,
       retries: 0,

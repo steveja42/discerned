@@ -113,6 +113,21 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
         // eslint-disable-next-line no-console
         console.log('   ✓ block cleared — capturing');
         await page.waitForTimeout(1_500);
+        // Wait for a populated article body — AP News / Reuters inject the story
+        // paragraphs lazily after first paint, so capturing too early yields a
+        // hero-only shell (near-empty once the comment widget is excluded).
+        await page.evaluate(async () => {
+          const SELS = ['[class*="RichTextStoryBody"]', '[data-testid="ArticleBody"]',
+            '[class*="article-body"]', '[data-testid^="paragraph"]', 'article'];
+          const len = () => {
+            for (const s of SELS) { const el = document.querySelector(s);
+              if (el) { const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim(); if (t.length > 600) return t.length; } }
+            return 0;
+          };
+          const deadline = Date.now() + 8000;
+          // eslint-disable-next-line no-unmodified-loop-condition
+          while (Date.now() < deadline && len() < 600) { await new Promise(r => setTimeout(r, 400)); }
+        }).catch(() => undefined);
         await screenshotSourcePage(page, art.source());
 
         // Capture via the dev test bridge.

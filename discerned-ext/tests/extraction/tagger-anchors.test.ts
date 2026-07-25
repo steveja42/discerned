@@ -32,6 +32,14 @@ describe('checkTaggerAnchors — selector-anchor manifest', () => {
     expect(report!.dead).toEqual([]);
   });
 
+  it('reports every hackernews anchor live against the HN fixture', () => {
+    loadFixture('hackernews-thread.html', 'https://news.ycombinator.com/item?id=1');
+    const report = checkTaggerAnchors('news.ycombinator.com', document);
+    expect(report!.name).toBe('hackernews');
+    expect(report!.dead).toEqual([]);
+    expect(report!.allDead).toBe(false);
+  });
+
   it('flags a fully-redesigned page as allDead (triggers generic fallback)', () => {
     // A reddit URL whose DOM no longer contains ANY of the tagger's anchors —
     // exactly the shape of a silent redesign. allDead must be true so

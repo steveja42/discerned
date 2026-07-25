@@ -1,0 +1,11 @@
+{
+  "format": "article",
+  "url": "https://apnews.com/article/russia-ukraine-war-drones-missiles-zelenskyy-f42baa61109fcb43b7efabf5334c4f50",
+  "title": { "contains": "drone and missile barrage" },
+  "bodyText": {
+    "minLength": 1000,
+    "contains": ["Zaporizhzhia", "Rocheleau", "Zelenskyy", "drones and missiles"],
+    "excludes": ["wintersoldier", "grid_engineer", "war crime, plain and simple"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

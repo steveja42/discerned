@@ -1,55 +1,255 @@
 {
   "_comment": "Phase 4.1 corpus-sweep target list. Each entry is a real ARTICLE / content URL the sweep captures, renders, scores (text-coverage, blank-ratio, aspect-distortion, chrome-hits), and screenshots (source/clip/cast). Deep article URLs (not homepages/section hubs) are used deliberately: (1) a single article is the realistic capture target — a homepage's lead-story teaser is a hero + no body, which the scorer mistakes for a broken clip; (2) CF/bot walls hit homepages/section indexes far harder than individual articles, so a deep-link also clears several sites a hub URL gets blocked on. These URLs were discovered live from each site's section page via tests/e2e/tools/discover-article-urls.mjs (run against the warm Cloudflare-cleared Chrome Profile 3) on 2026-07-21 — NOT hand-written, so they were real+loading when added. Article URLs rot: when a formerly-good site starts skipping with 'load failed', re-run the discovery tool to refresh its URL. Sweep runs against the same warm profile. A URL that won't load is a SKIP, not a scored finding; paywalls + IP-level 403s will still skip and that's expected. 'format' defaults to 'article'.",
   "domains": [
-    { "name": "apnews", "url": "https://apnews.com/article/russia-ukraine-war-drones-missiles-zelenskyy-f42baa61109fcb43b7efabf5334c4f50", "note": "wire news article" },
-    { "name": "reuters", "url": "https://www.reuters.com/technology/us-looks-speed-air-taxis-supersonic-planes-market-2026-07-21/", "note": "wire news article — hard-blocks headless (skips), clears with a manual headed pass (tools/sweep-headed-manual.mjs)" },
-    { "name": "npr", "url": "https://www.npr.org/2026/07/17/nx-s1-5898504/ice-medicaid-palantir-data", "note": "public radio article" },
-    { "name": "theverge", "url": "https://www.theverge.com/tech/968375/sony-udio-lawsuit-songs-ai-copyright", "note": "tech news article, SPA-ish" },
-    { "name": "arstechnica", "url": "https://arstechnica.com/cars/2026/07/f1-in-belgium-the-2026-cars-look-pathetic-on-all-the-best-racetracks/", "note": "tech long-form article" },
-    { "name": "techcrunch", "url": "https://techcrunch.com/2026/07/20/trumps-latest-ai-czar-has-already-resigned/", "note": "tech news article" },
-    { "name": "wired", "url": "https://www.wired.com/story/mississippi-state-testing-reading-comprehension-literacy/", "note": "long-form article, paywall-lite" },
-    { "name": "theguardian", "url": "https://www.theguardian.com/fashion/2026/jul/21/board-shorts-summer-surfer-fashion-trend", "note": "news article" },
-    { "name": "bbc-news", "url": "https://www.bbc.com/news/technology-67514068", "note": "news article (known good via <article>)" },
-    { "name": "aljazeera", "url": "https://www.aljazeera.com/news/2026/7/21/arizonas-primary-elections-which-us-races-to-watch-and-why-they-matter", "note": "news article" },
-    { "name": "cnn", "url": "https://www.cnn.com/2026/07/21/middleeast/iran-war-israel-sidelines-preparations-intl/index.html", "note": "news article, heavy chrome" },
-    { "name": "nbcnews", "url": "https://www.nbcnews.com/news/us-news/trump-revenge-iran-watch-arizona-primaries-morning-rundown-rcna588491", "note": "news article" },
-    { "name": "politico", "url": "https://www.politico.com/news/2026/07/21/nasa-nuclear-mars-mission-cost-01005610", "note": "politics article — needed HEADED to clear CF Turnstile" },
-    { "name": "axios", "url": "https://www.axios.com/2026/07/20/paramount-skydance-warner-merger-paused", "note": "smart-brevity article — needed HEADED to clear CF" },
-    { "name": "bloomberg", "url": "https://www.bloomberg.com/news/articles/2026-07-21/intel-rallies-after-saying-it-ll-make-more-headcount-reductions", "note": "hard paywall + bot wall — loads HEADED (tools/sweep-headed-manual.mjs), body likely paywall-truncated; skips headless" },
-    { "name": "economist", "url": "https://www.economist.com/science-and-technology/2026/07/22/why-the-openai-escape-is-the-most-worrying-ai-mishap-yet", "note": "science article — paywall + CF; clears HEADED (tools manual pass), body may be paywall-truncated" },
-    { "name": "nature", "url": "https://www.nature.com/articles/d41586-026-02220-1", "note": "science journal article" },
-    { "name": "sciencedaily", "url": "https://www.sciencedaily.com/releases/2026/07/260719040000.htm", "note": "science article" },
-    { "name": "arxiv", "url": "https://arxiv.org/abs/1706.03762", "note": "paper abstract page (known good)" },
-    { "name": "wikipedia-en", "url": "https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)", "note": "reference article (known good)" },
-    { "name": "mdn", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array", "note": "dev docs (known good)" },
-    { "name": "python-docs", "url": "https://docs.python.org/3/library/asyncio.html", "note": "dev docs, sphinx (known good)" },
-    { "name": "reactdev", "url": "https://react.dev/learn/thinking-in-react", "note": "dev docs, SPA (known good)" },
-    { "name": "github-blog", "url": "https://github.blog/ai-and-ml/generative-ai/how-ai-code-generation-works/", "note": "product blog article" },
-    { "name": "stackoverflow-blog", "url": "https://stackoverflow.blog/2026/06/23/the-2026-developer-survey-is-now-open-for-human-developers-only/", "note": "wordpress blog article" },
-    { "name": "css-tricks", "url": "https://css-tricks.com/css-states-and-javascript-events/", "note": "dev blog article" },
-    { "name": "smashingmagazine", "url": "https://www.smashingmagazine.com/2026/07/when-makes-sense-block-main-thread/", "note": "dev long-form article" },
-    { "name": "martinfowler", "url": "https://martinfowler.com/articles/patterns-of-distributed-systems/", "note": "long technical essay (known good)" },
-    { "name": "paulgraham", "url": "https://www.paulgraham.com/greatwork.html", "note": "plain-HTML essay (known good)" },
-    { "name": "overreacted", "url": "https://overreacted.io/there-are-no-instances-in-atproto/", "note": "personal dev blog article" },
-    { "name": "danluu", "url": "https://danluu.com/ai-coding/", "note": "text-only blog article, no chrome" },
-    { "name": "substack-generic", "url": "https://astralcodexten.substack.com/p/give-up-seventy-percent-of-the-way", "note": "substack article (known good)" },
-    { "name": "ghost-blog", "url": "https://ghost.org/resources/how-to-publish-your-first-post/", "note": "ghost cms article" },
-    { "name": "medium-generic", "url": "https://medium.com/@karpathy/software-2-0-a64152b37c35", "note": "medium article (CF/Turnstile — skip likely)" },
-    { "name": "dev-to", "url": "https://dev.to/francistrdev/choose-your-burden-4dgl", "note": "dev community article" },
-    { "name": "hackernews", "url": "https://news.ycombinator.com/item?id=38713847", "note": "HN comment thread (known good)" },
-    { "name": "lobsters", "url": "https://lobste.rs/s/wfmpqr/human_mathematicians_are_being", "note": "link-aggregator thread" },
-    { "name": "hackaday", "url": "https://hackaday.com/2026/07/08/linux-fu-the-local-phonebook/", "note": "maker blog article" },
-    { "name": "quantamagazine", "url": "https://www.quantamagazine.org/the-organisms-that-make-earths-harshest-places-home-20260720/", "note": "science long-form article" },
-    { "name": "theatlantic", "url": "https://www.theatlantic.com/technology/2026/07/openai-hugging-face-hack/688025/", "note": "long-form article, paywall-lite — body may truncate for non-subscribers" },
-    { "name": "newyorker", "url": "https://www.newyorker.com/magazine/2026/07/27/florentina-holzingers-naked-ambition", "note": "long-form article, paywall-lite" },
-    { "name": "vox", "url": "https://www.vox.com/politics/481087/us-iran-trump-war-israel-politics-explainer", "note": "explainer article" },
-    { "name": "espn", "url": "https://www.espn.com/nfl/story/_/id/47899175/2026-nfl-free-agency-tracker-live-updates-signings-trades-cuts-contracts-rumors", "note": "sports article, heavy widgets" },
-    { "name": "imdb", "url": "https://www.imdb.com/title/tt0111161/", "note": "structured entity page — IP-level 403 possible" },
-    { "name": "goodreads-book", "url": "https://www.goodreads.com/book/show/2767052-the-hunger-games", "note": "book page (tagger) — IP-throttled, flaky" },
-    { "name": "reddit-thread", "url": "https://www.reddit.com/r/programming/comments/1v1mpxw/zig_proposes_introducing_an_actually_memory_safe/", "note": "single reddit THREAD (post + comments — real content, not the subreddit feed listing); tagReddit target. CF-walled: loads HEADED, may skip headless" },
-    { "name": "stackoverflow-q", "url": "https://stackoverflow.com/questions/11227809/", "note": "SO question (tagger, CF) (known good)" },
-    { "name": "youtube-watch", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "note": "youtube (tagger) (known good)" },
-    { "name": "amazon-product", "url": "https://www.amazon.com/dp/0345339681", "note": "product page, heavy chrome" },
-    { "name": "nytimes", "url": "https://www.nytimes.com/2022/09/19/crosswords/mini-to-maestro-part-1.html", "note": "article, paywall-lite — refresh with a current story when it skips" }
+    {
+      "name": "apnews",
+      "url": "https://apnews.com/article/russia-ukraine-war-drones-missiles-zelenskyy-f42baa61109fcb43b7efabf5334c4f50",
+      "note": "wire news article"
+    },
+    {
+      "name": "reuters",
+      "url": "https://www.reuters.com/technology/us-looks-speed-air-taxis-supersonic-planes-market-2026-07-21/",
+      "note": "wire news article - hard-blocks headless (skips); capture via MANUAL HEADED pass"
+    },
+    {
+      "name": "npr",
+      "url": "https://www.npr.org/2026/07/17/nx-s1-5898504/ice-medicaid-palantir-data",
+      "note": "public radio article"
+    },
+    {
+      "name": "theverge",
+      "url": "https://www.theverge.com/tech/968375/sony-udio-lawsuit-songs-ai-copyright",
+      "note": "tech news article, SPA-ish"
+    },
+    {
+      "name": "arstechnica",
+      "url": "https://arstechnica.com/cars/2026/07/f1-in-belgium-the-2026-cars-look-pathetic-on-all-the-best-racetracks/",
+      "note": "tech long-form article"
+    },
+    {
+      "name": "techcrunch",
+      "url": "https://techcrunch.com/2026/07/20/trumps-latest-ai-czar-has-already-resigned/",
+      "note": "tech news article"
+    },
+    {
+      "name": "wired",
+      "url": "https://www.wired.com/story/mississippi-state-testing-reading-comprehension-literacy/",
+      "note": "long-form article, paywall-lite"
+    },
+    {
+      "name": "theguardian",
+      "url": "https://www.theguardian.com/fashion/2026/jul/21/board-shorts-summer-surfer-fashion-trend",
+      "note": "news article"
+    },
+    {
+      "name": "bbc-news",
+      "url": "https://www.bbc.com/news/technology-67514068",
+      "note": "news article (known good via <article>)"
+    },
+    {
+      "name": "aljazeera",
+      "url": "https://www.aljazeera.com/news/2026/7/21/arizonas-primary-elections-which-us-races-to-watch-and-why-they-matter",
+      "note": "news article"
+    },
+    {
+      "name": "cnn",
+      "url": "https://www.cnn.com/2026/07/21/middleeast/iran-war-israel-sidelines-preparations-intl/index.html",
+      "note": "news article, heavy chrome"
+    },
+    {
+      "name": "nbcnews",
+      "url": "https://www.nbcnews.com/news/us-news/trump-revenge-iran-watch-arizona-primaries-morning-rundown-rcna588491",
+      "note": "news article"
+    },
+    {
+      "name": "politico",
+      "url": "https://www.politico.com/news/2026/07/21/nasa-nuclear-mars-mission-cost-01005610",
+      "note": "politics article — needed HEADED to clear CF Turnstile"
+    },
+    {
+      "name": "axios",
+      "url": "https://www.axios.com/2026/07/20/paramount-skydance-warner-merger-paused",
+      "note": "smart-brevity article — needed HEADED to clear CF"
+    },
+    {
+      "name": "bloomberg",
+      "url": "https://www.bloomberg.com/news/articles/2026-07-21/intel-rallies-after-saying-it-ll-make-more-headcount-reductions",
+      "note": "hard paywall + bot wall — loads HEADED (MANUAL HEADED pass), body likely paywall-truncated; skips headless"
+    },
+    {
+      "name": "economist",
+      "url": "https://www.economist.com/science-and-technology/2026/07/22/why-the-openai-escape-is-the-most-worrying-ai-mishap-yet",
+      "note": "science article — paywall + CF; clears HEADED (tools manual pass), body may be paywall-truncated"
+    },
+    {
+      "name": "nature",
+      "url": "https://www.nature.com/articles/d41586-026-02220-1",
+      "note": "science journal article"
+    },
+    {
+      "name": "sciencedaily",
+      "url": "https://www.sciencedaily.com/releases/2026/07/260719040000.htm",
+      "note": "science article"
+    },
+    {
+      "name": "arxiv",
+      "url": "https://arxiv.org/abs/1706.03762",
+      "note": "paper abstract page (known good)"
+    },
+    {
+      "name": "wikipedia-en",
+      "url": "https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)",
+      "note": "reference article (known good)"
+    },
+    {
+      "name": "mdn",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array",
+      "note": "dev docs (known good)"
+    },
+    {
+      "name": "python-docs",
+      "url": "https://docs.python.org/3/library/asyncio.html",
+      "note": "dev docs, sphinx (known good)"
+    },
+    {
+      "name": "reactdev",
+      "url": "https://react.dev/learn/thinking-in-react",
+      "note": "dev docs, SPA (known good)"
+    },
+    {
+      "name": "github-blog",
+      "url": "https://github.blog/ai-and-ml/generative-ai/how-ai-code-generation-works/",
+      "note": "product blog article"
+    },
+    {
+      "name": "stackoverflow-blog",
+      "url": "https://stackoverflow.blog/2026/06/23/the-2026-developer-survey-is-now-open-for-human-developers-only/",
+      "note": "wordpress blog article"
+    },
+    {
+      "name": "css-tricks",
+      "url": "https://css-tricks.com/css-states-and-javascript-events/",
+      "note": "dev blog article"
+    },
+    {
+      "name": "smashingmagazine",
+      "url": "https://www.smashingmagazine.com/2026/07/when-makes-sense-block-main-thread/",
+      "note": "dev long-form article"
+    },
+    {
+      "name": "martinfowler",
+      "url": "https://martinfowler.com/articles/patterns-of-distributed-systems/",
+      "note": "long technical essay (known good)"
+    },
+    {
+      "name": "paulgraham",
+      "url": "https://www.paulgraham.com/greatwork.html",
+      "note": "plain-HTML essay (known good)"
+    },
+    {
+      "name": "overreacted",
+      "url": "https://overreacted.io/there-are-no-instances-in-atproto/",
+      "note": "personal dev blog article"
+    },
+    {
+      "name": "danluu",
+      "url": "https://danluu.com/ai-coding/",
+      "note": "text-only blog article, no chrome"
+    },
+    {
+      "name": "substack-generic",
+      "url": "https://astralcodexten.substack.com/p/give-up-seventy-percent-of-the-way",
+      "note": "substack article (known good)"
+    },
+    {
+      "name": "ghost-blog",
+      "url": "https://ghost.org/resources/how-to-publish-your-first-post/",
+      "note": "ghost cms article"
+    },
+    {
+      "name": "medium-generic",
+      "url": "https://medium.com/@karpathy/software-2-0-a64152b37c35",
+      "note": "medium article — CF/Turnstile; clears via headed retry or manual pass. HEADED."
+    },
+    {
+      "name": "dev-to",
+      "url": "https://dev.to/francistrdev/choose-your-burden-4dgl",
+      "note": "dev community article"
+    },
+    {
+      "name": "hackernews",
+      "url": "https://news.ycombinator.com/item?id=38713847",
+      "note": "HN comment thread — returns empty/iframe-wall body headless; capture via MANUAL HEADED pass."
+    },
+    {
+      "name": "lobsters",
+      "url": "https://lobste.rs/s/wfmpqr/human_mathematicians_are_being",
+      "note": "link-aggregator thread"
+    },
+    {
+      "name": "hackaday",
+      "url": "https://hackaday.com/2026/07/08/linux-fu-the-local-phonebook/",
+      "note": "maker blog article"
+    },
+    {
+      "name": "quantamagazine",
+      "url": "https://www.quantamagazine.org/the-organisms-that-make-earths-harshest-places-home-20260720/",
+      "note": "science long-form article"
+    },
+    {
+      "name": "theatlantic",
+      "url": "https://www.theatlantic.com/technology/2026/07/openai-hugging-face-hack/688025/",
+      "note": "long-form article, paywall-lite — body may truncate for non-subscribers"
+    },
+    {
+      "name": "newyorker",
+      "url": "https://www.newyorker.com/magazine/2026/07/27/florentina-holzingers-naked-ambition",
+      "note": "long-form article, paywall-lite"
+    },
+    {
+      "name": "vox",
+      "url": "https://www.vox.com/politics/481087/us-iran-trump-war-israel-politics-explainer",
+      "note": "explainer article"
+    },
+    {
+      "name": "espn",
+      "url": "https://www.espn.com/nfl/story/_/id/47899175/2026-nfl-free-agency-tracker-live-updates-signings-trades-cuts-contracts-rumors",
+      "note": "sports article, heavy widgets"
+    },
+    {
+      "name": "imdb",
+      "url": "https://www.imdb.com/title/tt0111161/",
+      "note": "structured entity page — IP-level 403 headless; MANUAL HEADED pass. Thin capture (JS entity page)."
+    },
+    {
+      "name": "goodreads-book",
+      "url": "https://www.goodreads.com/book/show/2767052-the-hunger-games",
+      "note": "book entity page (tagger) — 403/throttled headless; MANUAL HEADED pass."
+    },
+    {
+      "name": "reddit-thread",
+      "url": "https://www.reddit.com/r/programming/comments/1v1mpxw/zig_proposes_introducing_an_actually_memory_safe/",
+      "note": "single reddit THREAD (post + comments — real content, not the subreddit feed listing); tagReddit target. CF-walled: loads HEADED, may skip headless"
+    },
+    {
+      "name": "stackoverflow-q",
+      "url": "https://stackoverflow.com/questions/11227809/",
+      "note": "SO question (tagger, CF) (known good)"
+    },
+    {
+      "name": "youtube-watch",
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "note": "youtube (tagger) (known good)"
+    },
+    {
+      "name": "amazon-product",
+      "url": "https://www.amazon.com/dp/0345339681",
+      "note": "product page, heavy chrome"
+    },
+    {
+      "name": "nytimes",
+      "url": "https://www.nytimes.com/2022/09/19/crosswords/mini-to-maestro-part-1.html",
+      "note": "article, paywall-lite — 403 headless; MANUAL HEADED pass. Refresh URL when it 404s. (NYT reportedly NOT truncated from the test profile — recheck.)"
+    }
   ]
 }

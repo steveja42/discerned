@@ -1,0 +1,18 @@
+{
+  "format": "article",
+  "url": "https://news.ycombinator.com/item?id=38710709",
+  "hostOverride": "news.ycombinator.com",
+  "title": { "contains": "Uniting the Linux random-number devices" },
+  "bodyText": {
+    "minLength": 400,
+    "contains": [
+      "persist PRNG state",
+      "Windows does that",
+      "unpredictable seed",
+      "EdSchouten",
+      "dist-epoch"
+    ],
+    "excludes": ["submit", "add comment"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

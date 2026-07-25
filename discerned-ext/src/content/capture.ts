@@ -1542,7 +1542,17 @@ function looksLikeContainer(el: Element): boolean {
 
 function findArticleElement(smartDetection: boolean): Element | null {
   for (const sel of ARTICLE_SELECTORS) {
-    const el = querySelectorAllDeep(document.body, sel)[0] ?? null;
+    // `article` is the first selector, but third-party comment widgets render
+    // each comment as `<article class="vf3-comment">` (Viafoura), `<article>`
+    // (Disqus/Coral), etc. On a story page with no real <article> element (AP
+    // News → only <main class="Page-main">) the FIRST <article> on the page is
+    // a reader comment — capturing it ships the comments and drops the story.
+    // Take the first candidate that is NOT itself/inside a comment widget,
+    // keeping the original "first match per selector" behaviour otherwise.
+    const el = querySelectorAllDeep(document.body, sel).find(e => {
+      try { return !(e.matches(COMMENT_WIDGET_SELECTOR) || e.closest(COMMENT_WIDGET_SELECTOR)); }
+      catch { return true; }
+    }) ?? null;
     if (!el || (el.textContent ?? '').trim().length < ARTICLE_MIN_CHARS) continue;
     if (smartDetection && looksLikeContainer(el)) {
       log(LL.DEBUG, `Discerned: skipping <${el.tagName.toLowerCase()}> (looks like container) — falling to Readability`, 'url:', window.location.href);
@@ -1565,6 +1575,26 @@ function findArticleElement(smartDetection: boolean): Element | null {
 const LAYOUT_MIN_TEXT_CHARS = 200;
 const LAYOUT_MAX_LINK_TEXT_RATIO = 0.85; // dominated by link text = nav/feed of cards
 const LAYOUT_MAX_BUTTON_DENSITY = 0.15; // buttons/textLength — high = UI chrome
+
+// Third-party reader-comment widgets. These render a huge lazy-loaded text block
+// (a whole discussion thread) that outscores the article body in the layout
+// finder — so on a site with no <article> element (e.g. AP News → only
+// <main class="Page-main">) the finder picks the comments over the story.
+// These platforms mount at stable, well-known container ids/tags/class prefixes
+// across the thousands of news sites that embed them, so matching them is
+// generic — not per-site. scoreContentBlock() both refuses to pick a block that
+// IS a comment widget and discounts a story+comments container's score to its
+// non-comment text, so the story column wins on its own merits.
+const COMMENT_WIDGET_SELECTOR = [
+  'vf-widget', '[class*="viafoura" i]', '#ap-comments',            // Viafoura
+  '#disqus_thread', '.disqus', '#disqus', 'iframe[src*="disqus.com"]', // Disqus
+  '.coral', '#coral_thread', '.coral-container',                   // Coral / Talk (Vox Media)
+  '[data-spotim-module]', '.spot-im', '#spot-im', '.spcv_app',     // OpenWeb / Spot.IM
+  '.fb-comments', '.fb_comments_count',                            // Facebook comments
+  '#hyvor-talk-view', 'hyvor-talk-comments',                       // Hyvor Talk
+  '#commento', '#commento-root',                                   // Commento
+  '#comments-list', '.comments-area',                              // generic WP fallbacks
+].join(', ');
 const LAYOUT_SKIP_TAGS = new Set([
   'script', 'style', 'noscript', 'nav', 'header', 'footer', 'aside',
   'svg', 'path', 'button', 'input', 'select', 'textarea', 'form', 'iframe',
@@ -1593,13 +1623,27 @@ function scoreContentBlock(el: Element, hasLayout: boolean): BlockScore | null {
   // Reject elements that ARE the body / html — they own the whole page chrome.
   if (el === document.body || el === document.documentElement) return null;
 
+  // Never pick a third-party comment widget (or any node inside one). A whole
+  // reader-discussion thread is a big text block that would otherwise outscore
+  // the article — see COMMENT_WIDGET_SELECTOR.
+  if (el.matches(COMMENT_WIDGET_SELECTOR) || el.closest(COMMENT_WIDGET_SELECTOR)) return null;
+
   if (hasLayout) {
     // Soft size gate: prefer elements visible in the layout but don't require
     // them. Tests/sparse pages may render content at much smaller sizes.
     if (rect.width > 0 && rect.width < 200) return null;
   }
 
-  const text = (el.textContent ?? '').trim();
+  const fullText = (el.textContent ?? '').trim();
+  // Score on the block's NON-comment text: a story container that also holds a
+  // comment widget (AP's <main class="Page-main"> wraps both) is scored on the
+  // story alone, so the widget's bulk can't inflate — or, when the widget is the
+  // block's only substance, deflate it below the story's own score.
+  const commentText = Array.from(el.querySelectorAll(COMMENT_WIDGET_SELECTOR))
+    .reduce((n, w) => n + (w.textContent ?? '').trim().length, 0);
+  const text = commentText > 0
+    ? fullText.slice(0, Math.max(0, fullText.length - commentText))
+    : fullText;
   if (text.length < LAYOUT_MIN_TEXT_CHARS) return null;
 
   // Reject elements dominated by link text — those are link lists / nav menus.
@@ -2062,6 +2106,27 @@ const EXCL_MARKER = 'data-discerned-excl';
  * can be cleaned up with removeMarked() afterward.
  */
 function markExcluded(root: HTMLElement = document.body): () => void {
+  // Third-party reader-comment widgets (Viafoura, Disqus, Coral, OpenWeb, …).
+  // These are marked here — on the LIVE DOM, where their id/class still exist
+  // (sanitisation later strips all non-dx-/tweet- classes, so they can't be
+  // matched on the clone). Dropping them from Tier 1's whole-<main> capture is
+  // what keeps AP News's story (in <main class="Page-main">, alongside the
+  // Viafoura thread) from shipping the comments too. The layout finder
+  // separately refuses to PICK a comment widget as the capture root
+  // (scoreContentBlock), so marking the widget here can't empty a finder
+  // capture — the finder root is the story block, the widget a sibling/child
+  // that removeMarked prunes.
+  //
+  // The layout finder (scoreContentBlock) already refuses to pick a comment
+  // widget as the capture root, so on a comment-dominated page the chosen root
+  // is a story block, not inside the widget — marking the widget here prunes it
+  // from the clip without emptying it.
+  try {
+    querySelectorAllDeep(root, COMMENT_WIDGET_SELECTOR).forEach(w => {
+      w.setAttribute(EXCL_MARKER, '1');
+    });
+  } catch { /* invalid selector on some engine — skip */ }
+
   forEachDeepElement(root, el => {
     if (el.id === 'discerned-overlay') return;
     const s = window.getComputedStyle(el);
@@ -2713,6 +2778,86 @@ function tagReddit(root: Document | Element): Element | void {
 }
 
 /**
+ * Tag news.ycombinator.com item pages. HN renders as nested tables with stable
+ * class names (server-rendered, never hashed):
+ *   - `table.fatitem`                       the post/root item (title + subtext)
+ *   - `.titleline`                          the story title link
+ *   - `.subtext`                            points · author · time · N comments
+ *   - `table.comment-tree > tr.athing.comtr` one row per comment
+ *   - `td.ind[indent="N"]`                  the nesting depth (0 = top level)
+ *   - `.comhead`                            author + age + nav links
+ *   - `.comment > .commtext`                the comment body prose
+ *   - `.votelinks` / `.reply` / `.togg` / `.navs`  vote arrows, reply/collapse chrome
+ *
+ * Stamps `dx-post` on the fatitem and each top-level comment, `dx-reply` on
+ * nested comments, `dx-byline` on each `.comhead`, and `dx-excl` on the vote
+ * arrows / reply-loaders / collapse toggles / per-comment nav links. Conveys
+ * thread nesting by setting a left margin from the `indent` attribute (inline
+ * style — survives the capture default `stripInlineStyles: false`).
+ *
+ * Returns `#hnmain` as the narrowed capture root so HN's orange top nav bar
+ * (`.pagetop`) and the reply form / footer links drop out.
+ */
+function tagHackerNews(root: Document | Element): Element | void {
+  const main = root.querySelector('#hnmain');
+  if (!main) return undefined;
+
+  // The orange masthead nav bar (Hacker News | new | past | comments | …), its
+  // HN-logo cell, and the per-page login link. Drop the whole top table row —
+  // climb from .pagetop to the <tr> it lives in so the logo <img> goes too.
+  const pagetop = main.querySelector('.pagetop');
+  const masthead = pagetop?.closest('tr');
+  if (masthead) appendClass(masthead, 'dx-excl');
+
+  // The post / root item.
+  const fatitem = main.querySelector('table.fatitem');
+  if (fatitem) {
+    appendClass(fatitem, 'dx-post');
+    // Story pages: .subtext is the meta row (points · author · N comments).
+    const subtext = fatitem.querySelector('.subtext');
+    if (subtext) {
+      appendClass(subtext, 'dx-stats');
+      // Drop the interactive-only links (hide / unhide / past / favorite / flag)
+      // that clutter the meta row; keep points, author, age, and the comment
+      // count, which are informative.
+      subtext.querySelectorAll('a').forEach(a => {
+        const t = (a.textContent ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+        if (/^(hide|un-?hide|past|favorite|un-?favorite|flag|un-?flag)$/.test(t)) appendClass(a, 'dx-excl');
+      });
+    }
+    // The .comhead on a comment-permalink fatitem is a byline, not a title.
+    const head = fatitem.querySelector('.comhead');
+    if (head) appendClass(head, 'dx-byline');
+  }
+
+  // Each comment row. Stamp dx-post (top level) / dx-reply (nested), the
+  // .comhead as a byline, and indent by depth. The comment body (.commtext)
+  // needs no marker — it's plain prose the sanitiser keeps.
+  main.querySelectorAll('tr.athing.comtr').forEach(row => {
+    const indentCell = row.querySelector('td.ind');
+    const depth = parseInt(indentCell?.getAttribute('indent') ?? '0', 10) || 0;
+    appendClass(row, depth > 0 ? 'dx-reply' : 'dx-post');
+    if (depth > 0) {
+      // Cap the visual indent so deep threads don't march off the right edge.
+      const px = Math.min(depth, 8) * 24;
+      const existing = row.getAttribute('style') ?? '';
+      row.setAttribute('style', `${existing};margin-left:${px}px`);
+    }
+    const head = row.querySelector('.comhead');
+    if (head) appendClass(head, 'dx-byline');
+  });
+
+  // Chrome: vote arrows (.votelinks), the empty .ind spacer cells, per-comment
+  // nav links (parent | context | next | prev | root — all in .navs), collapse
+  // toggles ([–] .togg), the reply-link stubs, and the "add comment" reply
+  // form at the foot of the thread. All sanitise into stray glyphs, one-word
+  // link runs, or (the form) an empty textarea + submit button.
+  main.querySelectorAll('.votelinks, td.ind, .navs, .togg, .reply, form').forEach(el => appendClass(el, 'dx-excl'));
+
+  return main;
+}
+
+/**
  * Tag youtube.com watch pages. YT's content lives in `<ytd-watch-flexy>` with
  * `<div id="primary-inner">` as the actual content column (title, description,
  * comments) and `<div id="secondary">` as the "Up next" sidebar — the latter is
@@ -2788,8 +2933,17 @@ function tagYoutube(root: Document | Element): Element | void {
   });
 
   // Drop the action strip (Like / Dislike / Share / Save / Download / Clip /
-  // Subscribe). It sanitises into huge SVG icons with one-word labels.
-  primaryInner.querySelectorAll('#actions, #actions-inner, #subscribe-button, ytd-menu-renderer').forEach(el => appendClass(el, 'dx-excl'));
+  // Subscribe). It sanitises into huge SVG icons with one-word labels. Covers
+  // both the container ids and the individual view-model widgets that sit in
+  // #above-the-fold OUTSIDE #actions (subscribe pill, notification bell, and
+  // the segmented like/dislike button) — these each render as an oversized
+  // thumb / bell SVG glyph with the count stacked beside it (the P2 defect).
+  primaryInner.querySelectorAll(
+    '#actions, #actions-inner, #subscribe-button, ytd-menu-renderer, ' +
+    'ytd-subscribe-button-renderer, ytd-subscription-notification-toggle-button-renderer-next, ' +
+    'segmented-like-dislike-button-view-model, like-button-view-model, dislike-button-view-model, ' +
+    'ytd-download-button-renderer, yt-icon-button, #flexible-item-buttons',
+  ).forEach(el => appendClass(el, 'dx-excl'));
 
   // Drop YT's tooltip/badge shells — they duplicate visible text (channel
   // name appears as <a>jawed</a> + <tp-yt-paper-tooltip>jawed</tp-yt-paper-tooltip>)
@@ -2818,6 +2972,27 @@ function tagYoutube(root: Document | Element): Element | void {
   const comments = primaryInner.querySelector('#comments, ytd-comments');
   if (comments && comments.querySelectorAll('ytd-comment-thread-renderer').length === 0) {
     appendClass(comments, 'dx-excl');
+  }
+
+  // Drop structured-description cards (Event Tickets / Bandsintown / merch /
+  // podcast / game shelves). These render an oversized Lottie animation or
+  // yt-icon glyph (a giant ℹ info-badge, a ↗ external-link arrow) with a couple
+  // of link words — the "giant blue glyph" defect on live watch pages. The
+  // description PROSE lives in #description-inline-expander's attributed-string,
+  // which is NOT inside these renderers, so dropping them keeps the real text.
+  primaryInner.querySelectorAll(
+    'lottie-component, #ticket-shelf, ytd-ticket-shelf-renderer, ' +
+    'ytd-video-description-course-section-renderer, ytd-merch-shelf-renderer, ' +
+    'ytd-video-description-podcast-section-renderer, ytd-video-attribute-view-model, ' +
+    'ytd-video-description-game-section-renderer, yt-video-attribute-view-model, ' +
+    'ytd-compact-link-renderer, ytd-info-panel-container-renderer',
+  ).forEach(el => appendClass(el, 'dx-excl'));
+  // Any remaining bare yt-icon / standalone svg glyph inside the description
+  // that isn't part of an avatar or a link's own affordance — these sanitise to
+  // oversized no-context glyphs.
+  const descRoot = primaryInner.querySelector('#description-inline-expander, #description');
+  if (descRoot) {
+    descRoot.querySelectorAll('yt-icon, lottie-component').forEach(el => appendClass(el, 'dx-excl'));
   }
 
   return primaryInner;
@@ -2923,6 +3098,12 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     tag: tagYoutube,
     postClone: postCloneYoutube,
     anchors: ['#primary-inner', 'ytd-video-owner-renderer, #owner'],
+  },
+  {
+    name: 'hackernews',
+    match: h => /(^|\.)ycombinator\.com$/i.test(h),
+    tag: tagHackerNews,
+    anchors: ['#hnmain', 'table.fatitem', 'tr.athing.comtr'],
   },
   {
     name: 'stackoverflow',
@@ -3184,28 +3365,32 @@ function postCloneReddit(clone: Element): void {
  * between videos. The clone is detached and safe to mutate.
  */
 function postCloneYoutube(clone: Element): void {
-  const player = clone.querySelector('#player, #player-container, ytd-player');
-  if (!player) return;
-  const videoId = new URL(window.location.href).searchParams.get('v');
-  if (!videoId) {
-    player.remove();
-    return;
-  }
-  const posterUrl = ytLivePosterUrl && /^https?:\/\//.test(ytLivePosterUrl)
-    ? ytLivePosterUrl
-    : `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
   const doc = clone.ownerDocument!;
-  const figure = doc.createElement('figure');
-  const link = doc.createElement('a');
-  link.setAttribute('href', `https://www.youtube.com/watch?v=${videoId}`);
-  const img = doc.createElement('img');
-  img.setAttribute('src', posterUrl);
-  img.setAttribute('alt', 'Video thumbnail');
-  img.setAttribute('width', '1280');
-  img.setAttribute('height', '720');
-  link.appendChild(img);
-  figure.appendChild(link);
-  player.replaceWith(figure);
+
+  // Replace the #player subtree with a synthetic poster <figure> hero. Needs
+  // the video id (for the poster fallback + link); when it's absent — e.g. a
+  // fixture served without ?v=, or an embed — just drop the player and carry
+  // on to the byline / info-bar transforms below (which don't need the id).
+  const player = clone.querySelector('#player, #player-container, ytd-player');
+  const videoId = new URL(window.location.href).searchParams.get('v');
+  if (player && videoId) {
+    const posterUrl = ytLivePosterUrl && /^https?:\/\//.test(ytLivePosterUrl)
+      ? ytLivePosterUrl
+      : `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+    const figure = doc.createElement('figure');
+    const link = doc.createElement('a');
+    link.setAttribute('href', `https://www.youtube.com/watch?v=${videoId}`);
+    const img = doc.createElement('img');
+    img.setAttribute('src', posterUrl);
+    img.setAttribute('alt', 'Video thumbnail');
+    img.setAttribute('width', '1280');
+    img.setAttribute('height', '720');
+    link.appendChild(img);
+    figure.appendChild(link);
+    player.replaceWith(figure);
+  } else if (player) {
+    player.remove();
+  }
 
   // Restructure the channel header into avatar + 2-row column (channel
   // name on top, subscriber count below). Same shape as Reddit's credit-bar.
@@ -3255,6 +3440,69 @@ function postCloneYoutube(clone: Element): void {
       owner.appendChild(col);
     }
   }
+
+  // Rebuild the view-count / date info bar as a single clean text row.
+  //
+  // Live YT renders the view count with <yt-animated-rolling-number>, an
+  // odometer whose per-digit spans are absolutely positioned. Sanitisation
+  // strips that positioning, so "399,124,001 views" collapses to one digit
+  // per line — the P2 corpus defect. Replace the whole info-text widget with a
+  // plain "N views · date" span so it lays out as ordinary inline text.
+  rebuildYoutubeInfoBar(clone, doc);
+}
+
+/**
+ * Replace YouTube's odometer-based view-count/date widget with a plain-text
+ * "N views · <date>" row (marked dx-stats). Reads the human-readable count
+ * from an aria-label ("… views") when present, else reconstructs the digit run
+ * from the rolling-number spans. Safe no-op when the widget is absent.
+ */
+function rebuildYoutubeInfoBar(clone: Element, doc: Document): void {
+  const info = clone.querySelector('ytd-watch-info-text, #info-container, #info');
+  if (!info) return;
+
+  const clean = (s: string | null | undefined): string =>
+    (s ?? '').replace(/\s+/g, ' ').trim();
+
+  // The <yt-animated-rolling-number> odometer renders EVERY digit 0-9 in each
+  // column (it animates by sliding a 0-9 strip), so its textContent is a run of
+  // "1234567890123456789…" garbage — never a real number. Reject any string
+  // carrying a long consecutive digit run so odometer noise can't leak in.
+  const isOdometerGarbage = (s: string): boolean => /\d{11,}/.test(s.replace(/[.,\s]/g, ''));
+
+  // View count: read the human-readable value from an aria-label ("1.7B views")
+  // — the odometer's textContent is garbage (see above). Fall back to the
+  // #view-count text only when it isn't odometer garbage.
+  let views = '';
+  const viewLabelled = Array.from(info.querySelectorAll('[aria-label]'))
+    .map(el => clean(el.getAttribute('aria-label')))
+    .find(l => /\bviews?\b/i.test(l) && !isOdometerGarbage(l));
+  if (viewLabelled) {
+    const m = viewLabelled.match(/[\d.,]+\s*[KMB]?\s*views?/i);
+    views = m ? m[0] : viewLabelled;
+  } else {
+    const vcText = clean(clone.querySelector('#view-count')?.textContent);
+    if (vcText && !isOdometerGarbage(vcText)) views = vcText;
+  }
+
+  // Date: prefer a clean aria-label / text; #date-text can ALSO be an odometer
+  // (garbage). Drop the date rather than ship "12345…678 years ago".
+  let date = '';
+  const dateEl = clone.querySelector('#date-text');
+  const dateAria = clean(dateEl?.getAttribute('aria-label'));
+  const dateTxt = clean(dateEl?.textContent);
+  if (dateAria && !isOdometerGarbage(dateAria)) date = dateAria;
+  else if (dateTxt && !isOdometerGarbage(dateTxt)) date = dateTxt;
+
+  const parts = [views, date].filter(p => p.length > 0);
+  if (parts.length === 0) { info.remove(); return; }
+
+  const row = doc.createElement('div');
+  row.className = 'dx-stats';
+  const span = doc.createElement('span');
+  span.textContent = parts.join(' · ');
+  row.appendChild(span);
+  info.replaceWith(row);
 }
 
 // ── Semantic structure tagging (generic fallback) ────────────────────────────
