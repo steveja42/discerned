@@ -3996,7 +3996,33 @@ function scrubStyle(value: string): string {
     // A CSS-side rule can't do this precisely: `[style*="padding-top:"]
     // [style*="%"]` matches the substrings independently, so bsky rows with
     // `flex: 1 1 0%; padding-bottom: 4px` lose real padding (see globals.css).
-    .replace(/padding-(top|bottom)\s*:\s*\d+(?:\.\d+)?%/gi, 'padding-$1: 0');
+    .replace(/padding-(top|bottom)\s*:\s*\d+(?:\.\d+)?%/gi, 'padding-$1: 0')
+    // Height-clamp declarations that assume a live "Read more"/expander control
+    // the static clip doesn't have. On the live page a collapsed description
+    // (Amazon `max-height:280px`), truncated review snippet, or line-clamped
+    // teaser hides its overflow; in the clip that overflow instead spills and
+    // OVERLAPS the following content. Drop the clamp so the block grows to fit
+    // its text. width clamps are untouched (they don't cause vertical overlap).
+    .replace(/(?:max-)?height\s*:\s*[^;]+;?/gi, '')
+    .replace(/-webkit-line-clamp\s*:\s*[^;]+;?/gi, '')
+    .replace(/-webkit-box-orient\s*:\s*[^;]+;?/gi, '')
+    // With the height clamp gone, a leftover `overflow:hidden`/`clip` on the same
+    // box is harmless, but `overflow:scroll|auto` would add a scrollbar to a
+    // now-fully-expanded block — normalise those away too.
+    .replace(/overflow(-y)?\s*:\s*(hidden|scroll|auto|clip)\s*;?/gi, '')
+    // Percentage WIDTH on a content block assumes the live multi-column layout
+    // (Amazon "About the authors": each <li> is `width:45%` in a horizontal
+    // carousel). The clip renders one column, so 45% just squeezes the bio into
+    // a narrow strip. Drop it so the block fills the clip width. Pixel widths are
+    // left (avatars/thumbnails legitimately size themselves); only %-width, the
+    // multi-column signature, is removed.
+    .replace(/(?:max-|min-)?width\s*:\s*\d+(?:\.\d+)?%\s*;?/gi, '')
+    // Negative-margin + float hanging-indent hack (Amazon bio: `width:130px;
+    // margin-left:-130px;float:left` pulls the avatar into a padding-left gutter).
+    // In the clip the floats collapse and the negative margin drags text over its
+    // neighbour. Neutralise the float + negative side-margins so blocks stack.
+    .replace(/float\s*:\s*(left|right)\s*;?/gi, '')
+    .replace(/margin-(left|right)\s*:\s*-\d+(?:\.\d+)?(px|em|rem|%)\s*;?/gi, '');
 }
 
 const IMG_LAYOUT_PROPS = [
@@ -4782,7 +4808,10 @@ const CHROME_LINK_TEXT_RE = new RegExp(
   // E-commerce buy-box actions + Prime promos (Amazon-style product-page chrome).
   '|join prime|try prime.*|add to cart|buy now|buy with 1-click|add to list' +
   '|see all buying options|update location|gift options|add gift options' +
-  '|deliver to .{0,30}|other used.*collectible.*)$', 'i');
+  '|deliver to .{0,30}|other used.*collectible.*' +
+  // "Other sellers" / used-&-new offer strips that sit just above the buy box.
+  '|other sellers on \\w.*|new (&|&amp;|and) used \\(\\d.*|see all \\d+ (used|new).*' +
+  '|\\d+ (used|new) (&|&amp;|and) .*from \\$.*)$', 'i');
 // Skip-navigation links ("Skip to content", "Jump to ratings and reviews").
 const SKIP_LINK_RE = /^(skip to|jump to)\b/i;
 // Headings that UNAMBIGUOUSLY introduce a recirculation module — removed
@@ -4805,7 +4834,19 @@ const CROSS_SELL_HEADING_RE = new RegExp(
   '^(frequently bought together|more items to explore|products? related to this item' +
   '|customers (who (bought|viewed)|also (bought|viewed|read))' +
   '|compare with similar items|what other items do customers buy' +
-  '|4 stars and above|explore (similar|more) (items|products)|related products)', 'i');
+  '|4 stars and above|explore (similar|more) (items|products)|related products' +
+  // Amazon storefront rails: "Explore more across the store", "Explore more from
+  // across the store", "Books with Buy", "More to explore", "Related to items
+  // you've viewed", "Best sellers in".
+  '|explore more (from )?across the store|books with buy|more to explore' +
+  '|related to items you.?ve viewed|best sellers in\\b.*|inspired by your (browsing|purchases)' +
+  '|based on your (recent )?(browsing|activity)|you might (also )?like)', 'i');
+// Author/brand "Follow" cards + generic shopping-experience prompts that render
+// as short heading-labelled chrome blocks on product pages (Amazon "Follow the
+// authors", "Rate today's book shopping experience"). Not cross-sell carousels
+// and not review sections — dropped as text-anchored chrome, deepest match wins.
+const COMMERCE_CHROME_RE =
+  /^(follow the authors?|rate today.?s .{0,40}shopping experience|report (an )?(incorrect|abuse|issue).*|report incorrect product.*|share your thoughts with other customers|other sellers on \w)/i;
 // Weaker headings that also occur in real prose — these additionally require
 // the container to be link-dominant before anything is removed.
 const RELATED_HEADING_RE = new RegExp(
@@ -4824,6 +4865,29 @@ const PREFERRED_SOURCE_RE = /(preferred source of news|add us on google|make .{0
 // Prime upsell, or a sponsored ad strip, none of it product information.
 const COMMERCE_PROMO_RE =
   /(get fast,? free shipping|free delivery |prime members get |enjoy fast,? free delivery|order within \d|deliver(ing)? to .{0,30}\d|free 30-day refund|new on amazon)/i;
+// Buy-box purchase affordances. A product page's buy box (Amazon #buybox, and the
+// equivalent block on any retailer) leads the DOM ABOVE the cover/title, so its
+// price + purchase controls open the capture. The individual "Add to cart"/"Buy
+// Now" LINKS are dropped by CHROME_LINK_TEXT_RE, but the surrounding div-soup
+// (price, "In Stock", "Quantity", "Ships from / Sold by", "Other sellers") is
+// plain text that survives. removeBuyBox() finds the block clustering these
+// signals and drops the whole thing. Split into a strong action signal (must be
+// present) + supporting signals (≥1 more required) so a lone "add to list" link
+// in prose is never mistaken for a buy box.
+const BUYBOX_ACTION_RE = /\b(add to cart|buy now|buy with 1-click|add to basket|pre-?order now|add both to cart)\b/i;
+const BUYBOX_SUPPORT_RE = /\b(in stock|only \d+ left in stock|quantity\b|other sellers|new (&|and|&amp;) used|add to list|ships from|sold by|shipper ?\/ ?seller|secure transaction|list price:|free returns|add to registry)\b/i;
+// Customer-reviews / user-ratings section HEADINGS. On entity/product pages
+// (Amazon, Goodreads, Yelp, app stores, Best Buy) this section is enormous — a
+// scroll of individual reviews that dwarfs the product/entity info and buries it.
+// Like cross-sell rails the heading is a SIBLING of the reviews list, so the
+// whole enclosing section is removed by removeReviewsSection(). Matched as a
+// prefix — "Customer reviews", "Top reviews from …", "Reviews with images",
+// "N global ratings", "Ratings and reviews", "Community reviews".
+const REVIEWS_SECTION_RE = new RegExp(
+  '^(customer reviews?|top reviews?\\b.*|reviews with images|ratings? (and|&) reviews?' +
+  '|community reviews?|reader reviews?|user reviews?|verified purchase reviews?' +
+  '|what (customers|people|readers) (are )?saying|review this (product|book|item)' +
+  '|\\d[\\d,.]*\\s*(global |total )?(ratings?|reviews?)\\b.*|most (helpful|recent) reviews?)', 'i');
 
 /**
  * Drop page chrome that the landmark stripper can't see: it identifies chrome
@@ -4836,6 +4900,66 @@ const COMMERCE_PROMO_RE =
  */
 function removeGenericChrome(root: Element): void {
   const inTweetCard = (el: Element): boolean => !!el.closest('[class*="tweet-card"]');
+
+  // (0) Buy box — runs FIRST, before (1) strips the "Add to cart"/"Buy Now"
+  // action links the cluster detection anchors on.
+  removeBuyBox(root);
+
+  // (0b) Sponsored ad-slot banners: a text-less <a> wrapping only an image whose
+  // href carries retail ad-placement / sponsored-brand tracking params (Amazon
+  // `pf_rd_p`, `pd_rd_w`, `sbm_`, `/stores/…brand pages). These are paid banners
+  // (e.g. a cosmetics ad on a book page), not product content, and a wide-short
+  // one leads the capture. Keyed off the href signature so it's generic across
+  // retail ad networks, not a per-site rule.
+  const AD_HREF_RE = /([?&](pf_rd_p|pd_rd_w|pd_rd_r|pd_rd_wg|sbm_|spons)|\/stores\/[^/]+\/page\/|\/sspa\/|adsystem|doubleclick)/i;
+  root.querySelectorAll('a').forEach(a => {
+    if (!root.contains(a) || inTweetCard(a)) return;
+    const href = a.getAttribute('href') ?? '';
+    if (!AD_HREF_RE.test(href)) return;
+    const text = (a.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const hasImg = !!a.querySelector('img');
+    // Only when it's an image banner with no real link text (a product teaser
+    // has a title). Drop the enclosing wrapper if it holds nothing else.
+    if (hasImg && text.length <= 40) {
+      const parent = a.parentElement;
+      a.remove();
+      if (parent && parent !== root && (parent.textContent ?? '').replace(/\s+/g, '').length === 0 &&
+          parent.querySelector('img, a') === null) parent.remove();
+    }
+  });
+
+  // (0c) Author-follow strip ("Follow the authors"): the heading is dropped by
+  // the commerce-chrome pass, but the author-name chips it labels are a SIBLING
+  // block that survives — a "See all" link + one link per author (name often
+  // duplicated), no prose. On the live page it's a collapsed/hidden widget, so
+  // it must not lead the clip. Keyed off Amazon's author-follow-strip href ref
+  // (`aufs`, `fta` = follow-the-authors) on `/e/<authorId>` author-page links —
+  // a precise, generic signature. Drop each such chip link, then its now-empty
+  // wrapper (incl. a leading "See all" / <hr> that labelled the strip).
+  // Amazon author-page links (`/e/<authorId>`) whose ref marks the follow-the-
+  // authors strip: `ref=aufs…` (author-follow-strip) and/or the `_fta_` (follow-
+  // the-authors) token. The ref is a PATH segment (`/ref=aufs_dp_fta_an_dsk`),
+  // not a query param, and the tokens are underscore-delimited — so match them
+  // as substrings, not `\b`-bounded words.
+  const AUTHOR_FOLLOW_HREF_RE = /\/e\/[A-Z0-9]{6,}\b.*(ref=aufs|_fta_|_fta\b)/i;
+  const followChips = Array.from(root.querySelectorAll('a')).filter(a =>
+    root.contains(a) && AUTHOR_FOLLOW_HREF_RE.test(a.getAttribute('href') ?? ''));
+  const followWrappers = new Set<Element>();
+  for (const a of followChips) {
+    // The chip's wrapper is typically <div class="dx-header"><div><a>…; record
+    // its grandparent block so we can drop the whole strip once chips are gone.
+    const block = a.closest('.dx-header')?.parentElement ?? a.parentElement?.parentElement ?? null;
+    if (block && block !== root) followWrappers.add(block);
+    (a.closest('.dx-header') ?? a).remove();
+  }
+  for (const w of followWrappers) {
+    if (!root.contains(w) || w === root) continue;
+    // Only if what's left is chrome: a short block with no prose paragraph and
+    // no content image (just the "See all" link / <hr> that labelled the strip).
+    const txt = (w.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const hasProse = Array.from(w.querySelectorAll('p, li')).some(n => (n.textContent ?? '').trim().length >= 80);
+    if (!hasProse && txt.length <= 40) w.remove();
+  }
 
   // (1) Skip-links + exact-text chrome verbs.
   root.querySelectorAll('a, button').forEach(el => {
@@ -4901,6 +5025,12 @@ function removeGenericChrome(root: Element): void {
   // enclosing section instead.
   removeCrossSellRails(root);
 
+  // (2c) Customer-reviews / user-ratings sections (Amazon, Goodreads, Yelp, app
+  // stores): the same heading-is-a-sibling-of-the-list shape as cross-sell rails,
+  // but the section is a scroll of individual reviews that dwarfs the entity's
+  // own info. Drop the whole section so the product/entity content isn't buried.
+  removeReviewsSection(root);
+
   // (3) Newsletter signup blocks: smallest text match, then climb to the
   // enclosing short container.
   const newsletterSeeds = Array.from(root.querySelectorAll('*')).filter(el =>
@@ -4936,6 +5066,51 @@ function removeGenericChrome(root: Element): void {
     }
     box.remove();
     log(LL.DEBUG, 'Discerned: removeGenericChrome dropped commerce promo block', 'url:', window.location.href);
+  }
+
+  // (3a2) Commerce chrome cards ("Follow the authors", "Rate today's book
+  // shopping experience", "Share your thoughts with other customers"): short
+  // heading-labelled interactive blocks on product pages. Deepest heading/leaf
+  // match, climb to the enclosing short container, drop it. Bounded by a small
+  // char cap so it can never reach the product's own description.
+  const commerceChromeSeeds = Array.from(root.querySelectorAll('h1, h2, h3, h4, h5, [role="heading"], a, button, span, div'))
+    .filter(el => {
+      const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+      return t.length > 0 && t.length <= 60 && COMMERCE_CHROME_RE.test(t) &&
+        !Array.from(el.children).some(c => COMMERCE_CHROME_RE.test((c.textContent ?? '').replace(/\s+/g, ' ').trim()));
+    });
+  // Climb to the enclosing self-contained widget (Amazon *_feature_div: the
+  // "Other sellers" ingress, the "Report an issue with this product or seller"
+  // tell-Amazon card) and drop it whole. These wrappers have no real prose, so
+  // — like removeBuyBox — the no-long-prose guard is the real safety and the
+  // char cap only stops a runaway climb; a 300-char cap was too small (the
+  // feature_div wrappers run 1.5–3 KB) and left the widget shell behind.
+  const chromeHasLongProse = (el: Element): boolean =>
+    Array.from(el.querySelectorAll('p, li')).some(n => (n.textContent ?? '').trim().length >= 150);
+  // Same hard stop as removeBuyBox: never climb into the entity's title/hero.
+  // These chrome cards ("Follow the authors", "Other sellers", "Report an issue")
+  // sit adjacent to the title on Amazon, sharing low-prose ancestors.
+  const chromeWouldEatContent = (el: Element): boolean =>
+    !!el.querySelector('h1') ||
+    Array.from(el.querySelectorAll('img')).some(img => {
+      const w = parseInt(img.getAttribute('width') ?? '', 10);
+      const h = parseInt(img.getAttribute('height') ?? '', 10);
+      return (Number.isFinite(w) && w >= 100) || (Number.isFinite(h) && h >= 100) ||
+        img.closest('figure') !== null;
+    });
+  for (const seed of commerceChromeSeeds) {
+    if (!root.contains(seed) || seed === root) continue;
+    let box: Element = seed;
+    for (let i = 0; i < 5; i++) {
+      const p = box.parentElement;
+      if (!p || p === root) break;
+      if (chromeHasLongProse(p) || chromeWouldEatContent(p)) break; // into real content
+      if ((p.textContent ?? '').replace(/\s+/g, ' ').length > 4000) break;
+      box = p;
+    }
+    if (chromeWouldEatContent(box)) continue; // seed itself wraps entity info — leave it
+    box.remove();
+    log(LL.DEBUG, 'Discerned: removeGenericChrome dropped commerce chrome card', 'url:', window.location.href);
   }
 
   // (3b) "Preferred source" promo strips — text pitch + icon link, not a
@@ -5008,6 +5183,53 @@ function removeGenericChrome(root: Element): void {
     el.remove();
     log(LL.DEBUG, 'Discerned: removeGenericChrome dropped tag/category link list', 'url:', window.location.href);
   });
+
+  // (8) Duplicated rating value. Rating widgets render the number TWICE — a
+  // visible bare "4.7" next to the full accessible label "4.7 out of 5 stars"
+  // (Amazon: <span>4.7</span> + <i><span>4.7 out of 5 stars</span></i>). After
+  // class/style strip both show, so it reads "4.7 4.7 out of 5 stars". Drop the
+  // bare-number leaf when an adjacent sibling's text starts with the SAME number
+  // followed by a rating phrase — generic across rating widgets (Goodreads
+  // "4.7"+"4.7 avg rating", app stores, etc.).
+  root.querySelectorAll('span, a, b, strong').forEach(el => {
+    if (!root.contains(el) || inTweetCard(el) || el.querySelector('*')) return; // leaf only
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const m = /^(\d(?:\.\d)?)(?:\s*\/\s*5)?$/.exec(t); // bare "4", "4.7", "4.7/5"
+    if (!m) return;
+    const num = m[1];
+    const scope = el.parentElement;
+    if (!scope || scope === root) return;
+    const scopeText = (scope.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (scopeText.length > 60) return; // a rating widget, not prose
+    const numRe = new RegExp('\\b' + num.replace('.', '\\.') + '\\b', 'g');
+    const occurrences = (scopeText.match(numRe) ?? []).length;
+    // The SAME number appears twice in this small scope AND the labelled form
+    // ("4.7 out of 5 stars" / "4.7 / 5" / "4.7 avg") is present — so the bare
+    // leaf is the redundant visible copy. Drop it.
+    const labelled = new RegExp('\\b' + num.replace('.', '\\.') +
+      '\\b\\s*(out of\\s+5|of\\s+5|stars?|\\/\\s*5|avg)', 'i').test(scopeText);
+    if (occurrences >= 2 && labelled) el.remove();
+  });
+
+  // (9) Duplicated price. E-commerce price widgets render the amount TWICE — a
+  // plain screen-reader copy next to a digit-split visual one (Amazon a-price:
+  // <span>$5.84</span> + <span><span>$</span><span>5.</span><span>84</span></span>).
+  // Class/style strip un-hides the sr copy, so it reads "$5.84 $5.84". Drop the
+  // plain leaf when its next-element sibling renders the SAME price. Generic
+  // across price widgets (the split-digit sibling is the telltale).
+  const PRICE_RE = /^[$€£¥]\s?\d[\d,]*(?:\.\d{2})?$/;
+  const normPrice = (s: string) => s.replace(/\s+/g, '').replace(/[.,](?=\d{3}\b)/g, '');
+  root.querySelectorAll('span, b, strong').forEach(el => {
+    if (!root.contains(el) || inTweetCard(el) || el.querySelector('*')) return; // leaf only
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (!PRICE_RE.test(t)) return;
+    const sib = el.nextElementSibling;
+    if (!sib) return;
+    const sibText = (sib.textContent ?? '').replace(/\s+/g, ' ').trim();
+    // Sibling shows the same price (its digit-split form normalises to the same
+    // string once whitespace is removed) — el is the redundant plain copy.
+    if (normPrice(sibText) === normPrice(t)) el.remove();
+  });
 }
 
 /**
@@ -5020,6 +5242,71 @@ function removeGenericChrome(root: Element): void {
  * links, and whose content is cross-sell (link/image dominant, no real prose),
  * then remove that. Bounded so it can never eat the product's own description.
  */
+/**
+ * Drop a product-page buy box (Amazon #buybox and the equivalent on any
+ * retailer): the price + purchase-controls block that leads the DOM above the
+ * cover/title, so it opens the capture. CHROME_LINK_TEXT_RE already removes the
+ * "Add to cart"/"Buy Now" LINKS, but the surrounding div-soup (price, "In Stock",
+ * "Quantity", "Ships from / Sold by", "Other sellers") is plain text that
+ * survives — so we drop the whole block here, keyed off a cluster of purchase
+ * affordances. Anchored on a BUYBOX_ACTION_RE element (Add to cart / Buy Now),
+ * climbing to the smallest ancestor that ALSO carries a supporting signal, then
+ * to the enclosing buy-box card — bounded so it can never eat the product
+ * description (a ≥150-char <p> or a runaway text size stops the climb).
+ */
+function removeBuyBox(root: Element): void {
+  // Deepest elements whose OWN text (its immediate text nodes + short inline
+  // descendants) names a buy action — the button/link/label itself, not a huge
+  // wrapper that merely contains one.
+  const actionSeeds = Array.from(root.querySelectorAll('a, button, span, div, input, [role="button"]'))
+    .filter(el => {
+      const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+      return t.length > 0 && t.length <= 40 && BUYBOX_ACTION_RE.test(t) &&
+        !Array.from(el.children).some(c => BUYBOX_ACTION_RE.test((c.textContent ?? '').replace(/\s+/g, ' ').trim()));
+    });
+  const hasLongProse = (el: Element): boolean =>
+    Array.from(el.querySelectorAll('p, li')).some(n => (n.textContent ?? '').trim().length >= 150);
+  // The climb must NEVER swallow the entity's own info. On Amazon the buy box
+  // (#buybox, right column) and the title/cover/description (#centerCol) share a
+  // low-prose ancestor, so a "no long <p>" guard alone would climb up and eat the
+  // product. Hard-stop the moment an ancestor also encloses the product title
+  // heading OR a large content image (the cover/hero) — those belong to the
+  // entity, not the buy box.
+  const wouldEatContent = (el: Element): boolean => {
+    if (el.querySelector('h1')) return true;
+    // A big content image (cover/hero) — sized by width/height attr like the
+    // rest of the pipeline; a buy box holds only tiny icons/swatches.
+    return Array.from(el.querySelectorAll('img')).some(img => {
+      const w = parseInt(img.getAttribute('width') ?? '', 10);
+      const h = parseInt(img.getAttribute('height') ?? '', 10);
+      return (Number.isFinite(w) && w >= 100) || (Number.isFinite(h) && h >= 100) ||
+        img.closest('figure') !== null;
+    });
+  };
+
+  for (const seed of actionSeeds) {
+    if (!root.contains(seed)) continue;
+    // Climb to the OUTERMOST ancestor that (a) still carries a SUPPORTING signal
+    // (so a stray "Buy now" link in prose with no price/stock/seller nearby is
+    // left alone), (b) has NO real prose paragraph, and (c) does NOT enclose the
+    // product title/hero. Stop hard at the first ancestor that violates (b)/(c);
+    // the LAST valid `box` is the buy-box card. Size cap only guards a runaway.
+    let box: Element | null = null;
+    let cursor: Element | null = seed;
+    for (let i = 0; i < 12 && cursor && cursor !== root; i++) {
+      if (hasLongProse(cursor) || wouldEatContent(cursor)) break;
+      const text = (cursor.textContent ?? '').replace(/\s+/g, ' ').trim();
+      if (text.length > 12000) break; // far bigger than any buy box = real content
+      if (BUYBOX_SUPPORT_RE.test(text)) box = cursor; // still a buy box at this level
+      cursor = cursor.parentElement;
+    }
+    if (box && !wouldEatContent(box)) {
+      box.remove();
+      log(LL.DEBUG, 'Discerned: removeBuyBox dropped product buy box', 'url:', window.location.href);
+    }
+  }
+}
+
 function removeCrossSellRails(root: Element): void {
   const seeds = Array.from(root.querySelectorAll('h1, h2, h3, h4, [role="heading"]')).filter(el => {
     const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
@@ -5056,6 +5343,116 @@ function removeCrossSellRails(root: Element): void {
     if (box !== seed || (box === seed && seed.querySelectorAll('a').length >= 2)) {
       box.remove();
       log(LL.DEBUG, 'Discerned: removeCrossSellRails dropped cross-sell rail', 'url:', window.location.href);
+    }
+  }
+}
+
+// Text signals that a block is a customer-review list rather than the entity's
+// own description: per-review rating/verification/helpfulness affordances that
+// repeat once per review. Counting them lets us climb only while an ancestor
+// stays review-dominated, and bail the moment we'd swallow the product info.
+const REVIEW_SIGNAL_RE = /(out of 5 stars|verified purchase|found this (review )?helpful|was this (review )?helpful|\d+ (people|customers) found|review(ed)? in the .{0,40}on \w|top review|helpful\s+report)/i;
+
+/**
+ * Drop a customer-reviews / user-ratings section (Amazon, Goodreads, Yelp, app
+ * stores, Best Buy). Anchored on a REVIEWS_SECTION_RE heading whose enclosing
+ * section is a scroll of individual reviews — this dwarfs and buries the entity's
+ * own info on a product/title page, and the user asked for product info only.
+ *
+ * Unlike a cross-sell carousel a reviews block is FULL of prose (each review is a
+ * paragraph), so the "no long prose" guard can't bound the climb. Instead we
+ * climb only while the ancestor stays REVIEW-DOMINATED — most of its text is
+ * covered by per-review rating/verification/helpfulness signals — and stop the
+ * moment an ancestor pulls in non-review content (the product description, the
+ * page title `<h1>`, the primary product/entity `<figure>`). Nothing is removed
+ * unless the section actually carries several distinct review signals, so a lone
+ * "Write a review" button or a single testimonial is never mistaken for the list.
+ */
+function removeReviewsSection(root: Element): void {
+  const seeds = Array.from(root.querySelectorAll('h1, h2, h3, h4, [role="heading"]')).filter(el => {
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    return t.length > 0 && t.length <= 60 && REVIEWS_SECTION_RE.test(t);
+  });
+  // How many DISTINCT review-signal occurrences a subtree carries — the reviews
+  // list repeats them once per review, the product description carries none.
+  const reviewSignals = (el: Element): number => {
+    let n = 0;
+    for (const node of Array.from(el.querySelectorAll('*'))) {
+      // Count a signal on the deepest element that carries it (avoid counting
+      // the same "Verified Purchase" once per ancestor).
+      const own = Array.from(node.childNodes)
+        .filter(c => c.nodeType === Node.TEXT_NODE)
+        .map(c => c.textContent ?? '').join(' ');
+      if (REVIEW_SIGNAL_RE.test(own)) n++;
+    }
+    return n;
+  };
+  // Content that means we've climbed OUT of the reviews list into the entity's
+  // own info: the page title, the product/entity hero figure.
+  const pullsInEntityInfo = (el: Element): boolean =>
+    !!el.querySelector('h1') || !!el.querySelector(':scope > figure, :scope > * > figure');
+
+  for (const seed of seeds) {
+    if (!root.contains(seed)) continue;
+    // The reviews section must actually be a list of reviews — require several
+    // review signals in the seed heading's nearest reasonable container. Find the
+    // smallest ancestor that already carries ≥3 signals; that's the section body.
+    let start: Element = seed;
+    let hops = 0;
+    while (start.parentElement && start.parentElement !== root && hops < 6 &&
+           reviewSignals(start) < 3) {
+      start = start.parentElement; hops++;
+    }
+    if (reviewSignals(start) < 3) continue; // not a real reviews list — leave it
+    if (pullsInEntityInfo(start)) continue; // section already includes entity info — too risky
+
+    // Climb to the largest ancestor that is STILL review-dominated and does not
+    // pull in the entity's own info. Dominance = ≥70% of the ancestor's text is
+    // inside review-signal-bearing descendants' nearest blocks (approximated by
+    // the ratio of the start section's text to the ancestor's text).
+    let box: Element = start;
+    let cursor: Element | null = start.parentElement;
+    const startLen = (start.textContent ?? '').replace(/\s+/g, ' ').trim().length;
+    for (let i = 0; i < 5 && cursor && cursor !== root; i++) {
+      if (pullsInEntityInfo(cursor)) break;
+      const cursorLen = (cursor.textContent ?? '').replace(/\s+/g, ' ').trim().length;
+      // Stop if the ancestor adds substantial non-review text (the description /
+      // details block) — keep climbing only while reviews still dominate.
+      if (cursorLen === 0 || startLen / cursorLen < 0.7) break;
+      box = cursor;
+      cursor = cursor.parentElement;
+    }
+    box.remove();
+    log(LL.DEBUG, 'Discerned: removeReviewsSection dropped customer-reviews section', 'url:', window.location.href);
+  }
+
+  // Cleanup: a ratings-SUMMARY widget (star histogram + "Reviews with images"
+  // thumbnail strip) sits ABOVE the individual reviews and survives the pass
+  // above (few per-review signals). Once the review list itself is gone it's a
+  // dangling "Customer reviews" heading over a prose-free star breakdown — drop
+  // it too. Guarded: only when the heading's small enclosing container holds NO
+  // real prose paragraph (≥120 chars), so an in-article "User reviews" section
+  // with actual written reviews is never touched.
+  const orphanSeeds = Array.from(root.querySelectorAll('h1, h2, h3, h4, [role="heading"]')).filter(el => {
+    if (!root.contains(el)) return false;
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    return t.length > 0 && t.length <= 60 && REVIEWS_SECTION_RE.test(t);
+  });
+  const hasRealProse = (el: Element): boolean =>
+    Array.from(el.querySelectorAll('p')).some(p => (p.textContent ?? '').trim().length >= 120);
+  for (const seed of orphanSeeds) {
+    if (!root.contains(seed)) continue;
+    let box: Element = seed;
+    for (let i = 0; i < 3; i++) {
+      const p = box.parentElement;
+      if (!p || p === root) break;
+      if (hasRealProse(p)) break; // climbed into real content — stop and don't remove it
+      if ((p.textContent ?? '').replace(/\s+/g, ' ').length > 4000) break;
+      box = p;
+    }
+    if (!hasRealProse(box)) {
+      box.remove();
+      log(LL.DEBUG, 'Discerned: removeReviewsSection dropped orphaned ratings summary', 'url:', window.location.href);
     }
   }
 }

@@ -1,0 +1,23 @@
+{
+  "format": "article",
+  "title": { "contains": "Hobbit" },
+  "url": "https://www.amazon.com/dp/0345339681",
+  "bodyText": {
+    "minLength": 200,
+    "contains": ["The Hobbit", "greatest", "320 pages", "Editorial Reviews"],
+    "excludes": [
+      "Explore more across the store",
+      "Customers who bought this item also bought",
+      "Customer reviews",
+      "Reviews with images",
+      "Verified Purchase",
+      "found this helpful",
+      "Follow the authors",
+      "Add to cart",
+      "Buy Now",
+      "Other sellers on Amazon",
+      "47 percent savings"
+    ]
+  },
+  "bodyHtml": { "noScripts": true }
+}

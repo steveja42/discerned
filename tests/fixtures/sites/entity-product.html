@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>The Hobbit — Product Page</title>
+  <meta property="og:image" content="https://example.com/og/hobbit-cover.jpg">
+</head>
+<body>
+  <!-- An e-commerce / entity page: NO <article>, NO page <h1>. Content is the
+       product column (title + description + details), surrounded by cross-sell
+       carousels, an author "Follow" card, and a huge customer-reviews scroll —
+       the shape removeCrossSellRails / removeReviewsSection / the commerce-chrome
+       pass must strip so the product info isn't buried. Mirrors amazon.com/dp. -->
+  <div id="dp-container" style="display:block">
+
+    <!-- Buy box: leads the DOM above the cover on real product pages. Price +
+         purchase controls + seller + other-sellers — plain-text div-soup that
+         survives CHROME_LINK_TEXT_RE (it only kills the action LINKS). Should be
+         removed wholesale by removeBuyBox. -->
+    <div id="buybox">
+      <span class="price">$5.84 with 47 percent savings -47% $5.84</span>
+      <span class="list-price">List Price: $11.00</span>
+      <div class="availability">In Stock</div>
+      <div class="qty"><label>Quantity:</label><span>1</span></div>
+      <button>Add to cart</button>
+      <button>Buy Now</button>
+      <div class="merchant">Shipper / Seller</div>
+      <div class="merchant-name">Amazon.com</div>
+      <a href="/gp/offer-listing">Other sellers on Amazon</a>
+      <a href="/gp/offer-listing">New &amp; Used (187) from $1.65</a>
+    </div>
+
+    <!-- Product content column (this is what should SURVIVE). -->
+    <div id="centerCol">
+      <h2>The Hobbit</h2>
+      <div class="byline"><a href="/author/tolkien">J. R. R. Tolkien</a> (Author)</div>
+      <figure><img src="https://example.com/hobbit-cover.jpg" alt="The Hobbit cover" width="300" height="450"></figure>
+      <p>The enchanting adventure that begins The Lord of the Rings, the greatest
+      fantasy epic of all time. When Thorin Oakenshield and his band of dwarves
+      embark upon a dangerous quest to reclaim the hoard of gold stolen from them
+      by the evil dragon Smaug, Gandalf the wizard suggests an unlikely accomplice:
+      Bilbo Baggins, an unassuming Hobbit dwelling in peaceful Hobbiton.</p>
+      <div class="details">
+        <ul>
+          <li>Reading age: 12 - 17 years</li>
+          <li>Print length: 320 pages</li>
+          <li>Language: English</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Author "Follow" card (commerce chrome). -->
+    <div class="follow-block">
+      <h3>Follow the authors</h3>
+      <div class="follow-row"><span>J. R. R. Tolkien</span><button>Follow</button></div>
+      <div class="follow-row"><span>Michael Hague</span><button>Follow</button></div>
+    </div>
+
+    <!-- Cross-sell rail: heading is a SIBLING of the product carousel. -->
+    <div class="rail">
+      <h2>Explore more across the store</h2>
+      <div class="carousel">
+        <a href="/dp/1"><img src="https://example.com/a.jpg" alt="Home"><span>Home</span><span>$8.99</span></a>
+        <a href="/dp/2"><img src="https://example.com/b.jpg" alt="Anne of Green Gables"><span>Anne of Green Gables</span><span>$6.19</span></a>
+        <a href="/dp/3"><img src="https://example.com/c.jpg" alt="Tom Sawyer"><span>Tom Sawyer</span><span>$5.70</span></a>
+        <a href="/dp/4"><img src="https://example.com/d.jpg" alt="Treasure Island"><span>Treasure Island</span><span>$7.99</span></a>
+      </div>
+    </div>
+
+    <!-- Second cross-sell rail (older Amazon shape). -->
+    <div class="rail">
+      <h3>Customers who bought this item also bought</h3>
+      <div class="carousel">
+        <a href="/dp/5"><img src="https://example.com/e.jpg" alt="The Silmarillion"><span>The Silmarillion</span></a>
+        <a href="/dp/6"><img src="https://example.com/f.jpg" alt="Unfinished Tales"><span>Unfinished Tales</span></a>
+        <a href="/dp/7"><img src="https://example.com/g.jpg" alt="The Children of Hurin"><span>The Children of Hurin</span></a>
+        <a href="/dp/8"><img src="https://example.com/h.jpg" alt="Beren and Luthien"><span>Beren and Luthien</span></a>
+      </div>
+    </div>
+
+    <!-- Editorial content that legitimately follows (should SURVIVE). -->
+    <div class="editorial">
+      <h2>Editorial Reviews</h2>
+      <h3>From the Inside Flap</h3>
+      <p>Bilbo Baggins was a hobbit who wanted to be left alone in quiet comfort.
+      But the wizard Gandalf came along with a band of homeless dwarves. Soon
+      Bilbo was drawn into their quest, facing evil orcs and savage wolves.</p>
+    </div>
+
+    <!-- Customer-reviews scroll: heading + histogram summary + a long list of
+         individual reviews, each with a rating + "Verified Purchase" + helpful
+         affordance. This is the 191KB block that buries the product. -->
+    <div id="reviewsMedley">
+      <h2>Customer reviews</h2>
+      <div class="histogram">
+        <span>4.8 out of 5 stars</span>
+        <span>29,254 global ratings</span>
+      </div>
+      <h3>Reviews with images</h3>
+      <div class="review-thumbs">
+        <a href="/r/i1"><img src="https://example.com/ri1.jpg" alt="reader photo"></a>
+        <a href="/r/i2"><img src="https://example.com/ri2.jpg" alt="reader photo"></a>
+      </div>
+      <h3>Top reviews from the United States</h3>
+      <div class="review-list">
+        <div class="review">
+          <div class="r-head"><span>Jane D.</span><span>5.0 out of 5 stars</span></div>
+          <div class="r-verify">Verified Purchase</div>
+          <p>An absolute classic. My kids loved it and so did I. Reading it aloud
+          was a joy every single night. Highly recommended for all ages.</p>
+          <div class="r-helpful">312 people found this helpful</div>
+          <div class="r-actions"><button>Helpful</button><button>Report</button></div>
+        </div>
+        <div class="review">
+          <div class="r-head"><span>Mark S.</span><span>4.0 out of 5 stars</span></div>
+          <div class="r-verify">Verified Purchase</div>
+          <p>Great edition, though the print is a little small for my aging eyes.
+          The story itself is timeless and the binding feels sturdy.</p>
+          <div class="r-helpful">88 people found this helpful</div>
+          <div class="r-actions"><button>Helpful</button><button>Report</button></div>
+        </div>
+        <div class="review">
+          <div class="r-head"><span>Alan L.</span><span>5.0 out of 5 stars</span></div>
+          <div class="r-verify">Verified Purchase</div>
+          <p>Bought as a gift and it was a huge hit. The illustrations in this
+          edition are gorgeous. Would buy again without hesitation.</p>
+          <div class="r-helpful">57 people found this helpful</div>
+          <div class="r-actions"><button>Helpful</button><button>Report</button></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
