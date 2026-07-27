@@ -139,8 +139,11 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry): Promise<Sweep
         } catch { /* cross-origin frame — unreadable, skip */ }
       }
       // A page with essentially NO body text (block in a cross-origin iframe, or
-      // an empty stub) has nothing to capture regardless of the reason.
-      if (t.length < 20) return { hit: 'empty body (likely iframe wall / stub)', len: t.length, cf: false };
+      // an empty stub) has nothing to capture. An empty stub is the classic
+      // HEADLESS bot-detection signature (IMDb/Amazon/Akamai serve a near-empty
+      // body to headless Chrome but render normally in a real window), so mark it
+      // retry-eligible headed even though it's not a Cloudflare challenge.
+      if (t.length < 20) return { hit: 'empty body (likely iframe wall / stub / headless bot-block)', len: t.length, cf: true };
       // Only treat longer pages as an interstitial when SHORT enough that a real
       // article's prose couldn't be there — a real article merely containing
       // "access denied" in its body stays.
