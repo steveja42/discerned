@@ -4659,6 +4659,112 @@ function dedupGalleryThumbnails(root: Element): void {
   }
 }
 
+/**
+ * Drop repeated small ICON images — reaction glyphs, subscription/badge icons,
+ * and the author avatar — that a page renders multiple times across its
+ * engagement chrome (dev.to shows the sparkle-heart / unicorn / bookmark
+ * reaction bar plus a "Subscribe" badge at the top, in a sticky sidebar, AND at
+ * the foot of the article; the author avatar appears in the nav, the byline, and
+ * the author card). After sanitisation strips the chrome that positioned them,
+ * every copy stacks into the clip.
+ *
+ * `dedupAdjacentImages` won't merge them (its 6-level ancestor cap deliberately
+ * keeps two comments' identical avatars distinct), and `dedupGalleryThumbnails`
+ * requires a long alt (these carry `alt=""` or a one-word `alt="Subscriber"`).
+ *
+ * This pass keys on an EXACT shared URL stem among ICON-SIZED images (both
+ * authored dimensions ≤ 64 px), regardless of DOM distance, and keeps the first.
+ * It is deliberately scoped OUT of thread structure — an `<img>` inside a
+ * `.dx-post`/`.dx-reply`/`.dx-header`/`.dx-byline` is a per-comment avatar (real
+ * content), so those are left alone even when the same author's avatar repeats.
+ * Content photos are never touched: they aren't icon-sized.
+ */
+function dedupRepeatedIcons(root: Element): void {
+  const ICON_MAX_PX = 64;
+  // Protect PER-COMMENT avatars in a real thread (each comment shows its own
+  // author's avatar — legitimately repeated, distinct people). Scope this to
+  // comment/post containers only: `dx-post`/`dx-reply`/`dx-header`/`dx-reply-row`
+  // and tweet cards. Deliberately NOT `dx-byline`/`dx-stats` — those are the
+  // byline + engagement strips a page repeats across top/sticky/foot bars
+  // (dev.to tags its reaction + subscribe rows this way), exactly what we want
+  // to dedup.
+  const inThread = (img: Element): boolean =>
+    !!img.closest('.dx-post, .dx-reply, .dx-header, .dx-reply-row, [class*="tweet-card"]');
+  const stemOf = (img: Element): string => {
+    let src = (img.getAttribute('data-dx-src') || img.getAttribute('src') || '').trim();
+    if (!src || src.startsWith('data:')) return '';
+    // Unwrap image-PROXY / resizer URLs that embed the real source URL — dev.to
+    // (`media2.dev.to/dynamic/image/width=50,…/https%3A%2F%2F…real.png`),
+    // Cloudinary, imgproxy, wsrv.nl, Next.js `/_next/image?url=…`. Without this,
+    // every proxied image shares the same leading `https%3a%2f%2f…host…` path
+    // segment, collapsing DISTINCT photos into one giant false group. Decode the
+    // last embedded `http(s)…` occurrence and key on ITS filename instead.
+    try {
+      // Find the LAST embedded http(s) occurrence — the proxy host is the FIRST
+      // one, the real source URL is nested after it (…/dynamic/image/…/https%3A…real).
+      const all = [...src.matchAll(/https?(?::|%3a)(?:\/\/|%2f%2f)/gi)];
+      if (all.length > 1) {
+        let inner = src.slice(all[all.length - 1].index);
+        // Percent-decode up to twice (proxies sometimes double-encode).
+        for (let i = 0; i < 2 && /%[0-9a-f]{2}/i.test(inner); i++) {
+          try { inner = decodeURIComponent(inner); } catch { break; }
+        }
+        // Strip any resizer query the inner URL still carries, keep the path.
+        src = inner.split(/[?#]/)[0];
+      } else {
+        // Next.js `/_next/image?url=<encoded>` and `?src=`/`?image=` proxies.
+        const q = src.match(/[?&](?:url|src|image|u)=([^&]+)/i);
+        if (q) { try { src = decodeURIComponent(q[1]).split(/[?#]/)[0]; } catch { /* keep */ } }
+      }
+    } catch { /* keep original src */ }
+    const m = src.match(/([^/?#]+?)(?:\.[a-z]{2,5})?(?:\?|#|$)/i);
+    return m && m[1].length > 8 ? m[1].toLowerCase() : '';
+  };
+  // Icon-sized when BOTH authored dimensions are small. A duplicate copy sitting
+  // in a hidden/collapsed engagement bar renders at 0×0, so annotateLiveImageSizes
+  // gives it no width/height — those return `null` here (unknown), NOT false, so a
+  // group is deduped as long as it has NO oversized (proven-large) member and at
+  // least one proven-icon member.
+  const iconClass = (img: Element): 'icon' | 'large' | 'unknown' => {
+    const w = parseInt(img.getAttribute('width') ?? '', 10);
+    const h = parseInt(img.getAttribute('height') ?? '', 10);
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return 'unknown';
+    return (w <= ICON_MAX_PX && h <= ICON_MAX_PX) ? 'icon' : 'large';
+  };
+
+  const groups = new Map<string, Element[]>();
+  Array.from(root.querySelectorAll('img')).forEach(img => {
+    if (inThread(img)) return;
+    const stem = stemOf(img);
+    if (!stem) return;
+    if (!groups.has(stem)) groups.set(stem, []);
+    groups.get(stem)!.push(img);
+  });
+
+  let removed = 0;
+  groups.forEach(group => {
+    if (group.length < 2) return;
+    const classes = group.map(iconClass);
+    // Never touch a group with a PROVEN-large member — that's a repeated content
+    // image; leave it to dedupAdjacentImages, which respects thread distance.
+    if (classes.includes('large')) return;
+    // Dedup when the group is an unambiguous ICON asset. Two independent
+    // signals, because Readability (Tier 2) strips width/height so the size
+    // signal can be absent:
+    //   (a) at least one member is proven icon-sized, OR
+    //   (b) the SAME exact URL repeats 3+ times — a content photo essentially
+    //       never appears 3× in one article, but a reaction/subscribe glyph or
+    //       the author avatar does (top + sticky + foot engagement bars).
+    if (!classes.includes('icon') && group.length < 3) return;
+    // Keep the first occurrence; drop the rest.
+    group.slice(1).forEach(img => { img.remove(); removed++; });
+  });
+
+  if (removed > 0) {
+    log(LL.DEBUG, `Discerned: dedupRepeatedIcons removed ${removed} repeated icon img(s)`, 'url:', window.location.href);
+  }
+}
+
 // ── Generic page-chrome text patterns ────────────────────────────────────────
 // Exact-text chrome verbs on <a>/<button>: share/save/follow clusters (BBC),
 // question toolbars (Stack Overflow), author Follow buttons (Medium). Matched
@@ -5003,6 +5109,13 @@ function sanitiseTreeInPlace(root: Element, stripStyles = false) {
   // Runs before dedupAdjacentImages: it uses a stronger alt+stem key with no
   // distance cap, whereas dedupAdjacentImages won't cross the two tracks.
   dedupGalleryThumbnails(root);
+
+  // Drop repeated small ICON images (reaction glyphs, subscribe/badge icons,
+  // the author avatar) that a page renders across its engagement chrome — the
+  // same exact icon appearing at top, in a sticky bar, and at the article foot
+  // (dev.to). Distance-independent, keyed on an exact URL stem among icon-sized
+  // images, scoped OUT of thread structure so per-comment avatars survive.
+  dedupRepeatedIcons(root);
 
   // De-duplicate <img>s that the source rendered as multiple copies of the
   // same media (Reddit's blur-preview + main + lightbox-source pattern, news

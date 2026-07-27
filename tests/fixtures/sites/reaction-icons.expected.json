@@ -1,0 +1,10 @@
+{
+  "format": "article",
+  "url": "https://dev.to/francistrdev/choose-your-burden",
+  "title": { "contains": "Choose your Burden" },
+  "bodyText": {
+    "minLength": 200,
+    "contains": ["Choose your Burden", "developer"]
+  },
+  "bodyHtml": { "noScripts": true, "hasImgs": true }
+}

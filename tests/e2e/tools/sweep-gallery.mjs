@@ -31,6 +31,14 @@ function build() {
   let files;
   try { files = readdirSync(RUN_DIR); } catch { return null; }
 
+  // Per-file mtimes drive a `?v=<mtime>` cache-buster on every <img src> so a
+  // reload of the gallery always fetches the FRESHLY-regenerated PNG. Filenames
+  // are stable ({domain}--3-cast.png), so without this the browser serves the
+  // cached bytes of a prior run even on a hard reload — the reported "Axios cast
+  // doesn't match the current one" symptom.
+  /** @type {Map<string, number>} filename → mtimeMs */
+  const fileMtimes = new Map();
+
   /** @type {Map<string, {source: string[], clip: string[], cast: string[], mtime: number, rec: any}>} */
   const sites = new Map();
   const ensure = (s) => { if (!sites.has(s)) sites.set(s, { source: [], clip: [], cast: [], mtime: 0, rec: null }); return sites.get(s); };
@@ -42,8 +50,16 @@ function build() {
     if (variant) continue; // skip crop variants in the gallery
     const e = ensure(site);
     e[type].push(f);
-    try { e.mtime = Math.max(e.mtime, statSync(resolve(RUN_DIR, f)).mtimeMs); } catch { /* ignore */ }
+    try {
+      const mt = statSync(resolve(RUN_DIR, f)).mtimeMs;
+      fileMtimes.set(f, mt);
+      e.mtime = Math.max(e.mtime, mt);
+    } catch { /* ignore */ }
   }
+
+  // Cache-busting src: append `?v=<mtimeMs>` so a regenerated image (same
+  // filename) gets a new URL the browser can't serve stale from cache.
+  const src = (f) => `./${f}?v=${Math.round(fileMtimes.get(f) ?? 0)}`;
   // Merge score.json sidecars.
   for (const f of files) {
     const m = /^(.+?)--score\.json$/.exec(f);
@@ -105,13 +121,13 @@ function build() {
 
   // Overview column: a fixed-height scroll panel (the row preview).
   const col = (label, list) => {
-    const imgs = list.map((f) => `<img src="./${f}" alt="${f}" loading="lazy">`).join('\n');
+    const imgs = list.map((f) => `<img src="${src(f)}" alt="${f}" loading="lazy">`).join('\n');
     return `<div class="col"><div class="col-label">${label}${list.length ? '' : ' <em>(none)</em>'}</div><div class="scroll">${imgs}</div></div>`;
   };
   // Detail column: independent scroll panel (.dscroll) + a header with a hide (×)
   // button so you can drop one column and compare the other two side by side.
   const detailCol = (kind, label, list) => {
-    const imgs = list.map((f) => `<img src="./${f}" alt="${f}" loading="lazy">`).join('\n');
+    const imgs = list.map((f) => `<img src="${src(f)}" alt="${f}" loading="lazy">`).join('\n');
     return `<div class="col col-${kind}"><div class="col-label">${label}${list.length ? '' : ' <em>(none)</em>'} <button class="hide-col" title="hide this column">×</button></div><div class="dscroll">${imgs}</div></div>`;
   };
 
