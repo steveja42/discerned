@@ -17,7 +17,7 @@
 //     pnpm exec playwright test -c tests/e2e/playwright.config.ts --project=corpus-sweep-manual
 // Per-site wait: SWEEP_MANUAL_WAIT_MS (default 120000).
 
-import { test } from '@playwright/test';
+import { test, type Page, type Frame } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
@@ -26,6 +26,47 @@ import { castShotSafe } from './helpers/castShot';
 import { sweepArtifacts, type SweepRecord } from './helpers/sweepArtifacts';
 import { computeScores, measureInPage, CHROME_SWEEP_PHRASES, type SweepMeasurements } from './helpers/sweepScorers';
 import { refreshSweepGallery } from './helpers/sweepGallery';
+
+/**
+ * Auto-solve a PerimeterX 'Press & Hold' captcha so the manual pass clears the
+ * gate ITSELF — never depending on (or stealing focus from) the user's clicks.
+ * PerimeterX renders the button either in the top document or inside a
+ * captcha iframe (`#px-captcha`, `iframe[title*="human"]`, `iframe[src*="px"]`).
+ * The gesture is a genuine press-and-HOLD: move to the button centre, mouse.down,
+ * hold ~8s (PerimeterX requires a sustained hold, longer than a click), mouse.up.
+ * Returns true when it found+pressed a button (caller re-polls to see if it
+ * cleared). Best-effort — every failure mode returns false so the loop continues.
+ */
+async function tryPressAndHold(page: Page): Promise<boolean> {
+  // Candidate roots: the page + every frame (the captcha is usually in an iframe).
+  const roots: (Page | Frame)[] = [page, ...page.frames()];
+  const SELECTORS = [
+    '#px-captcha', '#px-captcha [role="button"]',
+    '[aria-label*="Press" i]', '[aria-label*="hold" i]',
+    'div[role="button"]:has-text("Press")', 'p:has-text("Press & Hold")',
+    'text=/press\\s*&?\\s*hold/i',
+  ];
+  for (const root of roots) {
+    for (const sel of SELECTORS) {
+      try {
+        const loc = root.locator(sel).first();
+        if (!(await loc.count())) continue;
+        const box = await loc.boundingBox({ timeout: 1_000 }).catch(() => null);
+        if (!box || box.width < 4 || box.height < 4) continue;
+        const cx = box.x + box.width / 2;
+        const cy = box.y + box.height / 2;
+        // Real press-and-HOLD via the page mouse (frame coordinates are relative
+        // to the top document viewport for boundingBox, so use page.mouse).
+        await page.mouse.move(cx, cy);
+        await page.mouse.down();
+        await page.waitForTimeout(8_000);
+        await page.mouse.up();
+        return true;
+      } catch { /* try the next selector/root */ }
+    }
+  }
+  return false;
+}
 
 interface DomainEntry { name: string; url: string; note?: string }
 
@@ -53,6 +94,25 @@ const BLOCK_SIGNATURES = [
   'access to this page has been denied', 'request blocked', 'you have been blocked',
   'temporarily unavailable', 'rate limited', 'why did this happen', 'block reference id',
   'been blocked by network security', 'make sure your browser supports javascript and cookies',
+  // Strong CAPTCHA phrases (Walmart PerimeterX / Genius / PerimeterX press-hold) —
+  // distinctive enough to never appear in real prose, so the manual pass keeps
+  // WAITING on them instead of capturing the wall (matches corpus-sweep's STRONG list).
+  'robot or human', "make sure you're a human", 'make sure you are a human',
+  'we have to make sure you', 'press & hold to confirm', 'press and hold to confirm',
+];
+
+// A subset of unambiguous INTERACTIVE-GATE phrases that must keep the pass
+// WAITING even when the underlying page already has lots of text. Zillow's
+// PerimeterX 'Press & Hold' gate overlays a content-rich listing (>1500 chars of
+// underlying DOM), so the generic `t.length > 1500 → not blocked` shortcut fired
+// and the pass captured a transitional state MID-gate (the user was still
+// pressing). Checked BEFORE the length shortcut so an in-progress gate never
+// counts as cleared. These never occur in real listing/article prose.
+const STRONG_GATE_SIGNATURES = [
+  'press & hold to confirm', 'press and hold to confirm', 'press & hold',
+  'robot or human', "make sure you're a human", 'make sure you are a human',
+  'we have to make sure you', 'are you a robot', 'verify you are human',
+  'verifying you are human', 'performing security verification',
 ];
 
 test.describe.configure({ mode: 'serial' });
@@ -83,26 +143,52 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
         console.log(`\n▶ ${d.name}  —  ${url}\n   → clear the block in the window now…`);
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40_000 }).catch(() => {});
 
-        // Poll until no block signature is present (you interacted), or WAIT_MS.
+        // Poll until the page has been block-free for a SUSTAINED window, or
+        // WAIT_MS. A single "looks clear" poll is NOT enough: some walls
+        // (Zillow's PerimeterX) render the LISTING FIRST and THEN pop the
+        // 'Press & Hold' gate a second or two later — so an instant capture on
+        // first-clear grabs a transitional state while the user is still mid-gate.
+        // Require STABLE_CLEARS consecutive gate-free polls (a settle window)
+        // before proceeding, and check STRONG interactive-gate phrases BEFORE the
+        // "long page = clear" shortcut so an overlaid gate on a content-rich page
+        // still counts as blocked.
         const deadline = Date.now() + WAIT_MS;
-        let blocked = true;
+        const STABLE_CLEARS = 3; // ×2s = 6s of continuous gate-free state
+        let clearStreak = 0;
         while (Date.now() < deadline) {
-          blocked = await page.evaluate((sigs: string[]) => {
-            let t = (document.body?.innerText ?? '').replace(/\s+/g, ' ').trim();
-            for (const f of Array.from(document.querySelectorAll('iframe'))) {
-              try {
-                const i = (f as HTMLIFrameElement).contentDocument?.body?.innerText ?? '';
-                if (i) t = (t + ' ' + i).trim();
-              } catch { /* cross-origin */ }
-            }
-            if (t.length < 20) return true;
-            if (t.length > 1500) return false;
-            const low = t.toLowerCase();
-            return sigs.some(s => low.includes(s));
-          }, BLOCK_SIGNATURES).catch(() => true);
-          if (!blocked) break;
+          const blocked = await page.evaluate(
+            ({ sigs, strong }: { sigs: string[]; strong: string[] }) => {
+              let t = (document.body?.innerText ?? '').replace(/\s+/g, ' ').trim();
+              for (const f of Array.from(document.querySelectorAll('iframe'))) {
+                try {
+                  const i = (f as HTMLIFrameElement).contentDocument?.body?.innerText ?? '';
+                  if (i) t = (t + ' ' + i).trim();
+                } catch { /* cross-origin */ }
+              }
+              const low = t.toLowerCase();
+              if (t.length < 20) return true;
+              // STRONG interactive-gate phrases block REGARDLESS of page length —
+              // Zillow's gate overlays a >1500-char listing.
+              if (strong.some(s => low.includes(s))) return true;
+              if (t.length > 1500) return false;
+              return sigs.some(s => low.includes(s));
+            },
+            { sigs: BLOCK_SIGNATURES, strong: STRONG_GATE_SIGNATURES },
+          ).catch(() => true);
+          // Auto-solve a PerimeterX 'Press & Hold' gate ourselves (so the run
+          // never depends on — or steals focus from — the user). Detect the
+          // captcha button (top-document or inside a px iframe) and press-and-HOLD
+          // it: mouse.down → hold ~8s → mouse.up, which is what the human gesture
+          // does. Runs only while `blocked`; on success the next poll sees it clear.
+          if (blocked && !process.env.SWEEP_MANUAL_NO_AUTOSOLVE) {
+            const solved = await tryPressAndHold(page).catch(() => false);
+            if (solved) { await page.waitForTimeout(1_500); continue; }
+          }
+          clearStreak = blocked ? 0 : clearStreak + 1;
+          if (clearStreak >= STABLE_CLEARS) break;
           await page.waitForTimeout(2_000);
         }
+        const blocked = clearStreak < STABLE_CLEARS;
         if (blocked) {
           rec.skipReason = 'still blocked after manual wait';
           writeFileSync(art.score(), JSON.stringify(rec, null, 2));

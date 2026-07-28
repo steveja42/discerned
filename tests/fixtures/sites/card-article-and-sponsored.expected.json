@@ -1,0 +1,25 @@
+{
+  "format": "article",
+  "url": "https://example.com/great-coding-reset",
+  "title": { "contains": "Card-article" },
+  "bodyText": {
+    "minLength": 800,
+    "contains": ["The Great Coding Reset", "field guide to the new normal"],
+    "excludes": [
+      "totally different teaser headline",
+      "third promoted teaser card",
+      "Just Beyond Devastating",
+      "Melts Belly Fat",
+      "Sponsored",
+      "Latest Mobiles",
+      "OPPO Reno",
+      "Nokia G42",
+      "Photostories",
+      "Hot Picks",
+      "Top Trending",
+      "photo-gallery teaser",
+      "trending story link"
+    ]
+  },
+  "bodyHtml": { "noScripts": true }
+}

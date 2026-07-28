@@ -144,11 +144,24 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry): Promise<Sweep
       // body to headless Chrome but render normally in a real window), so mark it
       // retry-eligible headed even though it's not a Cloudflare challenge.
       if (t.length < 20) return { hit: 'empty body (likely iframe wall / stub / headless bot-block)', len: t.length, cf: true };
+      const low = t.toLowerCase();
+      // STRONG CAPTCHA phrases — so distinctive they NEVER occur in real article
+      // prose, so we check them BEFORE the length cap. Some walls (Walmart's
+      // PerimeterX "Robot or human?", Genius's "Scrrrr!!") render a chunk of
+      // footer/legal boilerplate that pushes the body past 1500 chars, so the
+      // generic length gate below would let the wall through and it gets CAPTURED
+      // (100%-coverage, no-chrome — the scorer thinks it's a healthy tiny page).
+      // These clear on a HEADED retry (real window + cf_clearance), so cf:true.
+      const STRONG = [
+        'robot or human', "make sure you're a human", 'make sure you are a human',
+        'we have to make sure you', 'press & hold to confirm', 'press and hold to confirm',
+      ];
+      const strongHit = STRONG.find(s => low.includes(s));
+      if (strongHit) return { hit: strongHit, len: t.length, cf: true };
       // Only treat longer pages as an interstitial when SHORT enough that a real
       // article's prose couldn't be there — a real article merely containing
       // "access denied" in its body stays.
       if (t.length > 1500) return null;
-      const low = t.toLowerCase();
       // CF/bot-CHALLENGE signatures — these can clear when retried HEADED.
       const CHALLENGE = [
         'performing security verification', 'checking your browser',

@@ -1540,6 +1540,48 @@ function looksLikeContainer(el: Element): boolean {
   return false;
 }
 
+// An <article> that is really a RECOMMENDATION / PROMO / REVIEW CARD, not the
+// page's main story. Two sites showed this in the corpus sweep: Business Insider
+// renders related-story "tout" cards as `<article class="tout …">` (the FIRST
+// <article> on the page → findArticleElement grabbed it, shipping a 229-char
+// card and dropping the story), and Letterboxd renders each user review as
+// `<article class="production-viewing …">` (first <article> = a review, not the
+// film). Both are the SAME class of bug as AP News's comment-<article> — the
+// first <article> isn't the content. Generic signal: the card is one of SEVERAL
+// sibling <article> cards (a feed/list), AND it holds far less text than the
+// page's largest content block. Card-class names are a secondary hint only.
+const CARD_ARTICLE_CLASS_RE = /(^|[\s_-])(tout|promo|teaser|recommend|related|card|review|viewing|feed-item|list-item|widget)([\s_-]|$)/i;
+
+/** True when `el` (an <article>) looks like a card in a feed/list rather than
+ *  the main story: it has ≥2 sibling <article>s of the same kind, OR it carries
+ *  a card-ish class AND a much larger content block exists elsewhere on the page. */
+function looksLikeArticleCard(el: Element): boolean {
+  const parent = el.parentElement;
+  if (parent) {
+    // A feed of sibling <article> cards: 2+ siblings that are also <article>.
+    const siblingArticles = Array.from(parent.children).filter(
+      c => c !== el && c.tagName.toLowerCase() === 'article',
+    );
+    if (siblingArticles.length >= 2) return true;
+  }
+  const elText = (el.textContent ?? '').trim().length;
+  // A card-ish class name + a dramatically larger content block elsewhere =
+  // this <article> is chrome, not the story. Compare against the biggest
+  // non-descendant/non-ancestor content section on the page.
+  const cls = (el.className || '').toString();
+  if (CARD_ARTICLE_CLASS_RE.test(cls)) {
+    let maxOther = 0;
+    for (const c of Array.from(document.body.querySelectorAll('main, section, [role="main"], div'))) {
+      if (c === el || c.contains(el) || el.contains(c)) continue;
+      const t = (c.textContent ?? '').trim().length;
+      if (t > maxOther) maxOther = t;
+    }
+    // The card is dwarfed (holds <30%) by a bigger block → it's not the story.
+    if (elText > 0 && maxOther > elText * 3) return true;
+  }
+  return false;
+}
+
 function findArticleElement(smartDetection: boolean): Element | null {
   for (const sel of ARTICLE_SELECTORS) {
     // `article` is the first selector, but third-party comment widgets render
@@ -1547,10 +1589,18 @@ function findArticleElement(smartDetection: boolean): Element | null {
     // (Disqus/Coral), etc. On a story page with no real <article> element (AP
     // News → only <main class="Page-main">) the FIRST <article> on the page is
     // a reader comment — capturing it ships the comments and drops the story.
-    // Take the first candidate that is NOT itself/inside a comment widget,
-    // keeping the original "first match per selector" behaviour otherwise.
+    // Recommendation "tout" cards (Business Insider) and user-review cards
+    // (Letterboxd) are the same trap: the first <article> is a card, not the
+    // content. Take the first candidate that is NOT a comment widget AND does
+    // not look like a feed/promo card, keeping "first match per selector" otherwise.
     const el = querySelectorAllDeep(document.body, sel).find(e => {
-      try { return !(e.matches(COMMENT_WIDGET_SELECTOR) || e.closest(COMMENT_WIDGET_SELECTOR)); }
+      try {
+        if (e.matches(COMMENT_WIDGET_SELECTOR) || e.closest(COMMENT_WIDGET_SELECTOR)) return false;
+        // Only the `article` selectors can yield a card; <main>/[role=main]
+        // are page-level, never a card, so skip the (costly) card check for them.
+        if (e.tagName.toLowerCase() === 'article' && looksLikeArticleCard(e)) return false;
+        return true;
+      }
       catch { return true; }
     }) ?? null;
     if (!el || (el.textContent ?? '').trim().length < ARTICLE_MIN_CHARS) continue;
@@ -1595,6 +1645,33 @@ const COMMENT_WIDGET_SELECTOR = [
   '#commento', '#commento-root',                                   // Commento
   '#comments-list', '.comments-area',                              // generic WP fallbacks
 ].join(', ');
+
+// Third-party SPONSORED-CONTENT / native-ad / recirculation widgets. These render
+// a big grid of "Sponsored"/"Learn More"/"You may like" teaser cards (paid
+// clickbait) that rides at the tail of the article — Times of India's clip showed
+// a dozen Taboola cards after the real story. Like the comment widgets these
+// networks mount at stable ids/classes/custom-tags across the thousands of news
+// sites embedding them, so matching them is generic — not per-site. markExcluded
+// drops them from the capture; scoreContentBlock refuses to pick one as the root.
+const SPONSORED_WIDGET_SELECTOR = [
+  '[id*="taboola" i]', '[class*="taboola" i]', '[data-placement*="taboola" i]', // Taboola
+  '[id*="outbrain" i]', '[class*="outbrain" i]', '.OUTBRAIN', '[data-widget-id^="AR_"]', // Outbrain
+  '[id*="mgid" i]', '[class*="mgid" i]', '[data-type="_mgwidget"]',             // MGID
+  '[class*="revcontent" i]', '[id*="rev-content" i]', '[id*="rc-widget" i]',    // RevContent
+  '[class*="dianomi" i]', '[id*="dianomi" i]',                                  // Dianomi
+  '[id*="zergnet" i]', '[class*="zergnet" i]',                                  // ZergNet
+  '[class*="trc_related" i]', '[class*="trc_rbox" i]',                         // Taboola related-box
+  'sellwild-widget', '[class*="sellwild" i]',                                   // Sellwild (TOI)
+  '[data-vars-widget-type="Recommended"]', '[class*="ob-widget" i]',           // Outbrain ob-widget
+  // First-party recirculation grids at the article tail (own-site teaser/link
+  // modules, not ad networks). Class names are descriptive enough to be generic
+  // across sites, not one-off: a "trending list" of story links, a "photo slider"
+  // teaser grid, a "recirc"/"related-stories" module. Times of India's tail
+  // ("Photostories" `photosslider`, "Hot Picks"/"Top Trending" `articletrendinglist`).
+  '[class*="articletrendinglist" i]', '[class*="trendinglist" i]',             // trending story-link lists
+  '[class*="photosslider" i]', '[class*="photoslider" i]', '[class*="photostor" i]', // photo-teaser sliders
+  '[class*="recirc" i]', '[class*="related-stories" i]', '[class*="morestories" i]', // generic recirc modules
+].join(', ');
 const LAYOUT_SKIP_TAGS = new Set([
   'script', 'style', 'noscript', 'nav', 'header', 'footer', 'aside',
   'svg', 'path', 'button', 'input', 'select', 'textarea', 'form', 'iframe',
@@ -1627,11 +1704,22 @@ function scoreContentBlock(el: Element, hasLayout: boolean): BlockScore | null {
   // reader-discussion thread is a big text block that would otherwise outscore
   // the article — see COMMENT_WIDGET_SELECTOR.
   if (el.matches(COMMENT_WIDGET_SELECTOR) || el.closest(COMMENT_WIDGET_SELECTOR)) return null;
+  // Likewise never pick a sponsored-content / native-ad recirculation widget
+  // (Taboola/Outbrain/…) — a grid of paid teaser cards that can outscore the story.
+  if (el.matches(SPONSORED_WIDGET_SELECTOR) || el.closest(SPONSORED_WIDGET_SELECTOR)) return null;
 
   if (hasLayout) {
+    // Reject INVISIBLE elements — zero rendered width OR height. Some SPAs keep a
+    // hidden app-shell/state wrapper carrying a huge blob of aria/JSON text at
+    // display:none or collapsed to 0×0 (Home Depot's `div.hfapp`: textLen 136k,
+    // area 0). Without a real box it can't be the visible content column, yet its
+    // raw text length would outscore the actual product block and win — so the
+    // clip comes out as a lone chrome fragment. A genuine content block always
+    // has a real rendered box. (width>0 && width<200 below still drops skinny rails.)
+    if (rect.width <= 0 || rect.height <= 0) return null;
     // Soft size gate: prefer elements visible in the layout but don't require
     // them. Tests/sparse pages may render content at much smaller sizes.
-    if (rect.width > 0 && rect.width < 200) return null;
+    if (rect.width < 200) return null;
   }
 
   const fullText = (el.textContent ?? '').trim();
@@ -2123,6 +2211,16 @@ function markExcluded(root: HTMLElement = document.body): () => void {
   // from the clip without emptying it.
   try {
     querySelectorAllDeep(root, COMMENT_WIDGET_SELECTOR).forEach(w => {
+      w.setAttribute(EXCL_MARKER, '1');
+    });
+  } catch { /* invalid selector on some engine — skip */ }
+
+  // Third-party sponsored-content / native-ad recirculation widgets (Taboola,
+  // Outbrain, MGID, …). A grid of paid "Sponsored" teaser cards that rides at
+  // the article tail — marked on the LIVE DOM (ids/classes still present) so
+  // removeMarked prunes it from the clip. Same rationale as the comment widgets.
+  try {
+    querySelectorAllDeep(root, SPONSORED_WIDGET_SELECTOR).forEach(w => {
       w.setAttribute(EXCL_MARKER, '1');
     });
   } catch { /* invalid selector on some engine — skip */ }
@@ -3038,6 +3136,40 @@ function tagStackOverflow(root: Document | Element): Element | void {
   return mainbar;
 }
 
+/**
+ * Zillow renders a single property's detail page as a LIGHTBOX OVERLAY on top of
+ * the area search-results page (SRP): `#home-detail-lightbox-container` ›
+ * `#search-detail-lightbox` holds the actual listing (the `<script
+ * type="application/ld+json">` RealEstateListing schema, photos, price, beds/
+ * baths, facts, price history), while the surrounding `.main-wrapper` is the SRP
+ * — a "Recently Sold Homes / N results" list of OTHER homes. The generic layout
+ * finder scored the SRP highest (its textContent dwarfs the detail), so the clip
+ * came out as a homes-search list instead of the property the user is looking at.
+ * Returning the detail-lightbox root scopes the capture to the property, bypassing
+ * the SRP-vs-detail contest entirely. On a genuine SRP page (no lightbox) this
+ * returns nothing and the generic path handles the listing grid.
+ */
+function tagZillow(root: Document | Element): Element | void {
+  // Prefer the OUTER lightbox container — it holds BOTH the photo gallery
+  // (`[data-testid="hollywood-gallery-images-tile-list"]`, a sibling of the text
+  // detail) AND `#search-detail-lightbox` (facts/price/history). Returning only
+  // the inner `#search-detail-lightbox` would drop the property photos.
+  const outer = root.querySelector('#home-detail-lightbox-container');
+  const inner = root.querySelector('#search-detail-lightbox');
+  // Pick the outer container only when it actually contains the inner detail (so
+  // we get gallery + detail); otherwise fall back to whichever exists.
+  const detail = (outer && inner && outer.contains(inner)) ? outer : (inner ?? outer);
+  if (!detail) return undefined;
+  // Guard: only scope to the lightbox when it actually holds the listing (its
+  // ld+json RealEstateListing, the photo gallery, or substantial text) — an
+  // empty/placeholder lightbox shell shouldn't strip the page to nothing.
+  const hasListing = !!detail.querySelector('script[type="application/ld+json"]')
+    || !!detail.querySelector('[data-testid="hollywood-gallery-images-tile-list"], img[alt*="image of"]')
+    || (detail.textContent ?? '').trim().length > 400;
+  if (!hasListing) return undefined;
+  return detail;
+}
+
 type SiteTagger = (root: Document | Element) => Element | void;
 // Optional post-clone transformer. Runs AFTER deepCloneWithShadow has built
 // the detached clone but BEFORE sanitisation/inlining. Receives the cloned
@@ -3110,6 +3242,12 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     match: h => /(^|\.)stackoverflow\.com$/i.test(h),
     tag: tagStackOverflow,
     anchors: ['#mainbar', '#question, .answer', '.user-info, .post-signature'],
+  },
+  {
+    name: 'zillow',
+    match: h => /(^|\.)zillow\.com$/i.test(h),
+    tag: tagZillow,
+    anchors: ['#home-detail-lightbox-container, #search-detail-lightbox'],
   },
 ];
 
@@ -5020,6 +5158,15 @@ function removeGenericChrome(root: Element): void {
     }
   }
 
+  // (2a') Shopping / cross-property recirculation rails keyed off a SISTER-SITE
+  // link signature — load-invariant, unlike a heading-position climb. Times of
+  // India renders a "Latest Mobiles" card grid whose cards all link to its
+  // gadgetsnow shopping site; the grid is a self-contained container the
+  // heading-climb (2) can't isolate (its heading is a plain <div> and the next
+  // wrapper up is the whole article body). Find the TIGHTEST container that
+  // clusters ≥3 such sister-site links and holds no real prose, and drop it.
+  removeSisterSiteRail(root, hasLongProse);
+
   // (2b) E-commerce cross-sell rails (Amazon-style): heading is a SIBLING of its
   // product carousel, so (2)'s climb-up misses the products. Remove the heading's
   // enclosing section instead.
@@ -5303,6 +5450,57 @@ function removeBuyBox(root: Element): void {
     if (box && !wouldEatContent(box)) {
       box.remove();
       log(LL.DEBUG, 'Discerned: removeBuyBox dropped product buy box', 'url:', window.location.href);
+    }
+  }
+}
+
+// Cross-property SHOPPING / recirculation sister-sites — a news page linking a
+// grid of product/media cards to its OWN commerce or gadgets sibling site (Times
+// of India → gadgetsnow "Latest Mobiles"). The host signature is load-invariant
+// (unlike the widget's DOM position, which varies between loads and whose heading
+// is a plain <div> the heading-climb can't isolate). Add sister-hosts here as the
+// sweep surfaces them; keep them to genuine recirculation/shopping properties.
+const SISTER_SITE_HOST_RE = /\b(gadgetsnow|shopping\.indiatimes|happytrips|cricbuzz|whatshot|itimes|dealsdray)\b/i;
+
+/**
+ * Remove a cross-property shopping/recirculation rail identified by a CLUSTER of
+ * links to a sister-site (SISTER_SITE_HOST_RE). Finds every such link, climbs to
+ * the tightest ancestor that (a) holds ≥3 of them, (b) has no ≥200-char prose
+ * paragraph, and (c) isn't huge (would eat the article), and drops it. Keyed off
+ * the host — robust to the widget's varying DOM shape.
+ */
+function removeSisterSiteRail(root: Element, hasLongProse: (el: Element) => boolean): void {
+  const links = Array.from(root.querySelectorAll('a[href]')).filter(a => {
+    if (a.closest('[class*="tweet-card"]')) return false;
+    const href = a.getAttribute('href') ?? '';
+    return SISTER_SITE_HOST_RE.test(href);
+  });
+  if (links.length < 3) return;
+
+  const removed = new Set<Element>();
+  for (const a of links) {
+    if (!root.contains(a)) continue;
+    // Climb to the tightest ancestor holding ≥3 sister links but no real prose.
+    let box: Element | null = null;
+    let cursor: Element | null = a.parentElement;
+    for (let i = 0; i < 8 && cursor && cursor !== root; i++) {
+      if (hasLongProse(cursor)) break;
+      const total = (cursor.textContent ?? '').replace(/\s+/g, ' ').length;
+      if (total > 4000) break; // too big — would eat the article body
+      const clusterCount = cursor.querySelectorAll('a[href]').length
+        ? Array.from(cursor.querySelectorAll('a[href]')).filter(x =>
+            SISTER_SITE_HOST_RE.test(x.getAttribute('href') ?? '')).length
+        : 0;
+      if (clusterCount >= 3) box = cursor;
+      cursor = cursor.parentElement;
+    }
+    if (box && !removed.has(box)) {
+      // Skip if an already-removed box contains this one (dedupe nested climbs).
+      if (![...removed].some(r => r.contains(box!))) {
+        box.remove();
+        removed.add(box);
+        log(LL.DEBUG, 'Discerned: removeSisterSiteRail dropped cross-property shopping rail', 'url:', window.location.href);
+      }
     }
   }
 }

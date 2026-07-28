@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Card-article + sponsored-widget guard fixture</title></head>
+<body>
+  <!--
+    Guards two generic corpus-sweep fixes at once:
+
+    (1) findArticleElement card-<article> skip. Real-world defects: Business
+        Insider renders related-story "tout" cards as the FIRST <article> on the
+        page (<article class="tout …">), and Letterboxd renders each user review
+        as <article class="production-viewing …"> — so findArticleElement's first
+        `article` match grabbed a small CARD and dropped the story. Here the first
+        two <article>s are recommendation cards (siblings in a rec rail); the real
+        story lives in <main>. The fix must skip the cards and capture <main>.
+
+    (2) Sponsored-widget strip (SPONSORED_WIDGET_SELECTOR). A Taboola native-ad
+        recirculation grid rides at the article tail; it must be dropped from the
+        capture (markExcluded) so its paid teaser text doesn't ship in the clip.
+  -->
+
+  <!-- Recommendation rail: a feed of sibling <article> CARD teasers. The first
+       <article> on the page is one of these — the bug was findArticleElement
+       grabbing it. -->
+  <section class="tout-collection">
+    <article class="tout as-horizontal with-ungrouped-text">
+      <a href="/related-story-one">Related: A totally different teaser headline about something else entirely for context</a>
+    </article>
+    <article class="tout as-horizontal with-ungrouped-text">
+      <a href="/related-story-two">Related: Another unrelated recommendation card teaser headline sitting in the rail</a>
+    </article>
+    <article class="tout as-horizontal with-ungrouped-text">
+      <a href="/related-story-three">Related: A third promoted teaser card that is not the actual story body at all</a>
+    </article>
+  </section>
+
+  <!-- The REAL story lives in <main>, not an <article>. findArticleElement should
+       skip the tout cards above and land here. -->
+  <main class="post-page-container">
+    <h1>The Great Coding Reset: How AI Is Changing Software Engineering</h1>
+    <p>There's been endless discussion about AI changing the workplace. One job has felt it to the core: software engineering. We set out to understand exactly how deeply the tools have reshaped the daily work of writing code.</p>
+    <p>Interviews with two dozen engineers reveal a craft in flux. Autocomplete became autopilot; review became the bottleneck; and the definition of a "senior" engineer quietly shifted toward judgment over keystrokes.</p>
+    <p>What follows is a field guide to the new normal, assembled from those conversations and the artifacts they shared — pull requests, prompts, and post-mortems from a year of building with machines that write.</p>
+    <p>The throughline: the work did not disappear. It moved. And the engineers who thrived were the ones who moved with it, treating the model as a fast, tireless, occasionally-wrong collaborator rather than a replacement.</p>
+
+    <!-- Sponsored native-ad recirculation widget (Taboola) at the article tail.
+         Must be stripped by SPONSORED_WIDGET_SELECTOR / markExcluded. -->
+    <div id="taboola-below-article-thumbnails" class="trc_related_container">
+      <div class="trc_rbox_div">
+        <a href="/sponsored/1"><span class="video-label">Sponsored</span> The Tragedy Of This Celebrity Is Just Beyond Devastating</a>
+      </div>
+      <div class="trc_rbox_div">
+        <a href="/sponsored/2"><span class="video-label">Sponsored</span> Doctors Stunned: This Simple Trick Melts Belly Fat Overnight — Learn More</a>
+      </div>
+      <div class="trc_rbox_div">
+        <a href="/sponsored/3"><span class="video-label">Sponsored</span> Locals Are Rushing To Buy This New Gadget Before It Sells Out — Learn More</a>
+      </div>
+    </div>
+
+    <div><span>End of Article</span></div>
+
+    <!-- "Latest Mobiles" product-recirculation widget (Times of India shape):
+         a self-contained container whose product cards all link to TOI's OWN
+         gadgetsnow SHOPPING sister-site. The heading is a plain <div> (not <h2>)
+         and the next wrapper up is the whole article body, so the heading-climb
+         can't isolate it — it's removed by removeSisterSiteRail(), keyed off the
+         load-invariant sister-site host signature (SISTER_SITE_HOST_RE). -->
+    <div class="latest-mobiles-widget noPaddingTitle">
+      <div><div><div>Latest Mobiles</div></div></div>
+      <a href="https://gadgetsnow.indiatimes.com/mobile-phones">View All</a>
+      <div class="latest-mobiles-grid">
+        <a href="https://gadgetsnow.indiatimes.com/oppo-reno"><img src="oppo.jpg" alt="OPPO Reno"> OPPO Reno</a>
+        <a href="https://gadgetsnow.indiatimes.com/nokia"><img src="nokia.jpg" alt="Nokia"> Nokia G42</a>
+        <a href="https://gadgetsnow.indiatimes.com/samsung"><img src="samsung.jpg" alt="Samsung"> Samsung Galaxy</a>
+      </div>
+    </div>
+
+    <!-- First-party recirculation tails (Times of India shape) — own-site teaser
+         grids / trending-link lists, removed by RECIRC_WIDGET_SELECTOR via their
+         descriptive wrapper classes (photosslider / articletrendinglist / …). -->
+    <div class="zrId1 photosslider">
+      <div><h2>Photostories</h2></div>
+      <a href="/photo/1"><img src="p1.jpg" alt="p1"> A slideshow teaser about celebrities</a>
+      <a href="/photo/2"><img src="p2.jpg" alt="p2"> Another photo-gallery teaser card here</a>
+    </div>
+    <div class="VZDNL articletrendinglist">
+      <h3>Hot Picks</h3>
+      <a href="/hot/1">Some trending hot-pick story link one</a>
+      <a href="/hot/2">Some trending hot-pick story link two</a>
+    </div>
+    <div class="VZDNL articletrendinglist">
+      <h3>Top Trending</h3>
+      <a href="/trend/1">Top trending story link alpha</a>
+      <a href="/trend/2">Top trending story link beta</a>
+    </div>
+  </main>
+</body>
+</html>

@@ -68,6 +68,16 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'discover-article-urls',
+      testMatch: /tools\/discover-article-urls\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'finder-diag-probe',
+      testMatch: /tools\/finder-diag-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
       name: 'primal-visual',
       testMatch: /primal-visual\.spec\.ts/,
       retries: 0,
