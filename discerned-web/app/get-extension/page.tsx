@@ -185,6 +185,9 @@ export default function GetExtensionPage() {
           <p style={{ fontFamily: 'var(--serif)', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.6, margin: '16px 0 0' }}>
             Want the details? Read <Link href="/about" style={linkStyle}>what Discerned is and why it works this way →</Link>
           </p>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 14.5, color: 'var(--ink-2)', lineHeight: 1.6, margin: '8px 0 0' }}>
+            Trouble installing, or something not working? <Link href="/feedback?target=extension" style={linkStyle}>Tell us →</Link>
+          </p>
         </div>
       </section>
 

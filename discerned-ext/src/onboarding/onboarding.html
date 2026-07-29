@@ -88,6 +88,9 @@
       font-size: 0.82rem; color: var(--p-ink-4); line-height: 1.5;
       border-top: 1px solid var(--p-rule-soft); padding-top: 20px;
     }
+    /* The footer hint sits directly under the button — no second divider. */
+    .hint-plain { border-top: none; padding-top: 0; }
+    .hint a { color: var(--p-accent-ink); text-decoration: underline; text-underline-offset: 2px; }
 
     .btn-done {
       padding: 13px 20px; border-radius: 8px; border: none;
@@ -130,6 +133,11 @@
     </p>
 
     <button class="btn-done" id="btn-done">Got it — start using Discerned →</button>
+
+    <p class="hint hint-plain" style="margin-top: 16px; text-align: center;">
+      Something not working?
+      <a href="https://discerned.online/feedback?target=extension" target="_blank" rel="noopener">Tell us</a>.
+    </p>
   </div>
 
   <script type="module" src="./onboarding.ts"></script>

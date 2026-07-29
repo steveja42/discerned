@@ -30,5 +30,12 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  // netlify/functions has its own tsconfig — those files are ESM bundled by esbuild at
+  // deploy time (not by Next) and need allowImportingTsExtensions, which must not leak
+  // into the app. `pnpm type-check` checks both.
+  //
+  // The function's test is excluded here for the same reason: it imports the .mts handler
+  // directly, so it needs the same extension allowance. Vitest resolves it fine at runtime,
+  // and tsconfig.test.json type-checks it.
+  "exclude": ["node_modules", "netlify/functions", "tests/feedback-function.test.ts"]
 }

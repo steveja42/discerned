@@ -21,6 +21,29 @@
   # Node 22 LTS is required by pnpm 11 (uses node:sqlite, introduced in Node 22).
   NODE_VERSION = "22"
 
+# Netlify Functions — the only server-side code in the app (the web app is a static
+# export, so no Next.js API routes or server actions are possible).
+#
+# The directory MUST live under discerned-web/: the [build] `ignore` rule above skips the
+# deploy when a commit touches nothing under discerned-web/, so a functions dir at the
+# repo root would never trigger a redeploy when changed.
+#
+# feedback.mts declares `export const config = { path: '/api/feedback' }`, so the v2
+# runtime serves it at that same-origin path directly — no [[redirects]] alias needed.
+# /api/* is used rather than the default /.netlify/functions/* because that well-known
+# path is filtered by some blockers and corporate proxies (same rationale as the
+# GoatCounter proxy below).
+#
+# Required env vars (set in the Netlify dashboard, never committed):
+#   TURNSTILE_SECRET_KEY   — Cloudflare Turnstile secret half (functions scope)
+#   GITHUB_FEEDBACK_TOKEN  — fine-grained PAT, Issues:write on steveja42/discerned
+#   GITHUB_FEEDBACK_REPO   — optional; defaults to steveja42/discerned
+# The public half, NEXT_PUBLIC_TURNSTILE_SITE_KEY, is read at BUILD time and must be
+# build-scoped, not functions-only.
+[functions]
+  directory = "discerned-web/netlify/functions"
+  node_bundler = "esbuild"
+
 # NIP-05 verifier — must allow cross-origin GET so other Nostr clients can
 # verify alice@discerned.online identifiers. Cache 5 min so a new user becomes
 # visible quickly while still amortising lookup traffic.

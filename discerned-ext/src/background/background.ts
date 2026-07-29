@@ -226,11 +226,28 @@ const DISCERNS_URL_PATTERNS = [
   'http://localhost:3000/discerns#*',
 ];
 
-async function openDiscernsTab(autoSignin?: boolean, openSettings?: boolean): Promise<void> {
+// Feedback form — the web app's /feedback page. No #* variants: the page has no hash routing.
+const FEEDBACK_URL_PATTERNS = [
+  'https://discerned.online/feedback',
+  'https://discerned.online/feedback?*',
+  'http://localhost:3000/feedback',
+  'http://localhost:3000/feedback?*',
+];
+
+/**
+ * Shared opener for web-app deep links: reuse a matching tab if one is open (activating
+ * it and focusing its window), otherwise create one.
+ *
+ * Extracted from openDiscernsTab so a second deep-link destination doesn't mean a second
+ * copy of this reuse/focus/navigate-only-when-deep-linking logic — it's subtle enough
+ * that divergent copies would drift. openLibraryTab deliberately stays separate: it
+ * soft-navigates an already-open tab via NAVIGATE_TO_CLIP to preserve React state,
+ * which doesn't fit this shape.
+ */
+async function openWebAppTab(path: string, query: string, patterns: string[]): Promise<void> {
   const base = await resolveBaseUrl();
-  const query = autoSignin ? '?signin=1' : openSettings ? '?settings=1' : '';
-  const url = `${base}/discerns${query}`;
-  const [existing] = await chrome.tabs.query({ url: DISCERNS_URL_PATTERNS });
+  const url = `${base}${path}${query}`;
+  const [existing] = await chrome.tabs.query({ url: patterns });
   if (existing?.id !== undefined) {
     // Reusing a tab still needs a navigation when we're deep-linking, or the
     // requested panel never opens — a plain activate would just show whatever
@@ -242,6 +259,22 @@ async function openDiscernsTab(autoSignin?: boolean, openSettings?: boolean): Pr
   } else {
     await chrome.tabs.create({ url });
   }
+}
+
+async function openDiscernsTab(autoSignin?: boolean, openSettings?: boolean): Promise<void> {
+  const query = autoSignin ? '?signin=1' : openSettings ? '?settings=1' : '';
+  await openWebAppTab('/discerns', query, DISCERNS_URL_PATTERNS);
+}
+
+/**
+ * Opens the feedback form, prefilling what the report is about and stamping the build so
+ * a bug report identifies itself. getManifest() is synchronous and permission-free.
+ */
+async function openFeedbackTab(target?: 'extension' | 'web' | 'both'): Promise<void> {
+  const params = new URLSearchParams();
+  if (target) params.set('target', target);
+  params.set('v', chrome.runtime.getManifest().version);
+  await openWebAppTab('/feedback', `?${params.toString()}`, FEEDBACK_URL_PATTERNS);
 }
 
 async function openLibraryTab(clipId?: string): Promise<void> {
@@ -524,6 +557,10 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       // open the bare discerns feed (the just-cast event may not have propagated
       // to the subscribed relays yet, so deep-linking would risk a transient miss).
       openDiscernsTab(message.autoSignin, message.openSettings).catch(() => {});
+      return { success: true };
+
+    case 'OPEN_FEEDBACK':
+      openFeedbackTab(message.target).catch(() => {});
       return { success: true };
 
     case 'DISMISS_OVERLAY_NUDGE':

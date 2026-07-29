@@ -1,0 +1,21 @@
+{
+  // Netlify Functions (v2 runtime) are plain ESM bundled by esbuild at deploy time, NOT
+  // by Next. They need two settings the app tsconfig deliberately doesn't have:
+  //
+  //  - allowImportingTsExtensions: the v2 runtime resolves ESM specifiers literally, so
+  //    a relative import must carry the real `.ts` extension.
+  //  - node types / ES2022 lib: functions run on Node 22 (process.env, console) rather
+  //    than in the browser.
+  //
+  // Scoped to this directory so the app's own type-checking rules stay untouched.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["**/*.mts", "../../lib/feedback-format.ts"]
+}

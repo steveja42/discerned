@@ -59,7 +59,7 @@ Content Script (src/content/)
   → web-bridge.ts  Runs on discerned.online/* — bridges extension data to the web app
 
 Background Worker (src/background/)
-  → background.ts  Handles context menus, signing, relay publishing, IndexedDB
+  → background.ts  Handles context menus, signing, relay publishing, IndexedDB, tab deep-links
   → relay-manager.ts  SimplePool wrapper; requires ≥ 2 relay ACKs; 10s timeout
 
 Popup (src/popup/)
@@ -93,6 +93,18 @@ Runs exclusively on `discerned.online/*` and `localhost:3000/*`. Bridges the ext
 - **Cast (📡)**: Public; published to Nostr relays
 - **Evaluation**: Signal (5 levels, Toxic→Masterpiece, optional — absent = unrated) · Qualifiers (multi-select tags, built-in + custom) · Category (7 built-in options + custom)
 - **Auth modes**: NIP-07 (browser extension wallet), Local (no cast), NIP-46
+
+## Opening web-app tabs (deep links)
+
+Content scripts have no `chrome.tabs`, so every navigation goes through a `chrome.runtime.sendMessage` to the background worker. `openWebAppTab(path, query, patterns)` in `background.ts` is the shared opener: it reuses a matching tab if one is open (activating it and focusing its window) and navigates only when carrying a query — a bare activate on an already-correct tab avoids a pointless reload. `openDiscernsTab` and `openFeedbackTab` are thin wrappers over it.
+
+`openLibraryTab` deliberately stays separate: it soft-navigates an already-open tab via a `NAVIGATE_TO_CLIP` message to preserve React state (`ClipStoreContext`), which doesn't fit the shared shape. Folding it in would need a `beforeNavigate` callback — over-abstraction for three call sites.
+
+**Feedback link.** The overlay's Settings drawer has a "Send feedback or report a bug" card that sends `OPEN_FEEDBACK`, opening the web app's `/feedback?target=extension&v=<version>`. The version comes from `chrome.runtime.getManifest().version` (synchronous, permission-free, in every context).
+
+The URL carries **the target and version only, on purpose.** Reports become PUBLIC GitHub issues, and auth mode / publish mode are information the user hasn't consented to disclose — "this user stores an nsec in the extension" should not be leaked into a public tracker by a bug report about a capture defect. They're also rarely the cause of what users actually report. A maintainer who needs them can ask in the issue thread. **Don't add them.**
+
+`src/onboarding/onboarding.html` also links to the feedback page. It's a real extension page, so a plain `<a target="_blank">` works there — no message plumbing. `popup.html` deliberately has no link: it's a stub shown only on `chrome://`-style pages where content scripts can't run, so it would reach almost nobody.
 
 ## NIP-07 signing architecture
 
@@ -387,10 +399,11 @@ When `false`, the bridge is a no-op; only the local `console` call fires in each
 
 ```
 src/
-  background/   background.ts, relay-manager.ts
-  content/      content.ts, capture.ts, overlay.ts
-  shared/       types.ts, nostr/{auth,events,encryption}.ts
-  popup/        popup.ts, popup.html
+  background/   background.ts, relay-manager.ts, relay-list-fetcher.ts
+  content/      content.ts, capture.ts, overlay.ts, web-bridge.ts, highlighter.ts
+  shared/       types.ts, logger.ts, theme.ts, relays.ts, nostr/{auth,events,encryption}.ts
+  popup/        popup.ts, popup.html          ← stub for chrome:// pages only
+  onboarding/   onboarding.ts, onboarding.html
 public/icons/
 dist/           (build output, gitignored)
 manifest.json   Chrome MV3 manifest

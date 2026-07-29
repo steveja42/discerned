@@ -43,6 +43,14 @@ function SettingsIcon() {
   );
 }
 
+function HeartIcon() {
+  return (
+    <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z" />
+    </svg>
+  );
+}
+
 function SearchIcon() {
   return (
     <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
@@ -132,6 +140,11 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
         {navLink('/discerns', 'Discerns', 'Clips that have been broadcast on Nostr')}
         {extensionPresent && navLink('/clips', 'My Clips', 'Clips stored only on this device')}
         {navLink('/about', 'About')}
+        {/* An icon rather than a 4th nav link — the right rail already carries three
+            links, two icon buttons, and two status dots. */}
+        <Link href="/feedback" className="icon-btn" title="Feedback & support">
+          <HeartIcon />
+        </Link>
         <a
           href="https://github.com/steveja42/discerned/tree/main/discerned-web"
           target="_blank"

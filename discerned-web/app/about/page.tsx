@@ -59,7 +59,13 @@ export default function AboutPage() {
         <h3 style={{ fontFamily: 'var(--serif)', fontSize: 19, fontWeight: 500, color: 'var(--ink)', margin: '32px 0 10px' }}>
           Sovereignty, not gamification.
         </h3>
-    
+
+        <p style={{ margin: '32px 0 0', paddingTop: 24, borderTop: '1px solid var(--rule)', fontSize: 15 }}>
+          Discerned is a small, independent project. If something is broken or missing,{' '}
+          <Link href="/feedback" style={{ color: 'var(--accent-ink)', textDecoration: 'underline', textUnderlineOffset: 2 }}>
+            tell us — or help keep it going →
+          </Link>
+        </p>
       </section>
 
       {signInOpen && (

@@ -184,6 +184,11 @@ export type BackgroundMessage =
   | { type: 'GET_CLIP_COUNT' }
   | { type: 'OPEN_LIBRARY'; clipId?: string }
   | { type: 'OPEN_HOME'; eventId?: string; autoSignin?: boolean; openSettings?: boolean }
+  // Deep-links to the web app's feedback form. `target` prefills the "what is this
+  // about" field; the extension version is stamped on by the handler. Deliberately
+  // carries NOTHING else — reports become PUBLIC GitHub issues, so auth mode and
+  // publish mode are withheld rather than disclosed without the user's say-so.
+  | { type: 'OPEN_FEEDBACK'; target?: 'extension' | 'web' | 'both' }
   | { type: 'REGISTER_LOG_TAB' }
   | { type: 'EXTRACT_EMBEDDED_TWEETS' }
   | { type: 'GET_CLIP_BODY'; id: string }

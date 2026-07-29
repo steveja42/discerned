@@ -994,6 +994,9 @@ ${themeVarsBlock(this.effectiveTheme)}
           </div>
           ${relayDevCard}
           <div class="settings-card">
+            <button class="link-btn" id="settings-feedback">Send feedback or report a bug</button>
+          </div>
+          <div class="settings-card">
             <button class="link-btn" id="settings-export">Export local clips as JSON</button>
           </div>
         </div>
@@ -1072,6 +1075,12 @@ ${themeVarsBlock(this.effectiveTheme)}
     this.shadow.getElementById('open-library-btn')?.addEventListener('click', () => {
       chrome.runtime.sendMessage({ type: 'OPEN_LIBRARY' }).catch(() => {});
       this.hide();
+    });
+
+    // Content scripts have no chrome.tabs — the background opens the tab for us.
+    this.shadow.getElementById('settings-feedback')?.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'OPEN_FEEDBACK', target: 'extension' })
+        .catch(() => { /* service worker asleep — non-fatal */ });
     });
 
     this.shadow.getElementById('settings-export')?.addEventListener('click', () => this.exportClips());
