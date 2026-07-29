@@ -9,7 +9,8 @@
 
 import type { AuthState, Capture, ClipFormat, Evaluation, SignalLevel, Category, PublishMode, Theme, ResolvedTheme, OwnProfile } from '@/shared/types';
 import { detectAuthState } from '@/shared/nostr/auth';
-import { STORAGE_KEYS, SIGNAL_LEVELS, SIGNAL_DESCRIPTIONS, QUALIFIER_GROUPS, signalRank, resolveRelayMode, relaysForMode, resolveThemePref, resolveEffectiveTheme } from '@/shared/types';
+import { STORAGE_KEYS, SIGNAL_LEVELS, SIGNAL_DESCRIPTIONS, QUALIFIER_GROUPS, signalRank, resolveRelayMode, resolveThemePref, resolveEffectiveTheme } from '@/shared/types';
+import { getEffectiveRelays } from '@/shared/relays';
 import { themeVarsBlock, prefersDark, onSystemThemeChange } from '@/shared/theme';
 import { LL, log } from '@/shared/logger';
 import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
@@ -1010,6 +1011,11 @@ ${themeVarsBlock(this.effectiveTheme)}
               <button class="chip${this.themePref === 'light' ? ' active' : ''}" data-theme="light" type="button">☀️ Light</button>
             </div>
           </div>
+          <div class="settings-card">
+            <div class="card-label">Relays</div>
+            <div class="relay-readout" id="relay-readout">Loading…</div>
+            <button class="link-btn" id="settings-manage-relays">Manage relays</button>
+          </div>
           ${relayDevCard}
           <div class="settings-card">
             <button class="link-btn" id="settings-export">Export local clips as JSON</button>
@@ -1116,6 +1122,16 @@ ${themeVarsBlock(this.effectiveTheme)}
 
     this.shadow.getElementById('settings-export')?.addEventListener('click', () => this.exportClips());
 
+    // Relays are read-only here; editing lives in the web app's settings, which
+    // is the single UI for the list (the extension remains the canonical store).
+    this.shadow.getElementById('settings-manage-relays')?.addEventListener('click', () => {
+      // Deep-link straight to the web app's settings panel — landing on the feed
+      // and leaving the user to hunt for the gear isn't "manage relays".
+      void chrome.runtime.sendMessage({ type: 'OPEN_HOME', openSettings: true });
+      this.hide();
+    });
+    void this.loadRelayReadout();
+
     // Appearance theme picker — persist the choice; the storage.onChanged listener
     // (registered in show()) re-applies the theme and re-renders (moving the active chip).
     this.shadow.querySelectorAll('#theme-picker .chip').forEach((el) => {
@@ -1204,6 +1220,18 @@ ${themeVarsBlock(this.effectiveTheme)}
     }
   }
 
+  // Fill the settings Relays card with the effective relay URLs (read-only).
+  private async loadRelayReadout() {
+    const el = this.shadow.getElementById('relay-readout');
+    if (!el) return;
+    try {
+      const relays = await getEffectiveRelays();
+      el.textContent = relays.join('\n');
+    } catch {
+      el.textContent = 'Could not read relay list';
+    }
+  }
+
   // Populate the "Connected to Nostr" footer tooltip with the user's npub slice
   // and the active relay count. Async because the relay mode lives in storage.
   private async updateNostrStatusTooltip() {
@@ -1216,8 +1244,9 @@ ${themeVarsBlock(this.effectiveTheme)}
       if (pubkey) {
         try { npubSlice = npubEncode(pubkey).slice(0, 12); } catch { npubSlice = ''; }
       }
-      const stored = await chrome.storage.local.get(STORAGE_KEYS.RELAYS);
-      const relays = relaysForMode(resolveRelayMode(stored[STORAGE_KEYS.RELAYS] as string | undefined));
+      // Effective set, not just the mode defaults — otherwise the count goes
+      // stale the moment the user adds or removes a relay.
+      const relays = await getEffectiveRelays();
       const relayPart = `${relays.length} relay${relays.length === 1 ? '' : 's'}`;
       // Prefer the verified nip05 / display name over the bare npub when known.
       const p = this.ownProfile;
@@ -2480,6 +2509,11 @@ ${themeVarsBlock(this.effectiveTheme)}
       .card-desc  { font-size: 12px; color: var(--p-ink-2); line-height: 1.5; }
       .card-value { font-size: 13px; color: var(--p-ink); }
       .card-value.ok { color: var(--p-accent-ink); }
+      .relay-readout {
+        font-size: 11px; color: var(--p-ink-2); font-family: var(--p-mono);
+        background: var(--p-surface-2); padding: 6px 8px;
+        white-space: pre-line; word-break: break-all; line-height: 1.6;
+      }
       .profile-identity { display: flex; flex-direction: column; gap: 4px; }
       .profile-name { font-size: 13px; font-weight: 600; color: var(--p-accent-ink); word-break: break-all; }
       .profile-id { font-size: 12px; color: var(--p-ink-2); font-family: var(--p-mono); background: var(--p-surface-2); padding: 6px 8px; word-break: break-all; }

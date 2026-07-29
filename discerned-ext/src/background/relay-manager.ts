@@ -1,13 +1,15 @@
 // Role: Background Service Worker — relay publisher
-// Description: Wraps nostr-tools SimplePool to broadcast signed Nostr events to the ACTIVE_RELAYS
-//              set. Requires MIN_PUBLISH_ACKS successful ACKs within a 10-second timeout; exposes
-//              health metrics so the background can surface publish failures.
-// Access: WebSocket via nostr-tools/pool (wss:// in production; a single ws://localhost relay in
-//         dev/test builds — see ACTIVE_RELAYS in shared/types.ts). No DOM, no Chrome APIs.
+// Description: Wraps nostr-tools SimplePool to broadcast signed Nostr events to the effective
+//              relay set. Requires minAcksFor(relays) successful ACKs within a 10-second timeout;
+//              exposes health metrics so the background can surface publish failures.
+// Access: WebSocket via nostr-tools/pool (the user's effective relay set — defaults ∪ their own
+//         relays in production, a single ws://localhost relay in local mode; see
+//         getEffectiveRelays in shared/relays.ts). chrome.storage.local via that helper. No DOM.
 
 import { SimplePool } from 'nostr-tools/pool';
 import type { NostrEvent } from 'nostr-tools/core';
-import { STORAGE_KEYS, resolveRelayMode, relaysForMode, minAcksFor } from '@/shared/types';
+import { minAcksFor } from '@/shared/types';
+import { getEffectiveRelays } from '@/shared/relays';
 import { LL, log } from '@/shared/logger';
 
 export interface PublishResult {
@@ -25,13 +27,12 @@ class RelayPool {
   }
 
   /**
-   * Resolve the active relay set at call time from the persisted relay mode
-   * (chrome.storage.local), falling back to the build-flag default when unset.
+   * Resolve the effective relay set at call time (mode defaults ∪ the user's
+   * own relays − removals). Read per-call, never cached, so a relay the user
+   * adds or removes takes effect on the very next publish.
    */
   private async getActiveRelays(): Promise<string[]> {
-    const stored = await chrome.storage.local.get(STORAGE_KEYS.RELAYS);
-    const mode = resolveRelayMode(stored[STORAGE_KEYS.RELAYS] as string | undefined);
-    return relaysForMode(mode);
+    return getEffectiveRelays();
   }
 
   /**

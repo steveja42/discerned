@@ -66,6 +66,20 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
 
   useEffect(() => onRelayModeChange(() => setRelayCount(getActiveRelays().length)), []);
 
+  // The extension's "Manage relays" link deep-links here with ?settings=1 —
+  // open the panel directly rather than dropping the user on the feed to hunt
+  // for the gear. Read from window.location (not useSearchParams) to avoid the
+  // Suspense boundary a static export would otherwise require; same approach as
+  // useNostrAuth's ?signin=1 handling. The param is stripped afterwards so a
+  // reload or shared link doesn't reopen the modal.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('settings') !== '1') return;
+    setSettingsOpen(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('settings');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }, []);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const isTrigger = isMac ? e.metaKey && e.key === 'k' : e.ctrlKey && e.key === 'k';

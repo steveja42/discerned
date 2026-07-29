@@ -51,15 +51,17 @@ export function matchesSignal(clipSignal: string | undefined, selected: string[]
   return clipSignal !== undefined && selected.includes(clipSignal);
 }
 
+// Mirrors DEFAULT_RELAYS in discerned-ext/src/shared/types.ts — keep in sync.
+// relay.damus.io retired at the end of July 2026; relay.primal.net replaced it.
 export const DEFAULT_RELAYS = [
-  'wss://relay.damus.io',
+  'wss://relay.primal.net',
   'wss://nos.lol',
   'wss://relay.snort.social',
 ] as const;
 
 // Active relay set. When NEXT_PUBLIC_LOCAL_RELAY is set (dev/test via .env.local)
 // it REPLACES the public relays so the feed reads only local test casts; unset
-// in production → real wss:// relays. Mirrors ACTIVE_RELAYS in the extension's
+// in production → real wss:// relays. Mirrors the relay-mode default in the extension's
 // shared/types.ts, but resolved via env var (Next idiom) rather than a build flag.
 //
 // The env var supplies the DEFAULT mode; a runtime dev toggle (synced from the
@@ -79,12 +81,103 @@ export function relaysForMode(mode: RelayMode): string[] {
   return mode === 'local' ? [LOCAL_RELAY ?? 'ws://localhost:7777'] : [...DEFAULT_RELAYS];
 }
 
+// ── User relay preferences (mirrors the extension's shared/relays.ts) ─────────
+// The EXTENSION is the source of truth: it owns chrome.storage.local and is the
+// only side that publishes. This mirror exists so (a) the feed subscribes to the
+// same set, and (b) the settings UI still works standalone when no extension is
+// installed (localStorage-backed). Keep RelaySource/RelayRow and
+// normaliseRelayUrl in sync with discerned-ext/src/shared/{types,relays}.ts.
+
+export type RelaySource = 'default' | 'user' | 'discovered';
+
+export interface RelayRow {
+  url: string;
+  source: RelaySource;
+}
+
+const RELAY_LIST_STORAGE_KEY = 'discerned.relayList';
+
+/**
+ * Canonicalise a relay URL so the same relay can't appear twice under two
+ * spellings. Returns null when the input can't be a relay URL.
+ * Mirror of normaliseRelayUrl in the extension's shared/relays.ts.
+ */
+export function normaliseRelayUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `wss://${trimmed}`;
+  let url: URL;
+  try {
+    url = new URL(withScheme);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'wss:' && url.protocol !== 'ws:') return null;
+  if (!url.hostname) return null;
+  const path = url.pathname === '/' ? '' : url.pathname.replace(/\/$/, '');
+  return `${url.protocol}//${url.host.toLowerCase()}${path}${url.search}`;
+}
+
 let currentMode: RelayMode = DEFAULT_RELAY_MODE;
 let activeRelays: string[] = relaysForMode(currentMode);
+// The relay list as last pushed by the extension (or restored from localStorage).
+// Empty means "no list known" — the mode defaults apply.
+let relayRows: RelayRow[] = [];
 const listeners = new Set<() => void>();
 
 export function getActiveRelays(): string[] {
   return activeRelays;
+}
+
+export function getRelayRows(): RelayRow[] {
+  return relayRows;
+}
+
+// Recompute the active set from mode + rows. In LOCAL mode the local relay is
+// exclusive (test casts must never reach the public network), matching
+// getEffectiveRelays() in the extension.
+function recomputeActiveRelays(): void {
+  if (currentMode === 'local' || relayRows.length === 0) {
+    activeRelays = relaysForMode(currentMode);
+    return;
+  }
+  activeRelays = relayRows.map((r) => r.url);
+}
+
+/**
+ * Adopt a relay list (pushed by the extension over the bridge, or edited
+ * locally). Recomputes the active set and notifies subscribers so the feed
+ * re-subscribes. Idempotent — an unchanged list is a no-op, which keeps the
+ * extension's echo of our own edit from causing a redundant re-subscribe.
+ */
+export function applyRelayList(rows: RelayRow[]): void {
+  const same =
+    rows.length === relayRows.length &&
+    rows.every((r, i) => r.url === relayRows[i].url && r.source === relayRows[i].source);
+  if (same) return;
+
+  relayRows = rows;
+  recomputeActiveRelays();
+  log(LL.NORMAL, `[nostr] relay list → ${rows.length} relay(s):`, activeRelays);
+  try {
+    localStorage.setItem(RELAY_LIST_STORAGE_KEY, JSON.stringify(rows));
+  } catch { /* SSR / blocked storage */ }
+  listeners.forEach((fn) => fn());
+}
+
+// Restore the last-known relay list on boot so the feed uses it before (or
+// without) an extension push. Called alongside initRelayModeFromStorage.
+export function initRelayListFromStorage(): void {
+  try {
+    const raw = localStorage.getItem(RELAY_LIST_STORAGE_KEY);
+    if (!raw) return;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    const rows = parsed.filter(
+      (r): r is RelayRow => !!r && typeof r.url === 'string' && typeof r.source === 'string',
+    );
+    if (rows.length > 0) applyRelayList(rows);
+  } catch { /* SSR / blocked storage / malformed JSON */ }
 }
 
 export function getCurrentRelayMode(): RelayMode {
@@ -104,7 +197,9 @@ export function onRelayModeChange(fn: () => void): () => void {
 export function applyRelayMode(mode: RelayMode): void {
   if (mode === currentMode) return;
   currentMode = mode;
-  activeRelays = relaysForMode(mode);
+  // Via recompute (not relaysForMode directly) so switching back to production
+  // restores the user's relay list rather than the bare defaults.
+  recomputeActiveRelays();
   log(LL.NORMAL, `[nostr] relay mode → ${mode} (${activeRelays.length} relay(s)):`, activeRelays);
   try { localStorage.setItem('discerned.relayMode', mode); } catch { /* SSR / blocked storage */ }
   listeners.forEach((fn) => fn());

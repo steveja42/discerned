@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { ClipData } from '@/lib/types';
 import { sendDeleteClips, sendUpdateNote, sendUpdateCategories } from '@/lib/bridge/extension-bridge';
-import { initRelayModeFromStorage } from '@/lib/constants';
+import { initRelayModeFromStorage, initRelayListFromStorage } from '@/lib/constants';
 
 export interface ClipBody {
   bodyHtml?: string;
@@ -52,6 +52,7 @@ export function ClipStoreProvider({ children }: { children: ReactNode }) {
   // A connected extension will subsequently override via DISCERNED_BRIDGE_RELAYS.
   useEffect(() => {
     initRelayModeFromStorage();
+    initRelayListFromStorage();
   }, []);
 
   const setClips = useCallback((clips: ClipData[]) => {

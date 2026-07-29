@@ -184,7 +184,7 @@ export type BackgroundMessage =
   | { type: 'NAVIGATE_TO_CLIP'; clipId: string }
   | { type: 'GET_CLIP_COUNT' }
   | { type: 'OPEN_LIBRARY'; clipId?: string }
-  | { type: 'OPEN_HOME'; eventId?: string; autoSignin?: boolean }
+  | { type: 'OPEN_HOME'; eventId?: string; autoSignin?: boolean; openSettings?: boolean }
   | { type: 'REGISTER_LOG_TAB' }
   | { type: 'EXTRACT_EMBEDDED_TWEETS' }
   | { type: 'GET_CLIP_BODY'; id: string }
@@ -193,6 +193,10 @@ export type BackgroundMessage =
   | { type: 'REJECT_PENDING_SIGN'; id: string; error: string }
   | { type: 'RELAY_MODE_CHANGED'; mode: RelayMode }
   | { type: 'PUSH_RELAY_MODE'; mode: RelayMode }
+  | { type: 'GET_RELAY_LIST' }
+  | { type: 'UPDATE_RELAY_LIST'; userRelays: string[]; removedRelays: string[] }
+  | { type: 'PUSH_RELAY_LIST'; rows: RelayRow[] }
+  | { type: 'GET_NIP07_RELAYS' }
   // Test-only (dev/test builds): build the cast event templates a cast WOULD
   // publish (kind-1 note + companion kind-30023), without signing or publishing.
   // Lets the e2e visual specs render the real published-cast output. The handler
@@ -209,7 +213,23 @@ export const STORAGE_KEYS = {
   NIP46_CLIENT_KEY: 'nip46ClientKey',
   NSEC_ENCRYPTED: 'nsecEncrypted',
   SETTINGS: 'settings',
+  // 'local' | 'production' — the dev relay MODE (see RelayMode below). This is
+  // only the BASE of the effective set; the user's own relays live in the two
+  // keys after it. Resolve them together via getEffectiveRelays() in shared/relays.ts.
   RELAYS: 'relays',
+  // string[] — relays the user added by hand, plus any merged in from their
+  // NIP-65 (kind-10002) relay list at sign-in.
+  USER_RELAYS: 'userRelays',
+  // string[] — relays the user explicitly removed. Applied AFTER the union of
+  // defaults + userRelays, so a built-in default can be dropped. Kept as its own
+  // list (rather than deleting from userRelays) so re-discovery at the next
+  // sign-in can't silently resurrect a relay the user chose to remove.
+  REMOVED_RELAYS: 'removedRelays',
+  // { [pubkey]: { relays: string[]; fetchedAt: number } } — per-identity NIP-65
+  // discovery cache with a 24h TTL. Same shape as PROFILE_CACHE. An EMPTY relays
+  // array is cached too, so an identity with no kind-10002 isn't re-fetched on
+  // every sign-in.
+  RELAY_DISCOVERY: 'relayDiscovery',
   OVERLAY_NUDGE_DISMISSED: 'overlayNudgeDismissed',
   ONBOARDING_SHOWN: 'onboardingShown',
   CAST_COUNT: 'castCount',
@@ -245,7 +265,8 @@ export type WebBridgeOutbound =
   | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] }
   | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null }
   | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown>; expectedPubkey?: string }
-  | { type: 'DISCERNED_BRIDGE_RELAYS'; mode: RelayMode };
+  | { type: 'DISCERNED_BRIDGE_RELAYS'; mode: RelayMode }
+  | { type: 'DISCERNED_BRIDGE_RELAY_LIST'; rows: RelayRow[] };
 
 export type WebBridgeInbound =
   | { type: 'DISCERNED_WEB_READY'; clipCount: number }
@@ -257,11 +278,13 @@ export type WebBridgeInbound =
   | { type: 'DISCERNED_SET_NIP07_PUBKEY'; pubkey: string }
   | { type: 'DISCERNED_SIGNED'; id: string; signed: Record<string, unknown> }
   | { type: 'DISCERNED_SIGN_REJECTED'; id: string; error: string }
-  | { type: 'DISCERNED_SET_RELAY_MODE'; mode: RelayMode };
+  | { type: 'DISCERNED_SET_RELAY_MODE'; mode: RelayMode }
+  | { type: 'DISCERNED_SET_RELAY_LIST'; userRelays: string[]; removedRelays: string[] };
 
-// Default relay list
+// Default relay list. Mirrored in discerned-web/lib/constants.ts — keep in sync.
+// relay.damus.io retired at the end of July 2026; relay.primal.net replaced it.
 export const DEFAULT_RELAYS = [
-  'wss://relay.damus.io',
+  'wss://relay.primal.net',
   'wss://nos.lol',
   'wss://relay.snort.social',
   //not working 'wss://relay.nostr.band',
@@ -270,17 +293,11 @@ export const DEFAULT_RELAYS = [
 // Local relay for dev/test builds only. Tree-shaken out of production.
 export const LOCAL_RELAY = 'ws://localhost:7777';
 
-// Active relay set. Test/dev REPLACES the public relays so test casts never
-// reach the real network; production keeps the wss:// list. This is the
-// build-flag DEFAULT — it's the fallback used by resolveRelayMode() below when
-// the user hasn't set an explicit relay mode in chrome.storage.local.
-export const ACTIVE_RELAYS: readonly string[] = __DISCERNED_TEST_BUILD__
-  ? [LOCAL_RELAY]
-  : DEFAULT_RELAYS;
-
-// Min ACKs for publish success — derived from relay count, capped at 2 so
-// production still requires 2 while a single local relay needs only 1.
-export const MIN_PUBLISH_ACKS = Math.min(ACTIVE_RELAYS.length, 2);
+// NOTE: there is deliberately no exported ACTIVE_RELAYS / MIN_PUBLISH_ACKS
+// constant. The effective relay set is user-dependent (defaults ∪ the user's own
+// relays − removals) and can only be resolved asynchronously from
+// chrome.storage.local — see getEffectiveRelays() in shared/relays.ts. A
+// module-load constant would silently miss the user's relays.
 
 // ── Attribution snippet sentinels (mirrored ext↔web, keep in sync) ───────────
 // Every cast prepends a human-readable "Discerned by nostr:… — category · rating
@@ -298,7 +315,7 @@ export const SNIPPET_SENTINEL_CLOSE = '⁢⁡⁣⁢'; // invisible close marker
 
 // ── Runtime relay mode (dev toggle) ──────────────────────────────────────────
 // A 'local' | 'production' preference persisted in chrome.storage.local under
-// STORAGE_KEYS.RELAYS. When unset, the build-flag default (ACTIVE_RELAYS) wins —
+// STORAGE_KEYS.RELAYS. When unset, the __DISCERNED_TEST_BUILD__ default wins —
 // so production users who never touch the toggle behave exactly as before. The
 // extension is the source of truth; it mirrors this mode to the web app over the
 // bridge (DISCERNED_BRIDGE_RELAYS), and each side resolves its own URLs.
@@ -318,6 +335,18 @@ export function relaysForMode(mode: RelayMode): string[] {
 // Min ACKs derived from an actual relay list (1 for the lone local relay, 2 for production).
 export function minAcksFor(relays: readonly string[]): number {
   return Math.min(relays.length, 2);
+}
+
+// ── User relay preferences ───────────────────────────────────────────────────
+// One row of the relay list as rendered by the management UI. `source` only
+// drives the badge and which storage key a removal writes to — every row is
+// removable (removing a 'default' records it in REMOVED_RELAYS). Mirrored in
+// discerned-web/lib/constants.ts (mirrored, NOT imported — keep in sync).
+export type RelaySource = 'default' | 'user' | 'discovered';
+
+export interface RelayRow {
+  url: string;
+  source: RelaySource;
 }
 
 // ── Runtime theme (light / dark / system) ────────────────────────────────────

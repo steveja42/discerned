@@ -15,6 +15,7 @@
 
 import type { AuthState, BackgroundMessage, ClipData, WebBridgeInbound, WebBridgeOutbound } from '@/shared/types';
 import { STORAGE_KEYS, resolveRelayMode } from '@/shared/types';
+import { getRelayRows } from '@/shared/relays';
 import { LL, log } from '@/shared/logger';
 
 const ORIGIN = window.location.origin;
@@ -149,6 +150,10 @@ async function sendBridgeData(knownCount = 0): Promise<boolean> {
   const relayStored = await chrome.storage.local.get(STORAGE_KEYS.RELAYS);
   const relayMode = resolveRelayMode(relayStored[STORAGE_KEYS.RELAYS] as string | undefined);
   post({ type: 'DISCERNED_BRIDGE_RELAYS', mode: relayMode });
+
+  // And the user's own relay list (defaults ∪ their relays − removals), so the
+  // web app's settings UI renders the same set the extension publishes to.
+  post({ type: 'DISCERNED_BRIDGE_RELAY_LIST', rows: await getRelayRows() });
   return true;
 }
 
@@ -176,6 +181,9 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
   }
   if (message.type === 'PUSH_RELAY_MODE') {
     post({ type: 'DISCERNED_BRIDGE_RELAYS', mode: message.mode });
+  }
+  if (message.type === 'PUSH_RELAY_LIST') {
+    post({ type: 'DISCERNED_BRIDGE_RELAY_LIST', rows: message.rows });
   }
   if (message.type === 'PUSH_PENDING_SIGN') {
     // First-cast handoff from the background: surface a confirm UI in the
@@ -316,6 +324,16 @@ window.addEventListener('message', (e: MessageEvent) => {
       type: 'NIP07_DETECTED',
       hasNIP07: true,
       pubkey: msg.pubkey,
+    }).catch(() => { /* non-fatal */ });
+  }
+  if (msg?.type === 'DISCERNED_SET_RELAY_LIST') {
+    // The relay list was edited in the web app's settings UI. Hand it to the
+    // background, which is the canonical store — it normalises, persists, and
+    // re-broadcasts to every open tab (including this one).
+    chrome.runtime.sendMessage({
+      type: 'UPDATE_RELAY_LIST',
+      userRelays: msg.userRelays,
+      removedRelays: msg.removedRelays,
     }).catch(() => { /* non-fatal */ });
   }
   if (msg?.type === 'DISCERNED_SET_RELAY_MODE') {

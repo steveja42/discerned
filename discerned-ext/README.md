@@ -241,7 +241,7 @@ Evaluation is emitted as NIP-32 label tags (namespaced `l` values):
 | Category | General · Tech · Finance · Health · Politics · Philosophy · Science · Culture · (custom) |
 
 ### Default Relays
-- `wss://relay.damus.io`
+- `wss://relay.primal.net`
 - `wss://nos.lol`
 - `wss://relay.snort.social`
 

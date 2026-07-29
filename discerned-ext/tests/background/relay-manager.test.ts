@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NostrEvent } from 'nostr-tools/core';
-import { STORAGE_KEYS } from '@/shared/types';
+import { STORAGE_KEYS, DEFAULT_RELAYS } from '@/shared/types';
 
 // One controllable publish result per relay URL. SimplePool.publish([url], ev)
 // returns an array of per-relay promises; the mock returns [outcome(url)].
@@ -64,7 +64,7 @@ describe('publishWithMinimum', () => {
 
   it('production: 2 of 3 ACKs meets the threshold', async () => {
     setRelayMode('production');
-    relayOutcomes.set('wss://relay.damus.io', () => Promise.resolve(''));
+    relayOutcomes.set('wss://relay.primal.net', () => Promise.resolve(''));
     relayOutcomes.set('wss://nos.lol', () => Promise.resolve(''));
     relayOutcomes.set('wss://relay.snort.social', () => Promise.reject(new Error('rate limited')));
 
@@ -78,7 +78,7 @@ describe('publishWithMinimum', () => {
 
   it('production: 1 of 3 ACKs is below the threshold → failure', async () => {
     setRelayMode('production');
-    relayOutcomes.set('wss://relay.damus.io', () => Promise.resolve(''));
+    relayOutcomes.set('wss://relay.primal.net', () => Promise.resolve(''));
     relayOutcomes.set('wss://nos.lol', () => Promise.reject(new Error('down')));
     relayOutcomes.set('wss://relay.snort.social', () =>
       Promise.resolve('connection failure: timed out'));
@@ -89,7 +89,7 @@ describe('publishWithMinimum', () => {
 
   it('an explicit minimumSuccess override wins over the derived threshold', async () => {
     setRelayMode('production');
-    relayOutcomes.set('wss://relay.damus.io', () => Promise.resolve(''));
+    relayOutcomes.set('wss://relay.primal.net', () => Promise.resolve(''));
     relayOutcomes.set('wss://nos.lol', () => Promise.reject(new Error('down')));
     relayOutcomes.set('wss://relay.snort.social', () => Promise.reject(new Error('down')));
 
@@ -97,6 +97,52 @@ describe('publishWithMinimum', () => {
     expect(strict.success).toBe(false);
     const lax = await publishWithMinimum(EVENT, 1);
     expect(lax.success).toBe(true);
+  });
+});
+
+describe('user relay preferences', () => {
+  it('publishes to the union of defaults and the user\'s own relays', async () => {
+    (chrome.storage.local.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      [STORAGE_KEYS.RELAYS]: 'production',
+      [STORAGE_KEYS.USER_RELAYS]: ['wss://mine.example.com'],
+    });
+    for (const url of [...DEFAULT_RELAYS, 'wss://mine.example.com']) {
+      relayOutcomes.set(url, () => Promise.resolve(''));
+    }
+    const { success, results } = await publishWithMinimum(EVENT);
+    expect(success).toBe(true);
+    expect(results.map((r) => r.relay)).toContain('wss://mine.example.com');
+    expect(results).toHaveLength(DEFAULT_RELAYS.length + 1);
+  });
+
+  it('skips a default the user removed', async () => {
+    (chrome.storage.local.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      [STORAGE_KEYS.RELAYS]: 'production',
+      [STORAGE_KEYS.REMOVED_RELAYS]: ['wss://relay.snort.social'],
+    });
+    relayOutcomes.set('wss://relay.primal.net', () => Promise.resolve(''));
+    relayOutcomes.set('wss://nos.lol', () => Promise.resolve(''));
+
+    const { success, results } = await publishWithMinimum(EVENT);
+    expect(success).toBe(true);
+    expect(results.map((r) => r.relay)).not.toContain('wss://relay.snort.social');
+  });
+
+  it('keeps the ACK threshold capped at 2 even with a large relay set', async () => {
+    const extras = Array.from({ length: 5 }, (_, i) => `wss://extra${i}.example.com`);
+    (chrome.storage.local.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      [STORAGE_KEYS.RELAYS]: 'production',
+      [STORAGE_KEYS.USER_RELAYS]: extras,
+    });
+    // Only two relays ACK; the rest fail. Still a success — the threshold is
+    // min(count, 2), not "most of them".
+    relayOutcomes.set('wss://relay.primal.net', () => Promise.resolve(''));
+    relayOutcomes.set('wss://nos.lol', () => Promise.resolve(''));
+    for (const url of [...extras, 'wss://relay.snort.social']) {
+      relayOutcomes.set(url, () => Promise.reject(new Error('down')));
+    }
+    const { success } = await publishWithMinimum(EVENT);
+    expect(success).toBe(true);
   });
 });
 

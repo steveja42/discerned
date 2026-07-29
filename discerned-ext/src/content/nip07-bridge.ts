@@ -20,6 +20,9 @@ window.open = (url?: string | URL, target?: string, features?: string): WindowPr
 interface NostrProvider {
   getPublicKey(): Promise<string>;
   signEvent(event: object): Promise<object>;
+  // Optional in NIP-07 — several wallets don't implement it, so every call site
+  // must feature-detect before invoking.
+  getRelays?(): Promise<Record<string, { read: boolean; write: boolean }>>;
 }
 
 declare global {
@@ -48,6 +51,26 @@ window.addEventListener('message', async (event: MessageEvent) => {
     } catch (err) {
       window.postMessage({
         type: 'DISCERNED_NIP07_PUBKEY_RESPONSE',
+        error: (err as Error).message,
+      }, '*');
+    }
+    return;
+  }
+
+  if (type === 'DISCERNED_NIP07_GETRELAYS') {
+    // getRelays is OPTIONAL in NIP-07. An absent implementation is a normal
+    // outcome, not an error — respond with an empty map so the caller falls
+    // through quietly instead of waiting out its timeout.
+    if (typeof window.nostr?.getRelays !== 'function') {
+      window.postMessage({ type: 'DISCERNED_NIP07_GETRELAYS_RESPONSE', relays: {} }, '*');
+      return;
+    }
+    try {
+      const relays = await window.nostr.getRelays();
+      window.postMessage({ type: 'DISCERNED_NIP07_GETRELAYS_RESPONSE', relays }, '*');
+    } catch (err) {
+      window.postMessage({
+        type: 'DISCERNED_NIP07_GETRELAYS_RESPONSE',
         error: (err as Error).message,
       }, '*');
     }

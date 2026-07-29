@@ -26,7 +26,9 @@ import {
   invalidateBunkerSigner,
 } from '@/shared/nostr/nip46-manager';
 import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation, ClipData, EmbeddedTweetData, RelayMode } from '@/shared/types';
-import { STORAGE_KEYS, relaysForMode, resolveRelayMode } from '@/shared/types';
+import { STORAGE_KEYS, relaysForMode } from '@/shared/types';
+import { getEffectiveRelays, getRelayRows, saveRelayPrefs, mergeDiscoveredRelays } from '@/shared/relays';
+import { fetchPreferredRelays, clearDiscoveryCache } from './relay-list-fetcher';
 import { LL, log, setLogRelayTabs } from '@/shared/logger';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
 import type { EventTemplate } from 'nostr-tools/core';
@@ -121,6 +123,72 @@ async function pushRelayModeToWebApp(mode: RelayMode): Promise<void> {
   }
 }
 
+// Push the current relay list to any open discerned tab so the settings UI
+// reflects an edit made elsewhere — or relays just discovered at sign-in —
+// without a reload.
+async function pushRelayListToWebApp(): Promise<void> {
+  const rows = await getRelayRows();
+  const tabs = await chrome.tabs.query({ url: DISCERNED_URL_PATTERNS });
+  const message: BackgroundMessage = { type: 'PUSH_RELAY_LIST', rows };
+  for (const tab of tabs) {
+    if (tab.id === undefined) continue;
+    chrome.tabs.sendMessage(tab.id, message).catch(() => { /* non-fatal */ });
+  }
+}
+
+/**
+ * Ask an ALREADY-OPEN discerned tab for the wallet's getRelays() result.
+ *
+ * Deliberately does NOT use resolveSigningTab(), which opens a tab when none
+ * exists — relay discovery is a silent background nicety and must never make a
+ * window appear. No open tab simply means no fallback this time.
+ */
+async function getNip07RelaysFromOpenTab(): Promise<string[]> {
+  const tabs = await chrome.tabs.query({ url: DISCERNED_URL_PATTERNS });
+  const live = tabs.find(t => t.id !== undefined && !t.discarded);
+  if (live?.id === undefined) return [];
+  try {
+    const res = await chrome.tabs.sendMessage(live.id, { type: 'GET_NIP07_RELAYS' }) as
+      { relays?: string[] } | undefined;
+    return res?.relays ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Discover the identity's preferred relays and merge them into the user's list.
+ *
+ * Primary source is their NIP-65 kind-10002 event (works for every auth mode);
+ * the NIP-07 wallet's optional getRelays() is the fallback. Anything the user
+ * explicitly removed stays removed — mergeDiscoveredRelays enforces that.
+ *
+ * Fire-and-forget by contract: sign-in must never block on relay I/O, and a
+ * failure here must never surface as a sign-in error.
+ */
+async function discoverAndMergeRelays(pubkey: string, isNip07: boolean): Promise<void> {
+  try {
+    let discovered = await fetchPreferredRelays(pubkey);
+    if (discovered.length === 0 && isNip07) {
+      discovered = await getNip07RelaysFromOpenTab();
+      if (discovered.length > 0) {
+        log(LL.NORMAL, `[relays] NIP-07 getRelays returned ${discovered.length} write relay(s)`);
+      }
+    }
+    if (discovered.length === 0) return;
+
+    const added = await mergeDiscoveredRelays(discovered);
+    if (added.length === 0) {
+      log(LL.NORMAL, '[relays] preferred relays already known for', npubEncode(pubkey).slice(0, 12));
+      return;
+    }
+    log(LL.NORMAL, `[relays] added ${added.length} preferred relay(s) for ${npubEncode(pubkey).slice(0, 12)}:`, added);
+    await pushRelayListToWebApp();
+  } catch (err) {
+    log(LL.WARN, '[relays] discovery failed:', err instanceof Error ? err.message : String(err));
+  }
+}
+
 async function handleImportClips(clips: ClipData[]): Promise<BackgroundResponse> {
   try {
     for (const clip of clips) {
@@ -159,12 +227,16 @@ const DISCERNS_URL_PATTERNS = [
   'http://localhost:3000/discerns#*',
 ];
 
-async function openDiscernsTab(autoSignin?: boolean): Promise<void> {
+async function openDiscernsTab(autoSignin?: boolean, openSettings?: boolean): Promise<void> {
   const base = await resolveBaseUrl();
-  const url = autoSignin ? `${base}/discerns?signin=1` : `${base}/discerns`;
+  const query = autoSignin ? '?signin=1' : openSettings ? '?settings=1' : '';
+  const url = `${base}/discerns${query}`;
   const [existing] = await chrome.tabs.query({ url: DISCERNS_URL_PATTERNS });
   if (existing?.id !== undefined) {
-    await chrome.tabs.update(existing.id, { active: true, url: autoSignin ? url : undefined });
+    // Reusing a tab still needs a navigation when we're deep-linking, or the
+    // requested panel never opens — a plain activate would just show whatever
+    // the tab was already displaying.
+    await chrome.tabs.update(existing.id, { active: true, url: query ? url : undefined });
     if (existing.windowId !== undefined) {
       chrome.windows.update(existing.windowId, { focused: true }).catch(() => {});
     }
@@ -394,10 +466,14 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
         currentAuthState = { type: 'pro', hasNIP07: true, pubkey: message.pubkey };
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
         log(LL.NORMAL, '[auth] NIP-07 detected — pro mode, pubkey:', message.pubkey ? npubEncode(message.pubkey).slice(0, 12) : '(pending)');
+        // Only meaningful once a pubkey is known; the passive page-load detection
+        // sends hasNIP07 with no pubkey, and discovery needs one.
+        if (message.pubkey) void discoverAndMergeRelays(message.pubkey, true);
       } else if (message.hasNIP07 && currentAuthState.type === 'pro' && message.pubkey && !currentAuthState.pubkey) {
         currentAuthState = { ...currentAuthState, pubkey: message.pubkey };
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
         log(LL.NORMAL, '[auth] NIP-07 pubkey resolved:', npubEncode(message.pubkey).slice(0, 12));
+        void discoverAndMergeRelays(message.pubkey, true);
       } else if (message.hasNIP07 && currentAuthState.type === 'pro' && message.pubkey && currentAuthState.pubkey && message.pubkey !== currentAuthState.pubkey) {
         // Explicit identity switch: a pubkey-bearing NIP07_DETECTED only comes from
         // the web app's Sign In (DISCERNED_SET_NIP07_PUBKEY) — a user gesture on
@@ -406,6 +482,7 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
         currentAuthState = { ...currentAuthState, pubkey: message.pubkey };
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
         log(LL.NORMAL, '[auth] NIP-07 identity switched:', npubEncode(prev).slice(0, 12), '→', npubEncode(message.pubkey).slice(0, 12));
+        void discoverAndMergeRelays(message.pubkey, true);
       }
       return { success: true };
 
@@ -450,7 +527,7 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       // message.eventId is accepted for a future deep-link to the cast; for now we
       // open the bare discerns feed (the just-cast event may not have propagated
       // to the subscribed relays yet, so deep-linking would risk a transient miss).
-      openDiscernsTab(message.autoSignin).catch(() => {});
+      openDiscernsTab(message.autoSignin, message.openSettings).catch(() => {});
       return { success: true };
 
     case 'DISMISS_OVERLAY_NUDGE':
@@ -497,12 +574,32 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       return { success: true };
     }
 
+    case 'GET_RELAY_LIST':
+      return { success: true, data: await getRelayRows() };
+
+    case 'UPDATE_RELAY_LIST': {
+      // The relay list was edited (from the web app's settings UI). The
+      // extension is the canonical store: persist, then re-broadcast so every
+      // other open tab converges on the same list.
+      await saveRelayPrefs(message.userRelays, message.removedRelays);
+      const effective = await getEffectiveRelays();
+      log(LL.NORMAL, `[relays] list updated — ${effective.length} effective relay(s):`, effective);
+      await pushRelayListToWebApp();
+      return { success: true };
+    }
+
+    case 'GET_NIP07_RELAYS':
+      // Background→content message; the background asks a discerned tab for the
+      // wallet's getRelays() result, it never receives this itself.
+      return { success: false, error: 'GET_NIP07_RELAYS is not handled by background' };
+
     case 'PUSH_NEW_CLIP':
     case 'FORCE_BRIDGE_RESYNC':
     case 'NAVIGATE_TO_CLIP':
     case 'PUSH_CATEGORIES':
     case 'PUSH_PENDING_SIGN':
     case 'PUSH_RELAY_MODE':
+    case 'PUSH_RELAY_LIST':
       // These are background→content messages; the background never receives them.
       // (PUSH_PENDING_SIGN is sent TO the web-bridge content script, not received here.)
       return { success: false, error: 'Not handled by background' };
@@ -529,6 +626,9 @@ async function handleConnectNip46(bunkerUri: string): Promise<BackgroundResponse
       [STORAGE_KEYS.NIP46_CLIENT_KEY]: result.clientKeyHex,
     });
     log(LL.NORMAL, '[auth] nip46 connected, pubkey:', npubEncode(result.pubkey).slice(0, 12));
+    // NIP-65 needs only a pubkey, so remote-signer identities get relay
+    // discovery too (the wallet getRelays fallback is nip07-only).
+    void discoverAndMergeRelays(result.remotePubkey, false);
     return { success: true, data: { pubkey: result.pubkey } };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Connection failed' };
@@ -552,6 +652,7 @@ async function handleConnectNsec(rawNsec: string, pin: string): Promise<Backgrou
       [STORAGE_KEYS.NSEC_ENCRYPTED]: ncryptsec,
     });
     log(LL.NORMAL, '[auth] nsec connected, pubkey:', npubEncode(pubkeyHex).slice(0, 12));
+    void discoverAndMergeRelays(pubkeyHex, false);
     return { success: true, data: { pubkey: pubkeyHex } };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to save account key' };
@@ -591,6 +692,13 @@ async function handleUnlockNsec(pin: string): Promise<BackgroundResponse> {
 async function handleDisconnectAuth(): Promise<BackgroundResponse> {
   invalidateBunkerSigner();
   nsecPrivateKey = null;
+  // Forget this identity's NIP-65 discovery so signing back in re-fetches it.
+  // The user's relay LIST itself survives — it's a device preference, and the
+  // relays they added by hand aren't tied to the identity that discovered them.
+  const priorPubkey = currentAuthState.type === 'nip46'
+    ? currentAuthState.remotePubkey
+    : currentAuthState.type !== 'guest' ? currentAuthState.pubkey : undefined;
+  if (priorPubkey) await clearDiscoveryCache(priorPubkey);
   currentAuthState = { type: 'guest' };
   guestPrivateKey = generateSecretKey();
   await closeOwnSigningTab();
@@ -1132,13 +1240,9 @@ function resolveAuthorPubkey(): string | undefined {
   }
 }
 
-// Resolve the active relay URL list (same resolution the relay pool uses) for
+// Resolve the effective relay URL list (same resolution the relay pool uses) for
 // seeding the nprofile/naddr mentions in the snippet + long-form link.
-async function resolveActiveRelays(): Promise<string[]> {
-  const stored = await chrome.storage.local.get(STORAGE_KEYS.RELAYS);
-  const mode = resolveRelayMode(stored[STORAGE_KEYS.RELAYS] as string | undefined);
-  return relaysForMode(mode);
-}
+const resolveActiveRelays = getEffectiveRelays;
 
 // Build the kind-1 note template. With a longFormRef it becomes summary + link
 // to the companion article; otherwise it inlines the body (bookmark: none;

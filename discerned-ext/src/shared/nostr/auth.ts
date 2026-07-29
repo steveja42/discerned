@@ -95,6 +95,43 @@ export async function getNIP07PublicKey(timeoutMs = 15000): Promise<string | nul
 }
 
 /**
+ * Get the user's preferred relays from their NIP-07 wallet (window.nostr.getRelays).
+ *
+ * Returns only the relays marked WRITE — those are where the user publishes, so
+ * they're the ones worth adopting. Returns [] when the wallet doesn't implement
+ * getRelays (it's optional in NIP-07), when it errors, or on timeout.
+ *
+ * This is the FALLBACK for relay discovery; the primary source is the user's
+ * NIP-65 kind-10002 event, which works for every auth mode rather than nip07 only.
+ * 5s timeout — unlike getPublicKey this never shows an approval prompt, so a
+ * wallet that hasn't answered by then almost certainly won't.
+ */
+export async function getNIP07Relays(timeoutMs = 5000): Promise<string[]> {
+  return new Promise((resolve) => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'DISCERNED_NIP07_GETRELAYS_RESPONSE') {
+        window.removeEventListener('message', handler);
+        clearTimeout(timer);
+        const map = event.data.relays as
+          | Record<string, { read?: boolean; write?: boolean }>
+          | undefined;
+        if (!map || typeof map !== 'object') {
+          resolve([]);
+          return;
+        }
+        resolve(Object.entries(map).filter(([, policy]) => policy?.write).map(([url]) => url));
+      }
+    };
+    window.addEventListener('message', handler);
+    window.postMessage({ type: 'DISCERNED_NIP07_GETRELAYS' }, '*');
+    const timer = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      resolve([]);
+    }, timeoutMs);
+  });
+}
+
+/**
  * Sign event using NIP-07.
  *
  * Default timeout 30s — leaves headroom for the wallet to wake its SW,

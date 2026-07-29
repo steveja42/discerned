@@ -13,7 +13,7 @@
 // plain window.postMessage because the bridge correctly drops those either way.
 
 import { describe, it, expect, vi } from 'vitest';
-import { listenForBridge, type BridgeMessage } from '@/lib/bridge/extension-bridge';
+import { listenForBridge, sendRelayListToExtension, type BridgeMessage } from '@/lib/bridge/extension-bridge';
 
 function dispatchBridgeEvent(payload: unknown): void {
   const ev = new MessageEvent('message', {
@@ -70,6 +70,40 @@ describe('extension-bridge listener', () => {
     expect(handler.mock.calls[0][0].expectedPubkey).toBe('a'.repeat(64));
 
     cleanup();
+  });
+
+  it('delivers the user relay list pushed by the extension', () => {
+    const handler = vi.fn();
+    const cleanup = listenForBridge(handler);
+
+    const relayMsg: BridgeMessage = {
+      type: 'DISCERNED_BRIDGE_RELAY_LIST',
+      rows: [
+        { url: 'wss://relay.primal.net', source: 'default' },
+        { url: 'wss://mine.example.com', source: 'discovered' },
+      ],
+    };
+    dispatchBridgeEvent(relayMsg);
+
+    expect(handler).toHaveBeenCalledWith(relayMsg);
+    // The source badge survives so the settings UI can label discovered relays.
+    expect(handler.mock.calls[0][0].rows[1].source).toBe('discovered');
+
+    cleanup();
+  });
+
+  it('sends an edited relay list back to the extension', () => {
+    const spy = vi.spyOn(window, 'postMessage');
+    sendRelayListToExtension(['wss://mine.example.com'], ['wss://nos.lol']);
+    expect(spy).toHaveBeenCalledWith(
+      {
+        type: 'DISCERNED_SET_RELAY_LIST',
+        userRelays: ['wss://mine.example.com'],
+        removedRelays: ['wss://nos.lol'],
+      },
+      window.location.origin,
+    );
+    spy.mockRestore();
   });
 
   it('ignores DISCERNED_WEB_READY echoes (own-side messages)', () => {

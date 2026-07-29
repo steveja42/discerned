@@ -1,6 +1,6 @@
 // Role: Background Service Worker — kind-0 profile fetcher
 // Description: Fetches the signed-in identity's kind-0 profile metadata (name / nip05)
-//              from the ACTIVE_RELAYS set, verifies any nip05 against the domain's
+//              from the effective relay set, verifies any nip05 against the domain's
 //              /.well-known/nostr.json (NIP-05), and caches the result in
 //              chrome.storage.local with a 24h TTL. Used by the overlay settings +
 //              footer to display a human-readable identity instead of a bare npub.
@@ -9,7 +9,8 @@
 
 import { SimplePool } from 'nostr-tools/pool';
 import { isNip05, isValid, type Nip05 } from 'nostr-tools/nip05';
-import { STORAGE_KEYS, resolveRelayMode, relaysForMode, type OwnProfile } from '@/shared/types';
+import { STORAGE_KEYS, type OwnProfile } from '@/shared/types';
+import { getEffectiveRelays } from '@/shared/relays';
 import { LL, log } from '@/shared/logger';
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -42,11 +43,10 @@ async function writeCache(profile: OwnProfile): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.PROFILE_CACHE]: cache });
 }
 
-async function activeRelays(): Promise<string[]> {
-  const stored = await chrome.storage.local.get(STORAGE_KEYS.RELAYS);
-  const mode = resolveRelayMode(stored[STORAGE_KEYS.RELAYS] as string | undefined);
-  return relaysForMode(mode);
-}
+// Effective relay set (mode defaults ∪ the user's own relays − removals). A
+// user's kind-0 often lives only on their own relays, so this must be the full
+// effective set rather than just the built-in defaults.
+const activeRelays = getEffectiveRelays;
 
 /**
  * Fetch (or serve from cache) the kind-0 profile for `pubkey`. Returns null when

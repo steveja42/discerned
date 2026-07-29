@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useClipStore } from '@/lib/bridge/ClipStoreContext';
 import { listenForBridge } from '@/lib/bridge/extension-bridge';
-import { applyRelayMode } from '@/lib/constants';
+import { applyRelayMode, applyRelayList } from '@/lib/constants';
 
 export function useLibraryBridge() {
   const store = useClipStore();
@@ -48,6 +48,11 @@ export function useLibraryBridge() {
       if (msg.type === 'DISCERNED_BRIDGE_RELAYS') {
         // Honour the extension's dev relay mode on /clips too.
         applyRelayMode(msg.mode);
+      }
+      if (msg.type === 'DISCERNED_BRIDGE_RELAY_LIST') {
+        // The extension is the source of truth for the user's relay list —
+        // adopt it (it may include relays just discovered from their NIP-65).
+        applyRelayList(msg.rows);
       }
     }, mountClipCount.current);
 

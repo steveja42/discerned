@@ -4,7 +4,7 @@
 // On mount, the page posts DISCERNED_WEB_READY so the extension knows it can send.
 
 import type { ClipData } from '@/lib/types';
-import type { RelayMode } from '@/lib/constants';
+import type { RelayMode, RelayRow } from '@/lib/constants';
 import { LL, log } from '@/lib/logger';
 
 export type BridgeMessage =
@@ -15,7 +15,8 @@ export type BridgeMessage =
   | { type: 'DISCERNED_BRIDGE_CATEGORIES'; categories: string[] }
   | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null }
   | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown>; expectedPubkey?: string }
-  | { type: 'DISCERNED_BRIDGE_RELAYS'; mode: RelayMode };
+  | { type: 'DISCERNED_BRIDGE_RELAYS'; mode: RelayMode }
+  | { type: 'DISCERNED_BRIDGE_RELAY_LIST'; rows: RelayRow[] };
 
 export function listenForBridge(
   handler: (msg: BridgeMessage) => void,
@@ -139,4 +140,16 @@ export function sendSignRejectedToExtension(id: string, error: string): void {
 // to any other open tabs. No-op when the extension isn't installed.
 export function sendRelayModeToExtension(mode: RelayMode): void {
   window.postMessage({ type: 'DISCERNED_SET_RELAY_MODE', mode }, window.location.origin);
+}
+
+// Push an edited relay list to the extension, which normalises + persists it
+// (it is the canonical store) and re-broadcasts the result to every open tab.
+// `userRelays` are the relays the user added or had discovered; `removedRelays`
+// are the ones they dropped, including built-in defaults. No-op when the
+// extension isn't installed — the web app keeps its own localStorage copy.
+export function sendRelayListToExtension(userRelays: string[], removedRelays: string[]): void {
+  window.postMessage(
+    { type: 'DISCERNED_SET_RELAY_LIST', userRelays, removedRelays },
+    window.location.origin,
+  );
 }

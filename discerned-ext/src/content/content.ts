@@ -9,7 +9,7 @@ import type { CaptureOptions } from './capture';
 import { DiscernedOverlay } from './overlay';
 import { htmlToMarkdown } from './html-to-markdown';
 import { sourceHtmlForLongForm } from '@/shared/nostr/events';
-import { detectAuthState, signWithNIP07 } from '@/shared/nostr/auth';
+import { detectAuthState, signWithNIP07, getNIP07Relays } from '@/shared/nostr/auth';
 import type { AuthState, BackgroundMessage, Capture, ClipFormat, Evaluation, ResolvedTheme } from '@/shared/types';
 import { STORAGE_KEYS, resolveThemePref, resolveEffectiveTheme } from '@/shared/types';
 import { themeVarsBlock, prefersDark } from '@/shared/theme';
@@ -46,6 +46,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((err: unknown) => sendResponse({
         error: err instanceof Error ? err.message : 'NIP-07 signing failed',
       }));
+    return true; // keep channel open for async response
+  } else if (message.type === 'GET_NIP07_RELAYS') {
+    // Relay-discovery fallback: the background can't reach window.nostr, so it
+    // asks the resolved signing tab (same path as SIGN_WITH_NIP07). Always
+    // resolves — an absent getRelays yields [].
+    getNIP07Relays()
+      .then(relays => sendResponse({ relays }))
+      .catch(() => sendResponse({ relays: [] }));
     return true; // keep channel open for async response
   } else if (message.type === 'LOG_RELAY') {
     relayLog(message.level, message.source, message.serialized);
