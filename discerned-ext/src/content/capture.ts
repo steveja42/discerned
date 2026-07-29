@@ -3170,6 +3170,129 @@ function tagZillow(root: Document | Element): Element | void {
   return detail;
 }
 
+/**
+ * Times of India article pages wrap the story in `.innerbody` (a stable
+ * descriptive class), which sits inside a broad `.contentwrapper` / `.nonAppView`
+ * shell that ALSO holds: a top breadcrumb nav (`nav.nav_links_wrapper`), a
+ * right-hand sidebar (`.article_rhs`) full of "Trending Stories" / "Daily
+ * Puzzles" recirculation link-lists, and — via infinite scroll — the NEXT
+ * article appended below. The generic finder scored the broad shell highest and
+ * grabbed all of it (header + article + sidebar + next article). Returning
+ * `.innerbody` scopes the capture to the single article (no top nav, no appended
+ * next article), and we dx-excl the `.article_rhs` sidebar inside it so the
+ * Trending-Stories / Daily-Puzzles rails don't ride along.
+ */
+function tagTimesOfIndia(root: Document | Element): Element | void {
+  const body = root.querySelector('.innerbody, [class*="innerbody" i]');
+  if (!body || (body.textContent ?? '').trim().length < 400) return undefined;
+  // Returning a tagger root makes the pipeline SKIP the generic chrome strippers
+  // (removeGenericChrome/stripPageChrome) AND clear the markExcluded flags inside
+  // the root — only the tagger's own `dx-excl` marks are re-promoted. So the
+  // tagger must dx-excl every non-article module itself.
+  //
+  // (a) Right-hand sidebar + sponsored/native-ad + first-party recirc widgets.
+  const EXCL = [
+    '[class*="article_rhs" i]',  // Trending Stories, Daily Puzzles, buy rails
+    SPONSORED_WIDGET_SELECTOR,   // Taboola / Outbrain / sellwild / photosslider / articletrendinglist / …
+  ].join(', ');
+  body.querySelectorAll(EXCL).forEach(el => appendClass(el, 'dx-excl'));
+
+  // (b) Everything AFTER the "End of Article" marker is post-article chrome
+  // (the "Latest Mobiles" gadgetsnow rail + any other recirc grids TOI stacks
+  // there). TOI marks the article end with a <div><span>End of Article</span></div>;
+  // dx-excl every following sibling up the ancestor chain until we leave `body`.
+  const endMarker = Array.from(body.querySelectorAll('div, span'))
+    .find(el => (el.textContent ?? '').trim() === 'End of Article');
+  if (endMarker) {
+    let node: Element | null = endMarker;
+    while (node && node !== body) {
+      let sib = node.nextElementSibling;
+      while (sib) { appendClass(sib, 'dx-excl'); sib = sib.nextElementSibling; }
+      node = node.parentElement;
+    }
+    appendClass(endMarker, 'dx-excl'); // drop the "End of Article" label itself
+  }
+
+  // (c) Top breadcrumb ("News › Technology News › Tech News") that leads the clip.
+  body.querySelectorAll('nav, [class*="nav_links" i], [class*="breadcrumb" i], [itemtype*="BreadcrumbList" i]')
+    .forEach(el => appendClass(el, 'dx-excl'));
+
+  return body;
+}
+
+/**
+ * Etsy listing pages split into `.alp-primary` (the product column — title,
+ * price, photos, "Item details", Description) and `.alp-secondary` (the reviews
+ * block: "Reviews for this item", "Photos from reviews"). Both sit inside a
+ * `<main>` whose raw textContent is dominated by the hundreds of reviews, so the
+ * generic finder scored `<main>` highest and the clip led with the reviews,
+ * missing the product hero. Returning `.alp-primary` scopes the capture to the
+ * product column (reviews excluded). We dx-excl the interactive/purchase chrome
+ * that leads it ("Add to Favorites", "Add to cart", "Report this item").
+ */
+function tagEtsy(root: Document | Element): Element | void {
+  const primary = root.querySelector('.alp-primary, [class*="alp-primary" i]');
+  if (!primary || !primary.querySelector('h1') || (primary.textContent ?? '').trim().length < 300) return undefined;
+  primary.querySelectorAll(
+    '[data-reviews], [data-review-region], [id*="reviews" i], form, button, ' +
+    '[data-add-to-cart-button], [data-selector*="add-to-cart" i], [class*="add-to-cart" i]',
+  ).forEach(el => appendClass(el, 'dx-excl'));
+  // Pre-title interactive/badge chrome that leads the column ("Add to Favorites",
+  // "In demand. N people bought this…", "Report this item to Etsy", "Etsy's Pick").
+  // Match a short leaf whose entire text is one of these, drop its small wrapper.
+  const ETSY_CHROME = /^(add to favou?rites|report this item|etsy.?s pick|in demand|\d+ (people|others) (bought|have this|want this)|star seller|loading|hm,? we.?re having trouble|try to refresh)\b/i;
+  Array.from(primary.querySelectorAll('span, div, p, a, button, li')).forEach(el => {
+    if (el.querySelector('h1')) return; // never the title's wrapper
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    // Short chrome fragment whose text STARTS with a badge/interactive phrase.
+    // Bounded to ≤120 chars so a real description paragraph is never matched.
+    if (t.length > 0 && t.length <= 120 && ETSY_CHROME.test(t) &&
+        !Array.from(el.children).some(c => { const ct = (c.textContent ?? '').replace(/\s+/g, ' ').trim(); return ct.length <= 120 && ETSY_CHROME.test(ct); })) {
+      appendClass(el, 'dx-excl');
+    }
+  });
+  return primary;
+}
+
+/**
+ * Yelp opens a business listing as an OVERLAY PANEL on top of the area search
+ * results (rendered over them, not a separate page). The panel starts with a
+ * "Back to Search" button
+ * + Yelp logo + close (×), then `[data-testid="photoHeader"]` (biz name, rating,
+ * category, hours), the photo carousel, and the biz sections (Menu, Location &
+ * Hours, Amenities, Recommended Reviews). The surrounding search list ("Best … in
+ * … — Last Updated", "Do you recommend this business?") dwarfs the biz detail in
+ * textContent, so the generic finder captured the search list. Returning the
+ * overlay panel — the ancestor of `photoHeader` that also holds the "Back to
+ * Search" control — scopes the capture to the business, excluding the search list.
+ */
+function tagYelp(root: Document | Element): Element | void {
+  const photoHeader = root.querySelector('[data-testid="photoHeader"], [class*="photoHeader" i]');
+  if (!photoHeader) return undefined;
+  // Climb to the overlay panel: the nearest ancestor that also contains the
+  // "Back to Search" control (the marker at the top of the biz overlay). That
+  // panel holds the whole business detail and not the search results below it.
+  const hasBackToSearch = (el: Element): boolean =>
+    Array.from(el.querySelectorAll('a, button, p, span')).some(n =>
+      /^back to search$/i.test((n.textContent ?? '').replace(/\s+/g, ' ').trim()));
+  let panel: Element | null = photoHeader;
+  for (let i = 0; i < 6 && panel && panel !== root; i++) {
+    if (hasBackToSearch(panel)) break;
+    panel = panel.parentElement;
+  }
+  // Fall back to the photoHeader's grandparent if no Back-to-Search marker (a
+  // biz page opened directly, not over search) — still scopes to the biz column.
+  const scope = (panel && hasBackToSearch(panel)) ? panel : (photoHeader.parentElement ?? photoHeader);
+  if ((scope.textContent ?? '').trim().length < 300 || !scope.querySelector('h1')) return undefined;
+  // Drop the overlay nav chrome (Back to Search / close / Yelp logo) + the
+  // search-list "Do you recommend this business?" recommendation widget if present.
+  scope.querySelectorAll('button, [data-testid="logo"], [id="logo"]').forEach(el => {
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (/back to search|^close$|^$|recommend this business/i.test(t) || el.querySelector('svg')) appendClass(el, 'dx-excl');
+  });
+  return scope;
+}
+
 type SiteTagger = (root: Document | Element) => Element | void;
 // Optional post-clone transformer. Runs AFTER deepCloneWithShadow has built
 // the detached clone but BEFORE sanitisation/inlining. Receives the cloned
@@ -3248,6 +3371,24 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     match: h => /(^|\.)zillow\.com$/i.test(h),
     tag: tagZillow,
     anchors: ['#home-detail-lightbox-container, #search-detail-lightbox'],
+  },
+  {
+    name: 'timesofindia',
+    match: h => /(^|\.)(timesofindia\.indiatimes|indiatimes)\.com$/i.test(h),
+    tag: tagTimesOfIndia,
+    anchors: ['.innerbody, [class*="innerbody"]'],
+  },
+  {
+    name: 'etsy',
+    match: h => /(^|\.)etsy\.com$/i.test(h),
+    tag: tagEtsy,
+    anchors: ['.alp-primary, [class*="alp-primary"]'],
+  },
+  {
+    name: 'yelp',
+    match: h => /(^|\.)yelp\.com$/i.test(h),
+    tag: tagYelp,
+    anchors: ['[data-testid="photoHeader"], [class*="photoHeader"]'],
   },
 ];
 
@@ -4978,6 +5119,11 @@ const CROSS_SELL_HEADING_RE = new RegExp(
   // you've viewed", "Best sellers in".
   '|explore more (from )?across the store|books with buy|more to explore' +
   '|related to items you.?ve viewed|best sellers in\\b.*|inspired by your (browsing|purchases)' +
+  // Walmart cross-sell rails: "Similar items you might like", "Products you may
+  // also like", "Recommended for you", "More items to consider", "Refine your
+  // search", "Based on what customers bought".
+  '|similar items( you might like)?|products you may also like|recommended for you' +
+  '|more items to consider|refine your search|based on what customers (bought|viewed)' +
   '|based on your (recent )?(browsing|activity)|you might (also )?like)', 'i');
 // Author/brand "Follow" cards + generic shopping-experience prompts that render
 // as short heading-labelled chrome blocks on product pages (Amazon "Follow the
@@ -5003,6 +5149,14 @@ const PREFERRED_SOURCE_RE = /(preferred source of news|add us on google|make .{0
 // Prime upsell, or a sponsored ad strip, none of it product information.
 const COMMERCE_PROMO_RE =
   /(get fast,? free shipping|free delivery |prime members get |enjoy fast,? free delivery|order within \d|deliver(ing)? to .{0,30}\d|free 30-day refund|new on amazon)/i;
+// SHORT product BADGE / social-proof / promo labels that render as their own
+// small pills ABOVE the product title (Walmart: "Sponsored", "500+ bought since
+// yesterday, try a subscription", "Overall pick", "Best seller"). They lead the
+// clip as stray text before the <h1>. Matched against a badge element's ENTIRE
+// trimmed text (short, ≤60 chars) so a prose paragraph merely containing e.g.
+// "best seller" is never removed.
+const PRODUCT_BADGE_RE =
+  /^(sponsored|overall pick|best ?seller|popular pick|editor'?s pick|rollback|clearance|\d[\d,]*\+? bought (since|in the past)\b.*|try (a )?subscription|new arrival|limited stock|only \d+ left)$/i;
 // Buy-box purchase affordances. A product page's buy box (Amazon #buybox, and the
 // equivalent block on any retailer) leads the DOM ABOVE the cover/title, so its
 // price + purchase controls open the capture. The individual "Add to cart"/"Buy
@@ -5213,6 +5367,52 @@ function removeGenericChrome(root: Element): void {
     }
     box.remove();
     log(LL.DEBUG, 'Discerned: removeGenericChrome dropped commerce promo block', 'url:', window.location.href);
+  }
+
+  // (3a0) Streaming WATCH-PROVIDER ad strip (IMDb: a "RENT/BUY" / "SUBSCRIPTION"
+  // block with a wide `<img alt="Watch on Prime Video">` provider banner + an
+  // amazon/apple/etc. video link). A paid provider tile, not title info. Keyed off
+  // the "Watch on <provider>" banner alt (stable across IMDb's providers); climb to
+  // the enclosing prose-free provider block (RENT/BUY/SUBSCRIPTION label) and drop it.
+  const WATCH_ON_ALT_RE = /^watch on \w/i;
+  Array.from(root.querySelectorAll('img')).forEach(img => {
+    if (!root.contains(img) || inTweetCard(img)) return;
+    if (!WATCH_ON_ALT_RE.test(img.getAttribute('alt') ?? '')) return;
+    let box: Element = img;
+    for (let i = 0; i < 5; i++) {
+      const p = box.parentElement;
+      if (!p || p === root) break;
+      const t = (p.textContent ?? '').replace(/\s+/g, ' ').trim();
+      // Stop before swallowing real content: bail if a long prose <p> appears or
+      // the block grows past a provider-strip size.
+      if (t.length > 400 || Array.from(p.querySelectorAll('p')).some(x => (x.textContent ?? '').trim().length >= 120)) break;
+      box = p;
+    }
+    box.remove();
+    log(LL.DEBUG, 'Discerned: removeGenericChrome dropped watch-provider strip', 'url:', window.location.href);
+  });
+
+  // (3a1) Product BADGE / social-proof pills above the product title
+  // ("Sponsored", "500+ bought since yesterday, try a subscription", "Overall
+  // pick", "Best seller"). Each is a short standalone label that leads the clip
+  // as stray text before the <h1>. Match a leaf/near-leaf whose ENTIRE trimmed
+  // text is a badge phrase, climb to its small pill wrapper (≤80 chars), drop it.
+  const badgeSeeds = Array.from(root.querySelectorAll('span, div, p, a, li')).filter(el => {
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (t.length === 0 || t.length > 60 || !PRODUCT_BADGE_RE.test(t)) return false;
+    // Leaf-ish: no child element carries the SAME full badge text (take the tightest).
+    return !Array.from(el.children).some(c => (c.textContent ?? '').replace(/\s+/g, ' ').trim() === t);
+  });
+  for (const seed of badgeSeeds) {
+    if (!root.contains(seed) || seed === root || inTweetCard(seed)) continue;
+    let box: Element = seed;
+    for (let i = 0; i < 2; i++) {
+      const p = box.parentElement;
+      if (!p || p === root || (p.textContent ?? '').replace(/\s+/g, ' ').trim().length > 80) break;
+      box = p;
+    }
+    box.remove();
+    log(LL.DEBUG, 'Discerned: removeGenericChrome dropped product badge', 'url:', window.location.href);
   }
 
   // (3a2) Commerce chrome cards ("Follow the authors", "Rate today's book

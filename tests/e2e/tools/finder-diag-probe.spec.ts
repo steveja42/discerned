@@ -20,6 +20,11 @@ const TARGETS: Record<string, string> = {
   timesofindia: 'https://timesofindia.indiatimes.com/technology/tech-news/apple-may-launch-its-rival-to-meta-ray-ban-smart-glass-at-wwdc-2027-report/articleshow/132654734.cms',
   homedepot: 'https://www.homedepot.com/p/Milwaukee-M18-18V-Lithium-Ion-Cordless-SAWZALL-Reciprocating-Saw-Tool-Only-2621-20/205482388',
   zillow: 'https://www.zillow.com/homedetails/2049-SE-157th-Ave-Portland-OR-97233/53862003_zpid/',
+  walmart: 'https://www.walmart.com/ip/Mobil-1-High-Mileage-Full-Synthetic-Motor-Oil-5W-30-5-Quart/17018131',
+  etsy: 'https://www.etsy.com/listing/547491922/leather-walletwalletman-leather',
+  imdb: 'https://www.imdb.com/title/tt0111161/',
+  devto: 'https://dev.to/francistrdev/choose-your-burden-4dgl',
+  yelp: 'https://www.yelp.com/biz/lalibela-ethiopian-restaurant-portland?osq=Ethiopian',
 };
 
 test.describe.configure({ mode: 'serial' });
@@ -51,6 +56,28 @@ test('finder diagnostics for the 4 mis-pick domains', async () => {
       try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
         await page.waitForTimeout(4_000);
+        // Auto-solve a PerimeterX 'Press & Hold' gate (walmart/etsy) so the probe
+        // doesn't need the user to click. Retry a few times.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const blocked = await page.evaluate(() => {
+            const t = (document.body?.innerText ?? '').toLowerCase();
+            return t.length < 40 || /press\s*&?\s*hold|robot or human|make sure you'?re a human/.test(t);
+          }).catch(() => false);
+          if (!blocked) break;
+          for (const root of [page, ...page.frames()]) {
+            for (const sel of ['#px-captcha', '[aria-label*="Press" i]', 'text=/press\\s*&?\\s*hold/i']) {
+              try {
+                const loc = root.locator(sel).first();
+                if (!(await loc.count())) continue;
+                const box = await loc.boundingBox({ timeout: 800 }).catch(() => null);
+                if (!box) continue;
+                await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+                await page.mouse.down(); await page.waitForTimeout(8_000); await page.mouse.up();
+              } catch { /* next */ }
+            }
+          }
+          await page.waitForTimeout(2_000);
+        }
         // Scroll to trigger lazy body/recommendations, then back to top.
         await page.evaluate(async () => {
           for (let y = 0; y < 6000; y += 600) { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 300)); }
@@ -100,6 +127,56 @@ test('finder diagnostics for the 4 mis-pick domains', async () => {
         // TOI "Latest Mobiles" widget structural dump — walk up from the heading
         // and describe how the card grid relates (child vs following sibling) so
         // the removal selector can be made robust to this LOAD's actual DOM.
+        if (name === 'yelp') {
+          const ydump = await page.evaluate(() => {
+            const lines: string[] = [];
+            // Find the biz-detail overlay/lightbox vs the search list. Try known
+            // Yelp anchors + any element holding the biz h1 + a modal/overlay role.
+            const h1 = document.querySelector('h1');
+            lines.push(`h1: ${h1 ? '"' + (h1.textContent ?? '').trim().slice(0, 50) + '"' : 'none'}`);
+            for (const sel of ['[role="dialog"]', '[role="main"]', 'main', '[class*="lightbox" i]', '[class*="modal" i]', '[class*="overlay" i]', '[aria-modal="true"]', '[data-testid*="biz" i]', '[class*="biz-details" i]', '[class*="photoHeader" i]']) {
+              const el = document.querySelector(sel);
+              if (!el) { lines.push(`${sel}: (none)`); continue; }
+              const t = ((el as HTMLElement).innerText ?? '').replace(/\s+/g, ' ').trim();
+              const hasBizH1 = el.querySelector('h1') ? 'HAS-h1' : 'no-h1';
+              lines.push(`${sel}: ${hasBizH1} txt="${t.slice(0, 90)}"`);
+            }
+            // Where does the biz h1 live — walk its ancestry, report which ancestor
+            // first ALSO contains the biz reviews (Reviews heading) but NOT the
+            // search-list "Do you recommend this business?" text = the biz scope.
+            const photoHeader = document.querySelector('[class*="photoHeader" i]');
+            if (photoHeader) {
+              let el: Element | null = photoHeader;
+              for (let i = 0; i < 12 && el && el !== document.body; i++) {
+                const p: Element | null = el.parentElement; if (!p) break;
+                const t = ((p as HTMLElement).innerText ?? '');
+                const hasReviews = /Recommended Reviews|Location & Hours|Amenities/i.test(t) ? '+BIZBODY' : '';
+                const hasSearch = /Do you recommend this business\?|Best .* in .* — Last Updated/i.test(t) ? '+SEARCH' : '';
+                const id = p.id ? ' id="' + p.id + '"' : '';
+                const dt = p.getAttribute('data-testid'); const dts = dt ? ' data-testid="' + dt + '"' : '';
+                lines.push(`  ph.up[${i}] <${p.tagName.toLowerCase()}${id}${dts} class="${(p.className||'').toString().slice(0,30)}"> txt=${t.replace(/\s+/g,' ').trim().length}${hasReviews}${hasSearch}`);
+                el = p;
+              }
+            }
+            return lines.join('\n');
+          });
+          out.push('YELP STRUCTURE:\n' + ydump);
+        }
+        if (name === 'etsy') {
+          const edump = await page.evaluate(() => {
+            const lines: string[] = [];
+            for (const sel of ['.alp-primary', '.alp-secondary', '.alp-page', 'main', '[data-appears-component-name*="listing" i]', '[data-reviews]', '[data-review-region]', '[id*="reviews" i]']) {
+              const el = document.querySelector(sel);
+              if (!el) { lines.push(`${sel}: (none)`); continue; }
+              const t = ((el as HTMLElement).innerText ?? '').replace(/\s+/g, ' ').trim();
+              const h1 = el.querySelector('h1');
+              const price = /\$\d/.test(t) ? 'HAS-$' : 'no-$';
+              lines.push(`${sel}: h1=${h1 ? '"' + (h1.textContent ?? '').trim().slice(0, 40) + '"' : 'none'} ${price} txt[0..120]="${t.slice(0, 120)}"`);
+            }
+            return lines.join('\n');
+          });
+          out.push('ETSY STRUCTURE:\n' + edump);
+        }
         if (name === 'zillow') {
           const zdump = await page.evaluate(() => {
             const lines: string[] = [];
@@ -141,14 +218,15 @@ test('finder diagnostics for the 4 mis-pick domains', async () => {
         }
         if (name === 'timesofindia') {
           const widgetDump = await page.evaluate(() => {
-            const labels = ['Latest Mobiles', 'Photostories', 'Hot Picks', 'Top Trending'];
+            const labels = ['Trending Stories', 'Daily Puzzles', 'Trending in Tech', 'From around the web',
+              'Subscribe to TOI', 'THE TIMES OF INDIA', 'Tech News', 'End of Article'];
             const out: string[] = [];
             for (const label of labels) {
-              const heads = Array.from(document.querySelectorAll('h1,h2,h3,h4,span,div,a'))
+              const heads = Array.from(document.querySelectorAll('h1,h2,h3,h4,span,div,a,li'))
                 .filter(e => (e.textContent ?? '').trim().replace(/\s+/g, ' ') === label);
-              if (!heads.length) { out.push(`── ${label}: (heading not found)`); continue; }
+              if (!heads.length) { out.push(`── "${label}": (not found)`); continue; }
               const h = heads[0];
-              out.push(`── ${label}: heading <${h.tagName.toLowerCase()}>`);
+              out.push(`── "${label}": <${h.tagName.toLowerCase()} class="${(h.className||'').toString().slice(0,30)}">`);
               let el: Element | null = h;
               for (let i = 0; i < 6 && el && el !== document.body; i++) {
                 const p: Element | null = el.parentElement;
@@ -158,13 +236,33 @@ test('finder diagnostics for the 4 mis-pick domains', async () => {
                 const topHost = [...new Set(host)].slice(0, 2).join(',');
                 const imgs = p.querySelectorAll('img').length;
                 const txt = (p.textContent ?? '').replace(/\s+/g, ' ').trim().length;
-                out.push(`    up[${i}] <${p.tagName.toLowerCase()} class="${(p.className||'').toString().slice(0,34)}"> a=${hrefs.length} img=${imgs} txt=${txt} hosts=${topHost}`);
+                out.push(`    up[${i}] <${p.tagName.toLowerCase()} class="${(p.className||'').toString().slice(0,40)}"> a=${hrefs.length} img=${imgs} txt=${txt} hosts=${topHost}`);
+                el = p;
+              }
+            }
+            // How many article headlines (h1) are on the page? >1 = infinite-scroll appended next articles.
+            const h1s = Array.from(document.querySelectorAll('h1')).map(h => (h.textContent ?? '').trim().slice(0, 60));
+            out.push(`H1 headings on page (${h1s.length}): ${h1s.join(' || ')}`);
+            // Walk up from the FIRST article <h1> to find the tightest single-article
+            // scope (before it merges with sidebar / next article).
+            const h1 = document.querySelector('h1');
+            if (h1) {
+              out.push('── first-article <h1> ancestry:');
+              let el: Element | null = h1;
+              for (let i = 0; i < 9 && el && el !== document.body; i++) {
+                const p: Element | null = el.parentElement;
+                if (!p) break;
+                const txt = (p.textContent ?? '').replace(/\s+/g, ' ').trim().length;
+                const hasRhs = p.querySelector('[class*="article_rhs" i]') ? ' +RHS' : '';
+                const hasNav = p.querySelector('nav, [class*="navigation" i]') ? ' +NAV' : '';
+                const nextArt = (p.textContent ?? '').includes('autonomous college') ? ' +NEXTART' : '';
+                out.push(`    up[${i}] <${p.tagName.toLowerCase()} class="${(p.className||'').toString().replace(/\s+/g,' ').slice(0,40)}"> txt=${txt}${hasRhs}${hasNav}${nextArt}`);
                 el = p;
               }
             }
             return out.join('\n');
           });
-          out.push('TOI TAIL WIDGET STRUCTURES:\n' + widgetDump);
+          out.push('TOI TAIL + HEADER STRUCTURES:\n' + widgetDump);
         }
 
         out.push(`prose <p>(>40ch): ${diag.proseParagraphs}  proseChars: ${diag.proseChars}  totalBodyText: ${diag.totalBodyText}`);

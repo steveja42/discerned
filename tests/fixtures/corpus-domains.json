@@ -465,8 +465,8 @@
     },
     {
       "name": "yelp",
-      "url": "https://www.yelp.com/biz/tartine-bakery-san-francisco",
-      "note": "PHASE 4.3 — ENTITY: Yelp business profile (rating, hours, reviews) — bot wall (may need headed). Direct."
+      "url": "https://www.yelp.com/biz/lalibela-ethiopian-restaurant-portland?osq=Ethiopian",
+      "note": "PHASE 4.3 — ENTITY: Yelp business profile (rating, hours, reviews). Yelp renders the listing as a LIGHTBOX OVERLAY on top of search results (like Zillow) — tagYelp scopes to it. Bot wall — needs headed."
     },
     {
       "name": "tripadvisor",
