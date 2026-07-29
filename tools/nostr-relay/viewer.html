@@ -21,6 +21,16 @@
   .note .kind { color: #7aa2ff; }
   .note .body { white-space: pre-wrap; word-break: break-word; }
   .note.article .title { font-weight: 600; font-size: 16px; margin-bottom: 4px; }
+  .profile { display: flex; gap: 12px; align-items: flex-start; }
+  .profile img.avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover;
+           background: #202027; flex: 0 0 auto; }
+  .profile .who { min-width: 0; }
+  .profile .name { font-weight: 600; font-size: 16px; }
+  .profile .nip05 { font-size: 13px; color: #7aa2ff; word-break: break-all; }
+  .profile .nip05.unverified { color: #8a8a92; }
+  .profile .about { margin-top: 6px; white-space: pre-wrap; word-break: break-word; }
+  .profile .fields { margin-top: 6px; font-size: 12px; color: #8a8a92; }
+  .profile .fields span { margin-right: 10px; }
   .pk { font-family: ui-monospace, monospace; }
   code { background: #202027; padding: 1px 4px; border-radius: 4px; }
 </style>
@@ -31,6 +41,7 @@
   <input id="url" size="34" value="ws://localhost:7777" />
   <select id="kind">
     <option value="all">all kinds</option>
+    <option value="0">kind 0 (profiles)</option>
     <option value="1">kind 1 (notes)</option>
     <option value="30023">kind 30023 (articles)</option>
   </select>
@@ -50,6 +61,35 @@ function setStatus(msg, cls = '') { status.textContent = msg; status.className =
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
+// A kind-0 event's `content` is a JSON string of NIP-01 metadata. Render it as a
+// profile card; fall back to the raw body when it isn't valid JSON.
+function profileHtml(e) {
+  let meta;
+  try { meta = JSON.parse(e.content); } catch { return null; }
+  if (!meta || typeof meta !== 'object') return null;
+
+  const name = meta.display_name || meta.displayName || meta.name || '(no name)';
+  const picture = typeof meta.picture === 'string' && /^https?:\/\//.test(meta.picture)
+    ? meta.picture : '';
+  // nip05 is only *claimed* here — verification needs a .well-known fetch we don't do.
+  const nip05 = typeof meta.nip05 === 'string' ? meta.nip05 : '';
+  const about = typeof meta.about === 'string' ? meta.about : '';
+  const extra = ['website', 'lud16', 'lud06', 'banner']
+    .filter((k) => typeof meta[k] === 'string' && meta[k])
+    .map((k) => `<span>${esc(k)}: ${esc(String(meta[k]).slice(0, 120))}</span>`)
+    .join('');
+
+  return `<div class="profile">` +
+    (picture ? `<img class="avatar" src="${esc(picture)}" alt="" referrerpolicy="no-referrer" />`
+             : `<div class="avatar"></div>`) +
+    `<div class="who">` +
+      `<div class="name">${esc(name)}</div>` +
+      (nip05 ? `<div class="nip05 unverified" title="claimed, not verified">${esc(nip05)}</div>` : '') +
+      (about ? `<div class="about">${esc(about.slice(0, 2000))}</div>` : '') +
+      (extra ? `<div class="fields">${extra}</div>` : '') +
+    `</div></div>`;
+}
+
 function render(events) {
   events.sort((a, b) => b.created_at - a.created_at);
   out.innerHTML = '';
@@ -59,11 +99,12 @@ function render(events) {
     let npub; try { npub = nip19.npubEncode(e.pubkey).slice(0, 16) + '…'; } catch { npub = e.pubkey.slice(0, 12); }
     const when = new Date(e.created_at * 1000).toLocaleString();
     const title = e.kind === 30023 ? (e.tags.find(t => t[0] === 'title')?.[1] ?? '(untitled)') : '';
+    const profile = e.kind === 0 ? profileHtml(e) : null;
     div.innerHTML =
       `<div class="meta"><span class="kind">kind ${e.kind}</span>` +
       `<span class="pk">${esc(npub)}</span><span>${esc(when)}</span></div>` +
       (title ? `<div class="title">${esc(title)}</div>` : '') +
-      `<div class="body">${esc(e.content.slice(0, 4000))}</div>`;
+      (profile ?? `<div class="body">${esc(e.content.slice(0, 4000))}</div>`);
     out.appendChild(div);
   }
   setStatus(`${events.length} events`, 'ok');
@@ -88,7 +129,13 @@ function load() {
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m[0] === 'EVENT') events.push(m[2]);
-    else if (m[0] === 'EOSE') { clearTimeout(timer); render(events); ws.close(); }
+    else if (m[0] === 'EOSE') {
+      clearTimeout(timer);
+      // Profiles are replaceable and mostly self-similar — two is enough to eyeball.
+      events.sort((a, b) => b.created_at - a.created_at);
+      render(kindSel === '0' ? events.slice(0, 2) : events);
+      ws.close();
+    }
   };
   ws.onerror = () => { clearTimeout(timer); setStatus('connection error — check relay URL / that it is running', 'err'); };
 }

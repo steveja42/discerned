@@ -3,6 +3,7 @@
 //   node tools/dump-casts.mjs            # 2 most recent #discerned kind-1 + kind-30023
 //   node tools/dump-casts.mjs 30023      # 2 most recent long-form events
 //   node tools/dump-casts.mjs 1          # 2 most recent notes
+//   node tools/dump-casts.mjs 0          # 2 most recent profiles (metadata parsed)
 //   COUNT=5 node tools/dump-casts.mjs    # override how many to print
 //   RELAY=ws://localhost:7777 node tools/dump-casts.mjs
 //
@@ -15,7 +16,9 @@ const kindArg = process.argv[2];
 const kinds = kindArg ? [Number(kindArg)] : [1, 30023];
 
 // Ask for a few extra so sorting by created_at picks the true newest COUNT.
-const filter = { kinds, '#t': ['discerned'], limit: Math.max(COUNT * 5, 20) };
+// Kind-0 profiles carry no `t` tag, so the #discerned filter would exclude them.
+const filter = { kinds, limit: Math.max(COUNT * 5, 20) };
+if (!kinds.includes(0)) filter['#t'] = ['discerned'];
 const subId = 'dump-' + Math.random().toString(36).slice(2);
 
 const ws = new WebSocket(RELAY);
@@ -37,7 +40,15 @@ ws.addEventListener('message', (event) => {
     const recent = events.slice(0, COUNT);
     console.error(`[dump] ${recent.length} most-recent of ${events.length} event(s):\n`);
     for (const ev of recent) {
-      console.log(JSON.stringify(ev, null, 2));
+      // A kind-0's `content` is a JSON *string*; print it parsed so the profile
+      // fields are readable instead of one escaped blob.
+      if (ev.kind === 0) {
+        let meta;
+        try { meta = JSON.parse(ev.content); } catch { meta = null; }
+        console.log(JSON.stringify({ ...ev, content: meta ?? ev.content }, null, 2));
+      } else {
+        console.log(JSON.stringify(ev, null, 2));
+      }
       console.log('─'.repeat(60));
     }
     ws.close();
