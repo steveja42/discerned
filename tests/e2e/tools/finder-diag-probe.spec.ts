@@ -1,18 +1,65 @@
-// One-off diagnostic probe for the corpus-sweep finder mis-picks (businessinsider
-// hero-only, letterboxd review-card, timesofindia sponsored tail, homedepot
-// near-empty). For each URL it loads the LIVE page in the warm Profile 3 and dumps
-// the top candidate content-blocks the way findContentBlockByLayout sees them —
-// tag, class, textLen, area, linkRatio, #p, #img — plus whether the real body
-// text is present in the DOM. This tells us if each is a FINDER mis-pick (content
-// present but a wrong block wins) vs a bot-gate/lazy-load (content absent).
+// Live-page diagnostic probe for the corpus sweep. Two modes, one harness (warm
+// Profile 3 + PerimeterX auto-solve + artifact dump to test-output/):
 //
-// Run: DIAG=1 pnpm exec playwright test -c tests/e2e/playwright.config.ts \
-//   --project=finder-diag-probe   (from repo root, chrome fully closed)
+// MODE 1 — finder diagnostics (default). For each URL it dumps the top candidate
+//   content-blocks the way findContentBlockByLayout sees them — tag, class,
+//   textLen, visLen, area, linkRatio, #p, #img — plus whether the real body text
+//   is present. Distinguishes a FINDER mis-pick (content present, wrong block
+//   wins) from a bot-gate/lazy-load (content absent).
+//     DIAG=1 [DIAG_ONLY=haaretz,rfc-editor] [DIAG_HEADED=1]
+//
+// MODE 2 — picker diagnostics (DIAG_MODE=picker). Answers why a
+//   `discover-article-urls` seed reported "no link matched picker", which
+//   conflates four causes: the hub never rendered (bot wall), the site MOVED
+//   (msnbc.com → ms.now, phys.org → techxplore.com — the regex can then never
+//   match), the URL shape changed (CBC's ids went -1.N → -9.N), or minText
+//   rejected every match (ms.now's article links are image-wrapped, 0-char text).
+//   Reports final URL, <title>, body head, anchor/regex/minText counts, real
+//   in-domain deep links, a screenshot, and a verdict.
+//     DIAG=1 DIAG_MODE=picker [DIAG_ONLY=cbc] [DIAG_HEADED=1] [DIAG_WAIT=60]
+//
+//   Picker mode reads its seeds FROM discover-article-urls.spec.ts, so there is
+//   no second copy of the target list to drift (an earlier standalone probe held
+//   a stale lemmy hub URL and probed the wrong page).
+//
+// Shared options: DIAG_GAP=<seconds> paces between sites — hitting ~10 domains
+// back-to-back from one IP is itself a bot signal and Cloudflare starts serving
+// "Just a moment…" to the LATER ones. DIAG_WAIT=<seconds> holds each page open
+// so a human can dismiss a consent banner / solve a gate in a headed run.
+//
+// Run from the repo root with Chrome fully closed (the profile is locked):
+//   DIAG=1 pnpm exec playwright test -c tests/e2e/playwright.config.ts \
+//     --project=finder-diag-probe
 
 import { test } from '@playwright/test';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { launchWithExtension } from '../helpers/launchExtension';
+
+/** A discovery seed, parsed out of discover-article-urls.spec.ts (single source
+ *  of truth for hub URLs + link pickers — see the header note). */
+interface PickerSeed { name: string; seedUrl: string; hrefRe: string; minText: number }
+
+function loadPickerSeeds(): PickerSeed[] {
+  const src = readFileSync(resolve(__dirname, 'discover-article-urls.spec.ts'), 'utf8');
+  const seeds: PickerSeed[] = [];
+  for (const line of src.split('\n')) {
+    const m = /^\s*\{ name: '([^']+)', seedUrl: '([^']+)', hrefRe: '((?:[^'\\]|\\.)*)'/.exec(line);
+    if (!m) continue;
+    // `direct: true` seeds have no picker — nothing to diagnose.
+    if (/direct:\s*true/.test(line)) continue;
+    const minTextM = /minText:\s*(\d+)/.exec(line);
+    seeds.push({
+      name: m[1],
+      seedUrl: m[2],
+      // The TS source escapes backslashes for the string literal; undo that to
+      // get the pattern `new RegExp(...)` actually receives.
+      hrefRe: JSON.parse(`"${m[3]}"`) as string,
+      minText: minTextM ? Number(minTextM[1]) : 15,
+    });
+  }
+  return seeds;
+}
 
 const TARGETS: Record<string, string> = {
   businessinsider: 'https://www.businessinsider.com/great-coding-reset-ai-software-engineering-2026-7',
@@ -25,18 +72,33 @@ const TARGETS: Record<string, string> = {
   imdb: 'https://www.imdb.com/title/tt0111161/',
   devto: 'https://dev.to/francistrdev/choose-your-burden-4dgl',
   yelp: 'https://www.yelp.com/biz/lalibela-ethiopian-restaurant-portland?osq=Ethiopian',
+  // Phase 4.4 sweep mis-picks (2026-07-29).
+  haaretz: 'https://www.haaretz.com/gaza/2026-07-26/ty-article/al-jazeera-reportedly-ends-contracts-of-over-20-gazan-journalists/0000019f-9eeb-df42-a1df-fffb994d0000',
+  folha: 'https://www1.folha.uol.com.br/mercado/2026/07/china-busca-lideranca-nas-regras-da-ia-com-nova-organizacao-internacional.shtml',
+  'rfc-editor': 'https://www.rfc-editor.org/rfc/rfc9110.html',
+  thehindu: 'https://www.thehindu.com/sci-tech/technology/moonshot-ai-releases-weights-for-kimi-k3-as-us-big-tech-firms-debate-open-weight-models/article71276300.ece',
+  'lemmy-thread': 'https://lemmy.world/post/49992871',
 };
 
 test.describe.configure({ mode: 'serial' });
 
-test('finder diagnostics for the 4 mis-pick domains', async () => {
-  test.skip(!process.env.DIAG, 'set DIAG=1 to run the finder diagnostic probe');
-  test.setTimeout(300_000);
+test('live-page diagnostics (finder / picker)', async () => {
+  test.skip(!process.env.DIAG, 'set DIAG=1 to run the diagnostic probe');
+
+  const pickerMode = process.env.DIAG_MODE === 'picker';
+  const pickerSeeds = pickerMode ? loadPickerSeeds() : [];
+  const seedByName = new Map(pickerSeeds.map(s => [s.name, s]));
 
   const only = process.env.DIAG_ONLY
     ? new Set(process.env.DIAG_ONLY.split(',').map(s => s.trim()))
     : null;
-  const entries = Object.entries(TARGETS).filter(([n]) => !only || only.has(n));
+  const entries: Array<[string, string]> = pickerMode
+    ? pickerSeeds.filter(s => !only || only.has(s.name)).map(s => [s.name, s.seedUrl])
+    : Object.entries(TARGETS).filter(([n]) => !only || only.has(n));
+
+  const waitSecs = Number(process.env.DIAG_WAIT ?? 0);
+  const gapSecs = Number(process.env.DIAG_GAP ?? 0);
+  test.setTimeout(entries.length * (45_000 + (waitSecs + gapSecs) * 1_000) + 120_000);
 
   const rawUserDataDir = process.env.RAW_USER_DATA_DIR ??
     resolve(__dirname, '..', '..', '..', '.vscode', 'browser-test-profiles', 'chrome');
@@ -50,12 +112,38 @@ test('finder diagnostics for the 4 mis-pick domains', async () => {
   const out: string[] = [];
 
   try {
+    let firstSite = true;
     for (const [name, url] of entries) {
+      // Pace between sites (DIAG_GAP). An unpaced sweep of ~10 domains from one
+      // IP got the LAST three Cloudflare-challenged while earlier ones loaded.
+      if (!firstSite && gapSecs > 0) {
+        // eslint-disable-next-line no-console
+        console.log(`   … pausing ${gapSecs}s before ${name} (avoid rate-limit)`);
+        await new Promise(r => setTimeout(r, gapSecs * 1_000));
+      }
+      firstSite = false;
       const page = await ctx.newPage();
-      out.push(`\n════════ ${name} ════════\n${url}`);
+      const seed = seedByName.get(name);
+      out.push(`\n════════ ${name} ════════\n${url}`
+        + (seed ? `\n  hrefRe: ${seed.hrefRe}   minText: ${seed.minText}` : ''));
       try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
         await page.waitForTimeout(4_000);
+        // DIAG_WAIT holds the page so a human can clear a gate in a headed run.
+        // Polls meanwhile and stops early once the page looks alive, so a merely
+        // slow site costs no clicks.
+        if (waitSecs > 0) {
+          // eslint-disable-next-line no-console
+          console.log(`   ⏸ ${name}: holding up to ${waitSecs}s — clear anything blocking the page…`);
+          const deadline = Date.now() + waitSecs * 1_000;
+          while (Date.now() < deadline) {
+            const alive = await page.evaluate(
+              () => document.querySelectorAll('a[href]').length,
+            ).catch(() => 0);
+            if (alive >= 20) break;
+            await page.waitForTimeout(2_000);
+          }
+        }
         // Auto-solve a PerimeterX 'Press & Hold' gate (walmart/etsy) so the probe
         // doesn't need the user to click. Retry a few times.
         for (let attempt = 0; attempt < 3; attempt++) {
@@ -86,6 +174,66 @@ test('finder diagnostics for the 4 mis-pick domains', async () => {
         await page.waitForTimeout(2_000);
         const finalUrl = page.url();
         if (finalUrl !== url) out.push(`⟳ REDIRECTED → ${finalUrl}`);
+
+        // ── MODE 2: picker diagnostics ────────────────────────────────────
+        if (pickerMode && seed) {
+          const pd = await page.evaluate(({ hrefRe, minText }: { hrefRe: string; minText: number }) => {
+            const re = new RegExp(hrefRe);
+            const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+            const reMatch = anchors.filter(a => re.test(a.href));
+            const passBoth = reMatch.filter(
+              a => ((a.textContent ?? '').replace(/\s+/g, ' ').trim().length) >= minText);
+            // Ground truth for writing a new regex: the real in-domain deep
+            // links, with nav/section links filtered out.
+            const host = location.hostname.replace(/^www\./, '');
+            const seen = new Set<string>();
+            const samples: string[] = [];
+            for (const a of anchors) {
+              let u: URL;
+              try { u = new URL(a.href); } catch { continue; }
+              if (!u.hostname.includes(host)) continue;
+              if (u.pathname.split('/').filter(Boolean).length < 2) continue;
+              if (seen.has(u.pathname)) continue;
+              seen.add(u.pathname);
+              const last = u.pathname.split('/').filter(Boolean).pop() ?? '';
+              if (last.length < 15 && !/\d/.test(last)) continue;
+              const txt = (a.textContent ?? '').replace(/\s+/g, ' ').trim();
+              if (samples.length < 12) samples.push(`${u.href}   [text ${txt.length}ch] "${txt.slice(0, 45)}"`);
+            }
+            return {
+              title: document.title,
+              bodyHead: (document.body?.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 220),
+              bodyLen: (document.body?.innerText ?? '').replace(/\s+/g, ' ').trim().length,
+              anchors: anchors.length,
+              reMatch: reMatch.length,
+              passBoth: passBoth.length,
+              reMatchSamples: reMatch.slice(0, 3)
+                .map(a => `${a.href}  [text ${(a.textContent ?? '').trim().length}ch]`),
+              samples,
+            };
+          }, { hrefRe: seed.hrefRe, minText: seed.minText });
+
+          out.push(`  <title>: "${pd.title}"`);
+          out.push(`  page body text: ${pd.bodyLen} chars   anchors: ${pd.anchors}`);
+          out.push(`  body head: "${pd.bodyHead}"`);
+          out.push(`  matched regex: ${pd.reMatch}    then passed minText: ${pd.passBoth}`);
+          if (pd.bodyLen < 500) out.push('  ⇒ VERDICT: page never rendered (bot wall / empty shell)');
+          else if (pd.anchors < 20) out.push('  ⇒ VERDICT: rendered but almost no links (JS-only feed?)');
+          else if (pd.reMatch === 0) out.push('  ⇒ VERDICT: links present, REGEX IS WRONG (site moved? URL shape changed?)');
+          else if (pd.passBoth === 0) out.push('  ⇒ VERDICT: regex matched but minText rejected every one');
+          else out.push('  ⇒ VERDICT: would match now');
+          if (pd.reMatchSamples.length) {
+            out.push('  regex-matching hrefs:');
+            pd.reMatchSamples.forEach(x => out.push(`     ${x}`));
+          }
+          out.push('  real in-domain deep links on the page:');
+          pd.samples.forEach(x => out.push(`     ${x}`));
+          await page.screenshot({
+            path: resolve(__dirname, '..', '..', '..', 'test-output', `diag-picker-${name}.png`),
+          }).catch(() => undefined);
+          await page.close().catch(() => undefined);
+          continue;
+        }
 
         const diag = await page.evaluate(() => {
           const SKIP = new Set(['script','style','noscript','nav','header','footer','aside','svg','path','button','input','select','textarea','form','iframe','p','li','blockquote','h1','h2','h3','h4','h5','h6','pre','code']);
@@ -127,6 +275,78 @@ test('finder diagnostics for the 4 mis-pick domains', async () => {
         // TOI "Latest Mobiles" widget structural dump — walk up from the heading
         // and describe how the card grid relates (child vs following sibling) so
         // the removal selector can be made robust to this LOAD's actual DOM.
+        // Lemmy: nested replies render as ~1-character-wide vertical columns in
+        // the clip. Dump the comment tree's indent mechanism — which element
+        // carries the per-level offset, and how wide each nesting level is —
+        // so we can tell a generic width fix from a per-site tagger.
+        if (name === 'lemmy-thread') {
+          const ldump = await page.evaluate(() => {
+            const lines: string[] = [];
+            const nodes = Array.from(document.querySelectorAll('[id^="comment-"]'));
+            lines.push(`[id^="comment-"] nodes: ${nodes.length}`);
+            // Depth = how many comment ancestors each has → the nesting level.
+            const withDepth = nodes.map(n => {
+              let d = 0, cur: Element | null = n.parentElement;
+              while (cur && cur !== document.body) {
+                if (cur.id?.startsWith('comment-')) d++;
+                cur = cur.parentElement;
+              }
+              const r = n.getBoundingClientRect();
+              return { n, d, w: Math.round(r.width), x: Math.round(r.left) };
+            });
+            const byDepth = new Map<number, { count: number; minW: number; maxW: number }>();
+            for (const { d, w } of withDepth) {
+              const e = byDepth.get(d) ?? { count: 0, minW: 1e9, maxW: 0 };
+              e.count++; e.minW = Math.min(e.minW, w); e.maxW = Math.max(e.maxW, w);
+              byDepth.set(d, e);
+            }
+            lines.push('width by nesting depth (live page):');
+            for (const [d, v] of [...byDepth.entries()].sort((a, b) => a[0] - b[0])) {
+              lines.push(`   depth ${d}: n=${v.count}  width ${v.minW}..${v.maxW}px`);
+            }
+            // The visual nesting is NOT nested #comment- ids — find what really
+            // offsets a reply: group comments by their left edge (x), which is
+            // the rendered indent, and report the class that carries it.
+            const byX = new Map<number, number>();
+            for (const { x } of withDepth) byX.set(x, (byX.get(x) ?? 0) + 1);
+            lines.push('comments grouped by left edge (rendered indent):');
+            for (const [x, n] of [...byX.entries()].sort((a, b) => a[0] - b[0])) {
+              lines.push(`   x=${x}px : ${n} comment(s)`);
+            }
+            // For an indented one, which ancestor introduces the offset?
+            const base = Math.min(...withDepth.map(w => w.x));
+            const indented = withDepth.find(w => w.x > base + 4);
+            if (indented) {
+              lines.push(`\nindented comment (x=${indented.x}, base=${base}) — ancestors that add offset:`);
+              let cur: Element | null = indented.n;
+              for (let i = 0; cur && cur !== document.body && i < 10; i++) {
+                const cs = getComputedStyle(cur);
+                const r = cur.getBoundingClientRect();
+                lines.push(`   [${i}] <${cur.tagName.toLowerCase()} class="${(cur.className || '').toString().slice(0, 50)}">`
+                  + ` x=${Math.round(r.left)} w=${Math.round(r.width)} ml=${cs.marginLeft} pl=${cs.paddingLeft}`);
+                cur = cur.parentElement;
+              }
+            } else {
+              lines.push('\n(no comment is indented relative to the others — flat list)');
+            }
+
+            // What creates the indent on a deep comment?
+            const deep = withDepth.sort((a, b) => b.d - a.d)[0];
+            if (deep) {
+              lines.push(`\nancestor chain of a depth-${deep.d} comment:`);
+              let cur: Element | null = deep.n;
+              for (let i = 0; cur && cur !== document.body && i < 14; i++) {
+                const cs = getComputedStyle(cur);
+                const r = cur.getBoundingClientRect();
+                lines.push(`   [${i}] <${cur.tagName.toLowerCase()} class="${(cur.className || '').toString().slice(0, 45)}">`
+                  + ` w=${Math.round(r.width)} ml=${cs.marginLeft} pl=${cs.paddingLeft} disp=${cs.display} flex=${cs.flex}`);
+                cur = cur.parentElement;
+              }
+            }
+            return lines.join('\n');
+          });
+          out.push(ldump);
+        }
         if (name === 'yelp') {
           const ydump = await page.evaluate(() => {
             const lines: string[] = [];

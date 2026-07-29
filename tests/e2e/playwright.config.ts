@@ -78,6 +78,16 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'hidden-prose-probe',
+      testMatch: /tools\/hidden-prose-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'clip-width-probe',
+      testMatch: /tools\/clip-width-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
       name: 'primal-visual',
       testMatch: /primal-visual\.spec\.ts/,
       retries: 0,

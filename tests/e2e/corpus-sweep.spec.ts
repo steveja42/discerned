@@ -1,6 +1,6 @@
 // Phase 4.1 — broad-web corpus sweep.
 //
-// Runs article capture against ~50 popular domains we have NOT hand-curated
+// Runs article capture against the popular domains we have NOT hand-curated
 // (tests/fixtures/corpus-domains.json — real ARTICLE deep-links, discovered live
 // via tools/discover-article-urls.mjs, NOT homepages: a homepage's lead-story
 // teaser is a hero + no body, which the scorer mistakes for a broken clip),
@@ -114,6 +114,52 @@ async function tryPressAndHold(page: Page): Promise<boolean> {
   return false;
 }
 
+/**
+ * Delete every clip already in the extension's IndexedDB.
+ *
+ * The sweep posts each capture into /clips itself, but the REAL extension's
+ * web-bridge additionally pushes everything it has stored from previous runs.
+ * Those leftovers crowd the library: the row for the clip we just posted may not
+ * be `.first()`, and a detail panel can sit on a stale clip — which silently
+ * screenshot+scored the WRONG SITE (8 domains once shared one Amazon clip image,
+ * scored as "healthy"). Purging once per context makes each run deterministic.
+ * Best-effort: a failure here must never abort the sweep.
+ */
+async function purgeStoredClips(ctx: BrowserContext): Promise<number> {
+  const page = await ctx.newPage();
+  try {
+    await page.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
+    // Give the extension bridge a moment to push its stored clips in.
+    await page.waitForTimeout(3_000);
+    // Ask the bridge for the stored clips, then delete them by id. Both messages
+    // are the web app's own protocol (web-bridge.ts forwards GET_CLIPS /
+    // DELETE_CLIPS to the background worker, which owns IndexedDB).
+    const ids = await page.evaluate(() => new Promise<string[]>((res) => {
+      const timer = setTimeout(() => { window.removeEventListener('message', on); res([]); }, 8_000);
+      function on(e: MessageEvent) {
+        if (e.data?.type !== 'DISCERNED_BRIDGE_CLIPS') return;
+        clearTimeout(timer);
+        window.removeEventListener('message', on);
+        const clips = (e.data.clips ?? []) as Array<{ capture?: { id?: string } }>;
+        res(clips.map(c => c.capture?.id).filter((x): x is string => !!x));
+      }
+      window.addEventListener('message', on);
+      // DISCERNED_WEB_READY makes the bridge (re-)push its stored clip list.
+      window.postMessage({ type: 'DISCERNED_WEB_READY' }, window.location.origin);
+    }));
+    if (ids.length === 0) return 0;
+    await page.evaluate((toDelete: string[]) => {
+      window.postMessage({ type: 'DISCERNED_DELETE_CLIPS', ids: toDelete }, window.location.origin);
+    }, ids);
+    await page.waitForTimeout(2_000);
+    return ids.length;
+  } catch {
+    return 0;
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+}
+
 test.describe.configure({ mode: 'serial' });
 
 // A record the driver marks with `challenged` when the skip was a Cloudflare /
@@ -199,7 +245,16 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
       }).catch(() => undefined);
       await screenshotSourcePage(page, art.source());
     } catch (navErr) {
-      rec.skipReason = `load failed: ${(navErr as Error).message.split('\n')[0]}`;
+      const msg = (navErr as Error).message.split('\n')[0];
+      rec.skipReason = `load failed: ${msg}`;
+      // Some sites refuse the HEADLESS connection outright rather than serving a
+      // challenge page — CBC answers ERR_HTTP2_PROTOCOL_ERROR headless but loads
+      // normally in a real window. A transport-level refusal is worth the headed
+      // retry for the same reason a challenge page is; a genuine 404/DNS failure
+      // won't clear and just skips again.
+      if (/ERR_HTTP2_PROTOCOL_ERROR|ERR_CONNECTION_(RESET|CLOSED)|ERR_SSL/.test(msg)) {
+        rec.challenged = true;
+      }
       persist(rec);
       return rec;
     }
@@ -256,12 +311,23 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
         'attention required', 'ddos protection by', 'just a moment',
         'are you a robot', 'unusual traffic', 'not a bot',
         'access is temporarily restricted', 'we detected unusual activity',
+        // phys.org/techxplore: "Checking your connection … to prevent automated
+        // abuse", and a bare "400 / blocked by our server's security policies".
+        // Both are SHORT and chrome-free, so without these signatures the scorer
+        // read the block page as a healthy 92%-coverage clip — a block scoring
+        // well is worse than an honest skip. CF-shaped, so retry headed.
+        'checking your connection', 'prevent automated abuse',
+        'blocked by our server', 'security policies',
       ];
       // HARD-block signatures — a headed retry won't help (IP/account level).
       const HARD = [
         'ray id', '403 forbidden', '403 error', 'access denied',
         'access to this page has been denied', 'request blocked',
         'you have been blocked', 'temporarily unavailable', 'rate limited',
+        // techxplore serves a bare "400 / Your request has been blocked by our
+        // server's security policies." page. It is SHORT and chrome-free, so
+        // without this signature the scorer read it as a healthy 92%-coverage
+        // clip — a block page scoring well is worse than a skip.
       ];
       const cfHit = CHALLENGE.find(s => low.includes(s));
       if (cfHit) return { hit: cfHit, len: t.length, cf: true };
@@ -310,7 +376,16 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
         window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
       }, cap);
 
-      const row = libPage.locator('article.clip').first();
+      // Select THIS capture's row, never `.first()`. The real extension's
+      // web-bridge also pushes every clip already in IndexedDB (leftovers from
+      // previous sweep runs) into the same store, so `.first()` — and even a
+      // title match, since a re-run re-posts the same title — could land on a
+      // PRIOR domain's clip and silently screenshot+score the wrong page (8
+      // domains shared one stale Amazon clip image before this was found).
+      // A per-run marker in the title makes the row unambiguous.
+      const marker = `dxsweep-${d.name}-${Date.now()}`;
+      (cap as Record<string, unknown>).title = `${String((cap as { title?: unknown }).title ?? d.name)} ​${marker}`;
+      const row = libPage.locator('article.clip', { hasText: marker }).first();
       let rowVisible = false;
       for (let attempt = 0; attempt < 4 && !rowVisible; attempt++) {
         await postClip();
@@ -322,7 +397,24 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
         persist(rec);
         return rec;
       }
-      await row.click();
+      // The detail panel can keep showing a PREVIOUS clip's body for a beat after
+      // the click (and a click can land while the list is re-rendering). Re-click
+      // until the panel's title is THIS capture's, so the screenshot and the
+      // score can never describe a different site.
+      const detailTitle = libPage.locator('.detail-title', { hasText: marker }).first();
+      let detailReady = false;
+      for (let attempt = 0; attempt < 3 && !detailReady; attempt++) {
+        await row.click();
+        try {
+          await detailTitle.waitFor({ state: 'visible', timeout: 10_000 });
+          detailReady = true;
+        } catch { /* stale render — click again */ }
+      }
+      if (!detailReady) {
+        rec.skipReason = 'detail panel never showed this capture (stale render)';
+        persist(rec);
+        return rec;
+      }
       const clipBody = libPage.locator('.clip-body');
       await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
       await libPage.waitForTimeout(1_000);
@@ -357,6 +449,9 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
       persist(rec);
 
       // ── Cast (additive third image — never fails the sweep) ─────────────
+      // Drop the row-disambiguation marker so the cast renders the real title.
+      (cap as Record<string, unknown>).title =
+        String((cap as { title?: unknown }).title ?? '').replace(/\s*​?dxsweep-\S+$/, '');
       await castShotSafe(page, cap as { title?: string }, art.cast());
       return rec;
     } catch (renderErr) {
@@ -380,11 +475,15 @@ function mergeRecord(acc: Map<string, SweepDriverRecord>, rec: SweepDriverRecord
   if (!prev || (prev.status !== 'ok' && rec.status === 'ok')) acc.set(rec.domain, rec);
 }
 
-test('corpus-sweep: capture + score ~50 domains, build ranked gallery', async () => {
+test('corpus-sweep: capture + score the corpus domains, build ranked gallery', async () => {
   test.skip(!process.env.SWEEP, 'set SWEEP=1 to run the broad-web corpus sweep');
   // ~75s budget per domain (nav + capture + render + 3 screenshots + cast), plus
   // headroom for the headed-retry pass over the CF-challenged subset.
-  test.setTimeout(DOMAINS.length * 75_000 + 120_000);
+  // 75s/domain is the steady-state cost, but a slow site plus the detail-panel
+  // re-click retries can exceed it — and on a SMALL run (one domain, when
+  // verifying a fix) that lands inside the whole test's budget with no slack.
+  // Floor the budget so short runs aren't killed mid-capture.
+  test.setTimeout(Math.max(DOMAINS.length * 75_000, 300_000) + 120_000);
 
   const rawUserDataDir = process.env.RAW_USER_DATA_DIR ??
     resolve(__dirname, '..', '..', '.vscode', 'browser-test-profiles', 'chrome');
@@ -438,6 +537,13 @@ test('corpus-sweep: capture + score ~50 domains, build ranked gallery', async ()
     clearSwCacheForRawDir: true,
   });
   try {
+    // Clear clips left in IndexedDB by earlier runs before capturing anything —
+    // see purgeStoredClips (they made the sweep score the wrong site).
+    const purged = await purgeStoredClips(ctx);
+    if (purged) {
+      // eslint-disable-next-line no-console
+      console.log(`   ⌫ purged ${purged} stored clip(s) from a previous run`);
+    }
     for (const d of headlessDomains) {
       const rec = await captureDomain(ctx, d);
       mergeRecord(acc, rec);

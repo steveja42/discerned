@@ -1,7 +1,9 @@
 # Corpus-sweep capture-quality — handoff
 
 Status snapshot for picking this up in a fresh context. The corpus sweep
-(`tests/e2e/corpus-sweep.spec.ts`) captures ~50 uncurated domains, scores each
+(`tests/e2e/corpus-sweep.spec.ts`) captures the uncurated domains listed in
+`tests/fixtures/corpus-domains.json` (185 as of 2026-07-29 — Phase 4.4 added
+100 seeds), scores each
 clip with content-free heuristics, and writes 3 images/domain (source/clip/cast)
 to `test-output/corpus-sweep-run/`. A human visual review lives in
 `test-output/corpus-sweep-run/visual-findings.json` (the gallery sorts by it).

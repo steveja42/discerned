@@ -93,6 +93,22 @@ The repo has a multi-layer test suite covering both sub-projects and the full cl
 - `tests/e2e/overlay-visual.spec.ts` — opt-in (`OVERLAY=1`) visual harness for the extension's evaluation overlay (Signal slider + Qualifier chips, dark-zinc theme). Triggers `ACTIVATE_DISCERNED` through the extension service worker and screenshots the gate + unrated main views to `test-output/overlay-*.png` for human review (closed shadow root — no pixel baseline).
 - `tests/e2e/helpers/launchExtension.ts` — `launchWithExtension({ profile, headed })`. Persistent profiles live at `.vscode/browser-test-profiles/<name>/` (gitignored). Anti-detection launch flags (`--disable-blink-features=AutomationControlled`, real UA, `navigator.webdriver` override) included by default — required for Medium/Breitbart-style Cloudflare gates.
 - Probe specs (opt-in via env vars): `embedded-tweet-probe`, `breitbart-probe`, `medium-probe`, `tweet-video-probe`, `extractor-frame0-probe`, `extractor-full-probe`, `zh-counters-probe`. Each dumps DOM structure / per-iframe extractor output to `test-output/` for one-off diagnostics.
+
+#### Sweep-triage probes
+
+Three diagnostics that answer the questions a corpus-sweep score *can't*. All are opt-in, write to `test-output/`, and are **diagnostics, not gates** — the pixel baselines remain the regression floor. Reach for these before writing a capture fix: a sweep finding rarely means what it looks like, and guessing the mechanism has produced wrong fixes more than once.
+
+| Probe | Answers | Run |
+|---|---|---|
+| `tools/finder-diag-probe.spec.ts` | **Two modes.** *finder* (default): which content-block the layout finder picks and why — tag/class/textLen/visLen/area/linkRatio/#p/#img per candidate, plus whether the real body text is even in the DOM. Distinguishes a finder mis-pick from a bot-gate/lazy-load. *picker* (`DIAG_MODE=picker`): why a discovery seed reported "no link matched picker" — final URL, `<title>`, anchor/regex/minText counts, real deep links, screenshot, verdict. | `DIAG=1 [DIAG_MODE=picker] [DIAG_ONLY=a,b] [DIAG_HEADED=1] [DIAG_WAIT=60] [DIAG_GAP=45] --project=finder-diag-probe` |
+| `tools/hidden-prose-probe.spec.ts` | Is low text-coverage a **paywall** (prose in the DOM but `visibility:hidden` — capture is faithful, do NOT "fix" it) or a **finder mis-pick** (prose visible, wrong block won)? Reports visible-vs-hidden prose counts, what hid each paragraph, and where the visible prose lives. | `HIDDEN=1 [HIDDEN_ONLY=folha] [HIDDEN_HEADED=1] --project=hidden-prose-probe` |
+| `tools/clip-width-probe.spec.ts` | Why a rendered clip **collapses into narrow columns** (text one character per line). Renders a saved capture through the real `.clip-body` CSS and reports the narrowest text elements + the ancestor chain that set the width. Works **offline from a saved HTML file**, so a fix can be iterated without re-hitting a Cloudflare-gated site. | `CLIPW=1 CLIPW_DOMAIN=<d> [CLIPW_HTML=<path>] --project=clip-width-probe` |
+
+Notes:
+- **Picker mode reads its seeds from `discover-article-urls.spec.ts`** rather than keeping a second copy — an earlier standalone probe drifted to a stale hub URL and silently probed the wrong page.
+- `DIAG_GAP` paces between sites. Hitting ~10 domains back-to-back from one IP is itself a bot signal: an unpaced run got Cloudflare challenges on the *last* three sites while earlier ones loaded fine.
+- Chrome must be **fully closed** before any of these run — they use the warm `Profile 3`, and a live Chrome holds the profile lock (`launchPersistentContext` fails).
+- Causes these have actually found: domain rebrands (`msnbc.com` → `ms.now`, `phys.org` → `techxplore.com`) where the regex can never match; changed article-ID schemes (CBC `-1.N` → `-9.N`); wrong hub URL returning an empty shell (mistaken for a paywall); `minText` rejecting image-wrapped 0-char anchors; and `.dx-stats` (`display:flex`) collapsing a comment thread.
 - `tests/e2e/tagger-canary.spec.ts` — opt-in (`CANARY=1`, `--project=tagger-canary`) weekly canary that runs each per-site tagger's selector-anchor manifest against the LIVE site and fails naming the exact dead selector when a redesign breaks a tagger (page-load flakes are SKIPs, not fails). Scheduled locally via `scripts/tagger-canary-local.ps1` (warm `test` Chrome profile → covers CF-walled Reddit/YouTube/StackOverflow) and in CI via `.github/workflows/tagger-canary.yml` (open sites only). See `discerned-ext/CLAUDE.md` → "Tagger canary / repair loop".
 
 ### Fixtures

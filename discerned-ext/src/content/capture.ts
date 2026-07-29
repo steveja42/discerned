@@ -1551,10 +1551,25 @@ function looksLikeContainer(el: Element): boolean {
 // sibling <article> cards (a feed/list), AND it holds far less text than the
 // page's largest content block. Card-class names are a secondary hint only.
 const CARD_ARTICLE_CLASS_RE = /(^|[\s_-])(tout|promo|teaser|recommend|related|card|review|viewing|feed-item|list-item|widget)([\s_-]|$)/i;
+// "Many <article>s and this one is a small slice of them" = feed item, not the
+// story (see looksLikeArticleCard). 5 is well above the 1-2 a normal story page
+// has; 0.25 lets a genuinely dominant article through even when a page also
+// carries a few teaser <article>s.
+const CARD_ARTICLE_FEED_MIN_COUNT = 5;
+const CARD_ARTICLE_MIN_TEXT_SHARE = 0.25;
 
 /** True when `el` (an <article>) looks like a card in a feed/list rather than
  *  the main story: it has ≥2 sibling <article>s of the same kind, OR it carries
  *  a card-ish class AND a much larger content block exists elsewhere on the page. */
+// The page's <article> elements, resolved once per findArticleElement pass —
+// looksLikeArticleCard is called for every candidate and a document-wide
+// querySelectorAll per call is needless work on article-heavy pages.
+let pageArticlesCache: Element[] | null = null;
+function pageArticles(): Element[] {
+  if (!pageArticlesCache) pageArticlesCache = Array.from(document.querySelectorAll('article'));
+  return pageArticlesCache;
+}
+
 function looksLikeArticleCard(el: Element): boolean {
   const parent = el.parentElement;
   if (parent) {
@@ -1565,6 +1580,25 @@ function looksLikeArticleCard(el: Element): boolean {
     if (siblingArticles.length >= 2) return true;
   }
   const elText = (el.textContent ?? '').trim().length;
+
+  // MANY <article>s on the page, and this one is a small slice of them = it's an
+  // item in a list, not the story. This catches feeds whose items are nested at
+  // varying depths, where the sibling test above sees only 0-1 neighbours:
+  // Haaretz renders each reader comment as a class-less <article> (49 of them,
+  // some direct, replies wrapped in a <div>), so the FIRST <article> on the page
+  // is a comment — Tier 1 took it and shipped the comment thread INSTEAD of the
+  // article, which is the AP News failure mode with no vendor class to match on.
+  // A real story page has one dominant <article>, so requiring this one to hold
+  // a decent share of all <article> text keeps single-article pages unaffected.
+  const allArticles = pageArticles();
+  if (allArticles.length >= CARD_ARTICLE_FEED_MIN_COUNT && elText > 0) {
+    const totalArticleText = allArticles.reduce(
+      (n, a) => n + (a.contains(el) || el.contains(a) ? 0 : (a.textContent ?? '').trim().length),
+      elText,
+    );
+    if (elText < totalArticleText * CARD_ARTICLE_MIN_TEXT_SHARE) return true;
+  }
+
   // A card-ish class name + a dramatically larger content block elsewhere =
   // this <article> is chrome, not the story. Compare against the biggest
   // non-descendant/non-ancestor content section on the page.
@@ -1583,6 +1617,7 @@ function looksLikeArticleCard(el: Element): boolean {
 }
 
 function findArticleElement(smartDetection: boolean): Element | null {
+  pageArticlesCache = null; // fresh per pass — the DOM can change between captures
   for (const sel of ARTICLE_SELECTORS) {
     // `article` is the first selector, but third-party comment widgets render
     // each comment as `<article class="vf3-comment">` (Viafoura), `<article>`
@@ -1625,6 +1660,16 @@ function findArticleElement(smartDetection: boolean): Element | null {
 const LAYOUT_MIN_TEXT_CHARS = 200;
 const LAYOUT_MAX_LINK_TEXT_RATIO = 0.85; // dominated by link text = nav/feed of cards
 const LAYOUT_MAX_BUTTON_DENSITY = 0.15; // buttons/textLength — high = UI chrome
+// Structure bonus per <li>, vs 50 for a prose block (p/blockquote/heading). A
+// back-matter index / TOC / link roll is hundreds of tiny list items and would
+// otherwise out-bonus real prose purely on count — see scoreContentBlock.
+const LAYOUT_LIST_ITEM_WEIGHT = 10;
+// A prose element counts toward the structure bonus unless it is a NAVIGATION
+// STUB: shorter than PROSE_STUB_MAX_CHARS and more than PROSE_STUB_LINK_RATIO of
+// its text is link text (an index/TOC entry). 80 chars is comfortably below a
+// real sentence and above a "Section 15.2.1" index line.
+const PROSE_STUB_MAX_CHARS = 80;
+const PROSE_STUB_LINK_RATIO = 0.6;
 
 // Third-party reader-comment widgets. These render a huge lazy-loaded text block
 // (a whole discussion thread) that outscores the article body in the layout
@@ -1693,6 +1738,26 @@ interface BlockScore {
  * Returns null if the element is disqualified (off-screen, too small,
  * dominated by UI chrome, etc.).
  */
+/**
+ * True when a prose-tagged element is REAL prose rather than a navigation stub
+ * (an index/TOC entry: short, and essentially all of its text is link text).
+ * Memoised for one layout-finder pass — see proseStubCache.
+ */
+let proseStubCache = new WeakMap<Element, boolean>();
+function isRealProse(p: Element): boolean {
+  const cached = proseStubCache.get(p);
+  if (cached !== undefined) return cached;
+  const t = (p.textContent ?? '').trim();
+  let real = true;
+  if (t.length < PROSE_STUB_MAX_CHARS) {
+    let linkLen = 0;
+    for (const a of Array.from(p.querySelectorAll('a'))) linkLen += (a.textContent ?? '').trim().length;
+    real = linkLen <= t.length * PROSE_STUB_LINK_RATIO;
+  }
+  proseStubCache.set(p, real);
+  return real;
+}
+
 function scoreContentBlock(el: Element, hasLayout: boolean): BlockScore | null {
   if (LAYOUT_SKIP_TAGS.has(el.tagName.toLowerCase())) return null;
 
@@ -1734,6 +1799,7 @@ function scoreContentBlock(el: Element, hasLayout: boolean): BlockScore | null {
     : fullText;
   if (text.length < LAYOUT_MIN_TEXT_CHARS) return null;
 
+
   // Reject elements dominated by link text — those are link lists / nav menus.
   const linkText = Array.from(el.querySelectorAll('a'))
     .map(a => (a.textContent ?? '').trim())
@@ -1747,14 +1813,26 @@ function scoreContentBlock(el: Element, hasLayout: boolean): BlockScore | null {
   if (buttonDensity > LAYOUT_MAX_BUTTON_DENSITY * 100) return null;
 
   const imgCount = el.querySelectorAll('img').length;
-  const paragraphCount = el.querySelectorAll('p, blockquote, li, h1, h2, h3, h4').length;
+  // Count only REAL prose blocks toward the structure bonus. An index / TOC /
+  // link roll is built from the same tags as an article (RFC 9110's back-matter
+  // index is 476 <p>s), so a raw tag count treats "475 one-link index entries"
+  // as better evidence than "152 written paragraphs" and the clip comes out as
+  // a bare A-Z index. A block whose text is essentially just its own link text
+  // is a navigation stub, not prose — the aggregate linkRatio below misses this
+  // because each stub is short, keeping the block's overall ratio low (0.14).
+  // Memoised per element: the finder scores hundreds of NESTED candidates, so a
+  // given <p> is re-examined once per ancestor. Without the cache this is
+  // quadratic and blows the capture timeout on ordinary pages.
+  const proseCount = Array.from(el.querySelectorAll('p, blockquote, h1, h2, h3, h4'))
+    .reduce((n, p) => n + (isRealProse(p) ? 1 : 0), 0);
+  const listCount = el.querySelectorAll('li').length;
 
   // Score: visual area + text density, boosted by paragraphs/images, penalised
   // by link density. Centre-column elements score highest because area dominates.
   const area = rect.width * rect.height;
   const visualScore = Math.sqrt(area);
   const textScore = text.length;
-  const structureBonus = paragraphCount * 50 + imgCount * 20;
+  const structureBonus = proseCount * 50 + listCount * LAYOUT_LIST_ITEM_WEIGHT + imgCount * 20;
   const linkPenalty = 1 - linkRatio;
 
   const score = (visualScore + textScore + structureBonus) * linkPenalty;
@@ -1775,6 +1853,8 @@ function findContentBlockByLayout(): Element | null {
   // "main column" from a single paragraph in body root.
   const probe = document.body.getBoundingClientRect();
   const hasLayout = probe.width > 0 && probe.height > 0;
+  // Fresh prose-stub memo per pass (an SPA can rewrite these between captures).
+  proseStubCache = new WeakMap<Element, boolean>();
   // Pierce open shadow roots — some sites (Stansberry) render the article
   // body inside <template shadowrootmode="open">, which plain querySelectorAll
   // would miss. See querySelectorAllDeep in the Shadow-DOM helpers section.
@@ -3797,6 +3877,13 @@ const HEADER_AVATAR_MAX_PX = 128;
 const HEADER_NAME_MAX_CHARS = 80;
 const QUOTE_MIN_TEXT_CHARS = 40;
 const STATS_MIN_ICON_SIBLINGS = 3;
+// Upper bounds for "this container is an engagement-glyph strip". A real stats
+// row is icons plus short counts; anything holding a paragraph's worth of text
+// is content (a comment list, a post body) and must not be flexed. See
+// isProseContainer — YouTube's rebuilt "N views · date" row is ~40 chars, and a
+// tweet-card footer with a date + 4 counts stays well under 200.
+const STATS_MAX_PROSE_CHARS = 120;
+const STATS_MAX_TEXT_CHARS = 200;
 
 function appendClass(el: Element, token: string): void {
   const existing = el.getAttribute('class') ?? '';
@@ -3936,6 +4023,21 @@ function tagSemanticStructure(root: Element): void {
       return img.closest('figure') !== null;
     });
 
+  // True when an element holds real prose, so it cannot be an engagement-glyph
+  // strip however "action-shaped" its children look. Guards the two dx-stats
+  // passes below: a comment THREAD (Lemmy's nested <ul class="comments">) has an
+  // icon in every item and would otherwise be flexed into vertical slivers.
+  // A genuine stats row is glyphs + short counts ("1.3K"), never a paragraph.
+  const isProseContainer = (el: Element): boolean => {
+    if (el.querySelector('p, blockquote')) {
+      // A <p> inside a stats row is possible but always tiny; prose is not.
+      const proseLen = Array.from(el.querySelectorAll('p, blockquote'))
+        .reduce((n, p) => n + (p.textContent ?? '').trim().length, 0);
+      if (proseLen >= STATS_MAX_PROSE_CHARS) return true;
+    }
+    return (el.textContent ?? '').trim().length >= STATS_MAX_TEXT_CHARS;
+  };
+
   // Belt to the guard above: carousel/gallery wrappers declare themselves in
   // their class names (this pass runs BEFORE sanitisation strips classes).
   // Never tag a slide track as an icon row, whatever its children hold.
@@ -3950,6 +4052,13 @@ function tagSemanticStructure(root: Element): void {
   // header pass below skips elements already tagged dx-stats.
   root.querySelectorAll('*').forEach(parent => {
     if (insideCarousel(parent)) return;
+    // A stats row is a strip of glyphs — it never holds prose. A comment LIST
+    // does: each item carries a vote/reply icon, so a thread's <ul> looks
+    // "action-shaped" by child count and used to be tagged dx-stats. Since
+    // .dx-stats is `display:flex`, that turned every nested reply list into a
+    // flex row and collapsed each reply's text to a ~79px vertical strip
+    // (Lemmy). Reject any container carrying real prose.
+    if (isProseContainer(parent)) return;
     const children = Array.from(parent.children);
     if (children.length < STATS_MIN_ICON_SIBLINGS) return;
     const actionChildren = children.filter(c =>
@@ -3984,6 +4093,7 @@ function tagSemanticStructure(root: Element): void {
   root.querySelectorAll('*').forEach(parent => {
     if (parent.classList.contains('dx-stats')) return;
     if (insideCarousel(parent)) return;
+    if (isProseContainer(parent)) return; // same comment-list guard as pass 1
     const children = Array.from(parent.children);
     if (children.length < 2) return;
     const actionLike = children.filter(isActionShaped);
@@ -4182,7 +4292,7 @@ const ALLOWED_ATTRS_GLOBAL = new Set(['style', 'class']);
 const TRUSTED_CLASS_PREFIXES = ['dx-', 'tweet-'];
 const ALLOWED_ATTRS_PER_TAG: Record<string, Set<string>> = {
   a:   new Set(['href']),
-  img: new Set(['src', 'alt', 'title', 'width', 'height', 'data-dx-src']),
+  img: new Set(['src', 'alt', 'title', 'width', 'height', 'data-dx-src', 'data-discerned-currentsrc']),
   // Note: keys here MUST be lowercase — sanitiseElement compares attr.name.toLowerCase().
   // SVG camelCase attrs (viewBox, gradientUnits, etc.) are written as their lowercased
   // form, which matches the lowercased-attribute-name lookup browsers do on HTML-parsed SVG.
@@ -4419,6 +4529,12 @@ const SIZE_MARKER = 'data-discerned-sized';
 // space text nodes between the children before it is stripped.
 const FLEXSEP_MARKER = 'data-discerned-flexsep';
 
+// Stamped on a live <img> whose own src/data-src is a lazy-load PLACEHOLDER but
+// which the browser has already painted from a <picture>/srcset. Carries the
+// painted URL onto the clone, where `currentSrc` is empty. resolveImgSrc reads
+// it; inlineAllImages removes it once the bytes are fetched.
+const CURRENTSRC_ATTR = 'data-discerned-currentsrc';
+
 /**
  * Write each live <img>'s rendered width/height onto the live element as
  * width/height attributes, so subsequent cloneNode(true) copies them into
@@ -4440,6 +4556,15 @@ function annotateLiveImageSizes(liveRoot: Element): () => void {
   const liveImgs = querySelectorAllDeep(liveRoot, 'img') as HTMLImageElement[];
   const annotated: Array<{ img: HTMLImageElement; hadWidth: boolean; hadHeight: boolean }> = [];
   liveImgs.forEach(img => {
+    // Stamp the PAINTED url when the element's own src/data-src is a lazy-load
+    // placeholder. Only the live img knows this — `currentSrc` is empty on the
+    // detached clone inlineAllImages parses, so without this the clip inlines a
+    // 1×1 spacer and renders a blank box (The Hindu's 924×520 hero gap).
+    const cur = img.currentSrc;
+    if (cur && !isPlaceholderImgUrl(cur)) {
+      const own = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('src');
+      if (!own || isPlaceholderImgUrl(own)) img.setAttribute(CURRENTSRC_ATTR, cur);
+    }
     const rect = img.getBoundingClientRect();
     const w = Math.round(rect.width);
     const h = Math.round(rect.height);
@@ -4482,6 +4607,9 @@ function annotateLiveImageSizes(liveRoot: Element): () => void {
       if (!hadHeight) img.removeAttribute('height');
       img.removeAttribute(SIZE_MARKER);
     });
+    // The tagger contract is non-destructive: every marker we stamped on the
+    // LIVE page comes back off (the clone keeps its copy).
+    liveImgs.forEach(img => img.removeAttribute(CURRENTSRC_ATTR));
     flexMarked.forEach(el => el.removeAttribute(FLEXSEP_MARKER));
   };
 }
@@ -5994,6 +6122,16 @@ const MAX_CAST_IMAGE_URLS = 8;
 // when a size attribute is present (Tier-2 Readability output has none).
 const MIN_CAST_IMAGE_PX = 100;
 
+// Lazy-load placeholders: a literal 1×1 spacer asset, or a tiny inline data URI
+// blur-up stub. These are what a site paints BEFORE the real photo arrives; a
+// clip that inlines one shows a blank box at the hero's declared width/height.
+const PLACEHOLDER_IMG_RE = /(^|\/)(1x1|blank|spacer|placeholder|transparent|pixel)[-_.]?[a-z0-9]*\.(png|gif|jpe?g|webp|svg)(\?|#|$)/i;
+function isPlaceholderImgUrl(url: string): boolean {
+  if (PLACEHOLDER_IMG_RE.test(url)) return true;
+  // Tiny inline stub (LQIP). Real inlined art is far bigger than 512 chars.
+  return /^data:image\//i.test(url) && url.length < 512;
+}
+
 // Resolve an <img>'s real URL. Many news sites (CNN, etc.) lazy-load with
 // data-src; prefer it over a placeholder 1×1 src. Also check data-lazy-src
 // used by some WordPress themes. Relative srcs resolve against the live page.
@@ -6002,6 +6140,16 @@ function resolveImgSrc(img: HTMLImageElement, baseUrl: string): string | null {
     img.getAttribute('data-src') ||
     img.getAttribute('data-lazy-src') ||
     img.getAttribute('src');
+  // A 1×1 spacer/placeholder in src (and in data-src/data-original too — The
+  // Hindu puts the SAME spacer in both) means the real photo was supplied by a
+  // <picture>/srcset the browser already resolved. annotateLiveImageSizes stamps
+  // that painted URL as CURRENTSRC_ATTR on the LIVE img (a detached clone has an
+  // empty `currentSrc`), so prefer it whenever the attribute URL is a
+  // placeholder; otherwise the clip shows a blank gap at the hero's declared size.
+  const painted = img.getAttribute(CURRENTSRC_ATTR);
+  if (painted && (!raw || isPlaceholderImgUrl(raw))) {
+    try { return new URL(painted, baseUrl).toString(); } catch { /* fall through */ }
+  }
   if (!raw) return null;
   try {
     return new URL(raw, baseUrl).toString();
@@ -6065,6 +6213,7 @@ async function inlineAllImages(html: string): Promise<{ html: string; imageUrls:
       // Remove lazy-load attributes so the stored HTML is self-contained.
       img.removeAttribute('data-src');
       img.removeAttribute('data-lazy-src');
+      img.removeAttribute(CURRENTSRC_ATTR);
     }
   };
 
