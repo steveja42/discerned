@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<!--
+  Guards the generic video-embed substitution (substituteVideoEmbeds).
+
+  Shape 1 mirrors the real primal.net defect: a note whose entire media payload
+  is an <iframe src="youtube.com/embed/ID"> with NO <video> element anywhere on
+  the page. Sanitisation strips every iframe, so before the fix the video block
+  vanished from the clip entirely (no poster, no link).
+
+  The remaining shapes cover the other embed providers a news post / blog can
+  carry. Vimeo/Rumble/Twitch have no derivable thumbnail URL, so they degrade to
+  a "▶ …" dx-video-link anchor rather than disappearing.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Video embeds test page</title>
+</head>
+<body>
+  <article>
+    <h1>Posts with embedded video players</h1>
+
+    <p id="p1">RIP — this is the note prose that sits above the embedded player,
+      long enough that the layout finder treats this block as real content and
+      does not discard it as chrome or navigation furniture.</p>
+    <iframe class="w-max embeddedContent noBottomMargin"
+            src="https://www.youtube.com/embed/OSW2zeM3yLU"
+            width="560" height="315" allowfullscreen></iframe>
+
+    <p id="p2">A second paragraph of prose separating the players, again with
+      enough words in it to keep the containing block scoring as article content
+      throughout the capture pipeline's various tiers.</p>
+    <iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?rel=0"
+            width="560" height="315"></iframe>
+
+    <p id="p3">Vimeo has no thumbnail URL we can derive without an API call, so
+      it degrades to a link card instead of silently vanishing from the clip.</p>
+    <iframe src="https://player.vimeo.com/video/76979871?h=8272103f6e"
+            width="640" height="360"></iframe>
+
+    <p id="p4">Rumble and Twitch likewise degrade to link cards rather than
+      being stripped outright by the iframe sanitiser pass.</p>
+    <iframe src="https://rumble.com/embed/v2abcde/" width="640" height="360"></iframe>
+    <iframe src="https://player.twitch.tv/?video=1234567890" width="640" height="360"></iframe>
+
+    <p id="p5">An unrecognised iframe (an ad slot, a newsletter widget) must
+      still be dropped by the sanitiser exactly as it was before.</p>
+    <iframe src="https://ads.example.com/slot?id=99" width="300" height="250"></iframe>
+  </article>
+</body>
+</html>

@@ -88,6 +88,16 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'video-card-geom-probe',
+      testMatch: /tools\/video-card-geom-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'primal-video-probe',
+      testMatch: /tools\/primal-video-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
       name: 'primal-visual',
       testMatch: /primal-visual\.spec\.ts/,
       retries: 0,

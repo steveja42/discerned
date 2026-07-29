@@ -533,6 +533,7 @@ async function extractSelection(): Promise<Capture> {
   substituteVideosWithPosters(fragment);
   substituteStarRatings(fragment);
   await substituteEmbeddedTweets(fragment, harvestedTweets);
+  substituteVideoEmbeds(fragment);
   const sanitized = sanitizeFragment(fragment);
   log(LL.DEBUG, `Discerned: extractSelection — after sanitize: html=${sanitized.length} chars`, 'url:', url);
   const context = extractContext(range);
@@ -2036,6 +2037,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     substituteVideosWithPosters(clone, liveVideoFrames);
     substituteStarRatings(clone);
     await substituteEmbeddedTweets(clone, harvestedTweets);
+    substituteVideoEmbeds(clone);
     tagSemanticStructure(clone);
     const imgsBefore = clone.querySelectorAll('img').length;
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
@@ -2104,6 +2106,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     substituteVideosWithPosters(clone, liveVideoFrames);
     substituteStarRatings(clone);
     await substituteEmbeddedTweets(clone, harvestedTweets);
+    substituteVideoEmbeds(clone);
     tagSemanticStructure(clone);
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
     const { html: inlined, imageUrls } = await inlineAllImages(clone.innerHTML.trim());
@@ -2160,6 +2163,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   substituteVideosWithPosters(bodyClone, liveVideoFrames);
   substituteStarRatings(bodyClone);
   await substituteEmbeddedTweets(bodyClone, harvestedTweets);
+  substituteVideoEmbeds(bodyClone);
   tagSemanticStructure(bodyClone);
   sanitiseTreeInPlace(bodyClone);
   const { html: inlined, imageUrls } = await inlineAllImages(bodyClone.innerHTML.trim());
@@ -2248,6 +2252,7 @@ async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
   substituteVideosWithPosters(bodyClone, fpLiveVideoFrames);
   substituteStarRatings(bodyClone);
   await substituteEmbeddedTweets(bodyClone, harvestedTweets);
+  substituteVideoEmbeds(bodyClone);
   // Generic semantic tagging (skipped automatically when a site tagger was
   // active). Stamps dx-byline / dx-stats / dx-header on news + blog markup
   // so the captured HTML carries layout hints across sanitisation.
@@ -4728,6 +4733,118 @@ async function captureVideoFrames(root: Element | Document): Promise<Map<string,
     if (dataUri) frames.set(uuid, dataUri);
   }
   return frames;
+}
+
+/**
+ * Recognised video-embed iframe providers, mapped to the poster-thumbnail URL
+ * and canonical watch URL for a given embed src.
+ *
+ * Video embeds are `<iframe>`s, which `sanitiseTreeInPlace` strips outright —
+ * so without this pass a note/article whose only media is a YouTube or Vimeo
+ * player captures with the video block silently MISSING (no poster, no link).
+ * This is what primal.net notes hit: the note body is prose + an
+ * `<iframe src="youtube.com/embed/ID">`, and there is no `<video>` element on
+ * the page at all, so `substituteVideosWithPosters`' <video>/background-image
+ * passes never see it.
+ *
+ * Deliberately generic (not a primal tagger): the same shape appears on every
+ * site that embeds a player — Substack, WordPress blogs, news articles, Nostr
+ * clients. YouTube's `i.ytimg.com/vi/<id>/hqdefault.jpg` thumbnail is the same
+ * URL `postCloneYoutube` already relies on.
+ */
+type VideoEmbedInfo = { poster: string | null; href: string; label: string };
+
+function matchVideoEmbed(src: string): VideoEmbedInfo | null {
+  if (!/^https?:\/\//i.test(src)) return null;
+  let u: URL;
+  try { u = new URL(src); } catch { return null; }
+  const host = u.hostname.replace(/^www\./, '');
+
+  // YouTube — /embed/<id>, youtube-nocookie, and the /v/<id> legacy form.
+  // Thumbnail: prefer `mqdefault.jpg` (320x180, true 16:9) over `hqdefault.jpg`
+  // (480x360, 4:3) — hqdefault pads widescreen videos with baked-in black
+  // letterbox bars that no amount of CSS can crop back off. mqdefault exists for
+  // every video, unlike maxresdefault which 404s on older/low-res uploads.
+  if (/^(youtube\.com|youtube-nocookie\.com)$/i.test(host)) {
+    const id = u.pathname.match(/^\/(?:embed|v)\/([A-Za-z0-9_-]{6,})/)?.[1];
+    if (id) {
+      return {
+        poster: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+        href: `https://www.youtube.com/watch?v=${id}`,
+        label: 'YouTube video',
+      };
+    }
+  }
+  // Vimeo — /video/<id>. Thumbnail needs an API call we can't make inline, so
+  // fall back to a link card (poster: null).
+  if (host === 'player.vimeo.com') {
+    const id = u.pathname.match(/^\/video\/(\d+)/)?.[1];
+    if (id) return { poster: null, href: `https://vimeo.com/${id}`, label: 'Vimeo video' };
+  }
+  // Rumble / Odysee / Twitch / Dailymotion — no derivable thumbnail URL, but a
+  // link card is far better than the block vanishing.
+  if (host === 'rumble.com' && /^\/embed\//.test(u.pathname)) {
+    return { poster: null, href: src, label: 'Rumble video' };
+  }
+  if (/(^|\.)odysee\.com$/i.test(host) && /^\/\$\/embed\//.test(u.pathname)) {
+    return { poster: null, href: src, label: 'Odysee video' };
+  }
+  if (host === 'player.twitch.tv' || host === 'clips.twitch.tv') {
+    return { poster: null, href: src, label: 'Twitch video' };
+  }
+  if (host === 'dailymotion.com' || host === 'geo.dailymotion.com') {
+    const id = u.pathname.match(/\/video\/([A-Za-z0-9]+)/)?.[1];
+    if (id) return { poster: null, href: `https://www.dailymotion.com/video/${id}`, label: 'Dailymotion video' };
+  }
+  return null;
+}
+
+/**
+ * Replace recognised video-embed <iframe>s in the cloned subtree with a
+ * `tweet-video` poster card (reusing the existing play-overlay CSS) or, when no
+ * thumbnail URL is derivable, a `dx-video-link` anchor.
+ *
+ * Must run BEFORE sanitiseTreeInPlace (which removes every iframe) and AFTER
+ * substituteEmbeddedTweets (so Twitter's platform.twitter.com iframes are
+ * already claimed by the richer tweet-card path). The poster <img> is left as a
+ * plain https URL — the later inlineAllImages pass converts it to base64, and
+ * data-dx-src keeps it in the kind-30023 cast markdown.
+ */
+function substituteVideoEmbeds(root: Element | DocumentFragment): void {
+  const iframes = Array.from((root as Element).querySelectorAll('iframe'));
+  for (const iframe of iframes) {
+    const src = iframe.getAttribute('src') ?? '';
+    const info = matchVideoEmbed(src);
+    if (!info) continue;
+
+    const doc = iframe.ownerDocument ?? document;
+    if (info.poster) {
+      const a = doc.createElement('a');
+      a.className = 'tweet-video';
+      a.href = info.href;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      const img = doc.createElement('img');
+      img.setAttribute('src', info.poster);
+      img.setAttribute('alt', `${info.label} thumbnail`);
+      img.className = 'tweet-video-poster';
+      img.setAttribute('data-dx-src', info.poster);
+      a.appendChild(img);
+      const play = doc.createElement('div');
+      play.className = 'tweet-video-play';
+      play.setAttribute('aria-label', 'Play video');
+      play.innerHTML = '<svg viewBox="0 0 24 24" width="48" height="48"><path d="M8 5v14l11-7z"/></svg>';
+      a.appendChild(play);
+      iframe.replaceWith(a);
+    } else {
+      const a = doc.createElement('a');
+      a.className = 'dx-video-link';
+      a.href = info.href;
+      a.textContent = `▶ ${info.label}`;
+      iframe.replaceWith(a);
+    }
+    log(LL.DEBUG, `Discerned: video embed substituted — ${info.label} poster=${!!info.poster}`, 'url:', window.location.href);
+  }
 }
 
 /**

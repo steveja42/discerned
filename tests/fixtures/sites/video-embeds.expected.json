@@ -1,0 +1,11 @@
+{
+  "format": "article",
+  "url": "https://example.com/post/video-embeds",
+  "title": { "contains": "Video embeds" },
+  "bodyText": {
+    "minLength": 200,
+    "contains": ["embedded player", "link card"],
+    "excludes": ["ads.example.com"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

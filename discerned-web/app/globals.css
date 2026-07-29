@@ -1104,7 +1104,15 @@ a { color: inherit; }
 .clip-body .tweet-stat-count { font-size: 13px; }
 .clip-body .tweet-repost-header { display: flex; align-items: center; gap: 6px; font-family: var(--sans); font-size: 13px; color: var(--ink-3); font-weight: 500; margin-bottom: 8px; }
 .clip-body .tweet-repost-header svg { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
-.clip-body .tweet-video { display: block; position: relative; margin-top: 10px; border-radius: 12px; overflow: hidden; cursor: pointer; text-decoration: none; }
+/* position:relative must be !important — it's the containing block for the
+   absolutely-positioned .tweet-video-play overlay, and the `.clip-body *`
+   inline-style reset further down would otherwise flatten it to static. */
+/* position:relative must be !important — it's the containing block for the
+   absolutely-positioned .tweet-video-play overlay, and the `.clip-body *`
+   inline-style reset further down would otherwise flatten it to static.
+   width:fit-content shrink-wraps the card to the poster's intrinsic width so
+   the overlay doesn't overhang it as a grey band on the right. */
+.clip-body .tweet-video { display: block; width: fit-content; max-width: 100%; position: relative !important; margin-top: 10px; border-radius: 12px; overflow: hidden; cursor: pointer; text-decoration: none; }
 .clip-body .tweet-video-poster { max-width: 100% !important; width: auto !important; height: auto; display: block !important; margin: 0 !important; border-radius: 0 !important; }
 .clip-body .tweet-video-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); }
 .clip-body .tweet-video-play svg { fill: #fff; filter: drop-shadow(0 1px 4px rgba(0,0,0,0.5)); }
@@ -1203,8 +1211,17 @@ a { color: inherit; }
    flexbox shell. Sanitisation keeps inline `style` on non-img elements, so
    those transforms (e.g. transform: translateX(-105px)) survive into the clip
    and shove content off-screen. None of it is meaningful in a static clip —
-   reset it so normal block/flex flow (and the dx-* rules below) take over. */
-.clip-body * {
+   reset it so normal block/flex flow (and the dx-* rules below) take over.
+
+   Exempt our OWN trusted card chrome. .tweet-video-play (the centred play
+   overlay) and .tweet-video-duration are absolutely positioned BY US over the
+   poster, and .tweet-video is their containing block. All three must be
+   exempted: this selector outranks the plain `.clip-body .tweet-video` rule, so
+   without the :not() the card flattened to position:static and the overlay
+   either stacked BELOW the thumbnail as a grey bar (when it was static too) or
+   escaped to the viewport (once only the overlay was exempted). Affects every
+   clip with a video card — X video tweets, and all YouTube/Vimeo embeds. */
+.clip-body *:not(.tweet-video):not(.tweet-video-play):not(.tweet-video-duration) {
   transform: none !important;
   position: static !important;
   float: none !important;
