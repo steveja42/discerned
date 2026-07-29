@@ -10,7 +10,6 @@
 
 import {
   CAST_INLINE_BODY_MAX_CHARS,
-  createProfileEvent,
   createQuoteNoteEvent,
   createResourceNoteEvent,
   createLongFormEvent,
@@ -488,9 +487,6 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
 
     case 'GET_PROFILE':
       return handleGetProfile();
-
-    case 'PUBLISH_KIND_ZERO':
-      return handlePublishKind0(senderTabId);
 
     case 'RESOLVE_PENDING_SIGN':
       resolvePendingSign(message.id, message.signed);
@@ -1622,48 +1618,13 @@ function rejectPendingSign(id: string, error: string): void {
   entry.reject(new Error(error));
 }
 
-// ── Kind-0 publish (dev-build manual trigger) ────────────────────────────────
-//
-// Triggered by the "Publish Kind Zero" button in the overlay settings (dev only).
-// Signs and publishes a bare kind-0 profile event using the current tab as the
-// NIP-07 signing context (for pro mode) so the wallet prompt appears on the
-// page the user already has focused.
-
-async function handlePublishKind0(senderTabId: number | undefined): Promise<BackgroundResponse> {
-  try {
-    const template = createProfileEvent({});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let signed: any;
-    if (currentAuthState.type === 'pro') {
-      // Sign directly in the sender tab — the user already has it open and the
-      // wallet's approval prompt will appear there. Do NOT route through
-      // resolveSigningTab, which requires a discerned.online URL.
-      if (senderTabId === undefined) throw new Error('No sender tab for NIP-07 signing');
-      const response = await chrome.tabs.sendMessage(senderTabId, {
-        type: 'SIGN_WITH_NIP07',
-        event: template,
-      }) as { signed?: object; error?: string } | null;
-      if (!response) throw new Error('NIP-07 content script did not respond');
-      if (response.error) throw new Error(response.error);
-      signed = response.signed;
-    } else {
-      signed = await signEvent(template);
-    }
-    const result = await publishWithMinimum(signed);
-    const health = getRelayHealth(result.results);
-    if (result.success) {
-      log(LL.NORMAL, '[kind0] published OK',
-        { relays: `${health.healthy}/${health.total}` }, 'url:', 'background');
-      return { success: true };
-    }
-    const ackErr = `Published but only ${health.healthy}/${health.total} relays ACKed`;
-    log(LL.WARN, '[kind0] publish failed', { reason: ackErr }, 'url:', 'background');
-    return { success: false, error: ackErr };
-  } catch (err) {
-    log(LL.WARN, '[kind0] publish error', { err }, 'url:', 'background');
-    return { success: false, error: err instanceof Error ? err.message : String(err) };
-  }
-}
+// NOTE: profile (kind-0) publishing was deliberately REMOVED. Kind-0 is
+// replaceable — relays keep only the newest event per pubkey — so publishing a
+// partial profile silently erases every field it omits from the network. The
+// old dev-only "Publish Kind Zero" button sent `{}` and wiped the signed-in
+// identity's metadata. Profile editing belongs in a full Nostr client (Primal,
+// NostrUdel) that has real name/about/picture UI; discerned does not manage
+// profiles. Don't reintroduce this without that UI.
 
 async function signEvent(
   template: Parameters<typeof finalizeEvent>[0],

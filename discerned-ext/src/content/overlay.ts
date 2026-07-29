@@ -890,12 +890,6 @@ ${themeVarsBlock(this.effectiveTheme)}
         </div>
         <button class="btn btn-primary" id="settings-connect" style="margin-top:8px">Sign in →</button>
       `;
-      const diagnostic = __DISCERNED_TEST_BUILD__ ? `
-        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          <button class="btn btn-secondary" id="settings-publish-kind0" type="button">Publish Kind Zero</button>
-        </div>
-        <div id="settings-probe-result" class="card-desc" style="margin-top:8px;white-space:pre-wrap;font-family:var(--mono,monospace);font-size:12px"></div>
-      ` : '';
       // Only offer Disconnect once actually signed in (pubkey present). Without
       // a pubkey the wallet is merely *detected* — nothing has been connected to
       // disconnect from, and the MAIN view already treats this as "Local only".
@@ -915,7 +909,6 @@ ${themeVarsBlock(this.effectiveTheme)}
             ${disconnectBtn}
           </div>
           ${auth.pubkey ? identityBlock(auth.pubkey) : noPubkeyCta}
-          ${diagnostic}
         </div>
       `;
     } else if (auth.type === 'nip46') {
@@ -1041,28 +1034,6 @@ ${themeVarsBlock(this.effectiveTheme)}
       this.view = 'identity';
       this.render();
     });
-
-    if (__DISCERNED_TEST_BUILD__) {
-      this.shadow.getElementById('settings-publish-kind0')?.addEventListener('click', async () => {
-        const btn = this.shadow.getElementById('settings-publish-kind0') as HTMLButtonElement | null;
-        const out = this.shadow.getElementById('settings-probe-result');
-        if (!out) return;
-        if (btn) btn.disabled = true;
-        out.textContent = 'Publishing kind-0 event…';
-        const t0 = performance.now();
-        try {
-          const res = await chrome.runtime.sendMessage({ type: 'PUBLISH_KIND_ZERO' }).catch((e: unknown) => ({ success: false, error: String(e) }));
-          const elapsed = Math.round(performance.now() - t0);
-          if (res?.success) {
-            out.textContent = `Kind-0 published in ${elapsed}ms`;
-          } else {
-            out.textContent = `Kind-0 FAILED in ${elapsed}ms: ${(res as { error?: string }).error ?? 'unknown error'}`;
-          }
-        } finally {
-          if (btn) btn.disabled = false;
-        }
-      });
-    }
 
     this.shadow.getElementById('settings-disconnect')?.addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'DISCONNECT_AUTH' });

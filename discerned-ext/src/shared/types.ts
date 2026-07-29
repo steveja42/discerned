@@ -167,7 +167,6 @@ export type BackgroundMessage =
   | { type: 'PUSH_CATEGORIES'; categories: string[] }
   | { type: 'NIP07_DETECTED'; hasNIP07: boolean; pubkey?: string }
   | { type: 'GET_PROFILE' }
-  | { type: 'PUBLISH_KIND_ZERO' }
   | { type: 'CONNECT_NIP46'; bunkerUri: string }
   | { type: 'CONNECT_NSEC'; rawNsec: string; pin: string }
   | { type: 'GENERATE_NSEC' }

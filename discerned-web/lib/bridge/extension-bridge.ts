@@ -118,7 +118,7 @@ export function requestClipBody(id: string): void {
 // signs in on the web app. Best-effort: no-op when the extension isn't
 // installed, since postMessage to the same origin will simply find no
 // matching content-script listener. The user's gesture (Sign In click) on a
-// discerned origin is what makes the kind-0 publish that follows safe.
+// discerned origin is what sanctions the extension adopting this identity.
 export function sendPubkeyToExtension(pubkey: string): void {
   window.postMessage({ type: 'DISCERNED_SET_NIP07_PUBKEY', pubkey }, window.location.origin);
 }

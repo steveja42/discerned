@@ -452,26 +452,10 @@ export function createLongFormEvent(
   };
 }
 
-export interface ProfileMetadata {
-  name?: string;
-  nip05?: string;
-  about?: string;
-  picture?: string;
-}
-
-/**
- * Create a Profile Metadata event (Kind 0). Used to publish the user's
- * NIP-05 identifier (and display name) so any Nostr client can verify
- * `name@discerned.online` against their pubkey.
- */
-export function createProfileEvent(meta: ProfileMetadata): EventTemplate {
-  return {
-    kind: 0,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [['client', 'discerned']],
-    content: JSON.stringify(meta),
-  };
-}
+// NOTE: there is deliberately no kind-0 (profile metadata) factory here. Kind-0
+// is replaceable, so publishing one erases every field it omits from the relays.
+// discerned doesn't manage profiles — that belongs in a client with real
+// name/about/picture editing. See the note in background.ts near signEvent.
 
 /**
  * Create an encrypted App Data event (Kind 30078) for private clips.
