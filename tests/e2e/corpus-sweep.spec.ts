@@ -21,19 +21,29 @@
 //   $env:SWEEP='1'; pnpm exec playwright test -c tests/e2e/playwright.config.ts \
 //     --project=corpus-sweep
 // Options: SWEEP_LIMIT=10 (first N domains), SWEEP_ONLY=theverge,cnn (subset),
-//   PROFILE_DIR=Profile 3 (default), SWEEP_NO_HEADED_RETRY=1 (skip the headed pass).
+//   SWEEP_SKIP=imdb,nytimes (exclude a subset), PROFILE_DIR=Profile 3 (default),
+//   SWEEP_NO_HEADED_RETRY=1 (skip the CF headed pass), SWEEP_NO_PX_FIRST=1
+//   (skip the PerimeterX headed-first pass — NOT recommended, see below).
 //
-// Headed retry for Cloudflare: the main pass runs HEADLESS (out of your way). A
-// few sites (politico, axios) sit behind Cloudflare Turnstile that clears only
-// with a REAL visible window — even a deep article URL is walled. So after the
-// headless pass, any domain that skipped with a "challenge/error page" reason is
-// retried in a SECOND, HEADED pass. The profile's cf_clearance + a visible window
-// is enough to clear them with NO manual clicking (verified via the discovery
-// tool). Set SWEEP_NO_HEADED_RETRY=1 to keep the whole run headless (those sites
-// then stay skipped). The headed window is brief and only opens for the handful
-// of still-walled domains, not the whole corpus.
+// THREE-PASS flow:
+//  • Pass 0 — PerimeterX HEADED-FIRST (walmart/zillow/etsy/yelp/homedepot/
+//    goodreads-*, see PERIMETERX_SITES). These are run headed BEFORE any headless
+//    hit and are EXCLUDED from Pass 1. PerimeterX scores the fingerprint+session:
+//    a headless hit is the most suspicious signal and RAISES the risk score,
+//    escalating the wall to a hard block that persists for a cooldown — locking
+//    the site out even for a later headed attempt AND the user's own clicks. So we
+//    never touch them headless. The pass auto-solves the 'Press & Hold' gate
+//    (tryPressAndHold) + waits for a sustained gate-free state, so it needs NO
+//    user clicks. This is the DEFAULT (disable with SWEEP_NO_PX_FIRST=1).
+//  • Pass 1 — HEADLESS for everyone else (out of your way).
+//  • Pass 2 — CLOUDFLARE headed retry: a few sites (politico, axios, medium) sit
+//    behind CF Turnstile that clears only in a REAL window. Any domain that
+//    skipped headless with a "challenge/error page" is retried headed; the
+//    profile's cf_clearance clears them with NO clicking. CF (unlike PerimeterX)
+//    is repeatable, so it's safe to hit these headless first. PerimeterX sites are
+//    excluded here (they had their shot in Pass 0). SWEEP_NO_HEADED_RETRY=1 skips it.
 
-import { test, type BrowserContext } from '@playwright/test';
+import { test, type BrowserContext, type Page } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
@@ -45,6 +55,19 @@ import { refreshSweepGallery } from './helpers/sweepGallery';
 
 interface DomainEntry { name: string; url: string; note?: string }
 
+// Domains behind a PerimeterX (HUMAN) wall — "Robot or human?" / "Press & Hold".
+// These are run HEADED-FIRST (Pass 0), BEFORE any headless hit, and are EXCLUDED
+// from the headless Pass 1. Rationale: PerimeterX scores the fingerprint+session,
+// not the URL. A headless-Chrome hit is the most suspicious signal and RAISES the
+// risk score, which escalates the wall from "solvable Press & Hold" to a hard
+// block that persists for a cooldown — locking the site out even for a subsequent
+// headed attempt (and the user's own clicks). So we never touch them headless.
+// (Cloudflare sites don't have this problem — cf_clearance makes the headed retry
+// repeatable — so THOSE stay in the normal headless→headed-retry flow.)
+const PERIMETERX_SITES = new Set([
+  'walmart', 'zillow', 'etsy', 'yelp', 'homedepot', 'goodreads-book', 'goodreads-author',
+]);
+
 const DOMAINS: DomainEntry[] = (() => {
   const raw = JSON.parse(
     readFileSync(resolve(__dirname, '..', 'fixtures', 'corpus-domains.json'), 'utf8'),
@@ -54,9 +77,42 @@ const DOMAINS: DomainEntry[] = (() => {
     const only = new Set(process.env.SWEEP_ONLY.split(',').map(s => s.trim()));
     list = list.filter(d => only.has(d.name));
   }
+  if (process.env.SWEEP_SKIP) {
+    const skip = new Set(process.env.SWEEP_SKIP.split(',').map(s => s.trim()));
+    list = list.filter(d => !skip.has(d.name));
+  }
   if (process.env.SWEEP_LIMIT) list = list.slice(0, Number(process.env.SWEEP_LIMIT));
   return list;
 })();
+
+/**
+ * Auto-solve a PerimeterX 'Press & Hold' captcha in a HEADED context so the sweep
+ * clears the gate itself (no user clicks, no focus-stealing). Locates the captcha
+ * button across the page + its frames and press-and-HOLDS it (~8s — PerimeterX
+ * needs a sustained hold). Best-effort; every failure mode returns false. Mirrors
+ * corpus-sweep-manual's tryPressAndHold.
+ */
+async function tryPressAndHold(page: Page): Promise<boolean> {
+  const roots = [page, ...page.frames()];
+  const SELECTORS = ['#px-captcha', '#px-captcha [role="button"]', '[aria-label*="Press" i]',
+    '[aria-label*="hold" i]', 'text=/press\\s*&?\\s*hold/i'];
+  for (const root of roots) {
+    for (const sel of SELECTORS) {
+      try {
+        const loc = root.locator(sel).first();
+        if (!(await loc.count())) continue;
+        const box = await loc.boundingBox({ timeout: 1_000 }).catch(() => null);
+        if (!box || box.width < 4 || box.height < 4) continue;
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.down();
+        await page.waitForTimeout(8_000);
+        await page.mouse.up();
+        return true;
+      } catch { /* next */ }
+    }
+  }
+  return false;
+}
 
 test.describe.configure({ mode: 'serial' });
 
@@ -78,7 +134,7 @@ function persist(rec: SweepDriverRecord): void {
  * body is failure-isolated so one bad domain can never abort the sweep (the sweep
  * is a single serial test; an un-caught throw would kill every later domain).
  */
-async function captureDomain(ctx: BrowserContext, d: DomainEntry): Promise<SweepDriverRecord> {
+async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = false): Promise<SweepDriverRecord> {
   const art = sweepArtifacts(d.name);
   const rec: SweepDriverRecord = { domain: d.name, url: d.url, ranAt: new Date().toISOString(), status: 'skip' };
   const url = process.env[`SWEEP_URL_${d.name.toUpperCase()}`] || d.url;
@@ -88,6 +144,36 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry): Promise<Sweep
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40_000 });
       await page.waitForTimeout(3_500); // let SPA content paint
+      // PerimeterX 'Press & Hold' gate handling — HEADED only (a headless attempt
+      // can't clear it and only escalates the risk score). The AUTO-SOLVER tries
+      // first (press-and-hold ~8s per attempt) for a short window; if it still
+      // can't clear, we PRINT A PROMPT and wait for the USER to clear it. Either
+      // way we require a STABLE gate-free state (3 consecutive clear polls) before
+      // capturing — some walls (Zillow) render the listing THEN pop the gate ~2s
+      // later, so an instant capture would grab a transitional mid-gate state.
+      if (ctxIsHeaded) {
+        const GATE_RE = /press\s*&?\s*hold|robot or human|make sure you'?re a human|are you a robot|verify you are human/i;
+        const gateUp = async () => page.evaluate((reStr: string) => {
+          const re = new RegExp(reStr, 'i');
+          const t = (document.body?.innerText ?? '').trim();
+          return t.length < 40 || re.test(t);
+        }, GATE_RE.source).catch(() => false);
+        const AUTO_ATTEMPTS = 3;          // ~3 press-and-hold tries (~30s) before asking the user
+        const TOTAL_POLLS = 90;           // then up to ~3min more for a manual clear
+        let streak = 0, attempt = 0, prompted = false;
+        for (let i = 0; i < TOTAL_POLLS && streak < 3; i++) {
+          if (await gateUp()) {
+            streak = 0;
+            if (attempt < AUTO_ATTEMPTS) { await tryPressAndHold(page).catch(() => false); attempt++; }
+            else if (!prompted) {
+              prompted = true;
+              // eslint-disable-next-line no-console
+              console.log(`   ⚠ ${d.name}: auto press-and-hold didn't clear the gate — please clear it in the window now…`);
+            }
+          } else streak++;
+          await page.waitForTimeout(2_000);
+        }
+      }
       // Best-effort wait for a populated article body — some news sites (AP News,
       // Reuters) inject the story paragraphs lazily AFTER first paint, so a fixed
       // 3.5s wait can capture a hero-only shell (once the comment widget is
@@ -307,7 +393,40 @@ test('corpus-sweep: capture + score ~50 domains, build ranked gallery', async ()
 
   const acc = new Map<string, SweepDriverRecord>();
 
-  // ── Pass 1: HEADLESS (out of the user's way) ────────────────────────────
+  // Split the corpus: PerimeterX-walled sites run HEADED-FIRST (Pass 0) and are
+  // NEVER hit headless; everyone else runs headless (Pass 1). See PERIMETERX_SITES.
+  const pxDomains = DOMAINS.filter(d => PERIMETERX_SITES.has(d.name));
+  const headlessDomains = DOMAINS.filter(d => !PERIMETERX_SITES.has(d.name));
+
+  // ── Pass 0: HEADED-FIRST for PerimeterX sites (before any headless hit) ──
+  // A clean headed session's FIRST impression is the best chance to clear
+  // PerimeterX; the auto press-and-hold + sustained-clear (in captureDomain, gated
+  // on ctxIsHeaded) solves the gate without the user. Skipped entirely when there
+  // are none, or via SWEEP_NO_PX_FIRST=1 (then they'd only be reachable headless,
+  // which is discouraged — kept as an escape hatch).
+  if (pxDomains.length && !process.env.SWEEP_NO_PX_FIRST) {
+    // eslint-disable-next-line no-console
+    console.log(`\n── PerimeterX headed-first pass (${pxDomains.length}): ${pxDomains.map(d => d.name).join(', ')} ──`);
+    const { ctx: pxCtx } = await launchWithExtension({
+      rawUserDataDir, profileDirectory, channel, preinstalledExtension: true, headed: true,
+      clearSwCacheForRawDir: true,
+    });
+    try {
+      for (const d of pxDomains) {
+        const rec = await captureDomain(pxCtx, d, true);
+        mergeRecord(acc, rec);
+        // eslint-disable-next-line no-console
+        console.log(rec.status === 'ok'
+          ? `OK⊕   ${d.name.padEnd(20)} composite=${rec.scores!.composite.toFixed(3)} (px-headed)` +
+              (rec.scores!.flags.length ? `  [${rec.scores!.flags.join(', ')}]` : '')
+          : `SKIP⊕ ${d.name.padEnd(20)} ${rec.skipReason} (px-headed)`);
+      }
+    } finally {
+      await pxCtx.close();
+    }
+  }
+
+  // ── Pass 1: HEADLESS (out of the user's way) — everyone EXCEPT PerimeterX ─
   // The warm branded-Chrome profile (Profile 3) with the extension HAND-INSTALLED
   // + a valid cf_clearance — the only setup that runs the extension AND clears
   // Cloudflare on the sites that clear at all (see project_real_chrome_extension_cdp_load).
@@ -319,7 +438,7 @@ test('corpus-sweep: capture + score ~50 domains, build ranked gallery', async ()
     clearSwCacheForRawDir: true,
   });
   try {
-    for (const d of DOMAINS) {
+    for (const d of headlessDomains) {
       const rec = await captureDomain(ctx, d);
       mergeRecord(acc, rec);
       // eslint-disable-next-line no-console
@@ -335,7 +454,10 @@ test('corpus-sweep: capture + score ~50 domains, build ranked gallery', async ()
   // ── Pass 2: HEADED retry for Cloudflare-challenged domains only ─────────
   // A visible window + the profile's cf_clearance clears Turnstile with no manual
   // clicking. Only the handful of still-walled domains open a window, briefly.
-  const cfDomains = DOMAINS.filter(d => acc.get(d.name)?.challenged);
+  // EXCLUDE PerimeterX sites — they already had their headed shot in Pass 0, and
+  // re-hitting them would only escalate the wall (and they'd have been captured or
+  // legitimately skipped there, never marked `challenged` from a headless pass).
+  const cfDomains = DOMAINS.filter(d => acc.get(d.name)?.challenged && !PERIMETERX_SITES.has(d.name));
   if (cfDomains.length && !process.env.SWEEP_NO_HEADED_RETRY) {
     // eslint-disable-next-line no-console
     console.log(`\n── headed retry for ${cfDomains.length} CF-challenged domain(s): ${cfDomains.map(d => d.name).join(', ')} ──`);
