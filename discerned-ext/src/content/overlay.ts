@@ -980,23 +980,6 @@ ${themeVarsBlock(this.effectiveTheme)}
             <div class="usage-row"><span>📡 Public casts</span><span class="usage-value" id="cast-count">—</span></div>
           </div>
           <div class="settings-card">
-            <div class="card-label">Capture</div>
-            <label class="toggle-row">
-              <input type="checkbox" id="opt-smart-article" />
-              <span class="toggle-label">
-                <span class="toggle-title">Smart article detection</span>
-                <span class="toggle-desc">Skip broad article containers (feeds, pages with nested articles or nav) and use Readability instead.</span>
-              </span>
-            </label>
-            <label class="toggle-row">
-              <input type="checkbox" id="opt-strip-styles" />
-              <span class="toggle-label">
-                <span class="toggle-title">Strip inline styles</span>
-                <span class="toggle-desc">Remove style= attributes from captured HTML so clips render with Reading Room styling only.</span>
-              </span>
-            </label>
-          </div>
-          <div class="settings-card">
             <div class="card-label">Appearance</div>
             <div class="format-row" id="theme-picker" role="group" aria-label="Theme">
               <button class="chip${this.themePref === 'system' ? ' active' : ''}" data-theme="system" type="button">🖥️ System</button>
@@ -1138,24 +1121,12 @@ ${themeVarsBlock(this.effectiveTheme)}
     void this.updateNostrStatusTooltip();
   }
 
+  // NOTE: the smartArticleDetection / stripInlineStyles checkboxes used to live
+  // here. The UI was removed (unused); the flags themselves remain in the
+  // capture pipeline at their `false` defaults — see CaptureOptions in capture.ts.
   private async loadCaptureToggles() {
     try {
-      const stored = await chrome.storage.local.get([
-        STORAGE_KEYS.SMART_ARTICLE_DETECTION,
-        STORAGE_KEYS.STRIP_INLINE_STYLES,
-        STORAGE_KEYS.RELAYS,
-      ]);
-      const smartEl = this.shadow.getElementById('opt-smart-article') as HTMLInputElement | null;
-      const stripEl = this.shadow.getElementById('opt-strip-styles')  as HTMLInputElement | null;
-      if (smartEl) smartEl.checked = !!(stored[STORAGE_KEYS.SMART_ARTICLE_DETECTION] as boolean | undefined);
-      if (stripEl) stripEl.checked = !!(stored[STORAGE_KEYS.STRIP_INLINE_STYLES]     as boolean | undefined);
-
-      smartEl?.addEventListener('change', () => {
-        void chrome.storage.local.set({ [STORAGE_KEYS.SMART_ARTICLE_DETECTION]: smartEl.checked });
-      });
-      stripEl?.addEventListener('change', () => {
-        void chrome.storage.local.set({ [STORAGE_KEYS.STRIP_INLINE_STYLES]: stripEl.checked });
-      });
+      const stored = await chrome.storage.local.get([STORAGE_KEYS.RELAYS]);
 
       // Dev relay toggle (test builds only — the element is absent in production).
       if (__DISCERNED_TEST_BUILD__) {

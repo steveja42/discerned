@@ -236,6 +236,10 @@ export const STORAGE_KEYS = {
   LAST_PUBLISH_MODE: 'lastPublishMode',
   LAST_CATEGORY:     'lastCategory',
   QUALIFIERS:        'qualifiers', // persisted custom-qualifier list (sibling of CATEGORIES)
+  // Legacy — the overlay checkboxes that wrote these were removed, and capture
+  // no longer reads them (it uses the CaptureOptions defaults). Kept only so a
+  // future cleanup knows what may still be sitting in an existing install's
+  // chrome.storage.local. Nothing should read or write these.
   SMART_ARTICLE_DETECTION: 'smartArticleDetection',
   STRIP_INLINE_STYLES:     'stripInlineStyles',
   CUSTOM_CATEGORIES:       'customCategories', // legacy key — superseded by CATEGORIES

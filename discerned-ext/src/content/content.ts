@@ -175,20 +175,12 @@ async function handleActivation() {
     initialFormat,
     hasSelection: selectionPresent,
     onCapture: async (format: ClipFormat) => {
-      let captureOpts: CaptureOptions = { smartArticleDetection: false, stripInlineStyles: false };
-      try {
-        const stored = await chrome.storage.local.get([
-          STORAGE_KEYS.SMART_ARTICLE_DETECTION,
-          STORAGE_KEYS.STRIP_INLINE_STYLES,
-        ]);
-        captureOpts = {
-          smartArticleDetection: !!(stored[STORAGE_KEYS.SMART_ARTICLE_DETECTION] as boolean | undefined),
-          stripInlineStyles:     !!(stored[STORAGE_KEYS.STRIP_INLINE_STYLES]     as boolean | undefined),
-        };
-      } catch {
-        // Non-fatal; use defaults.
-      }
-      log(LL.DEBUG, `Discerned: capture starting — format="${format}" smartArticleDetection=${captureOpts.smartArticleDetection} stripInlineStyles=${captureOpts.stripInlineStyles}`, 'url:', window.location.href);
+      // The overlay checkboxes that used to drive these were removed, so they
+      // are no longer read from storage — a value stranded there would silently
+      // alter every capture with no UI to turn it off. The flags still exist in
+      // the pipeline (tests exercise both branches); this is their default.
+      const captureOpts: CaptureOptions = { smartArticleDetection: false, stripInlineStyles: false };
+      log(LL.DEBUG, `Discerned: capture starting — format="${format}"`, 'url:', window.location.href);
       return captureContext(format, captureOpts);
     },
     onClip: async (capture: Capture, evaluation: Evaluation) => {
