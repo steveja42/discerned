@@ -14,6 +14,7 @@ import {
   createResourceNoteEvent,
   createLongFormEvent,
   buildDiscernedSnippet,
+  setClientVersion,
   type LongFormRef,
 } from '@/shared/nostr/events';
 import { prepareClipPayload } from '@/shared/nostr/encryption';
@@ -35,6 +36,12 @@ import { decode, nsecEncode, npubEncode, naddrEncode } from 'nostr-tools/nip19';
 import * as nip49 from 'nostr-tools/nip49';
 import type { BunkerPointer } from 'nostr-tools/nip46';
 
+// Stamp the manifest version onto the `client` tag of every published cast. Set
+// at module scope (not inside an install/startup listener) so it is re-applied
+// on every service-worker wakeup — MV3 tears the worker down between casts, and
+// a listener-only assignment would leave the placeholder in place after a
+// restart. getManifest() is synchronous and permission-free.
+setClientVersion(chrome.runtime.getManifest().version);
 
 let currentAuthState: AuthState = { type: 'guest' };
 let guestPrivateKey: Uint8Array | null = null;

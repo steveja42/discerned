@@ -8,6 +8,8 @@ import {
   validateEvent,
   extractTagValue,
   extractTagValues,
+  setClientVersion,
+  DEFAULT_CLIENT_VERSION,
 } from '@/shared/nostr/events';
 import type { Capture, Evaluation, ClipFormat } from '@/shared/types';
 import type { EventTemplate, NostrEvent } from 'nostr-tools/core';
@@ -57,6 +59,12 @@ describe('Nostr event factory', () => {
         expect(extractTagValue(ev, 't')).toBe('discerned');
         expect(extractTagValue(ev, 'client')).toBe('discerned');
         expect(extractTagValue(ev, 'format')).toBe(fx.capture.format satisfies ClipFormat);
+
+        // NIP-89 client tag carries the extension version as a third element, so
+        // a permanent public cast records which capture pipeline produced it.
+        // tag[1] must stay 'discerned' (asserted above) — clients read that.
+        const clientTag = ev.tags.find((t) => t[0] === 'client');
+        expect(clientTag?.[2]).toMatch(/^\d+\.\d+\.\d+/);
 
         // Category is always labeled; signal and qualifier namespaces appear
         // only when the evaluation carries them (unrated → absent entirely).
@@ -152,6 +160,35 @@ describe('Nostr event factory', () => {
     const sel = fixtures.find((f) => f.capture.format === 'selection');
     if (!sel) throw new Error('no selection fixture');
     expect(() => createResourceNoteEvent(sel.capture, sel.evaluation)).toThrow();
+  });
+
+  describe('client tag version stamp', () => {
+    const artFx = fixtures.find((f) => f.capture.format === 'article');
+    if (!artFx) throw new Error('no article fixture');
+
+    const clientTagOf = (t: EventTemplate): string[] | undefined =>
+      t.tags.find((tag) => tag[0] === 'client');
+
+    // The background injects the real manifest version at startup. Restore the
+    // default afterwards so fixture generation stays deterministic.
+    it('stamps an injected version and keeps tag[1] stable', () => {
+      setClientVersion('9.9.9');
+      try {
+        const tag = clientTagOf(createResourceNoteEvent(artFx.capture, artFx.evaluation));
+        expect(tag?.[1]).toBe('discerned');
+        expect(tag?.[2]).toBe('9.9.9');
+      } finally {
+        setClientVersion(DEFAULT_CLIENT_VERSION);
+      }
+    });
+
+    // A blank version must not blank out the stamp — an empty third element
+    // would be worse than the placeholder (looks like a real, unversioned cast).
+    it('ignores an empty version', () => {
+      setClientVersion('   ');
+      const tag = clientTagOf(createResourceNoteEvent(artFx.capture, artFx.evaluation));
+      expect(tag?.[2]).toBe(DEFAULT_CLIENT_VERSION);
+    });
   });
 
   // Regression: an inlined hero image (data: URI) once got cast as the `image`

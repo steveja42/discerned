@@ -75,7 +75,8 @@
       ],
       [
         "client",
-        "discerned"
+        "discerned",
+        "0.0.0-dev"
       ],
       [
         "title",

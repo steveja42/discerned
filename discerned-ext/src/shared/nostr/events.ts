@@ -20,6 +20,33 @@ import { signalRank, SNIPPET_SENTINEL_OPEN, SNIPPET_SENTINEL_CLOSE } from '@/sha
  */
 export const CAST_INLINE_BODY_MAX_CHARS = 8000;
 
+/**
+ * Version stamped as the third element of the NIP-89 `client` tag on every
+ * published cast (`['client', 'discerned', '<version>']`). Casts are permanent
+ * and public, so this is the only way to know after the fact which capture
+ * pipeline produced a given event — invaluable when someone reports a clip that
+ * rendered wrong in a third-party client.
+ *
+ * Injected rather than read from `chrome.runtime.getManifest()` inside this
+ * module, for two reasons: this factory is otherwise pure (no `chrome.*`
+ * dependency, so it runs under jsdom in Vitest), and the committed golden event
+ * fixtures in tests/fixtures/events/ are generated from it — reading the live
+ * manifest would rewrite all ~20 of them on every version bump, burying real
+ * factory changes in release-diff noise. Tests therefore see the stable
+ * placeholder below; the real version is set once at background startup.
+ */
+export const DEFAULT_CLIENT_VERSION = '0.0.0-dev';
+let clientVersion: string = DEFAULT_CLIENT_VERSION;
+
+/**
+ * Set the version stamped on the `client` tag. Called once from the background
+ * worker with `chrome.runtime.getManifest().version`.
+ */
+export function setClientVersion(version: string): void {
+  const v = version.trim();
+  if (v.length > 0) clientVersion = v;
+}
+
 function baseEvaluationTags(capture: Capture, evaluation: Evaluation): string[][] {
   const tags: string[][] = [
     ['r', capture.url],
@@ -36,7 +63,13 @@ function baseEvaluationTags(capture: Capture, evaluation: Evaluation): string[][
       tags.push(['l', q, 'online.discerned.qualifier']);
     }
   }
-  tags.push(['t', 'discerned'], ['format', capture.format], ['client', 'discerned']);
+  // NIP-89 allows extra positional elements on `client`; the third is the
+  // version. Clients that only read tag[1] are unaffected.
+  tags.push(
+    ['t', 'discerned'],
+    ['format', capture.format],
+    ['client', 'discerned', clientVersion]
+  );
   if (capture.note && capture.note.trim().length > 0) {
     tags.push(['note', capture.note]);
   }
