@@ -225,6 +225,28 @@ const SEEDS: Seed[] = [
   { name: 'plato-stanford', seedUrl: 'https://plato.stanford.edu/entries/consciousness/', hrefRe: '', direct: true, note: 'very long academic reference entry' },
   { name: 'gutenberg', seedUrl: 'https://www.gutenberg.org/files/1342/1342-h/1342-h.htm', hrefRe: '', direct: true, note: 'full public-domain book (huge single HTML doc)' },
   { name: 'longreads', seedUrl: 'https://longreads.com/', hrefRe: 'longreads\\.com/\\d{4}/\\d{2}/\\d{2}/[a-z0-9-]+/', minText: 10, note: 'curated long-form article' },
+
+  // ══ PHASE 4.5 — books / film / music review+catalogue entity pages ═════════
+  // Requested coverage for the "rate + review a work" site class. The corpus
+  // already had goodreads-book, goodreads-author, letterboxd, rottentomatoes,
+  // metacritic, discogs and lastfm; these fill the gaps in that same class.
+  // Music streaming catalogue pages (Spotify/Apple/YT Music) are SPA app shells
+  // whose listing grids are JS-rendered and link-picker-hostile, so they're
+  // `direct` canonical album/track URLs — the navigation still proves they load
+  // and hydrate real text in the warm profile.
+  { name: 'storygraph', seedUrl: 'https://app.thestorygraph.com/browse', hrefRe: 'app\\.thestorygraph\\.com/books/[a-z0-9-]+$', minText: 2, note: 'PHASE 4.5 — ENTITY: StoryGraph book page (rating, moods, pace, reviews)' },
+  // LibraryThing work URLs carry a title slug after the id (/work/113/t/Slug),
+  // NOT a bare /work/<id> — the slug segment is optional on the canonical page
+  // but always present in Zeitgeist's links, so match it optionally.
+  { name: 'librarything', seedUrl: 'https://www.librarything.com/zeitgeist', hrefRe: 'librarything\\.com/work/\\d+(/t/[A-Za-z0-9-]+)?$', minText: 2, note: 'PHASE 4.5 — ENTITY: LibraryThing work page (ratings, tags, reviews)' },
+  { name: 'rateyourmusic', seedUrl: 'https://rateyourmusic.com/charts/top/album/all-time/', hrefRe: 'rateyourmusic\\.com/release/album/[a-z0-9._-]+/[a-z0-9._-]+/$', minText: 2, note: 'PHASE 4.5 — ENTITY: RYM album page (rating, genres, tracklist, reviews)' },
+  { name: 'spotify-album', seedUrl: 'https://open.spotify.com/album/4LH4d3cOWNNsVw41Gqt2kv', hrefRe: '', direct: true, note: 'PHASE 4.5 — ENTITY: Spotify album page (SPA app shell, tracklist)' },
+  { name: 'applemusic-album', seedUrl: 'https://music.apple.com/us/album/the-dark-side-of-the-moon/1065973699', hrefRe: '', direct: true, note: 'PHASE 4.5 — ENTITY: Apple Music album page (SPA, tracklist + editorial notes)' },
+  // YT Music album canonical form is /browse/MPREb_<id>, which 302s to a
+  // ?list=OLAK5uy_<id> playlist URL. Use the /browse/ form — the OLAK ids rot
+  // (a stale one renders the signed-in chrome with an EMPTY content pane, which
+  // reads as a bot wall but is really a dead id). Refresh by searching in-app.
+  { name: 'ytmusic-album', seedUrl: 'https://music.youtube.com/browse/MPREb_nHbCAGX6uUL', hrefRe: '', direct: true, note: 'PHASE 4.5 — ENTITY: YouTube Music album page (Polymer SPA, tracklist)' },
 ];
 
 test.describe.configure({ mode: 'serial' });
@@ -298,7 +320,13 @@ test('discover article URLs for the corpus sweep', async () => {
             out.error = `direct page had only ${textLen} chars of text (wall/empty?)`;
           }
         } else {
-        const picks = await page.evaluate(
+        // Client-rendered listing grids (StoryGraph/Rails-Turbo, RYM charts) can
+        // still be empty of real hrefs at the fixed wait above, then populate a
+        // few seconds later — that produced spurious "no link matched picker"
+        // misses whose regex was actually correct (the picker probe, which waits
+        // longer, reported "would match now"). Re-scrape a few times before
+        // calling it a miss, mirroring the `direct` branch's poll.
+        const scrape = () => page.evaluate(
           ({ hrefRe, minText }: { hrefRe: string; minText: number }) => {
             const re = new RegExp(hrefRe);
             const seen = new Set<string>();
@@ -318,7 +346,12 @@ test('discover article URLs for the corpus sweep', async () => {
             return found;
           },
           { hrefRe: s.hrefRe, minText: s.minText ?? 15 },
-        );
+        ).catch(() => [] as string[]);
+        let picks = await scrape();
+        for (let i = 0; i < 5 && picks.length === 0; i++) {
+          await page.waitForTimeout(2_500);
+          picks = await scrape();
+        }
         out.candidates = picks;
         out.url = picks[0] ?? '';
         if (!out.url) out.error = 'no link matched picker';

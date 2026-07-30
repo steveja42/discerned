@@ -77,7 +77,11 @@ function build() {
   // Human visual-review verdicts (visual-findings.json) — merged in + sortable.
   // Kept separate from the auto-scored *--score.json so a re-run never clobbers
   // them. worst→best rank so "sort by finding" surfaces the real problems first.
-  const VERDICT_RANK = { critical: 0, flaw: 1, clean: 2 };
+  // `blocked` ranks last: there is no capture to review (hard 403 / bot wall), so
+  // it is neither a defect in our pipeline nor a verified-clean clip. Keeping it
+  // after `clean` stops permanently-walled domains from squatting the top of the
+  // "sort by finding" view, where the actionable flaws belong.
+  const VERDICT_RANK = { critical: 0, flaw: 1, clean: 2, blocked: 3 };
   let findings = {};
   try {
     findings = JSON.parse(readFileSync(resolve(RUN_DIR, 'visual-findings.json'), 'utf8')).findings ?? {};
@@ -260,10 +264,12 @@ function build() {
   .verdict.v-critical { background: #c6282822; color: #e05555; }
   .verdict.v-flaw     { background: #f9a82522; color: #f9a825; }
   .verdict.v-clean    { background: #2e7d3222; color: #4caf50; }
+  .verdict.v-blocked  { background: #60606022; color: #9aa0a6; }
   .vnote { font-size: 12.5px; margin: 0 0 6px; padding-left: 2px; border-left: 3px solid transparent; padding-left: 8px; }
   .vnote.v-critical { color: #e05555; border-color: #e05555; }
   .vnote.v-flaw     { color: #cc9a3d; border-color: #f9a825; }
   .vnote.v-clean    { color: #7aa; border-color: #4caf5066; }
+  .vnote.v-blocked  { color: #9aa0a6; border-color: #9aa0a655; }
 
   .cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
   .col { min-width: 0; }

@@ -78,6 +78,10 @@ const TARGETS: Record<string, string> = {
   'rfc-editor': 'https://www.rfc-editor.org/rfc/rfc9110.html',
   thehindu: 'https://www.thehindu.com/sci-tech/technology/moonshot-ai-releases-weights-for-kimi-k3-as-us-big-tech-firms-debate-open-weight-models/article71276300.ece',
   'lemmy-thread': 'https://lemmy.world/post/49992871',
+  // Phase 4.5 sweep mis-pick (2026-07-30): the clip is the masthead badge + 3 nav
+  // links while the page renders a full 3-book catalog TABLE. Table-shaped content
+  // (no <p> prose) is the suspected finder blind spot.
+  'librarything-catalog': 'https://www.librarything.com/catalog/Kardiaa',
 };
 
 test.describe.configure({ mode: 'serial' });

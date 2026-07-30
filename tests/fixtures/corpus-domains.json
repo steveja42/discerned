@@ -1,5 +1,5 @@
 {
-  "_comment": "Phase 4.1 corpus-sweep target list (extended 2026-07-27 with 50 more sites — grep 'PHASE 4.3', weighted news/media + entity/structured per request; news URLs discovered live via tools/discover-article-urls.spec.ts against Profile 3, entity URLs are stable direct deep-links). Extended 2026-07-28 with 100 more seeds (grep 'PHASE 4.4' in tools/discover-article-urls.spec.ts) covering non-English scripts (CJK/RTL/Cyrillic), sports/finance/science verticals, Q&A + forum threads, doc-sites and structured entity pages; discovered live the same way. Each entry is a real ARTICLE / content URL the sweep captures, renders, scores (text-coverage, blank-ratio, aspect-distortion, chrome-hits), and screenshots (source/clip/cast). Deep article URLs (not homepages/section hubs) are used deliberately: (1) a single article is the realistic capture target — a homepage's lead-story teaser is a hero + no body, which the scorer mistakes for a broken clip; (2) CF/bot walls hit homepages/section indexes far harder than individual articles, so a deep-link also clears several sites a hub URL gets blocked on. These URLs were discovered live from each site's section page via tests/e2e/tools/discover-article-urls.mjs (run against the warm Cloudflare-cleared Chrome Profile 3) on 2026-07-21 — NOT hand-written, so they were real+loading when added. Article URLs rot: when a formerly-good site starts skipping with 'load failed', re-run the discovery tool to refresh its URL. Sweep runs against the same warm profile. A URL that won't load is a SKIP, not a scored finding; paywalls + IP-level 403s will still skip and that's expected. 'format' defaults to 'article'.",
+  "_comment": "Phase 4.1 corpus-sweep target list (extended 2026-07-27 with 50 more sites — grep 'PHASE 4.3', weighted news/media + entity/structured per request; news URLs discovered live via tools/discover-article-urls.spec.ts against Profile 3, entity URLs are stable direct deep-links). Extended 2026-07-28 with 100 more seeds (grep 'PHASE 4.4' in tools/discover-article-urls.spec.ts) covering non-English scripts (CJK/RTL/Cyrillic), sports/finance/science verticals, Q&A + forum threads, doc-sites and structured entity pages; discovered live the same way. Each entry is a real ARTICLE / content URL the sweep captures, renders, scores (text-coverage, blank-ratio, aspect-distortion, chrome-hits), and screenshots (source/clip/cast). Deep article URLs (not homepages/section hubs) are used deliberately: (1) a single article is the realistic capture target — a homepage's lead-story teaser is a hero + no body, which the scorer mistakes for a broken clip; (2) CF/bot walls hit homepages/section indexes far harder than individual articles, so a deep-link also clears several sites a hub URL gets blocked on. These URLs were discovered live from each site's section page via tests/e2e/tools/discover-article-urls.mjs (run against the warm Cloudflare-cleared Chrome Profile 3) on 2026-07-21 — NOT hand-written, so they were real+loading when added. Article URLs rot: when a formerly-good site starts skipping with 'load failed', re-run the discovery tool to refresh its URL. Sweep runs against the same warm profile. A URL that won't load is a SKIP, not a scored finding; paywalls + IP-level 403s will still skip and that's expected. 'format' defaults to 'article'. Extended 2026-07-30 with PHASE 4.5 — 6 book/film/music review+catalogue entity pages (StoryGraph, LibraryThing, RateYourMusic, Spotify, Apple Music, YouTube Music) completing the rate-and-review site class alongside the existing goodreads-book/goodreads-author/letterboxd/rottentomatoes/metacritic/discogs/lastfm entries.",
   "domains": [
     {
       "name": "apnews",
@@ -945,6 +945,41 @@
       "name": "netflix-techblog",
       "url": "https://netflixtechblog.com/genpage-towards-end-to-end-generative-homepage-construction-at-netflix-77146fba8a08",
       "note": "Medium-hosted engineering blog (Cloudflare: needs the headed pass)"
+    },
+    {
+      "name": "storygraph",
+      "url": "https://app.thestorygraph.com/books/449b16ff-575c-4c1f-a857-6e48ab45d569",
+      "note": "PHASE 4.5 — ENTITY: StoryGraph book page (rating, moods/pace stats, reviews). Discovered live."
+    },
+    {
+      "name": "librarything",
+      "url": "https://www.librarything.com/work/24789629/319692205",
+      "note": "PHASE 4.5 — ENTITY: LibraryThing WORK page (cover, author, description, tag cloud, member reviews + rating, members, classifications, statistics). Loads HEADLESS. An earlier /work/<id>/t/<slug> URL 403d; this /work/<id>/<id> form does not — the wall was URL-specific, NOT domain-wide."
+    },
+    {
+      "name": "rateyourmusic",
+      "url": "https://rateyourmusic.com/song/the-beatles/a-day-in-the-life/",
+      "note": "PHASE 4.5 — ENTITY: RYM SONG page (title, artist, genre, release date, all-time rank, ratings, lyrics). Needs the HEADED retry (Cloudflare challenge headless, clears headed). An earlier /release/album/... URL hard-403d; the /song/... form works."
+    },
+    {
+      "name": "spotify-album",
+      "url": "https://open.spotify.com/album/4LH4d3cOWNNsVw41Gqt2kv",
+      "note": "PHASE 4.5 — ENTITY: Spotify album page (SPA app shell, tracklist). Direct."
+    },
+    {
+      "name": "applemusic-album",
+      "url": "https://music.apple.com/us/album/the-dark-side-of-the-moon/1065973699",
+      "note": "PHASE 4.5 — ENTITY: Apple Music album page (SPA, tracklist + editorial notes). Direct. Distinct from the appstore entry (App Store app page)."
+    },
+    {
+      "name": "ytmusic-album",
+      "url": "https://music.youtube.com/browse/MPREb_nHbCAGX6uUL",
+      "note": "PHASE 4.5 — ENTITY: YouTube Music album page (Polymer SPA, tracklist). Direct; /browse/MPREb_ form (OLAK playlist ids rot)."
+    },
+    {
+      "name": "librarything-catalog",
+      "url": "https://www.librarything.com/catalog/Kardiaa",
+      "note": "PHASE 4.5 — ENTITY: LibraryThing member CATALOG (list/table of a user library). CAPTURE DEFECT (not a wall): the table lives in a CHILD IFRAME (catalog_bottom.php) while the top document holds only the masthead (134 chars, 0 tables), so the clip is the 20-YEARS badge + 3 nav links. Needs cross-frame capture; do not chase as a layout-finder mis-pick."
     }
   ]
 }

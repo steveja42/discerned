@@ -318,6 +318,14 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
         // well is worse than an honest skip. CF-shaped, so retry headed.
         'checking your connection', 'prevent automated abuse',
         'blocked by our server', 'security policies',
+        // UA-sniff "unsupported browser" stubs (music.youtube.com serves
+        // "Sorry, YouTube Music is not optimized for your browser" to the
+        // headless UA). Short + chrome-free, so the scorer read it as a healthy
+        // 100%-coverage clip — same false-pass class as the phys.org block
+        // above. The HEADED retry sends the real branded-Chrome UA and gets the
+        // actual page, so this is CF-shaped (retryable), not a hard block.
+        'is not optimized for your browser', 'unsupported browser',
+        'browser is not supported', 'update your browser to continue',
       ];
       // HARD-block signatures — a headed retry won't help (IP/account level).
       const HARD = [

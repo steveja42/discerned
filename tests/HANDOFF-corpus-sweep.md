@@ -2,11 +2,86 @@
 
 Status snapshot for picking this up in a fresh context. The corpus sweep
 (`tests/e2e/corpus-sweep.spec.ts`) captures the uncurated domains listed in
-`tests/fixtures/corpus-domains.json` (185 as of 2026-07-29 — Phase 4.4 added
-100 seeds), scores each
+`tests/fixtures/corpus-domains.json` (195 as of 2026-07-30 — Phase 4.4 added
+100 seeds; Phase 4.5 added 6 book/film/music review+catalogue entity pages),
+scores each
 clip with content-free heuristics, and writes 3 images/domain (source/clip/cast)
 to `test-output/corpus-sweep-run/`. A human visual review lives in
 `test-output/corpus-sweep-run/visual-findings.json` (the gallery sorts by it).
+
+## PHASE 4.5 (2026-07-30) — book/film/music review+catalogue sites
+
+Added the 6 missing sites in the "rate + review a work" class (the corpus already
+had goodreads-book, goodreads-author, letterboxd, rottentomatoes, metacritic,
+discogs, lastfm): **storygraph, librarything, rateyourmusic, spotify-album,
+applemusic-album, ytmusic-album**. All 6 URLs discovered live; 7 of the 9 sites in
+this class captured and were eyeballed (verdicts in `visual-findings.json`).
+
+**One generic defect dominates this class — small-image GRIDS collapse to one
+full-width image per row.** Seen on metacritic (Top Cast), letterboxd (festival
+premiere country FLAGS — the worst case, a giant stacked column of flag circles),
+spotify/ytmusic (discography rails) and already recorded for imdb (Top Cast).
+The source lays these out with grid/flex; the clip loses it and stacks them.
+Note `aspectDistorted: 0` — the images are NOT stretched, they are natively large
+and merely unwrapped, so **the auto-scorer cannot see this** (letterboxd scored
+composite 0.001 / "likely healthy" while being visually dominated by flags).
+A generic fix (cap the rendered width of images inside a many-small-images
+container, in `.clip-body` CSS) would improve 5+ sites at once — prefer that over
+per-site taggers. Related: `[memory: project_dx_stats_flex_collapse]` is the
+inverse failure (flex retained where it shouldn't be); this is flex/grid LOST.
+
+Second, narrower finding: **storygraph drops its Community Reviews block
+entirely** (4.29 rating, 1,292 reviews, mood %s, Pace/plot bar charts) while
+keeping cover/title/description, and leads the clip with left-rail action chrome.
+On a review site that block is the most valuable content — worth a tagger.
+
+**librarything + rateyourmusic: the 403s were URL-SPECIFIC, not domain-wide.**
+An earlier pass concluded both domains were permanently bot-walled (hard 403 on
+headless, headed AND curl). **That was wrong** — the user supplied different URLs
+on the same domains and both capture fine:
+- `librarything` — `/work/<id>/<id>` (e.g. `/work/24789629/319692205`) loads
+  **headless**; the `/work/<id>/t/<slug>` form 403s. Now the richest capture in
+  this whole class (see the verdict note).
+- `rateyourmusic` — `/song/<artist>/<title>/` clears on the **headed retry**; the
+  `/release/album/...` form hard-403s.
+LESSON: a 403 on one deep link is not evidence the domain is walled. Try another
+URL shape on the same site before writing a domain off — and note `curl` 403s
+prove nothing either way, since it carries no `cf_clearance`. The RYM
+`Invalid target origin 'null'` seen earlier came from the opaque-origin block
+page, not from the site proper; it does not recur on the working URL.
+The `blocked` verdict (new, ranks after `clean`) stays in the gallery vocabulary
+for genuinely uncapturable domains, but nothing in this class needs it now.
+
+**`librarything-catalog` (member catalog) is a CRITICAL capture defect — content
+in a CHILD IFRAME.** The clip is just the "20 YEARS" badge + three nav links,
+while the source renders a full 3-book table (covers/titles/authors/tags/ratings).
+Diagnosed with `finder-diag-probe` plus a frame dump: the table lives in
+**`catalog_bottom.php`** (3 tables / 6 rows) and the **top document has 134 chars
+and ZERO tables** — so there is nothing for the layout finder to pick and no
+scoring tweak can help. This is NOT a finder mis-pick (the initial guess,
+"table-shaped content with no `<p>` prose", was wrong). Fixing it needs
+cross-frame capture — the same `chrome.webNavigation.getAllFrames` +
+`chrome.scripting.executeScript` round-trip `harvestEmbeddedTweets` already uses.
+Caught by the scorer as `blank-space 41%`.
+
+**Sweep block-detector fix:** `music.youtube.com` serves a UA-sniff stub ("Sorry,
+YouTube Music is not optimized for your browser") to the headless UA. It is short
+and chrome-free, so the scorer read it as a **healthy 100 %-coverage clip** — the
+same false-pass class as the phys.org block already documented in the detector.
+Added `is not optimized for your browser` / `unsupported browser` /
+`browser is not supported` to the CHALLENGE list (CF-shaped: the headed retry
+sends the real branded-Chrome UA and gets the actual album page). Verified: the
+domain now SKIPs headless then captures on the headed retry.
+
+**Discovery-tool fix:** the scrape path waited a fixed ~5 s, so JS-hydrated
+listing grids (StoryGraph/Turbo, RYM charts) reported `no link matched picker`
+even though their regex was correct — the picker probe, which waits longer, said
+"would match now". It now re-scrapes up to 5×2.5 s before declaring a miss,
+mirroring the `direct` branch's existing poll. Also fixed the librarything regex
+(`/work/<id>/t/<slug>`, not bare `/work/<id>$`) and the ytmusic seed (use the
+canonical `/browse/MPREb_<id>` form — `OLAK` playlist ids rot, and a dead one
+renders the signed-in chrome with an EMPTY content pane, which reads as a bot
+wall but is really just a dead id).
 
 ## RESOLVED (2026-07-24) — AP News (P1), Hacker News, YouTube view-count (P2)
 
