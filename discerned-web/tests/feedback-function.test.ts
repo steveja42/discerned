@@ -12,7 +12,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // The handler reads process.env at call time, so each test can set it up front.
 const ORIGINAL_ENV = { ...process.env };
 
-type Outcome = { turnstile?: 'pass' | 'fail' | 'unreachable'; github?: 201 | 422 | 'unreachable' };
+type Outcome = {
+  turnstile?: 'pass' | 'fail' | 'unreachable';
+  github?: 201 | 422 | 404 | 'unreachable';
+};
 let outcome: Outcome = {};
 let githubBodies: string[] = [];
 
@@ -31,7 +34,14 @@ function stubFetch() {
       githubBodies.push(String(init?.body ?? ''));
       if (outcome.github === 'unreachable') throw new Error('simulated network failure');
       if (outcome.github === 422) {
-        return new Response(JSON.stringify({ message: 'Validation Failed' }), { status: 422 });
+        // GitHub's real shape when a label doesn't exist on the repo.
+        return new Response(JSON.stringify({
+          message: 'Validation Failed',
+          errors: [{ resource: 'Label', field: 'name', code: 'invalid' }],
+        }), { status: 422 });
+      }
+      if (outcome.github === 404) {
+        return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404 });
       }
       return new Response(JSON.stringify({ html_url: 'https://github.com/steveja42/discerned/issues/42', number: 42 }),
         { status: 201, headers: { 'content-type': 'application/json' } });
@@ -170,20 +180,43 @@ describe('feedback function', () => {
     const res = await handler(post(VALID), ctx());
     expect(res.status).toBe(500);
     expect(githubBodies).toHaveLength(0); // critically: did NOT accept the submission
+    // Naming the variable is the point — a generic "unavailable" for either of two
+    // missing vars means digging through function logs to tell them apart.
+    await expect(res.json()).resolves.toMatchObject({
+      error: expect.stringContaining('TURNSTILE_SECRET_KEY'),
+    });
   });
 
-  it('returns 500 when the GitHub token is missing', async () => {
+  it('returns 500 naming GITHUB_FEEDBACK_TOKEN when it is missing', async () => {
     delete process.env.GITHUB_FEEDBACK_TOKEN;
     const handler = await loadHandler();
-    expect((await handler(post(VALID), ctx())).status).toBe(500);
+    const res = await handler(post(VALID), ctx());
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toMatchObject({
+      error: expect.stringContaining('GITHUB_FEEDBACK_TOKEN'),
+    });
   });
 
-  it('maps a GitHub 422 (usually a missing label) to a 502 with a fallback message', async () => {
+  // The two setup mistakes must be told apart. Both used to read as one generic failure,
+  // which costs a debugging round-trip each.
+  it('names the missing labels on a GitHub 422', async () => {
     outcome.github = 422;
     const handler = await loadHandler();
     const res = await handler(post(VALID), ctx());
     expect(res.status).toBe(502);
-    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('GitHub') });
+    const body = await res.json() as { error: string };
+    expect(body.error).toMatch(/label/i);
+    expect(body.error).toContain('area:extension'); // lists what to create
+  });
+
+  it('points at the token on a GitHub 404 (fine-grained PATs mask 403 as 404)', async () => {
+    outcome.github = 404;
+    const handler = await loadHandler();
+    const res = await handler(post(VALID), ctx());
+    expect(res.status).toBe(502);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain('GITHUB_FEEDBACK_TOKEN');
+    expect(body.error).toContain('steveja42/discerned');
   });
 
   it('rate-limits the 4th submission from one IP', async () => {

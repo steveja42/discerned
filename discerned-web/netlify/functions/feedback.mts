@@ -91,6 +91,16 @@ function json(body: unknown, status: number, origin: string | null): Response {
 const fail = (error: string, status: number, origin: string | null) =>
   json({ ok: false, error }, status, origin);
 
+/**
+ * Message for a missing required env var. Names the variable, and points at the right place
+ * to set it: `netlify functions:serve` sees only the shell/.env, NOT the Netlify dashboard,
+ * which is the easy trap when testing locally. NETLIFY_DEV is set by the CLI.
+ */
+const configError = (varName: string) =>
+  process.env.NETLIFY_DEV
+    ? `${varName} is not set in this local function process. Add it to discerned-web/.env (the Netlify dashboard values are NOT visible to \`netlify functions:serve\`).`
+    : `Feedback is misconfigured: ${varName} is not set. Add it in the Netlify dashboard (Functions scope) and redeploy.`;
+
 // ── Turnstile ────────────────────────────────────────────────────────────────
 
 type VerifyOutcome = 'pass' | 'reject' | 'unreachable';
@@ -159,10 +169,15 @@ export default async function handler(req: Request, context: Context): Promise<R
 
   // NEVER FAIL OPEN. A deploy missing the secret must reject, not silently accept
   // everything — that failure mode gets discovered via spam.
+  //
+  // The response names the missing variable. It's a deployment mistake only the operator
+  // can fix, it reveals nothing an attacker benefits from (that the site uses Turnstile is
+  // already obvious from the widget), and the alternative — a generic "unavailable" for
+  // either of two vars — sends you digging through function logs to tell them apart.
   const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
   if (!turnstileSecret) {
     console.error('[feedback] TURNSTILE_SECRET_KEY is not set — refusing to accept submissions');
-    return fail('Feedback is temporarily unavailable.', 500, origin);
+    return fail(configError('TURNSTILE_SECRET_KEY'), 500, origin);
   }
 
   const turnstileToken =
@@ -184,7 +199,7 @@ export default async function handler(req: Request, context: Context): Promise<R
   const githubToken = process.env.GITHUB_FEEDBACK_TOKEN;
   if (!githubToken) {
     console.error('[feedback] GITHUB_FEEDBACK_TOKEN is not set');
-    return fail('Feedback is temporarily unavailable.', 500, origin);
+    return fail(configError('GITHUB_FEEDBACK_TOKEN'), 500, origin);
   }
   const repo = process.env.GITHUB_FEEDBACK_REPO || DEFAULT_REPO;
 
@@ -215,7 +230,24 @@ export default async function handler(req: Request, context: Context): Promise<R
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
       console.error('[feedback] GitHub issue creation failed:', res.status, detail.slice(0, 500));
-      // 422 here almost always means a label doesn't exist on the repo.
+
+      // Distinguish the two setup mistakes that both look like "it just doesn't work".
+      // Without this they collapse into one generic message and cost a round-trip each.
+      if (res.status === 422 && /label/i.test(detail)) {
+        // GitHub rejects the WHOLE request if any label is unknown.
+        return fail(
+          `Setup incomplete: a required label doesn’t exist on ${repo}. Create these: ${issue.labels.join(', ')} — note bug/enhancement ship with every repo.`,
+          502, origin,
+        );
+      }
+      if (res.status === 401 || res.status === 403 || res.status === 404) {
+        // Fine-grained PATs answer 404 (not 403) for a repo they can't see, so a token
+        // problem is indistinguishable from a wrong repo name from the outside.
+        return fail(
+          `Setup incomplete: GITHUB_FEEDBACK_TOKEN can’t file issues on ${repo} (HTTP ${res.status}). Check the token grants that repo Issues: write.`,
+          502, origin,
+        );
+      }
       return fail('Couldn’t file that. Please try again, or open an issue on GitHub.', 502, origin);
     }
 
