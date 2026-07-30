@@ -12,8 +12,6 @@ import type { AuthorProfile } from '@/lib/nostr/profiles';
 const EMPTY: Map<string, AuthorProfile> = new Map();
 
 export function useAuthorProfiles(clips: ClipData[]): Map<string, AuthorProfile> {
-  const [profiles, setProfiles] = useState<Map<string, AuthorProfile>>(EMPTY);
-
   // Stable key over the distinct author set so the effect only re-runs when the
   // membership changes, not when clips are merely re-ordered or appended.
   const authorKey = useMemo(() => {
@@ -22,8 +20,13 @@ export function useAuthorProfiles(clips: ClipData[]): Map<string, AuthorProfile>
     return [...set].sort().join(',');
   }, [clips]);
 
+  // Tagged with the author set it was fetched for, so a membership change reads
+  // as empty during render instead of via a setState at the top of the effect.
+  const [entry, setEntry] = useState<{ key: string; profiles: Map<string, AuthorProfile> } | null>(null);
+  const profiles = authorKey && entry?.key === authorKey ? entry.profiles : EMPTY;
+
   useEffect(() => {
-    if (!authorKey) { setProfiles(EMPTY); return; }
+    if (!authorKey) return;
     const pubkeys = authorKey.split(',');
 
     let cancelled = false;
@@ -34,10 +37,10 @@ export function useAuthorProfiles(clips: ClipData[]): Map<string, AuthorProfile>
         const { subscribeAuthorProfiles } = await import('@/lib/nostr/profiles');
         if (cancelled) return;
         cleanup = subscribeAuthorProfiles(pubkeys, (next) => {
-          if (!cancelled) setProfiles(next);
+          if (!cancelled) setEntry({ key: authorKey, profiles: next });
         });
       } catch {
-        if (!cancelled) setProfiles(EMPTY);
+        if (!cancelled) setEntry({ key: authorKey, profiles: EMPTY });
       }
     })();
 

@@ -12,14 +12,17 @@ import type { AuthorProfile } from '@/lib/nostr/profiles';
 const cache = new Map<string, AuthorProfile>();
 
 export function useOwnProfile(pubkey: string | null): AuthorProfile | null {
-  const [profile, setProfile] = useState<AuthorProfile | null>(() =>
-    pubkey ? cache.get(pubkey) ?? null : null,
-  );
+  // Keyed by the pubkey the value belongs to, so a pubkey change is resolved
+  // during render (fall back to that pubkey's cache entry) instead of being
+  // reset by a setState at the top of the effect below.
+  const [entry, setEntry] = useState<{ pubkey: string; profile: AuthorProfile } | null>(null);
+
+  const profile = pubkey
+    ? (entry?.pubkey === pubkey ? entry.profile : cache.get(pubkey) ?? null)
+    : null;
 
   useEffect(() => {
-    if (!pubkey) { setProfile(null); return; }
-    // Seed from cache immediately (covers a pubkey change between renders).
-    setProfile(cache.get(pubkey) ?? null);
+    if (!pubkey) return;
 
     let cancelled = false;
     let cleanup: (() => void) | undefined;
@@ -33,7 +36,7 @@ export function useOwnProfile(pubkey: string | null): AuthorProfile | null {
           const p = next.get(pubkey);
           if (p) {
             cache.set(pubkey, p);
-            setProfile(p);
+            setEntry({ pubkey, profile: p });
           }
         });
       } catch {

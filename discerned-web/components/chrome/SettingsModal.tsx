@@ -52,14 +52,11 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const [relayInput, setRelayInput] = useState('');
   const [relayError, setRelayError] = useState<string | null>(null);
 
-  // The modal usually mounts AFTER the extension's initial bridge push, so the
-  // subscription below would never see it. Re-read the resolved mode/list on
-  // mount to pick up whatever already landed.
-  useEffect(() => {
-    setRelayMode(getCurrentRelayMode());
-    const rows = getRelayRows();
-    if (rows.length > 0) setRelays(rows);
-  }, []);
+  // Note both useState calls above read getCurrentRelayMode() / getRelayRows()
+  // in their initialisers. That is what picks up an extension bridge push that
+  // landed BEFORE this modal mounted (the usual case — it opens on a click, long
+  // after hydration), so no mount effect is needed to re-read them; the
+  // subscription below covers pushes that arrive while it is open.
 
   // Adopt pushes from the extension — relays discovered at sign-in arrive this
   // way, so the list updates live without a reload. The mode is mirrored too:

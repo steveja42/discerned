@@ -27,7 +27,22 @@
     "eslint.workingDirectories": [
       { "directory": "discerned-ext", "changeProcessCWD": true },
       { "directory": "discerned-web", "changeProcessCWD": true }
-    ]
+    ],
+    // Lint TS/TSX explicitly — without this the extension is inconsistent about
+    // reporting them in a multi-root workspace.
+    "eslint.validate": [
+      "javascript",
+      "javascriptreact",
+      "typescript",
+      "typescriptreact"
+    ],
+    // onSave, NOT onType: eslint-config-next runs type-aware rules plus the
+    // React Compiler analysis, which measures ~5-6s for a single .tsx here
+    // (see the 6107ms warning in the ESLint output log). Linting on every
+    // keystroke queues those runs faster than they finish, which is why the
+    // Problems panel appeared empty — results arrived stale or not at all.
+    "eslint.run": "onSave",
+    "eslint.quiet": false
   },
   "launch": {
     "version": "0.2.0",

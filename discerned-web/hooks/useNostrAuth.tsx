@@ -12,7 +12,7 @@
 
 'use client';
 
-import { createContext, useContext, useState, useEffect, useLayoutEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { AuthState } from '@/lib/types';
 import { loadStoredPubkey, storePubkey, clearStoredAuth, hasNip07, nip07GetPubkey } from '@/lib/nostr/auth';
 import { npubEncode } from 'nostr-tools/nip19';
@@ -32,15 +32,26 @@ interface NostrAuthValue {
 const NostrAuthContext = createContext<NostrAuthValue | null>(null);
 
 export function NostrAuthProvider({ children }: { children: ReactNode }) {
-  const [auth, setAuth] = useState<AuthState>({ status: 'guest', pubkey: null });
+  // Restore the persisted pubkey in the initialiser rather than a layout effect:
+  // it lands on the FIRST render, so there is no guest→readonly flash to avoid.
+  // loadStoredPubkey() is localStorage-backed and returns null server-side, and
+  // the export is static (no SSR auth), so this can't drift at hydration.
+  const [auth, setAuth] = useState<AuthState>(() => {
+    const stored = loadStoredPubkey();
+    return stored
+      ? { status: 'readonly', pubkey: stored, source: 'manual' }
+      : { status: 'guest', pubkey: null };
+  });
   const [nip07Available, setNip07Available] = useState(false);
 
-  useLayoutEffect(() => {
-    const stored = loadStoredPubkey();
-    if (stored) {
-      log(LL.NORMAL, '[auth] restored pubkey from localStorage:', npubEncode(stored).slice(0, 12));
-      setAuth({ status: 'readonly', pubkey: stored, source: 'manual' });
+  // Logged from an effect, not the initialiser, which must stay side-effect free
+  // (React may invoke it more than once).
+  useEffect(() => {
+    if (auth.source === 'manual' && auth.status === 'readonly') {
+      log(LL.NORMAL, '[auth] restored pubkey from localStorage:', npubEncode(auth.pubkey!).slice(0, 12));
     }
+    // Mount-only: this reports the restored value, not every later auth change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

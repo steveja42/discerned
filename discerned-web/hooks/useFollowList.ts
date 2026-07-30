@@ -7,11 +7,16 @@
 import { useState, useEffect } from 'react';
 import type { FollowProfile } from '@/lib/nostr/follows';
 
+const EMPTY: FollowProfile[] = [];
+
 export function useFollowList(pubkey: string | null) {
-  const [follows, setFollows] = useState<FollowProfile[]>([]);
+  // Tagged with the pubkey it was fetched for, so switching identity yields an
+  // empty list during render rather than needing a setState reset in the effect
+  // (which would render the previous user's follows for one frame).
+  const [entry, setEntry] = useState<{ pubkey: string; follows: FollowProfile[] } | null>(null);
+  const follows = pubkey && entry?.pubkey === pubkey ? entry.follows : EMPTY;
 
   useEffect(() => {
-    setFollows([]);
     if (!pubkey) return;
 
     let cancelled = false;
@@ -22,10 +27,10 @@ export function useFollowList(pubkey: string | null) {
         const { subscribeFollowList } = await import('@/lib/nostr/follows');
         if (cancelled) return;
         cleanup = subscribeFollowList(pubkey, (next) => {
-          if (!cancelled) setFollows(next);
+          if (!cancelled) setEntry({ pubkey, follows: next });
         });
       } catch {
-        if (!cancelled) setFollows([]);
+        if (!cancelled) setEntry({ pubkey, follows: EMPTY });
       }
     })();
 

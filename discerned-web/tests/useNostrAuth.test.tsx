@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, act } from '@testing-library/react';
+import { useEffect } from 'react';
 import { NostrAuthProvider, useNostrAuth } from '@/hooks/useNostrAuth';
 import { getPublicKey } from 'nostr-tools';
 
@@ -12,11 +13,19 @@ const PUBKEY_A = getPublicKey(new Uint8Array(32).fill(1));
 const PUBKEY_B = getPublicKey(new Uint8Array(32).fill(2));
 
 // Captures the live context value so tests can call mutators and read state.
-let ctx: ReturnType<typeof useNostrAuth>;
+// Written from an effect, not during render — a render-phase write to module
+// scope is a side effect React is free to repeat.
+type Ctx = ReturnType<typeof useNostrAuth>;
+const box: { ctx: Ctx | null } = { ctx: null };
+
 function Probe() {
-  ctx = useNostrAuth();
+  const value = useNostrAuth();
+  useEffect(() => { box.ctx = value; });
   return null;
 }
+
+// Non-null by construction: every test calls renderProvider() first.
+const ctx = () => box.ctx!;
 
 function renderProvider() {
   render(
@@ -33,35 +42,35 @@ describe('setBridgeAuth transitions', () => {
 
   it('adopts a bridge identity from a guest session', () => {
     renderProvider();
-    act(() => ctx.setBridgeAuth(PUBKEY_A));
-    expect(ctx.auth).toMatchObject({ status: 'readonly', pubkey: PUBKEY_A, source: 'bridge' });
+    act(() => ctx().setBridgeAuth(PUBKEY_A));
+    expect(ctx().auth).toMatchObject({ status: 'readonly', pubkey: PUBKEY_A, source: 'bridge' });
   });
 
   it('switches a bridge session to a new identity', () => {
     renderProvider();
-    act(() => ctx.setBridgeAuth(PUBKEY_A));
-    act(() => ctx.setBridgeAuth(PUBKEY_B));
-    expect(ctx.auth).toMatchObject({ pubkey: PUBKEY_B, source: 'bridge' });
+    act(() => ctx().setBridgeAuth(PUBKEY_A));
+    act(() => ctx().setBridgeAuth(PUBKEY_B));
+    expect(ctx().auth).toMatchObject({ pubkey: PUBKEY_B, source: 'bridge' });
   });
 
   it('clears a bridge session on HELLO(null) (extension sign-out)', () => {
     renderProvider();
-    act(() => ctx.setBridgeAuth(PUBKEY_A));
-    act(() => ctx.setBridgeAuth(null));
-    expect(ctx.auth).toEqual({ status: 'guest', pubkey: null });
+    act(() => ctx().setBridgeAuth(PUBKEY_A));
+    act(() => ctx().setBridgeAuth(null));
+    expect(ctx().auth).toEqual({ status: 'guest', pubkey: null });
   });
 
   it('leaves a manual session untouched on HELLO(null)', () => {
     renderProvider();
-    act(() => ctx.signInPubkey(PUBKEY_A)); // manual, readonly
-    act(() => ctx.setBridgeAuth(null));
-    expect(ctx.auth).toMatchObject({ pubkey: PUBKEY_A, source: 'manual' });
+    act(() => ctx().signInPubkey(PUBKEY_A)); // manual, readonly
+    act(() => ctx().setBridgeAuth(null));
+    expect(ctx().auth).toMatchObject({ pubkey: PUBKEY_A, source: 'manual' });
   });
 
   it('does not override a connected (wallet) session', () => {
     renderProvider();
-    act(() => ctx.setNip07Connected(PUBKEY_A)); // connected via nip07
-    act(() => ctx.setBridgeAuth(PUBKEY_B));
-    expect(ctx.auth).toMatchObject({ status: 'connected', pubkey: PUBKEY_A, source: 'nip07' });
+    act(() => ctx().setNip07Connected(PUBKEY_A)); // connected via nip07
+    act(() => ctx().setBridgeAuth(PUBKEY_B));
+    expect(ctx().auth).toMatchObject({ status: 'connected', pubkey: PUBKEY_A, source: 'nip07' });
   });
 });

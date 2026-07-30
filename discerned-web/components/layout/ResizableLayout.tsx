@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, useState, useEffect, type ReactNode } from 'react';
+import { useRef, useCallback, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 interface ResizableLayoutProps {
   sidebar: ReactNode;
@@ -16,6 +16,19 @@ const MIN_FEED = 280;
 const MIN_DETAIL = 260;
 const STACK_BREAKPOINT = 900;
 
+// The viewport is an external store, so read it with useSyncExternalStore rather
+// than mirroring it into state from an effect — that costs an extra render on
+// every mount and briefly lays out wide on a narrow screen.
+const stackedQuery = () => window.matchMedia(`(max-width: ${STACK_BREAKPOINT}px)`);
+function subscribeStacked(fn: () => void) {
+  const mq = stackedQuery();
+  mq.addEventListener('change', fn);
+  return () => mq.removeEventListener('change', fn);
+}
+const getStackedSnapshot = () => stackedQuery().matches;
+// No viewport on the server; assume the unstacked desktop layout.
+const getStackedServerSnapshot = () => false;
+
 export default function ResizableLayout({
   sidebar,
   feed,
@@ -26,16 +39,8 @@ export default function ResizableLayout({
   const [sidebarW, setSidebarW] = useState(initialSidebarWidth);
   // null = use CSS fr-based default; number = user has dragged, use px
   const [detailW, setDetailW] = useState<number | null>(null);
-  const [stacked, setStacked] = useState(false);
+  const stacked = useSyncExternalStore(subscribeStacked, getStackedSnapshot, getStackedServerSnapshot);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${STACK_BREAKPOINT}px)`);
-    setStacked(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setStacked(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
 
   const startDrag = useCallback(
     (

@@ -153,20 +153,31 @@ interface LibraryProps {
 export default function Library({ initialClipId, searchQuery }: LibraryProps) {
   const { bridgePresent, clips, timedOut, categories, bodies, removeClips, updateClipNote, removeCategory, setClipBody, focusClipId, clearFocusClipId } = useLibraryBridge();
 
-  useEffect(() => {
-    if (!focusClipId) return;
-    const clip = clips.find((c) => c.capture.id === focusClipId);
-    if (clip && activeCat !== null) setActiveCat(clip.evaluation.category);
-    setSelectedId(focusClipId);
-    clearFocusClipId();
-  // clips intentionally omitted — we only want this to fire when focusClipId changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusClipId, clearFocusClipId]);
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [activeSignals, setActiveSignals] = useState<string[]>([]);
   const [activeQuals, setActiveQuals] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(initialClipId ?? null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Reacts to the extension deep-linking at a specific clip (NAVIGATE_TO_CLIP over
+  // the bridge). This is a genuine external-event handler: it must both move the
+  // selection AND acknowledge the request via clearFocusClipId(), so it can't be
+  // derived during render the way the other reset-on-key state in this app is —
+  // hence the set-state-in-effect exemption rather than a rewrite.
+  //
+  // Declared after the state above: it reads activeCat and calls both setters, so
+  // hoisting it would put them in the temporal dead zone.
+  useEffect(() => {
+    if (!focusClipId) return;
+    const clip = clips.find((c) => c.capture.id === focusClipId);
+    /* eslint-disable react-hooks/set-state-in-effect -- see note above */
+    if (clip && activeCat !== null) setActiveCat(clip.evaluation.category);
+    setSelectedId(focusClipId);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    clearFocusClipId();
+  // clips + activeCat intentionally omitted — we only want this to fire when focusClipId changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusClipId, clearFocusClipId]);
 
   const q = searchQuery?.trim().toLowerCase() ?? '';
 

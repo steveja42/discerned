@@ -248,7 +248,7 @@ export default function SignInModal({ onClose, onSignedIn, onNip07SignedIn }: Si
             {error && <p style={{ color: 'oklch(0.50 0.14 25)', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 12 }}>{error}</p>}
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn" onClick={() => setStep('menu')}>← Back</button>
-              <button className="btn primary" onClick={confirmGenerate}>I've saved it →</button>
+              <button className="btn primary" onClick={confirmGenerate}>I&apos;ve saved it →</button>
             </div>
           </>
         )}

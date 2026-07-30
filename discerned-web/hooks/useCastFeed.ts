@@ -28,9 +28,17 @@ export function preferLongForm(a: ClipData, b: ClipData): ClipData {
   return a; // both same kind — keep the incumbent
 }
 
+const NO_CLIPS: ClipData[] = [];
+
 export function useCastFeed() {
-  const [clips, setClips] = useState<ClipData[]>([]);
-  const [status, setStatus] = useState<FeedStatus>('connecting');
+  // Tagged with the relay epoch the casts came from. A mode flip therefore reads
+  // as an empty feed during render, rather than needing a setClips([]) reset at
+  // the top of the subscribe effect.
+  const [entry, setEntry] = useState<{ epoch: number; clips: ClipData[] }>({ epoch: 0, clips: NO_CLIPS });
+  // Status is epoch-scoped for the same reason: re-subscribing against a new
+  // relay set is a fresh connection, so it reads back as 'connecting' during
+  // render instead of being reset by a setState in the effect.
+  const [statusEntry, setStatus] = useState<{ epoch: number; status: FeedStatus }>({ epoch: 0, status: 'connecting' });
   // Bumped whenever the dev relay mode flips, forcing the subscribe effect to
   // tear down its pool and re-subscribe against the new relay set.
   const [relayEpoch, setRelayEpoch] = useState(0);
@@ -49,10 +57,6 @@ export function useCastFeed() {
     let cancelled = false;
     let cleanup: (() => void) | undefined;
 
-    // Drop casts from the previous relay set so a mode flip doesn't leave stale
-    // entries mixed with the new feed.
-    setClips([]);
-
     const init = async () => {
       try {
         const [{ subscribeFeed }, { parseEvent }] = await Promise.all([
@@ -64,7 +68,10 @@ export function useCastFeed() {
           (e) => {
             if (cancelled) return;
             const clip = parseEvent(e);
-            setClips((prev) => {
+            setEntry((prevEntry) => {
+              // Casts from a superseded relay set are dropped rather than merged:
+              // a mode flip starts the feed over from empty.
+              const prev = prevEntry.epoch === relayEpoch ? prevEntry.clips : NO_CLIPS;
               // Companion kind-1 note + kind-30023 long-form share a dedup key
               // (author + long-form id); keep only one, PREFERRING the richer
               // 30023. Standalone clips key on their own event id.
@@ -75,7 +82,9 @@ export function useCastFeed() {
                 const existing = prev[existingIdx];
                 // Same event re-delivered, or the less-preferred half of a pair:
                 // keep what we have.
-                if (preferLongForm(existing, clip) === existing) return prev;
+                if (preferLongForm(existing, clip) === existing) {
+                  return prevEntry.epoch === relayEpoch ? prevEntry : { epoch: relayEpoch, clips: prev };
+                }
                 next = [...prev];
                 next[existingIdx] = clip;
               } else {
@@ -83,19 +92,21 @@ export function useCastFeed() {
               }
               // Sort by timestamp descending so newest is always on top,
               // regardless of the order in which relays deliver events.
-              return next
-                .sort((a, b) => b.capture.timestamp - a.capture.timestamp)
-                .slice(0, 200);
+              return {
+                epoch: relayEpoch,
+                clips: next
+                  .sort((a, b) => b.capture.timestamp - a.capture.timestamp)
+                  .slice(0, 200),
+              };
             });
           },
-          () => { if (!cancelled) setStatus('live'); },
+          () => { if (!cancelled) setStatus({ epoch: relayEpoch, status: 'live' }); },
         );
       } catch {
-        if (!cancelled) setStatus('error');
+        if (!cancelled) setStatus({ epoch: relayEpoch, status: 'error' });
       }
     };
 
-    setStatus('connecting');
     init();
     return () => {
       cancelled = true;
@@ -103,5 +114,7 @@ export function useCastFeed() {
     };
   }, [relayEpoch]);
 
+  const clips = entry.epoch === relayEpoch ? entry.clips : NO_CLIPS;
+  const status = statusEntry.epoch === relayEpoch ? statusEntry.status : 'connecting';
   return { clips, status };
 }

@@ -3,7 +3,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 const STORAGE_KEY = 'discerned.readCasts';
 const MAX_TRACKED = 2000;
@@ -32,21 +32,39 @@ function save(ids: Set<string>): void {
   }
 }
 
-export function useReadCasts() {
-  const [read, setRead] = useState<Set<string>>(() => new Set());
+const EMPTY: Set<string> = new Set();
 
-  useEffect(() => {
-    setRead(load());
-  }, []);
+// The read set is the store. getSnapshot MUST return a stable reference or
+// useSyncExternalStore re-renders forever, so the current Set is cached here and
+// only replaced when markRead actually adds an id.
+let snapshot: Set<string> | null = null;
+const listeners = new Set<() => void>();
+
+function subscribe(fn: () => void) {
+  listeners.add(fn);
+  return () => { listeners.delete(fn); };
+}
+
+function getSnapshot(): Set<string> {
+  snapshot ??= load();
+  return snapshot;
+}
+
+// No localStorage on the server: everything reads as unread, which matches the
+// hydrating client render.
+const getServerSnapshot = () => EMPTY;
+
+export function useReadCasts() {
+  const read = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const markRead = useCallback((id: string) => {
-    setRead((prev) => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.add(id);
-      save(next);
-      return next;
-    });
+    const prev = getSnapshot();
+    if (prev.has(id)) return;
+    const next = new Set(prev);
+    next.add(id);
+    snapshot = next;
+    save(next);
+    for (const fn of listeners) fn();
   }, []);
 
   return { read, markRead };

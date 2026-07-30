@@ -73,24 +73,26 @@ function NoteEditor({
   clipId: string;
   onUpdateNote: (id: string, note: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(note ?? '');
+  // Editor state is tagged with the clip it belongs to, so selecting a different
+  // clip resets it during render instead of via a setState in an effect. Keying
+  // on clipId alone is deliberate: the old effect also depended on `note`, so a
+  // bridge update to the saved note would discard whatever the user was typing.
+  const [entry, setEntry] = useState<{ clipId: string; editing: boolean; draft: string } | null>(null);
+  const current = entry?.clipId === clipId ? entry : null;
+  const editing = current?.editing ?? false;
+  const draft = current?.draft ?? note ?? '';
 
-  // Reset when clip changes.
-  useEffect(() => {
-    setEditing(false);
-    setDraft(note ?? '');
-  }, [clipId, note]);
+  const setDraft = (next: string) => setEntry({ clipId, editing, draft: next });
+  const beginEdit = (initial: string) => setEntry({ clipId, editing: true, draft: initial });
 
   const save = () => {
     onUpdateNote(clipId, draft);
-    setEditing(false);
+    setEntry({ clipId, editing: false, draft });
   };
 
-  const cancel = () => {
-    setDraft(note ?? '');
-    setEditing(false);
-  };
+  // Set both fields at once — the setters above each rebuild the whole entry,
+  // so calling them in sequence would discard the first one's change.
+  const cancel = () => setEntry({ clipId, editing: false, draft: note ?? '' });
 
   if (editing) {
     return (
@@ -116,7 +118,7 @@ function NoteEditor({
 
   if (note) {
     return (
-      <div className="note-display" onClick={() => { setDraft(note); setEditing(true); }}>
+      <div className="note-display" onClick={() => beginEdit(note)}>
         <p style={{ margin: 0, fontFamily: 'var(--sans)', fontSize: 13.5, lineHeight: 1.55, color: 'var(--ink-2)' }}>
           {note}
         </p>
@@ -128,7 +130,7 @@ function NoteEditor({
   return (
     <span
       className="note-add-prompt"
-      onClick={() => { setDraft(''); setEditing(true); }}
+      onClick={() => beginEdit('')}
     >
       Add a note…
     </span>
