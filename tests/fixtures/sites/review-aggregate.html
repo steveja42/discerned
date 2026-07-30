@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!-- Review-SITE entity page (StoryGraph shape). The distinguishing feature vs
+     the Amazon `entity-product.html` fixture: the "Community Reviews" section is
+     an AGGREGATE summary — a score, a review count, mood percentages and
+     distribution bars — with NO individual reviews, so it carries none of the
+     per-review signals (REVIEW_SIGNAL_RE: "Verified Purchase", "found this
+     helpful", …) that removeReviewsSection's main pass keys on. It therefore
+     falls through to the orphan-ratings cleanup, which used to delete it
+     wholesale because it has no ≥120-char <p>. That aggregate block IS the
+     primary content of a review site, so hasAggregateRatingData() must keep it.
+     The trailing "Rate this book" widget is the shape that SHOULD still go:
+     prose-free, and no aggregate data. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>Fruit Fly | The StoryGraph</title></head>
+<body>
+  <div id="app">
+    <div class="book-page">
+      <div class="book-title-author-and-series">
+        <h3>Fruit Fly</h3>
+        <p>Josh Silver</p>
+      </div>
+      <div class="book-pages">416 pages &bull; first pub 2026</div>
+      <div class="blurb">
+        <p>
+          Anyone can write a bestseller. Here's how. It's been seven years since
+          Mallory shot to fame as a literary sensation, and after years of
+          struggling with writer's block she is desperate to resurrect her career
+          before it spirals into obscurity for good.
+        </p>
+      </div>
+
+      <div class="standard-pane">
+        <h3>Community Reviews</h3>
+        <div class="review-statistics">
+          <span class="average-star-rating">4.29</span>
+          <span>based on 1,292 reviews</span>
+        </div>
+        <div class="moods">
+          <p>dark: 92%</p>
+          <p>tense: 77%</p>
+          <p>emotional: 50%</p>
+          <p>funny: 45%</p>
+        </div>
+        <div class="distribution">
+          <h4>Pace</h4>
+          <div class="bars"><span>43%</span><span>54%</span><span>2%</span></div>
+          <div class="legend"><span>Fast</span><span>Medium</span><span>Slow</span></div>
+        </div>
+      </div>
+
+      <!-- A REVIEWS_SECTION_RE heading over a prose-free block that carries NO
+           aggregate data (no score, no count, no distribution) — the empty-shell
+           case the orphan cleanup still exists to drop. -->
+      <div class="rating-cta">
+        <h3>Review this book</h3>
+        <div class="stars"><span>Be the first to review</span></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

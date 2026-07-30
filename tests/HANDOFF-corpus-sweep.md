@@ -17,23 +17,73 @@ discogs, lastfm): **storygraph, librarything, rateyourmusic, spotify-album,
 applemusic-album, ytmusic-album**. All 6 URLs discovered live; 7 of the 9 sites in
 this class captured and were eyeballed (verdicts in `visual-findings.json`).
 
-**One generic defect dominates this class — small-image GRIDS collapse to one
-full-width image per row.** Seen on metacritic (Top Cast), letterboxd (festival
-premiere country FLAGS — the worst case, a giant stacked column of flag circles),
-spotify/ytmusic (discography rails) and already recorded for imdb (Top Cast).
-The source lays these out with grid/flex; the clip loses it and stacks them.
-Note `aspectDistorted: 0` — the images are NOT stretched, they are natively large
-and merely unwrapped, so **the auto-scorer cannot see this** (letterboxd scored
-composite 0.001 / "likely healthy" while being visually dominated by flags).
-A generic fix (cap the rendered width of images inside a many-small-images
-container, in `.clip-body` CSS) would improve 5+ sites at once — prefer that over
-per-site taggers. Related: `[memory: project_dx_stats_flex_collapse]` is the
-inverse failure (flex retained where it shouldn't be); this is flex/grid LOST.
+### FIXED (2026-07-30) — the four defects this batch found
 
-Second, narrower finding: **storygraph drops its Community Reviews block
-entirely** (4.29 rating, 1,292 reviews, mood %s, Pace/plot bar charts) while
-keeping cover/title/description, and leads the clip with left-rail action chrome.
-On a review site that block is the most valuable content — worth a tagger.
+**1. Small images ballooned to full width (the class's dominant defect).** Seen on
+letterboxd (festival country FLAGS — a giant stacked column of circles),
+metacritic + imdb (Top Cast), spotify/ytmusic/RYM (cover rails). **Two
+independent causes, both needed fixing:**
+- *Capture* — `annotateLiveImageSizes` early-returned on a zero-size rect, so a
+  lazy/off-screen image got NO width/height stamp. An unstamped **SVG** has no
+  intrinsic raster size, so with the source CSS stripped it stretched to the full
+  column. It now falls back to `naturalWidth/Height`, then the element's own
+  attributes, then `SVG_FALLBACK_PX` (24) for SVGs specifically.
+- *CSS* — even a stamped size was discarded by `.clip-body img { height: auto
+  !important }`. A new rule caps each image at `attr(width px)`, so it renders no
+  larger than the source drew it. Verified in Chromium 148: `width="40"` → 40px,
+  `width="230"` → 230px, no-attr hero → unchanged full width.
+Measured on the real letterboxd capture: images >400px went **63 → 0**, flags
+420px → 24px, clip height **57,617px → 30,346px**, with poster (230), related
+posters (110) and avatars (40) all at source size.
+Note `aspectDistorted: 0` throughout — the images were never *stretched*, just
+unwrapped, so **the auto-scorer was blind to this** (letterboxd scored 0.001 /
+"likely healthy" while visually wrecked). Don't trust a good composite on an
+entity page; look at the clip.
+
+**2. StoryGraph's Community Reviews block was being deleted.** Not a capture
+miss — `removeReviewsSection`'s *orphan-ratings cleanup* removed it. That cleanup
+drops any prose-free block under a `REVIEWS_SECTION_RE` heading (an Amazon
+leftover-star-histogram fix), and StoryGraph's block has no ≥120-char `<p>`. But
+on a REVIEW site that block IS the primary content: the 4.29 score, "1,292
+reviews", mood percentages and pace/plot distributions. New
+`hasAggregateRatingData()` keeps a block carrying a score **and** a count, or ≥3
+distribution percentages. The Amazon case is unaffected because its medley is
+removed by the MAIN pass (≥3 per-review signals) and never reaches the cleanup —
+both behaviours are now pinned by `entity-product.test.ts` +
+`tests/fixtures/sites/review-aggregate.html`.
+
+**3. Cross-sell / recirculation tails.** Added media-catalogue rail headings to
+`CROSS_SELL_HEADING_RE` ("More by …", "Releases for you", "More to Hear", "Other
+Versions", "Recommendations", "Fans might also like", …) and raised
+`removeCrossSellRails`' climb from 5 to **8 hops** — SPA catalogue pages nest the
+module card deeper than a server-rendered Amazon rail. The no-long-prose +
+link/image-dominance + 12k-char guards (re-checked per hop) remain the safety.
+Result: ytmusic clip ~1/3 its former height, applemusic text 22KB → 3.4KB.
+
+**4. Spotify's album title was clipped off-canvas.** The captured `<h1>` carries
+an inline `white-space: nowrap; font-size: 3rem` from the SPA, which assumes the
+source's wide layout — in the narrower clip column it ran off the edge ("The Dark
+Side of the Mo…"). `.clip-body` headings now force `white-space: normal
+!important` (inline styles need the `!important` to lose). Font-size is left
+alone so hierarchy is preserved.
+
+**Verification:** all **20 fixture pixel baselines** pass, 221 extension + 146 web
+unit tests, both type-checks and ext lint clean. One baseline was intentionally
+updated: `bsky-thread` shrank 13991→13928px, and a row-by-row comparison proved
+the first 13,928 rows are **byte-identical** and the removed 63px was pure white
+trailing space. **Caveat learned the hard way:** running these baselines at
+`--workers=3` produced 3 spurious failures (medium/wikipedia/bsky) that all pass
+at `--workers=1` — run them serially before believing a regression.
+
+**Known-residual (deliberately not fixed):**
+- *metacritic/imdb Top Cast* stack one photo per row. They're now capped at source
+  size (176px), but re-flowing them into a grid needs markup restructuring — each
+  photo sits in deeply nested per-card divs. Cosmetic.
+- *applemusic "Other Versions"* stub survives (last ~5% of the clip). Its module
+  card is a shared ancestor that also holds the album's editorial prose, so the
+  long-prose guard correctly refuses to remove it. Forcing it would delete real
+  content.
+- *ytmusic* album title/artist header still missing (cover → track 1 directly).
 
 **librarything + rateyourmusic: the 403s were URL-SPECIFIC, not domain-wide.**
 An earlier pass concluded both domains were permanently bot-walled (hard 403 on

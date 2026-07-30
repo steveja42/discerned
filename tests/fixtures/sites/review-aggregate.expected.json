@@ -1,0 +1,11 @@
+{
+  "_comment": "This fixture exists for the hasAggregateRatingData guard, which is asserted in tests/extraction/entity-product.test.ts with smartArticleDetection:FALSE — the mode the corpus sweep and the real capture bridge use, and the only one in which the Community Reviews block is in scope. article.test.ts runs the whole corpus with smartArticleDetection:TRUE, where this fixture's semantic-element pass narrows to the title alone; asserting the review block here would be testing a different code path than the one the guard lives in. So this sidecar only pins the invariants that hold in BOTH modes.",
+  "format": "article",
+  "title": { "contains": "Fruit Fly" },
+  "url": "https://app.thestorygraph.com/books/x",
+  "bodyText": {
+    "contains": ["Fruit Fly"],
+    "excludes": ["Be the first to review"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

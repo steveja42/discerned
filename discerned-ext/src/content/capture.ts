@@ -4526,6 +4526,12 @@ function sanitiseElement(element: Element, stripStyles = false) {
 
 const SIZE_MARKER = 'data-discerned-sized';
 
+/** Width/height stamped on an SVG image that reports no measurable size at
+ *  capture time (lazy/off-screen). SVGs have no intrinsic raster size, so an
+ *  unstamped one stretches to the full clip column once the source CSS is gone.
+ *  Sized like the icon/flag these actually are. */
+const SVG_FALLBACK_PX = 24;
+
 // Stamped on live elements whose computed display is flex/grid. Their children
 // sit visually apart on the source page, but once sanitisation strips the
 // source classes the children collapse to adjacent inline boxes and their text
@@ -4571,9 +4577,31 @@ function annotateLiveImageSizes(liveRoot: Element): () => void {
       if (!own || isPlaceholderImgUrl(own)) img.setAttribute(CURRENTSRC_ATTR, cur);
     }
     const rect = img.getBoundingClientRect();
-    const w = Math.round(rect.width);
-    const h = Math.round(rect.height);
-    if (w <= 0 || h <= 0) return;
+    let w = Math.round(rect.width);
+    let h = Math.round(rect.height);
+    if (w <= 0 || h <= 0) {
+      // A zero rect means the image is lazy/off-screen/collapsed right now, NOT
+      // that it has no size. Falling through unstamped is actively harmful for
+      // an SVG with no intrinsic raster size: with the source's CSS stripped it
+      // has nothing to constrain it, so `.clip-body img` stretches it to the
+      // full column (letterboxd's premiere list rendered as a giant stacked
+      // column of country-flag circles). Fall back to the intrinsic size, then
+      // to the element's own width/height attributes.
+      const nw = Math.round(img.naturalWidth);
+      const nh = Math.round(img.naturalHeight);
+      const aw = parseInt(img.getAttribute('width') ?? '', 10);
+      const ah = parseInt(img.getAttribute('height') ?? '', 10);
+      w = nw > 0 ? nw : (Number.isFinite(aw) ? aw : 0);
+      h = nh > 0 ? nh : (Number.isFinite(ah) ? ah : 0);
+      // An SVG flag/icon reports 0 natural size in some engines; give it a small
+      // default rather than leaving it unbounded. Keyed on the URL so ordinary
+      // raster images that genuinely failed to load stay untouched.
+      if ((w <= 0 || h <= 0) && /\.svg(\?|#|$)/i.test(img.currentSrc || img.getAttribute('src') || '')) {
+        w = SVG_FALLBACK_PX;
+        h = SVG_FALLBACK_PX;
+      }
+      if (w <= 0 || h <= 0) return;
+    }
     const hadWidth = img.hasAttribute('width');
     const hadHeight = img.hasAttribute('height');
     if (!hadWidth) img.setAttribute('width', String(w));
@@ -5369,7 +5397,18 @@ const CROSS_SELL_HEADING_RE = new RegExp(
   // search", "Based on what customers bought".
   '|similar items( you might like)?|products you may also like|recommended for you' +
   '|more items to consider|refine your search|based on what customers (bought|viewed)' +
-  '|based on your (recent )?(browsing|activity)|you might (also )?like)', 'i');
+  '|based on your (recent )?(browsing|activity)|you might (also )?like' +
+  // Media-catalogue rails on album/film/book entity pages. Same shape as the
+  // commerce rails (heading + sibling carousel of cover art), so the same
+  // climb-to-the-module-card removal applies: Spotify "More by <artist>",
+  // YouTube Music "Releases for you"/"Fans might also like", Apple Music
+  // "Other Versions"/"More to Hear"/"You Might Also Like", LibraryThing
+  // "Recommendations", Goodreads "Readers also enjoyed".
+  '|more by\\b.*|more from this artist|discography|see discography' +
+  '|releases for you|fans (might|may) also like|more like this' +
+  '|other versions|more to hear|featured on|appears on' +
+  '|recommendations|similar (artists|albums|books|films|movies)\\b.*' +
+  '|people (also|who) (viewed|liked|listened)\\b.*)', 'i');
 // Author/brand "Follow" cards + generic shopping-experience prompts that render
 // as short heading-labelled chrome blocks on product pages (Amazon "Follow the
 // authors", "Rate today's book shopping experience"). Not cross-sell carousels
@@ -5966,7 +6005,13 @@ function removeCrossSellRails(root: Element): void {
     // link/image dominant — that's the module card wrapping heading + carousel.
     let box: Element = seed;
     let cursor: Element | null = seed.parentElement;
-    for (let i = 0; i < 5 && cursor && cursor !== root; i++) {
+    // 8 hops, not 5: SPA catalogue pages (Apple Music, Spotify) wrap both the
+    // heading and its carousel in several structural divs, so the module card
+    // sits deeper than a server-rendered Amazon rail — at 5 the climb stopped
+    // short and Apple Music's "Other Versions" shelf survived. The real safety
+    // is the no-long-prose + link/image-dominance + 12k-char guards below, each
+    // re-checked per hop; the cap only stops a runaway climb.
+    for (let i = 0; i < 8 && cursor && cursor !== root; i++) {
       if (hasLongProse(cursor)) break;
       const text = (cursor.textContent ?? '').replace(/\s+/g, ' ').trim();
       // A module card is heavy on links/images relative to its text. Require at
@@ -6011,6 +6056,29 @@ const REVIEW_SIGNAL_RE = /(out of 5 stars|verified purchase|found this (review )
  * unless the section actually carries several distinct review signals, so a lone
  * "Write a review" button or a single testimonial is never mistaken for the list.
  */
+/**
+ * Does this block carry a real AGGREGATE rating summary (the thing a review
+ * site's page is actually about) rather than a bare leftover star histogram?
+ *
+ * Distinguishes StoryGraph's "Community Reviews" block — 4.29, "1,292 reviews",
+ * mood percentages, pace/plot distribution bars — from the dangling Amazon
+ * ratings widget that removeReviewsSection's cleanup is meant to drop. Requires
+ * BOTH an average-score-shaped number AND a review/rating count, or a spread of
+ * distribution percentages; a lone "5 stars" label never qualifies.
+ */
+function hasAggregateRatingData(el: Element): boolean {
+  const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+  if (text.length < 12) return false;
+  // "4.29", "4.29 out of 5", "4,29" — a decimal score in a plausible range.
+  const hasScore = /\b[0-5](?:[.,]\d{1,2})\s*(?:\/\s*5|out of\s*5|stars?)?\b/i.test(text);
+  // "1,292 reviews", "1292 ratings", "based on 1,292 reviews".
+  const hasCount = /\b\d[\d,.]*\s*(?:reviews?|ratings?)\b/i.test(text);
+  // A distribution/mood breakdown renders as several percentages ("dark: 92%,
+  // tense: 77%, …", or the pace bars "43% / 54% / 2%").
+  const pctCount = (text.match(/\d{1,3}\s*%/g) ?? []).length;
+  return (hasScore && hasCount) || pctCount >= 3;
+}
+
 function removeReviewsSection(root: Element): void {
   const seeds = Array.from(root.querySelectorAll('h1, h2, h3, h4, [role="heading"]')).filter(el => {
     const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
@@ -6093,7 +6161,13 @@ function removeReviewsSection(root: Element): void {
       if ((p.textContent ?? '').replace(/\s+/g, ' ').length > 4000) break;
       box = p;
     }
-    if (!hasRealProse(box)) {
+    // On a REVIEW site the aggregate summary IS the primary content, not an
+    // Amazon-style leftover star histogram: StoryGraph's "Community Reviews"
+    // block carries the 4.29 score, "1,292 reviews", the mood percentages and
+    // the pace/plot bar charts, and this cleanup was deleting all of it (it has
+    // no ≥120-char <p>, so the prose guard alone didn't save it). Keep a block
+    // that holds real aggregate rating DATA and drop only genuinely empty ones.
+    if (!hasRealProse(box) && !hasAggregateRatingData(box)) {
       box.remove();
       log(LL.DEBUG, 'Discerned: removeReviewsSection dropped orphaned ratings summary', 'url:', window.location.href);
     }

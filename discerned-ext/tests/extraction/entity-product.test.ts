@@ -49,4 +49,35 @@ describe('entity/product page chrome removal (bodyHtml level)', () => {
     expect(html).not.toContain('47 percent savings');
     expect(html).not.toContain('Shipper / Seller');
   });
+
+  // The orphan-ratings cleanup in removeReviewsSection used to delete ANY
+  // prose-free block under a REVIEWS_SECTION_RE heading. On a REVIEW site the
+  // aggregate block is the primary content, so that silently dropped
+  // StoryGraph's whole "Community Reviews" section — the 4.29 score, the review
+  // count, the mood percentages and the pace/plot distribution bars.
+  // hasAggregateRatingData() now keeps a block carrying real aggregate data.
+  // Note the Amazon case above still works because that reviews medley is
+  // removed by the MAIN pass (≥3 per-review signals), never reaching this
+  // cleanup — the two are guarded independently and both are asserted here.
+  it('keeps an aggregate ratings summary that has no individual reviews (review-site shape)', async () => {
+    loadFixture('review-aggregate.html', 'https://app.thestorygraph.com/books/x');
+    const cap = await captureContext('article', { smartArticleDetection: false, stripInlineStyles: false });
+    const html = cap.bodyHtml ?? '';
+
+    // The book's own info survives.
+    expect(html).toContain('Fruit Fly');
+
+    // The aggregate review data survives — this is what regressed.
+    expect(html).toContain('Community Reviews');
+    expect(html).toContain('4.29');
+    expect(html).toContain('1,292 reviews');
+    expect(html).toContain('dark: 92%');
+    expect(html).toContain('Pace');
+
+    // The counterpart still holds: a prose-free block under a reviews heading
+    // that carries NO aggregate data is still dropped by the orphan cleanup.
+    // ("Review this book" is a REVIEWS_SECTION_RE heading; "Rate this book" is
+    // deliberately not one, so it is out of this pass's scope either way.)
+    expect(html).not.toContain('Be the first to review');
+  });
 });

@@ -436,6 +436,15 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
 
       await screenshotClipBody(libPage, clipBody, art.clip());
 
+      // SWEEP_DUMP_HTML=1 saves the RENDERED clip markup next to the images.
+      // A screenshot shows THAT a clip is wrong; only the markup shows WHY
+      // (which attributes survived, what the sanitiser kept). Feeds the offline
+      // clip-width probe so a fix can be iterated without re-hitting the site.
+      if (process.env.SWEEP_DUMP_HTML) {
+        const html = await clipBody.evaluate(el => el.innerHTML).catch(() => '');
+        if (html) writeFileSync(resolve(art.dir, `${d.name}--clip.html`), html, 'utf8');
+      }
+
       // ── Score ───────────────────────────────────────────────────────────
       // Run measureInPage against the rendered clip body. Injected as a string
       // (its .toString()) + rebuilt in-page so the helper doesn't need bundling.

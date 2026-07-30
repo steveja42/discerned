@@ -1070,6 +1070,20 @@ a { color: inherit; }
 }
 .clip-body * { max-width: 100%; box-sizing: border-box; }
 .clip-body img { display: block !important; position: static !important; float: none !important; max-width: 100% !important; height: auto !important; max-height: 420px !important; object-fit: contain !important; object-position: left top !important; border-radius: 4px; margin: 12px 0; }
+/* Small images keep the size the SOURCE page rendered them at.
+   `annotateLiveImageSizes` stamps every captured <img> with its real on-page
+   width/height, but the rule above throws that away (`height: auto`, block
+   display), so a 40px avatar, a 24px flag or a 110px poster thumb stretched to
+   the full column — cast/headshot/flag/album grids became one giant image per
+   row and dominated the clip (letterboxd premiere flags, metacritic + imdb Top
+   Cast, spotify/ytmusic/RYM rails). Cap at the stamped width via attr() so each
+   image renders no larger than the source drew it. Only images the source drew
+   SMALL are affected; heroes and article photos (no width attr, or a large one)
+   keep the old full-width behaviour. */
+.clip-body img[width]:not(.tweet-avatar):not(.tweet-badge-emoji) {
+  width: auto;
+  max-width: min(100%, attr(width px, 100%)) !important;
+}
 .clip-body .tweet-card { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--rule-soft); padding: 12px 16px; }
 /* Match each source: native x.com captures use square corners (the page itself
    shows tweets as square cards); platform.twitter.com embed iframes use a
@@ -1134,6 +1148,16 @@ a { color: inherit; }
 .clip-body .dx-video-link { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--rule-soft); border-radius: 8px; font-family: var(--sans); font-size: 14px; text-decoration: none !important; color: var(--ink-2) !important; margin: 8px 0; }
 .clip-body p { margin: 0 0 1em; }
 .clip-body h1, .clip-body h2, .clip-body h3, .clip-body h4 { margin: 1.2em 0 0.4em; line-height: 1.25; font-weight: 600; }
+/* SPA headings often carry an INLINE `white-space: nowrap` (plus an outsized
+   font-size) that assumes the source's own wide layout — Spotify's album <h1>
+   is `font-size: 3rem; white-space: nowrap`, so in the narrower clip column it
+   ran off the edge and the title read "The Dark Side of the Mo…". Inline styles
+   beat normal rules, so this needs !important to win. Headings are always safe
+   to wrap; the font-size is left alone so the visual hierarchy is preserved. */
+.clip-body h1, .clip-body h2, .clip-body h3, .clip-body h4, .clip-body h5, .clip-body h6 {
+  white-space: normal !important;
+  overflow-wrap: break-word;
+}
 .clip-body a { color: var(--accent-ink); text-decoration: underline; }
 .clip-body blockquote { border-left: 3px solid var(--rule); padding-left: 12px; margin: 0 0 1em; color: #3a342c; }
 .clip-body pre, .clip-body code { font-family: ui-monospace, monospace; font-size: 13px; background: var(--paper-2); border-radius: 3px; padding: 1px 4px; }
