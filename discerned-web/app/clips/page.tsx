@@ -26,7 +26,6 @@ function LibraryWithClipId({ searchQuery }: { searchQuery: string }) {
 }
 
 export default function LibraryPage() {
-  const router = useRouter();
   const { auth, signInPubkey, setNip07Connected } = useNostrAuth();
   const { extensionPresent } = useBridgeAuth();
   const [signInOpen, setSignInOpen] = useState(false);
@@ -37,7 +36,6 @@ export default function LibraryPage() {
       <TopBar
         auth={auth}
         onSignIn={() => setSignInOpen(true)}
-        onBrandClick={() => router.push('/discerns')}
         searchPlaceholder="Search your clips…"
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}

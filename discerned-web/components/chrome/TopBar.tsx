@@ -1,6 +1,13 @@
 // Sticky application topbar with brand mark, search input, nav links, and auth avatar.
 // When brandHasPopover is true, the beacon pulses to draw attention to the first-visit popover.
-// onBrandClick is wired by DiscernsClient to dismiss the popover and navigate to /about.
+// The brand always goes home (/discerns — / is only a redirect to it). onBrandClick is an
+// optional override for pages that need side effects first (DiscernsClient dismisses the
+// first-visit popover); without it the mark is a plain <Link>, so content pages like /about
+// and /feedback get working brand navigation for free.
+//
+// The search box only renders when a page passes onSearchChange. Static content routes
+// (/about, /feedback, /get-extension) have nothing to search, and an inert input that
+// swallows Ctrl+K reads as broken.
 
 'use client';
 
@@ -14,6 +21,10 @@ import { getActiveRelays, onRelayModeChange } from '@/lib/constants';
 import { authorLabel } from '@/lib/nostr/profiles';
 import { useOwnProfile } from '@/hooks/useOwnProfile';
 import type { AuthState } from '@/lib/types';
+
+// The feed is home: `/` is a client-side redirect to it (see app/page.tsx), so linking
+// straight here avoids a pointless double navigation.
+const HOME_HREF = '/discerns';
 
 interface TopBarProps {
   auth: AuthState;
@@ -92,9 +103,10 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
     const handler = (e: KeyboardEvent) => {
       const isTrigger = isMac ? e.metaKey && e.key === 'k' : e.ctrlKey && e.key === 'k';
       if (!isTrigger) return;
-      e.preventDefault();
       const el = searchRef.current;
+      // No search box on this route — let the browser keep its own Ctrl+K.
       if (!el) return;
+      e.preventDefault();
       if (document.activeElement === el) {
         el.select();
       } else {
@@ -112,29 +124,33 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
   return (
     <>
     <header className="topbar">
-      <div
+      <Link
+        href={HOME_HREF}
         className={`brand brand-clickable ${brandHasPopover ? 'brand-pulse' : ''}`}
+        aria-label="Discerned — home"
         onClick={onBrandClick}
-        role={onBrandClick ? 'button' : undefined}
-        tabIndex={onBrandClick ? 0 : undefined}
-        onKeyDown={onBrandClick ? (e) => { if (e.key === 'Enter') onBrandClick(); } : undefined}
       >
         <span className="brand-mark" aria-hidden="true">
           <MiniBeacon size={24} />
         </span>
         <span className="brand-name">Discerned</span>
-      </div>
+      </Link>
 
-      <div className="search">
-        <SearchIcon />
-        <input
-          ref={searchRef}
-          placeholder={searchPlaceholder ?? 'Search clips, casters, sources…'}
-          value={searchValue ?? ''}
-          onChange={(e) => onSearchChange?.(e.target.value)}
-        />
-        <kbd>{isMac ? '⌘K' : 'Ctrl+K'}</kbd>
-      </div>
+      {onSearchChange ? (
+        <div className="search">
+          <SearchIcon />
+          <input
+            ref={searchRef}
+            placeholder={searchPlaceholder ?? 'Search clips, casters, sources…'}
+            value={searchValue ?? ''}
+            onChange={(e) => onSearchChange(e.target.value)}
+          />
+          <kbd>{isMac ? '⌘K' : 'Ctrl+K'}</kbd>
+        </div>
+      ) : (
+        // Keep the middle grid/flex cell occupied so the nav rail stays put.
+        <div className="search-spacer" aria-hidden="true" />
+      )}
 
       <div className="topbar-right">
         {navLink('/discerns', 'Discerns', 'Clips that have been broadcast on Nostr')}

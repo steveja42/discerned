@@ -188,6 +188,10 @@ a { color: inherit; }
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  /* The mark is an <a> to /discerns, so pin the colour — otherwise the UA link
+     blue overrides the wordmark's ink. */
+  color: var(--ink);
+  text-decoration: none;
 }
 /* Azure to match the browser-tab favicon, which is drawn in this same #1d4ed8.
    MiniBeacon renders in currentColor, so the colour lives here rather than in the
@@ -289,6 +293,9 @@ a { color: inherit; }
   font-size: 13px;
 }
 .search input::placeholder { color: var(--ink-4); }
+/* Holds the topbar's middle grid column on routes with nothing to search
+   (/about, /feedback, /get-extension) so the nav rail doesn't shift. */
+.search-spacer { min-width: 0; }
 .search kbd {
   font-family: var(--mono); font-size: 10px;
   background: var(--paper-3); padding: 2px 6px; border-radius: 4px;

@@ -30,10 +30,9 @@ export default function DiscernsClient() {
   const [signInOpen, setSignInOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const handleBrandClick = () => {
-    dismissPopover();
-    router.push('/discerns');
-  };
+  // The brand mark is a <Link> to /discerns in TopBar, so this only handles the
+  // side effect — navigation is the link's job.
+  const handleBrandClick = () => dismissPopover();
 
   const handleLearnMore = () => {
     dismissPopover();
