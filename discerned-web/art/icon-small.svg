@@ -1,0 +1,30 @@
+<!--
+  Discerned beacon — SMALL master (16px favicon frame), navy, transparent.
+
+  Light-theme counterpart of discerned-ext/art/icon-small.svg; see that file's header
+  for WHY the smallest size gets its own drawing instead of a downscale (short version:
+  a 16px downscale of the full mark is a 4px smudge), and for why the ladder rung is a
+  real gap between two trapezoids rather than an overpainted line.
+
+  Geometry is identical to the dark small master — only the colour literal differs.
+  `pnpm gen:icons` (in discerned-ext) uses this for the 16px frame of app/favicon.ico,
+  and app/icon.svg for the 32/48/256 frames.
+
+  Lives in art/ rather than app/ deliberately: Next's App Router picks up icons by
+  FILE CONVENTION, and a second icon-ish file in app/ is an easy way to accidentally
+  publish a stray site icon. art/ is inert build-time input.
+-->
+<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <g stroke="#1d4ed8" stroke-width="1.5" stroke-linecap="round" opacity="0.9">
+    <line x1="8" y1="3.0" x2="8" y2="0.8"/>
+    <line x1="3.1" y1="5.1" x2="1.0" y2="4.2"/>
+    <line x1="12.9" y1="5.1" x2="15.0" y2="4.2"/>
+  </g>
+
+  <circle cx="8" cy="5.3" r="2.2" fill="#1d4ed8"/>
+
+  <path d="M 6.55 8.2 L 9.45 8.2 L 10.12 10.6 L 5.88 10.6 Z" fill="#1d4ed8"/>
+  <path d="M 5.49 12.0 L 10.51 12.0 L 11.2 14.3 L 4.8 14.3 Z" fill="#1d4ed8"/>
+
+  <line x1="3.9" y1="15.2" x2="12.1" y2="15.2" stroke="#1d4ed8" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

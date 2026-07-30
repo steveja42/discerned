@@ -1,0 +1,51 @@
+<!--
+  Discerned beacon — SMALL master (16px toolbar size), azure, transparent.
+
+  A 16x16 raster of the full beacon is an unreadable smudge: the mark lands ~4px wide,
+  the 0.9-unit ladder rungs fall below one pixel, and all five rays disappear. Measured
+  on the first cut, only 22 of 256 pixels carried any mark at all.
+
+  So this size gets its own drawing rather than a downscale — the standard icon-design
+  answer to a mark that doesn't survive its smallest size. Differences from icon.svg,
+  all in service of pixel legibility:
+    * five rays reduced to three (the diagonal pair collapsed onto the horizontals)
+    * one ladder rung instead of two, at double weight
+    * strokes at >=1.5 units so nothing renders sub-pixel after Lanczos
+    * no 0.5-opacity on the rays — at this size they'd wash out
+
+  TRANSPARENT + FULL BLEED: no background rect, and the drawing reaches y=0.6..15.4 so
+  the beacon fills the tile. Round caps are inset by half a stroke width so nothing
+  clips at the edge.
+
+  `pnpm gen:icons` uses THIS file for icon16.png, and icon.svg for every larger size.
+  Keep the silhouette recognisably the same beacon.
+
+  In art/ rather than public/icons/ for the same reason as icon.svg — publicDir copies
+  everything under public/ straight into the shipped extension.
+-->
+<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <!-- Rays: vertical + two horizontals. Full-width so they read as "broadcasting". -->
+  <g stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" opacity="0.9">
+    <line x1="8" y1="3.0" x2="8" y2="0.8"/>
+    <line x1="3.1" y1="5.1" x2="1.0" y2="4.2"/>
+    <line x1="12.9" y1="5.1" x2="15.0" y2="4.2"/>
+  </g>
+
+  <!-- Lamp. Sits clear of the tower: at 16px an adjoining lamp and tower antialias into
+       one continuous blob and the beacon silhouette is lost, so there is a deliberate
+       ~0.7px of daylight under it. -->
+  <circle cx="8" cy="5.3" r="2.2" fill="#60a5fa"/>
+
+  <!-- Tower: solid trapezoids rather than an outline — an outlined body at this size
+       leaves a 1px interior that fills with antialiasing and reads as a blur.
+       Split into two pieces, and the void between them IS the rung: on a transparent
+       icon a rung cannot be "punched out" by overpainting the background colour (there
+       isn't one), so it has to be a real gap in the geometry. The gap is 1.4px, not
+       1px — a 1px void at this scale closes up under Lanczos antialiasing. Edge x
+       values are the trapezoid's own slope evaluated at each gap edge. -->
+  <path d="M 6.55 8.2 L 9.45 8.2 L 10.12 10.6 L 5.88 10.6 Z" fill="#60a5fa"/>
+  <path d="M 5.49 12.0 L 10.51 12.0 L 11.2 14.3 L 4.8 14.3 Z" fill="#60a5fa"/>
+
+  <!-- Base -->
+  <line x1="3.9" y1="15.2" x2="12.1" y2="15.2" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

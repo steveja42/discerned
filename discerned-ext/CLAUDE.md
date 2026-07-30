@@ -22,6 +22,7 @@ pnpm dev          # Vite watch mode
 pnpm build        # tsc + Vite production build
 pnpm build:test   # development-mode build → dist-test/ (for Playwright)
 pnpm pack:ext     # prod build → dist-pack/, zipped to the web app's public/ for download
+pnpm gen:icons    # regenerate all icon rasters (both projects) from the art/ SVG masters
 pnpm type-check   # tsc --noEmit (strict)
 pnpm lint         # ESLint on src/**/*.ts
 ```
@@ -46,6 +47,49 @@ What it does:
 3. Writes the result to `../discerned-web/public/discerned-extension.zip`.
 
 Because the web app is a **static export** deployed by Netlify (which only builds `discerned-web/`, never runs this script), the zip is **committed to git** so Netlify serves it. It does **not** auto-update: after shipping extension changes, re-run `pnpm pack:ext` and commit the refreshed zip. The manifest `version` is read only for the build log line — bump `manifest.json` yourself when cutting a new download.
+
+## Icon assets (`pnpm gen:icons`)
+
+Every shipped icon raster is generated from SVG masters by `scripts/gen-icons.mjs`. The PNGs/ICO are **committed** — the manifest and Next's icon lookup need real files, and the art changes about once a year, so a rasteriser in the build path would buy nothing.
+
+**The theme split.** There are two masters, and they deliberately differ:
+
+| Master | Colour | Feeds |
+|---|---|---|
+| `art/icon.svg` | azure `#60a5fa` | extension toolbar / Web Store icons, **and** the mirrored `discerned-web/public/icons/*.png` that `.well-known/nostr.json` uses as the Nostr profile avatar (Nostr clients are overwhelmingly dark-themed) |
+| `discerned-web/app/icon.svg` | navy `#1d4ed8` | the site's own `favicon.ico` + `apple-icon.png`, matching its light theme and the navbar's `var(--accent-ink)` |
+
+So `discerned-web/public/icons/` is **no longer a byte-mirror** of the extension's icons — the PNGs match each other, but the two masters don't. Don't "fix" the divergence.
+
+**All icons are transparent and full-bleed.** No background tile: Chrome composites the toolbar icon onto whatever theme the user runs, and browsers composite a favicon onto a tab strip that is near-white in light mode and near-black in dark mode, so an opaque tile would show as a coloured square. Consequences worth knowing before editing a master:
+
+- The mark is scaled to its own **tight bounding box** — `4 3 24 30` in `MiniBeacon`'s `0 0 32 36` coordinate system, measured with `getBBox()`. The raw viewBox carries ~4 units of slack per side, which is the "margin" that made the old icons look small. The same tight viewBox is used by the inline brand marks in `overlay.ts` / `popup.html` / `onboarding.html` / `connect.html`, so a CSS `height` there is the mark's real rendered height.
+- **Opacities are raised from MiniBeacon's**: rays `0.5 → 0.75`, lamp halo `0.12 → 0.28`. Those values were tuned against an opaque near-black tile; composited onto an arbitrary background, `0.12` azure becomes an ~alpha-30 smudge that makes the lamp read as a pale hole punched in the tower.
+
+**The 16px problem.** A 16×16 downscale of the full mark is an unreadable smudge: the mark lands ~4px wide and only 22 of 256 pixels carry any ink. So 16px has its own simplified drawing (`art/icon-small.svg`, and `discerned-web/art/icon-small.svg` for the light side) — three rays instead of five, one rung, a solid tower instead of an outline. `gen-icons.mjs` picks it via `masterFor()` for `icon16.png` and the 16px `favicon.ico` frame only. Two traps that cost a round of rework there:
+
+- The rung is a **real gap between two trapezoids**, not an overpainted line. With no background colour there is nothing to punch a hole with. The gap is 1.4px because a 1px void closes up under Lanczos antialiasing.
+- The lamp needs ~0.7px of daylight under it, or lamp and tower antialias into one blob and the silhouette is lost.
+
+**If you edit the silhouette, edit all four masters** plus `MiniBeacon.tsx` and the four inline copies, and keep them recognisably the same beacon.
+
+**Masters live in `art/`, never `public/`.** Vite's `publicDir` defaults to `public/`, so anything under it is copied verbatim into `dist/` and into the zip users download — an art source has no business shipping inside the extension. (This bit once: the old `public/icons/icon.svg` was riding along in every build.)
+
+Rasterising uses `@playwright/test`'s bundled Chromium (already a root devDependency for the e2e suite — no new package), so icons are drawn by the same engine that renders the navbar mark. `sharp` looks available but is **not** resolvable: it appears only in a pnpm `onlyBuiltDependencies` allowlist. Chromium can't emit `.ico`, so Pillow packs the 16/32/48/256 frames from the PNGs it produced.
+
+**`pnpm dev` does NOT pick up icon changes on its own.** `viteStaticCopy` copies `public/icons` once at watcher startup and never watches it, so overwriting a PNG leaves a running dev server serving the OLD icon indefinitely — the loaded extension shows stale art with nothing to indicate it, and `pnpm build` is not an escape hatch (it would clobber the dev `dist/`, see Dev environment above). `gen-icons.mjs` therefore copies the finished PNGs straight into `dist/`, `dist-test/`, and `dist-pack/` when those exist. If you ever hand-edit an icon without running the generator, copy it into those dirs yourself. This is exactly how a "the toolbar icon still has a black background" report happened once — the source was already transparent; `dist/` was not.
+
+**After any icon change, re-run `pnpm pack:ext`** — the committed zip carries its own copy of the icons and does not auto-update.
+
+The geometry in `art/icon.svg` is copied verbatim from `discerned-web/components/brand/MiniBeacon.tsx` so the icon and the navbar mark are provably the same drawing; only a wrapping transform and the colour literals differ.
+
+### The in-app brand mark
+
+The extension UI used a 📡 emoji as its logo. That's now the beacon, as an **inline SVG in `currentColor`**, in four places: the overlay panel header (`overlay.ts`, via the `BRAND_MARK` constant — used by both the gate and main views), `popup.html`, `onboarding.html`, and `connect.html`.
+
+`currentColor`, **not** the toolbar icon's azure: the overlay's accent is amber (`shared/theme.ts`), so a blue mark would clash. Inheriting the surrounding ink is what `MiniBeacon` does on the web too. Each host sets the size in CSS.
+
+Remaining 📡 occurrences are **prose and status text**, not brand marks — "📡 Broadcasting…", "📡 Public casts", "Cast published 📡". There the emoji reads as a broadcast verb and should stay. (The onboarding steps that told users to look for "the 📡 icon" in their toolbar *were* changed — they now say "the Discerned beacon", because that sentence describes the toolbar icon, which is no longer a satellite dish.)
 
 ## Architecture
 
@@ -404,7 +448,8 @@ src/
   shared/       types.ts, logger.ts, theme.ts, relays.ts, nostr/{auth,events,encryption}.ts
   popup/        popup.ts, popup.html          ← stub for chrome:// pages only
   onboarding/   onboarding.ts, onboarding.html
-public/icons/
+art/            icon.svg, icon-small.svg      ← SVG masters (build-time input, never shipped)
+public/icons/   icon{16,48,128}.png           ← generated; the only icons the manifest loads
 dist/           (build output, gitignored)
 manifest.json   Chrome MV3 manifest
 vite.config.ts

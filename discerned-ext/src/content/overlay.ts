@@ -410,7 +410,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       <style>${this.getStyles()}</style>
       <div class="discerned-root panel">
         <header class="panel-header">
-          <h2>📡 Discerned</h2>
+          <h2>${DiscernedOverlay.BRAND_MARK} Discerned</h2>
           <div class="header-actions">
             <button class="icon-btn close-btn" id="close" aria-label="Close">×</button>
           </div>
@@ -1246,7 +1246,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       <style>${this.getStyles()}</style>
       <div class="discerned-root panel">
         <header class="panel-header">
-          <h2>📡 Discerned</h2>
+          <h2>${DiscernedOverlay.BRAND_MARK} Discerned</h2>
           <div class="header-actions">
             <button class="icon-btn" id="open-settings" aria-label="Settings" title="Settings">⚙</button>
             <button class="icon-btn close-btn" id="close" aria-label="Close">×</button>
@@ -1998,6 +1998,33 @@ ${themeVarsBlock(this.effectiveTheme)}
     `<svg class="seg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
     `<path d="M21 11.5l-8.8 8.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>`;
 
+  // The Discerned beacon, replacing the 📡 emoji in the panel header. Geometry is the
+  // same drawing as discerned-web's MiniBeacon.tsx and the toolbar icon masters in
+  // art/ — keep them in sync if the silhouette ever changes.
+  //
+  // currentColor, NOT the azure of the toolbar icon: the overlay's accent is amber
+  // (see shared/theme.ts), so a blue mark would clash. Inheriting the h2's ink is what
+  // MiniBeacon does on the web too.
+  //
+  // viewBox is the mark's TIGHT bbox (4 3 24 30) rather than MiniBeacon's raw
+  // 0 0 32 36, which carries ~4 units of empty margin per side — with the raw box the
+  // mark renders ~17% smaller than the CSS height suggests and looks undersized next
+  // to the wordmark.
+  static readonly BRAND_MARK =
+    `<svg class="brand-mark" viewBox="4 3 24 30" fill="none" aria-hidden="true">` +
+    `<g stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.5">` +
+    `<line x1="16" y1="9" x2="16" y2="3"/><line x1="11.5" y1="10" x2="7.5" y2="6"/>` +
+    `<line x1="20.5" y1="10" x2="24.5" y2="6"/><line x1="9" y1="13" x2="4" y2="12"/>` +
+    `<line x1="23" y1="13" x2="28" y2="12"/></g>` +
+    `<circle cx="16" cy="14" r="5" fill="currentColor" opacity="0.12"/>` +
+    `<path d="M 15.5 7 L 16.5 7 L 16 4 Z" fill="currentColor"/>` +
+    `<circle cx="16" cy="14" r="2.4" fill="currentColor"/>` +
+    `<rect x="13.2" y="15.5" width="5.6" height="2.4" rx="0.5" fill="currentColor"/>` +
+    `<path d="M 14.2 18 L 17.8 18 L 19.4 33 L 12.6 33 Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/>` +
+    `<line x1="13.4" y1="22.5" x2="18.6" y2="22.5" stroke="currentColor" stroke-width="0.9" opacity="0.7"/>` +
+    `<line x1="13" y1="27" x2="19" y2="27" stroke="currentColor" stroke-width="0.9" opacity="0.7"/>` +
+    `<line x1="11" y1="33" x2="21" y2="33" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+
   // ── Styles ─────────────────────────────────────────────────────────────────
 
   private getStyles(): string {
@@ -2053,7 +2080,11 @@ ${themeVarsBlock(this.effectiveTheme)}
         border-bottom: 1px solid var(--p-rule);
       }
       .panel-header h2 { color: var(--p-ink); font-size: 15px; font-weight: 700; flex: 1;
-                         font-family: var(--p-mono); text-transform: uppercase; letter-spacing: 0.06em; }
+                         font-family: var(--p-mono); text-transform: uppercase; letter-spacing: 0.06em;
+                         display: flex; align-items: center; gap: 7px; }
+      /* Beacon brand mark; inherits the h2's ink via currentColor. The 24x30 tight
+         bbox viewBox means these px values are the mark's real rendered size. */
+      .panel-header h2 .brand-mark { width: 13px; height: 16px; flex: none; display: block; }
       .header-actions { display: flex; gap: 4px; }
 
       .icon-btn {

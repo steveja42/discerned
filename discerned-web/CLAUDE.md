@@ -114,6 +114,9 @@ The marker contract is defined extension-side in `discerned-ext/src/content/capt
 app/
   globals.css          ← all tokens + component styles
   layout.tsx           ← body class="style-studio"
+  icon.svg             ← site icon (Next file convention); cream master, generated
+  favicon.ico          ← 16/32/48/256, generated
+  apple-icon.png       ← 180px, generated
   page.tsx             ← root: client redirect to /discerns
   discerns/page.tsx    ← feed route (mounts DiscernsClient)
   discerns/DiscernsClient.tsx ← client: feed + popover + modal
@@ -151,11 +154,28 @@ netlify/functions/
   feedback.mts         ← the ONLY server-side code; own tsconfig.json
 scripts/
   gen-lightning-qr.mjs ← regenerates public/support/lightning-qr.svg (`pnpm gen:qr`)
+art/
+  icon-small.svg       ← 16px favicon-frame master; build-time input, NOT a site icon
 ```
 
 ## Brand mark discipline
 
-`MiniBeacon` and `HeroBeacon` are hand-authored SVGs — do not replace them with generic icons or library components. Their visual vocabulary (tapered tower, lattice braces, lamp dome, rays) ties the topbar to the hero. Both use `currentColor`.
+`MiniBeacon` and `HeroBeacon` are hand-authored SVGs — do not replace them with generic icons or library components. Their visual vocabulary (tapered tower, lattice braces, lamp dome, rays) ties the topbar to the hero. `MiniBeacon` uses `currentColor`; `HeroBeacon` hardcodes its palette.
+
+**`MiniBeacon`'s geometry is duplicated** into the icon masters (`discerned-ext/art/icon.svg` and `app/icon.svg`) so the navbar mark and the browser-tab favicon are provably the same drawing. Change the silhouette in one place and you must change it in all of them — see `discerned-ext/CLAUDE.md` → Icon assets.
+
+**Colour lives in CSS, not the component.** `.brand-mark` in `globals.css` sets `color: var(--accent-ink)` (`#1d4ed8` under `body.style-studio`) — the exact navy baked into `app/icon.svg`, so the header and the tab match. Note `--accent-ink` is *also* defined at `:root` as an oklch amber; `style-studio`, which `layout.tsx` applies to every page, is what makes the effective value blue.
+
+## Icons and favicons
+
+`app/favicon.ico`, `app/icon.svg`, and `app/apple-icon.png` are picked up by Next's **file convention** — there is no `metadata.icons` key in `layout.tsx` and none is needed. All three are generated; run `pnpm gen:icons` from `discerned-ext/` (the generator writes into both projects) and read that project's CLAUDE.md for the full pipeline.
+
+All icons are **transparent and full-bleed** — no background tile (a tab strip is near-white in light mode and near-black in dark mode, so an opaque one would show as a coloured square) and the mark is scaled to its own tight bbox so there is no wasted margin.
+
+Two things not to trip over:
+
+- **`public/icons/*.png` is the AZURE variant**, not the navy one the favicon uses. It backs the Nostr profile avatar that `public/.well-known/nostr.json` points at, and Nostr clients are overwhelmingly dark-themed. It is deliberately **not** a byte-mirror of the site favicon.
+- **`art/icon-small.svg` is a build-time source, not a site icon.** It lives outside `app/` on purpose: Next matches icons by filename convention, and a second icon-ish file in `app/` is an easy way to publish a stray one by accident.
 
 ## Common commands
 

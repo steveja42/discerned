@@ -189,10 +189,13 @@ a { color: inherit; }
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+/* Azure to match the browser-tab favicon, which is drawn in this same #1d4ed8.
+   MiniBeacon renders in currentColor, so the colour lives here rather than in the
+   component. --accent-ink (not --accent) is the exact value baked into app/icon.svg. */
 .brand-mark {
   width: 22px; height: 26px;
   display: inline-flex; align-items: center; justify-content: center;
-  color: var(--ink);
+  color: var(--accent-ink);
   align-self: center;
 }
 .brand-mark svg { width: 100%; height: 100%; display: block; }
