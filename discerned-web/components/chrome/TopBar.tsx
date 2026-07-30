@@ -73,16 +73,7 @@ function SearchIcon() {
 export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, searchPlaceholder, searchValue, onSearchChange, extensionPresent }: TopBarProps) {
   const path = usePathname();
   const searchRef = useRef<HTMLInputElement>(null);
-  // The extension's "Manage relays" link deep-links here with ?settings=1 — open
-  // the panel directly rather than dropping the user on the feed to hunt for the
-  // gear. Read from window.location (not useSearchParams) to avoid the Suspense
-  // boundary a static export would otherwise require; same approach as
-  // useNostrAuth's ?signin=1 handling. Guarded for SSR, where the initialiser
-  // also runs and there is no window — the export is static, so the server never
-  // sees the query string anyway and the client resolves it on first render.
-  const [settingsOpen, setSettingsOpen] = useState(
-    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('settings') === '1',
-  );
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // Track the active relay count so the Nostr dot tooltip stays current when the
   // relay mode flips (local ↔ production). Initialised from the env-resolved
   // default (SSR-safe and identical on first client render → no hydration drift).
@@ -94,11 +85,24 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
 
   useEffect(() => onRelayModeChange(() => setRelayCount(getActiveRelays().length)), []);
 
-  // Strip ?settings=1 once it has been consumed above, so a reload or a shared
-  // link doesn't reopen the modal. Purely an external side effect now — the
-  // opening itself is resolved during render.
+  // The extension's "Manage relays" link deep-links here with ?settings=1 — open
+  // the panel directly rather than dropping the user on the feed to hunt for the
+  // gear. Read from window.location (not useSearchParams) to avoid the Suspense
+  // boundary a static export would otherwise require; same approach as
+  // useNostrAuth's ?signin=1 handling. The param is stripped afterwards so a
+  // reload or shared link doesn't reopen the modal.
+  //
+  // This MUST stay in an effect rather than a useState initialiser: the app is a
+  // static export, so the pre-rendered HTML never has the modal open. Opening it
+  // during the first render would not match that markup and React would fail
+  // hydration on the whole subtree.
+  //
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('settings') !== '1') return;
+    /* eslint-disable react-hooks/set-state-in-effect -- see the note above: the
+       post-hydration setState is what keeps the first render matching the HTML. */
+    setSettingsOpen(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
     const url = new URL(window.location.href);
     url.searchParams.delete('settings');
     window.history.replaceState(null, '', url.pathname + url.search + url.hash);

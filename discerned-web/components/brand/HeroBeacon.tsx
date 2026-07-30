@@ -2,6 +2,10 @@
 // Includes radial sky gradient, scattered noise marks, fanned ray polygons, and the beacon tower.
 // Colours are hardcoded to the Editorial palette — do not replace with a raster image.
 
+// Round trig output before it reaches an attribute string: Node and the browser
+// can differ in the last float digit, which React flags as a hydration mismatch.
+const r3 = (n: number) => Math.round(n * 1000) / 1000;
+
 export default function HeroBeacon() {
   const bg1 = '#f6f1e8';
   const bg2 = '#efe4cc';
@@ -42,8 +46,8 @@ export default function HeroBeacon() {
             <line
               key={i}
               x1={x} y1={y}
-              x2={x + Math.cos(ang) * len}
-              y2={y + Math.sin(ang) * len}
+              x2={r3(x + Math.cos(ang) * len)}
+              y2={r3(y + Math.sin(ang) * len)}
             />
           );
         })}
@@ -52,12 +56,12 @@ export default function HeroBeacon() {
       <g opacity="0.85">
         {([-60, -42, -24, -8, 8, 24, 42, 60] as number[]).map((a, i) => {
           const rad = (a - 90) * Math.PI / 180;
-          const x = 400 + Math.cos(rad) * 600;
-          const y = 130 + Math.sin(rad) * 600;
+          const x = r3(400 + Math.cos(rad) * 600);
+          const y = r3(130 + Math.sin(rad) * 600);
           return (
             <polygon
               key={i}
-              points={`400,130 ${x - Math.sin(rad) * 14},${y + Math.cos(rad) * 14} ${x + Math.sin(rad) * 14},${y - Math.cos(rad) * 14}`}
+              points={`400,130 ${r3(x - Math.sin(rad) * 14)},${r3(y + Math.cos(rad) * 14)} ${r3(x + Math.sin(rad) * 14)},${r3(y - Math.cos(rad) * 14)}`}
               fill="url(#hb-ray)"
             />
           );
