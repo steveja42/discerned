@@ -38,6 +38,17 @@ export function authorLabel(pubkey: string, profile?: AuthorProfile): string {
   try { return `${npubEncode(pubkey).slice(0, 12)}…`; } catch { return pubkey.slice(0, 12); }
 }
 
+// Like authorLabel, but also accepts an unverified kind-0 display name. Used by the
+// Publishers filter list, where a self-declared name is a better handle for picking
+// someone out of a list than a truncated npub — the stricter authorLabel stays the
+// rule for attribution shown on a cast itself.
+export function authorDisplayName(pubkey: string, profile?: AuthorProfile): string {
+  if (profile?.verified && profile.nip05) return profile.nip05;
+  const name = profile?.name?.trim();
+  if (name) return name;
+  return authorLabel(pubkey, profile);
+}
+
 export function subscribeAuthorProfiles(
   pubkeys: string[],
   onUpdate: (profiles: Map<string, AuthorProfile>) => void,

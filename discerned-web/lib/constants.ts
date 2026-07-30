@@ -51,6 +51,14 @@ export function matchesSignal(clipSignal: string | undefined, selected: string[]
   return clipSignal !== undefined && selected.includes(clipSignal);
 }
 
+// OR match: clip passes if its author is one of the selected pubkeys. Empty = no filter.
+// Backs the Following + Publishers sidebar lists, which share one selection set — the
+// same person can appear in both, and picking them in either means the same thing.
+export function matchesAuthors(authorPubkey: string | undefined, selected: string[]): boolean {
+  if (selected.length === 0) return true;
+  return authorPubkey !== undefined && selected.includes(authorPubkey);
+}
+
 // Mirrors DEFAULT_RELAYS in discerned-ext/src/shared/types.ts — keep in sync.
 // relay.damus.io retired at the end of July 2026; relay.primal.net replaced it.
 export const DEFAULT_RELAYS = [

@@ -575,6 +575,56 @@ a { color: inherit; }
 .follow .handle { font-family: var(--mono); font-size: 10px; color: var(--ink-4); margin-left: auto; }
 .follows-empty { font-size: 12px; color: var(--ink-4); padding: 6px 8px; line-height: 1.4; }
 
+/* Collapsible sidebar sections (Discerns sidebar only — /clips keeps the plain
+   .side-section-label / .axis-filter-head headings). */
+.side-collapse-head {
+  width: 100%;
+  display: flex; align-items: center; gap: 8px;
+  background: transparent; border: 0; padding: 0;
+  margin-bottom: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color 120ms;
+}
+.side-collapse-head:hover { color: var(--ink-2); }
+.side-collapse-head .side-collapse-title { flex: 1; text-align: left; }
+.side-collapse-head .count { font-family: var(--mono); color: var(--ink-4); }
+.side-collapse-chev {
+  width: 12px; height: 12px;
+  flex-shrink: 0;
+  transition: transform 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.side-collapse-head[aria-expanded="false"] .side-collapse-chev { transform: rotate(-90deg); }
+
+/* Follow/publisher rows are multi-select: several can be active at once, so a
+   selected row gets a left accent bar to read as "checked" rather than "current". */
+.follow { position: relative; }
+.follow.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 6px; bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent-ink, var(--ink));
+}
+.follow:focus-visible {
+  outline: 2px solid var(--accent-ink, var(--ink));
+  outline-offset: -2px;
+}
+
+/* Publisher rows reuse the .follow layout; the discern count sits at the far right. */
+.follow .pub-count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-4);
+  flex-shrink: 0;
+}
+
 /* Filter section */
 .filters { display: flex; flex-direction: column; gap: 18px; }
 .axis-filter { display: flex; flex-direction: column; gap: 8px; }

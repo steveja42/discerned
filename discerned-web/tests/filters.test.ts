@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import {
   matchesSignal,
   matchesQualifiers,
+  matchesAuthors,
   deriveQualifierOptions,
   signalRank,
   BUILTIN_QUALIFIERS,
@@ -61,6 +62,27 @@ describe('matchesQualifiers', () => {
   it('clips without qualifiers fail any active qualifier filter', () => {
     expect(matchesQualifiers([], ['Timeless'])).toBe(false);
     expect(matchesQualifiers(undefined, ['Timeless'])).toBe(false);
+  });
+});
+
+describe('matchesAuthors', () => {
+  const alice = 'a'.repeat(64);
+  const bob = 'b'.repeat(64);
+  const carol = 'c'.repeat(64);
+
+  it('passes everything when no author is selected', () => {
+    expect(matchesAuthors(alice, [])).toBe(true);
+    expect(matchesAuthors(undefined, [])).toBe(true);
+  });
+
+  it('OR-matches across a multi-author selection', () => {
+    expect(matchesAuthors(alice, [alice, bob])).toBe(true);
+    expect(matchesAuthors(bob, [alice, bob])).toBe(true);
+    expect(matchesAuthors(carol, [alice, bob])).toBe(false);
+  });
+
+  it('excludes clips with no author once any author is selected', () => {
+    expect(matchesAuthors(undefined, [alice])).toBe(false);
   });
 });
 
