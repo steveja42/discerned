@@ -3,15 +3,13 @@
   "name": "Discerned",
   "version": "0.2.1",
   "description": "Value Attribution Layer for the Web - Capture, evaluate, and signal content to the Nostr network",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2SlJEy0Dz14OKq1+rXwJQBkZlveUvp5AemDlZ/A9uj0iIQnl/XcdkeLS2lkhIRJj14woamdHGl6s1tLcqzndU4dg6YAaxqRrCtvld97FjuuDWS2jyWELZ6k4WFg3NnC3t3XfsYuBjVWMAUSIXvgIFQK9bTrHcFbcJQkuwFIM6qsQ2LCsnxDhhtvK5l37KWhgwCnNc7aEpjB2xJsbMFQgmzoEEfIoKdLIIHVReTmaIQnXqfveJitK3YjHkY7KfMQnMxASJ2fu5BKQlOi+n1Da+RlVKb5odgmoUf2ZdEyePXmQp5vykoMJF15IPfFzKnwvuyNKIOk3PE4aKgm52YVHCwIDAQAB",
   "permissions": [
     "contextMenus",
     "storage",
     "activeTab",
     "tabs",
     "scripting",
-    "webNavigation",
-    "alarms"
+    "webNavigation"
   ],
   "host_permissions": [
     "<all_urls>"

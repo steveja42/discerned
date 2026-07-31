@@ -21,9 +21,14 @@ export const LL = {
  * REMOTE_LOGGING toggle
  * ─────────────────────
  * true  → logs from popup/background are relayed to the active tab so VSCode sees them
- * false → bridge is a no-op; only local console calls fire (set before publishing to Web Store)
+ * false → bridge is a no-op; only local console calls fire
+ *
+ * MUST be false in any build shipped to the Chrome Web Store. When true, background
+ * and popup logs are broadcast via chrome.tabs.sendMessage into whatever page the user
+ * is currently viewing — captured content, URLs and auth-flow details would land in
+ * arbitrary third-party sites' console context. Flip to true only for local debugging.
  */
-const REMOTE_LOGGING = true;
+const REMOTE_LOGGING = false;
 
 const LEVELS: LogLevel[] = ['log', 'warn', 'error', 'info', 'debug'];
 
@@ -157,8 +162,12 @@ export function relayLog(level: LogLevel, source: LogSource, serialized: string[
 /**
  * Minimum numeric level that will be emitted. Raise to suppress verbose output.
  * LL.TRACE=0, DEBUG=1, NORMAL=2, WARN=3, ERROR=4
+ *
+ * WARN is the shipping default: captured page content, URLs and auth details flow
+ * through NORMAL/DEBUG calls, and content-script logs land in the visited page's own
+ * console where any site script can read them. Lower it locally when debugging.
  */
-let activeLogLevel: AppLogLevel = LL.NORMAL;
+let activeLogLevel: AppLogLevel = LL.WARN;
 
 export function setLogLevel(level: AppLogLevel): void {
   activeLogLevel = level;
