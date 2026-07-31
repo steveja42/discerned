@@ -59,7 +59,9 @@ test.describe('extension capture pipeline', () => {
           });
         }, { format: fx.expected.format, hostOverride: fx.hostOverride });
 
-        matchExpected(cap as Parameters<typeof matchExpected>[0], fx.expected);
+        // fx.url is the local fixture-server URL the page was actually served
+        // from — not the sidecar's `url`, which is the location to simulate.
+        matchExpected(cap as Parameters<typeof matchExpected>[0], fx.expected, fx.url);
       } finally {
         await ctx.close();
       }

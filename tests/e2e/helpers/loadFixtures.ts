@@ -8,13 +8,31 @@ import type { ExpectedCapture } from './matchExpected';
 export const FIXTURE_ROOT = resolve(__dirname, '..', '..', 'fixtures', 'sites');
 export const CLIPS_ROOT = resolve(__dirname, '..', '..', 'fixtures', 'clips');
 
+export const FIXTURE_ORIGIN = 'http://127.0.0.1:4173';
+
 export interface SiteFixture {
   htmlName: string;        // e.g. "blog-post.html"
-  url: string;             // http://127.0.0.1:4173/blog-post.html
+  url: string;             // http://127.0.0.1:4173/blog-post.html — where to NAVIGATE
   hostOverride?: string;   // e.g. "www.reddit.com" — fires the real site tagger
   expected: ExpectedCapture;
 }
 
+/**
+ * The sidecar's `url` is the location to SIMULATE, not a navigation target. The
+ * Vitest suite fakes `window.location` with it (see
+ * discerned-ext/tests/helpers/loadFixture.ts), so fixtures whose capture path
+ * branches on hostname — Amazon entity pages, YouTube, AP — legitimately carry
+ * their real source URL there.
+ *
+ * Playwright must NOT navigate to that: this suite is the deterministic offline
+ * gate, and loading the live site asserts a saved snapshot's expectations
+ * against today's web (apnews/amazon/dev.to fixtures all failed that way, and
+ * hackernews/x-status passed only by luck). Hostname-dependence is handled by
+ * `hostOverride` instead — that mechanism exists precisely so the real tagger
+ * fires against the 127.0.0.1-served file.
+ *
+ * So the navigation target is derived from the FILENAME, always local.
+ */
 export function loadSiteFixtures(): SiteFixture[] {
   return readdirSync(FIXTURE_ROOT)
     .filter((f) => f.endsWith('.html'))
@@ -22,7 +40,12 @@ export function loadSiteFixtures(): SiteFixture[] {
       const htmlName = basename(file);
       const sidecar = resolve(FIXTURE_ROOT, `${htmlName.replace(/\.html$/, '')}.expected.json`);
       const expected = JSON.parse(readFileSync(sidecar, 'utf8')) as ExpectedCapture;
-      return { htmlName, url: expected.url, hostOverride: expected.hostOverride, expected };
+      return {
+        htmlName,
+        url: `${FIXTURE_ORIGIN}/${htmlName}`,
+        hostOverride: expected.hostOverride,
+        expected,
+      };
     });
 }
 

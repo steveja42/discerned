@@ -2,6 +2,7 @@
   "format": "article",
   "title": { "contains": "Havana" },
   "url": "https://x.com/CIA/status/2055074954375254084",
+  "hostOverride": "x.com",
   "bodyText": {
     "minLength": 10,
     "contains": ["Havana, Cuba", "@CIA"]

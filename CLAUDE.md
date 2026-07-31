@@ -84,7 +84,7 @@ The repo has a multi-layer test suite covering both sub-projects and the full cl
 - Both projects use `jsdom` env. The extension's `tests/setup.ts` shims `chrome.runtime` and silences the extension logger to `WARN`.
 
 ### Layer 2: Playwright e2e (at repo root)
-- `tests/e2e/extension.spec.ts` — real Chromium loads `discerned-ext/dist-test/`, drives each fixture page, asserts Capture matches the `.expected.json` sidecar.
+- `tests/e2e/extension.spec.ts` — real Chromium loads `discerned-ext/dist-test/`, drives each fixture page, asserts Capture matches the `.expected.json` sidecar. **Always offline**: the navigation target is derived from the fixture FILENAME (`http://127.0.0.1:4173/<name>.html`), never from the sidecar's `url`. That field is the location to **simulate** — the Vitest suite fakes `window.location` with it, so fixtures whose capture path branches on hostname (Amazon, YouTube, AP) legitimately carry their real source URL. Navigating to it instead made 9 fixtures load the LIVE site and assert a saved snapshot's expectations against today's web (7 failed; hackernews + x-status passed only by luck). Hostname-dependence belongs in `hostOverride`, which exists precisely so the real tagger/Tier-0 path fires against the local file. Real live testing is `live.spec.ts` — opt-in via `LIVE=1`, its own project and URL list.
 - `tests/e2e/web-rendering.spec.ts` — injects fixture clips through real postMessage bridge into `/clips`, asserts `<ClipRow>` rendering.
 - `tests/e2e/web-feed.spec.ts` — uses `page.routeWebSocket` to mock the Nostr relay and verify public feed rendering.
 - `tests/e2e/end-to-end.spec.ts` — full pipeline: capture → real CLIP handler → IndexedDB → bridge → `/clips` rendering.

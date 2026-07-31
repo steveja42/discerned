@@ -41,9 +41,22 @@ const JS_HREF_RE  = /=\s*["']?\s*javascript\s*:/i;
 const IFRAME_RE   = /<iframe[\s>]/i;
 const FORM_RE     = /<form[\s>]/i;
 
-export function matchExpected(cap: CapturePartial, exp: ExpectedCapture): void {
+/**
+ * `expectedUrl` overrides the sidecar's `url` for the location assertion. The
+ * sidecar records the URL to SIMULATE (what the Vitest suite fakes
+ * `window.location` with — often the real source URL, since the capture path
+ * branches on hostname). Under Playwright the page is really served from
+ * 127.0.0.1, so the spec passes the served URL here. Omit it and the sidecar
+ * value is used, which is right for any caller whose capture genuinely
+ * happened at `exp.url`.
+ */
+export function matchExpected(
+  cap: CapturePartial,
+  exp: ExpectedCapture,
+  expectedUrl?: string,
+): void {
   expect(cap.format, 'format').toBe(exp.format);
-  expect(cap.url, 'url').toBe(exp.url);
+  expect(cap.url, 'url').toBe(expectedUrl ?? exp.url);
 
   if (exp.title?.equals !== undefined) expect(cap.title).toBe(exp.title.equals);
   if (exp.title?.contains !== undefined) expect(cap.title).toContain(exp.title.contains);
