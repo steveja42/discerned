@@ -307,7 +307,11 @@ ${themeVarsBlock(theme)}
         animation: in .25s ease;
       }
       @keyframes in { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:none } }
-      .title { font-size: 13px; font-weight: 600; color: var(--p-danger); margin-bottom: 4px; }
+      .title { font-size: 13px; font-weight: 600; color: var(--p-danger);
+               margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+      /* ICON_CAST carries .seg-icon (15px, sized for the overlay slider) — re-size for
+         this toast. currentColor gives it the title's danger red. */
+      .title .seg-icon { width: 14px; height: 14px; flex: none; }
       .body  { font-size: 12px; color: var(--p-ink-3); }
       .close {
         position: absolute; top: 6px; right: 6px;
@@ -319,7 +323,7 @@ ${themeVarsBlock(theme)}
     </style>
     <div class="toast">
       <button class="close" type="button" aria-label="Dismiss">×</button>
-      <div class="title">📡 Cast failed</div>
+      <div class="title">${DiscernedOverlay.ICON_CAST}Cast failed</div>
       <div class="body">${esc(message)}</div>
     </div>
   `;

@@ -979,8 +979,8 @@ ${themeVarsBlock(this.effectiveTheme)}
           ${authBlock}
           <div class="settings-card">
             <div class="card-label">Usage</div>
-            <button class="usage-row usage-row-link" id="open-library-btn"><span>📥 Local clips</span><span class="usage-value" id="clip-count">—</span></button>
-            <div class="usage-row"><span>📡 Public casts</span><span class="usage-value" id="cast-count">—</span></div>
+            <button class="usage-row usage-row-link" id="open-library-btn"><span class="usage-label"><span class="status-icon">${DiscernedOverlay.ICON_CLIP}</span>Local clips</span><span class="usage-value" id="clip-count">—</span></button>
+            <div class="usage-row"><span class="usage-label"><span class="status-icon">${DiscernedOverlay.ICON_CAST}</span>Public casts</span><span class="usage-value" id="cast-count">—</span></div>
           </div>
           <div class="settings-card">
             <div class="card-label">Appearance</div>
@@ -1308,7 +1308,7 @@ ${themeVarsBlock(this.effectiveTheme)}
                 <button class="slider-seg${this.publishMode === 'both' ? ' active' : ''}"
                         id="seg-both" role="radio" aria-checked="${this.publishMode === 'both'}"
                         ${!isConnected ? 'disabled' : ''}
-                        title="Save locally and publish to Nostr — your clip is public and signed with your identity">${DiscernedOverlay.ICON_CLIP}${DiscernedOverlay.ICON_CAST}Both</button>
+                        title="Save locally and publish to Nostr — your clip is public and signed with your identity">${DiscernedOverlay.ICON_CAST}${DiscernedOverlay.ICON_CLIP}Both</button>
                 <button class="slider-seg${this.publishMode === 'local' ? ' active' : ''}"
                         id="seg-local" role="radio" aria-checked="${this.publishMode === 'local'}"
                         title="Keep local — stored only on this device, not published">${DiscernedOverlay.ICON_CLIP}Clip</button>
@@ -1799,12 +1799,14 @@ ${themeVarsBlock(this.effectiveTheme)}
       try { await this.opts.onClip(captureWithNote, evaluation); }
       catch { this.showError('Failed to clip. Please try again.'); return; }
       this.removePreview();
-      this.showSuccess('Clipped! 📥', { clipId: captureWithNote.id });
+      this.showSuccess('Clipped!', { clipId: captureWithNote.id, icon: DiscernedOverlay.ICON_CLIP });
 
     } else if (mode === 'cast') {
       // CAST only publishes to Nostr; local save requires an explicit CLIP action.
       this.removePreview();
-      await this.publishWithUnlock(() => this.opts!.onCast(captureWithNote, evaluation), '📡 Casting…');
+      // No glyph: showLoading writes via textContent (no markup), and the spinner
+      // beside it already carries "in progress".
+      await this.publishWithUnlock(() => this.opts!.onCast(captureWithNote, evaluation), 'Casting…');
 
     } else {
       // both: explicit local save first (idempotent double-save is safe), then publish.
@@ -1813,7 +1815,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       this.removePreview();
       await this.publishWithUnlock(
         () => this.opts!.onCast(captureWithNote, evaluation),
-        'Clipped! 📡 Casting…',
+        'Clipped! Casting…',
         captureWithNote.id,
       );
     }
@@ -1838,14 +1840,21 @@ ${themeVarsBlock(this.effectiveTheme)}
     loadingText: string,
     clipId?: string,
   ): Promise<void> {
+    // Both-mode shows both glyphs in the same cast-then-clip order as the Both button.
     const succeed = (eventId?: string) =>
-      this.showSuccess(clipId ? 'Clipped & cast 📡' : 'Cast published 📡', { clipId, eventId });
+      this.showSuccess(clipId ? 'Clipped & cast' : 'Cast published', {
+        clipId,
+        eventId,
+        icon: clipId
+          ? `${DiscernedOverlay.ICON_CAST}${DiscernedOverlay.ICON_CLIP}`
+          : DiscernedOverlay.ICON_CAST,
+      });
 
     if (this.needsUnlock()) {
       const unlocked = await this.promptUnlockInLoading();
       if (!unlocked) {
         // User cancelled — keep the local clip (both mode) but report no publish.
-        if (clipId) this.showSuccess('Clipped · not cast', { clipId });
+        if (clipId) this.showSuccess('Clipped · not cast', { clipId, icon: DiscernedOverlay.ICON_CLIP });
         else this.showError('Cast cancelled — your key is still locked.');
         return;
       }
@@ -1859,7 +1868,7 @@ ${themeVarsBlock(this.effectiveTheme)}
         // SW was recycled between the pre-check and signing — prompt then retry once.
         const unlocked = await this.promptUnlockInLoading();
         if (!unlocked) {
-          if (clipId) this.showSuccess('Clipped · not cast', { clipId });
+          if (clipId) this.showSuccess('Clipped · not cast', { clipId, icon: DiscernedOverlay.ICON_CLIP });
           else this.showError('Cast cancelled — your key is still locked.');
           return;
         }
@@ -1876,7 +1885,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       }
       // Local clip already saved (both mode) — surface the failure but keep the link.
       // Name the likely cause: this is usually the signer declining, which the user can fix.
-      if (clipId) this.showSuccess('Clipped · cast failed', { clipId });
+      if (clipId) this.showSuccess('Clipped · cast failed', { clipId, icon: DiscernedOverlay.ICON_CLIP });
       else this.showError('Cast failed — your signer may have declined or timed out.');
     }
   }
@@ -1955,16 +1964,25 @@ ${themeVarsBlock(this.effectiveTheme)}
     if (p) p.textContent = text;
   }
 
-  private showSuccess(message: string, opts: { clipId?: string; eventId?: string } = {}) {
+  /**
+   * `icon` takes RAW markup and is the one field here that bypasses escaping — pass
+   * ONLY the static ICON_* constants below, never anything derived from a capture,
+   * a relay response, or a signer error. `message` stays escaped.
+   */
+  private showSuccess(
+    message: string,
+    opts: { clipId?: string; eventId?: string; icon?: string } = {},
+  ) {
     const loading = this.shadow.getElementById('loading');
     if (!loading) return;
-    const { clipId, eventId } = opts;
+    const { clipId, eventId, icon } = opts;
     const libraryBtn = clipId
       ? `<button class="open-library-btn">View in My Clips →</button>` : '';
     const discernBtn = eventId
       ? `<button class="open-discern-btn">View in Discerns →</button>` : '';
     const links = [libraryBtn, discernBtn].filter(Boolean).join('<br>');
-    loading.innerHTML = `<div class="success">✓ ${this.escapeHtml(message)}${links ? `<br>${links}` : ''}<br><button class="dismiss-btn">Dismiss</button></div>`;
+    const glyph = icon ? `<span class="status-icon">${icon}</span>` : '✓';
+    loading.innerHTML = `<div class="success">${glyph} ${this.escapeHtml(message)}${links ? `<br>${links}` : ''}<br><button class="dismiss-btn">Dismiss</button></div>`;
     if (clipId) {
       loading.querySelector('.open-library-btn')?.addEventListener('click', () => {
         chrome.runtime.sendMessage({ type: 'OPEN_LIBRARY', clipId }).catch(() => {});
@@ -1993,12 +2011,14 @@ ${themeVarsBlock(this.effectiveTheme)}
     return 'CLIP';
   }
 
-  // Monochrome line icons for the publish-mode slider. Stroke uses currentColor so
-  // they follow the segment text colour (muted when inactive, white when active).
-  private static readonly ICON_CAST =
+  // Monochrome line icons for the publish-mode slider, the result messages, and the
+  // settings usage rows. Stroke uses currentColor so they follow the surrounding text
+  // colour — muted/white on the slider, success amber or error red in a status line.
+  // Public because content.ts's cast-error toast renders in its own shadow root.
+  static readonly ICON_CAST =
     `<svg class="seg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
     `<path d="M4.9 19.1A10 10 0 0 1 4.9 5M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M19.1 4.9a10 10 0 0 1 0 14.2"/><circle cx="12" cy="12" r="1.5"/></svg>`;
-  private static readonly ICON_CLIP =
+  static readonly ICON_CLIP =
     `<svg class="seg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
     `<path d="M21 11.5l-8.8 8.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>`;
 
@@ -2510,6 +2530,8 @@ ${themeVarsBlock(this.effectiveTheme)}
       .usage-row-link:hover { background: var(--p-surface-2); color: var(--p-ink); }
       .usage-row-link:hover .usage-value { color: var(--p-accent-ink); }
       .usage-value { color: var(--p-ink); font-weight: 600; }
+      /* Icon + text as one flex item so space-between still pushes the count right. */
+      .usage-label { display: inline-flex; align-items: center; gap: 6px; }
       .pin-unlock summary { font-size: 12px; color: var(--p-ink-3); cursor: pointer; }
       .pin-row { display: flex; gap: 6px; margin-top: 6px; }
       .pin-row input { flex: 1; background: var(--p-surface); border: 1px solid var(--p-rule); color: var(--p-ink); font-size: 12px; padding: 6px 8px; outline: none; }
@@ -2547,6 +2569,15 @@ ${themeVarsBlock(this.effectiveTheme)}
       .loading p { color: var(--p-ink-2); font-size: 14px; }
       .success { color: var(--p-accent-ink); font-size: 18px; font-weight: 600; font-family: var(--p-mono); }
       .error   { color: var(--p-danger); font-size: 18px; font-weight: 600; font-family: var(--p-mono); }
+      /* Inline ICON_CAST / ICON_CLIP beside status text and in the settings usage rows.
+         They carry .seg-icon (sized 15px for the slider), so re-size here and win on
+         specificity. currentColor means they take the success amber / error red of the
+         line they sit in — which an emoji could never do. */
+      .status-icon { display: inline-flex; align-items: center; vertical-align: -0.12em; }
+      .status-icon .seg-icon { width: 1em; height: 1em; flex: none; }
+      /* Both-mode pairs two glyphs; overlap slightly so they read as one unit,
+         matching #seg-both on the slider. */
+      .status-icon .seg-icon + .seg-icon { margin-left: -0.13em; }
       .open-library-btn, .open-discern-btn {
         margin-top: 10px; background: none; border: none; padding: 0;
         color: var(--p-accent-ink); font-size: 13px; cursor: pointer; text-decoration: underline;
