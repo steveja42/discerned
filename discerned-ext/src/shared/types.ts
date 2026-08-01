@@ -35,7 +35,7 @@ export const SIGNAL_LEVELS = ['Toxic', 'Noise', 'Passable', 'Worthwhile', 'Maste
 export const SIGNAL_DESCRIPTIONS: Record<SignalLevel, string> = {
   Toxic: '1 ★ — Outright fraud, dangerous disinformation, or malicious propaganda.',
   Noise: '2 ★ — Clickbait, low-effort engagement bait, or highly manipulative spin.',
-  Passable: '3 ★ — Mediocre or casual. Fine for a quick glance, but mostly superficial filler.',
+  Passable: '3 ★ — Fine for a quick glance. Nothing wrong with it, but nothing that stays with you.',
   Worthwhile: '4 ★ — Solid, high-signal content. It delivered exactly what it promised.',
   Masterpiece: '5 ★ — Exceptional execution. Flawless utility, deep wisdom, or elite artistic craft.',
 };

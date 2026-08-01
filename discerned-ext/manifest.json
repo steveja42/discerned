@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Discerned",
   "version": "0.2.1",
-  "description": "Value Attribution Layer for the Web - Capture, evaluate, and signal content to the Nostr network",
+  "description": "Web clipper with ratings and publishing. Rate what's worth reading, keep a private library, publish to Nostr when you choose.",
   "permissions": [
     "contextMenus",
     "storage",

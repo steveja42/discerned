@@ -1,10 +1,67 @@
 # Chrome Web Store submission — permission justifications & disclosures
 
-Reference copy of what goes into the Web Store submission form. Keep in sync with
-`manifest.json`; if a permission is added or removed, update the matching section here
-**and** re-check the privacy policy at `discerned-web/app/privacy/page.tsx`.
+**This file is a paste-source, not a submission.** No reviewer ever sees it. Everything
+below is text to copy into the Web Store dashboard form (and the uploaded package is the
+only other thing review looks at). Keep in sync with `manifest.json`; if a permission is
+added or removed, update the matching section here **and** re-check the privacy policy at
+`discerned-web/app/privacy/page.tsx`.
 
 Privacy policy URL: **https://discerned.online/privacy**
+
+Listing copy that lives elsewhere: the **short description** is `manifest.json`'s
+`description` field (132 char max) and auto-populates the listing summary. Every
+user-facing string in the extension is catalogued in [UI-TEXT.md](UI-TEXT.md).
+
+---
+
+## Detailed description (Store listing tab)
+
+The long listing field — up to 16,000 characters, typed into the dashboard, not in the
+manifest. Plain text with basic line breaks; the Store strips most formatting.
+
+**Claim discipline applies here as much as in-product** (see [UI-TEXT.md](UI-TEXT.md)): clips
+are NOT encrypted at rest, so nothing below says "encrypted", "secure", or pairs a
+padlock with local storage. Discerned has no follow graph and no reputation score, so
+neither is promised — ownership and portability are attributed to Nostr, which does
+deliver them. Don't add "you own your social graph" here; it isn't true of this extension
+today.
+
+> ## Turn your daily reading into signal worth keeping.
+>
+> Most read-later tools are a graveyard. You save an article, and that's the last you
+> think about it. Discerned adds the step that actually matters: you rate what you read,
+> so your library becomes a record of what was worth your time — and so does anyone
+> else's, if they choose to publish.
+>
+> **CLIP AND RATE WHAT MATTERS**
+> • Save full articles, a text selection, or a plain bookmark in one click.
+> • Score it on a five-level Signal rating, from "Toxic" to "Masterpiece".
+> • Tag it by tone, utility, and longevity — or add your own qualifiers.
+> • Sort into categories, with your own alongside the built-in ones.
+>
+> **LOCAL-FIRST, NO ACCOUNT REQUIRED**
+> • Your clips and ratings are stored on your own device, not on a server.
+> • There is no Discerned account, and no sign-up to start clipping.
+> • We run no backend and receive none of your data — there is nothing to receive it.
+> • Export your whole library as JSON whenever you want.
+>
+> **PUBLISH TO NOSTR WHEN YOU CHOOSE**
+> • Publishing is entirely opt-in, and off until you connect an identity.
+> • Connect however you like: a signing extension (Alby, nos2x), a remote signer over
+>   bunker://, or your own key stored behind a PIN.
+> • Published ratings are signed with your key, so they're verifiably yours.
+> • Nostr is an open social network: you own your identity and your posts, they work
+>   across every Nostr app, and no company can take them away.
+>
+> **CAPTURE THAT LOOKS LIKE WHAT YOU READ**
+> Discerned reproduces the page's real structure — headline, byline, images, comment
+> threads — rather than flattening it into plain text. Sites that defeat ordinary
+> clippers (Reddit, YouTube, Stack Overflow, Bluesky, Hacker News, and other
+> JavaScript-heavy layouts) have dedicated handling so the clip resembles the page you
+> were actually looking at.
+>
+> Stop saving articles to a read-later graveyard. Start keeping a record of what was
+> worth reading.
 
 ---
 
@@ -129,6 +186,8 @@ Verified for the current build:
 - [x] No sourcemaps in the production build
 - [x] No test hooks (`__DISCERNED_TEST_*`) in the production build
 - [x] `pnpm type-check`, `pnpm lint`, `pnpm test` all clean
+- [x] Short description written (`manifest.json` `description`, 124/132 chars)
+- [x] Detailed description drafted (see the Store listing section above)
 - [ ] Privacy policy **deployed** and reachable at https://discerned.online/privacy
 - [ ] Screenshots (1280×800 or 640×400) — at least one, up to five
 - [ ] Small promo tile (440×280)

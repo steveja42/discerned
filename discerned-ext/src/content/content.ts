@@ -261,7 +261,7 @@ async function handleCast(capture: Capture, evaluation: Evaluation): Promise<str
     // PIN_REQUIRED means the stored key is locked — the overlay handles this with
     // an inline unlock prompt + auto-retry, so don't also surface a red toast.
     if (!(error instanceof Error && error.message === 'PIN_REQUIRED')) {
-      void showCastErrorToast(error instanceof Error ? error.message : 'Broadcast failed');
+      void showCastErrorToast(error instanceof Error ? error.message : 'Cast failed');
     }
     throw error;
   }
@@ -319,7 +319,7 @@ ${themeVarsBlock(theme)}
     </style>
     <div class="toast">
       <button class="close" type="button" aria-label="Dismiss">×</button>
-      <div class="title">📡 Broadcast failed</div>
+      <div class="title">📡 Cast failed</div>
       <div class="body">${esc(message)}</div>
     </div>
   `;

@@ -396,15 +396,18 @@ ${themeVarsBlock(this.effectiveTheme)}
 
   private renderGate() {
     const signerDetected = this.authState.type === 'pro' && !this.authState.pubkey;
-    const icon = signerDetected ? '🔑' : '🌐';
-    const title = signerDetected ? 'Signing extension detected' : 'Local Only';
+    const icon = signerDetected ? '🔑' : '🔒';
+    const title = signerDetected ? "You're one click from publishing" : 'Start local, publish when ready';
+    // "Stays on this device" is literal — clips are NOT encrypted at rest (the
+    // IndexedDB row's `encrypted` field holds plaintext JSON; NIP-44 is stubbed),
+    // so nothing here may imply encryption.
     const desc = signerDetected
-      ? `We found your Nostr signing extension. Sign in to broadcast your clips publicly,
-         build a verifiable reputation, and join the Open Social Web. Or stay local-only —
-         your clips will be stored on this device.`
-      : `Your clips and evaluations will be stored locally. Connect an identity to also broadcast publicly,
-         build a verifiable reputation, and be part of the Open Social Web (Nostr).`;
-    const primaryLabel = signerDetected ? 'Sign in →' : 'Connect an identity →';
+      ? `Your Nostr signing extension is ready. Sign in to publish your ratings under your own
+         identity — they'll appear in any Nostr client, to the people who already follow you.`
+      : `Your clips and ratings stay on this device. Connect a Nostr identity to publish them —
+         Nostr is an open social network where you own your identity and your posts, and no
+         company can take them away.`;
+    const primaryLabel = signerDetected ? 'Sign in →' : 'Connect a Nostr identity →';
 
     this.shadow.innerHTML = `
       <style>${this.getStyles()}</style>
@@ -420,7 +423,7 @@ ${themeVarsBlock(this.effectiveTheme)}
           <p class="gate-title">${title}</p>
           <p class="gate-desc">${desc}</p>
           <button class="btn btn-primary gate-btn" id="gate-connect">${primaryLabel}</button>
-          <button class="btn btn-ghost gate-btn" id="gate-clip-only">Store locally (no broadcast)</button>
+          <button class="btn btn-ghost gate-btn" id="gate-clip-only">Not now — keep clips on this device</button>
         </div>
       </div>
     `;
@@ -869,9 +872,9 @@ ${themeVarsBlock(this.effectiveTheme)}
     if (auth.type === 'guest') {
       authBlock = `
         <div class="settings-card warning">
-          <div class="card-title">Local Only</div>
-          <div class="card-desc">Your evaluations are stored locally. Connect an identity to cast them publicly.</div>
-          <button class="btn btn-primary" id="settings-connect">Connect an identity →</button>
+          <div class="card-title">Publishing not set up</div>
+          <div class="card-desc">Your clips and ratings stay on this device. Connect a Nostr identity to publish them publicly.</div>
+          <button class="btn btn-primary" id="settings-connect">Connect a Nostr identity →</button>
         </div>
       `;
     } else if (auth.type === 'pro') {
@@ -917,7 +920,7 @@ ${themeVarsBlock(this.effectiveTheme)}
           <div class="card-row">
             <div>
               <div class="card-label">Status</div>
-              <div class="card-value ok">Connected via email login</div>
+              <div class="card-value ok">Connected via remote signer</div>
             </div>
             <button class="link-btn" id="settings-disconnect">Disconnect</button>
           </div>
@@ -976,7 +979,7 @@ ${themeVarsBlock(this.effectiveTheme)}
           ${authBlock}
           <div class="settings-card">
             <div class="card-label">Usage</div>
-            <button class="usage-row usage-row-link" id="open-library-btn"><span>🔒 Local clips</span><span class="usage-value" id="clip-count">—</span></button>
+            <button class="usage-row usage-row-link" id="open-library-btn"><span>📥 Local clips</span><span class="usage-value" id="clip-count">—</span></button>
             <div class="usage-row"><span>📡 Public casts</span><span class="usage-value" id="cast-count">—</span></div>
           </div>
           <div class="settings-card">
@@ -1557,7 +1560,7 @@ ${themeVarsBlock(this.effectiveTheme)}
           <div class="qual-group-label">Custom</div>
           <div class="qual-chips" id="custom-qual-chips">
             ${this.customQualifiers.map(chip).join('')}
-            <input type="text" id="qual-input" class="qual-input" placeholder="+ add" maxlength="40" autocomplete="off" spellcheck="false" />
+            <input type="text" id="qual-input" class="qual-input" placeholder="+ add custom tag" maxlength="40" autocomplete="off" spellcheck="false" />
           </div>
         </div>
       </div>
@@ -1796,21 +1799,21 @@ ${themeVarsBlock(this.effectiveTheme)}
       try { await this.opts.onClip(captureWithNote, evaluation); }
       catch { this.showError('Failed to clip. Please try again.'); return; }
       this.removePreview();
-      this.showSuccess('Clipped! 🔒', { clipId: captureWithNote.id });
+      this.showSuccess('Clipped! 📥', { clipId: captureWithNote.id });
 
     } else if (mode === 'cast') {
       // CAST only publishes to Nostr; local save requires an explicit CLIP action.
       this.removePreview();
-      await this.broadcastWithUnlock(() => this.opts!.onCast(captureWithNote, evaluation), '📡 Broadcasting…');
+      await this.publishWithUnlock(() => this.opts!.onCast(captureWithNote, evaluation), '📡 Casting…');
 
     } else {
-      // both: explicit local save first (idempotent double-save is safe), then broadcast.
+      // both: explicit local save first (idempotent double-save is safe), then publish.
       try { await this.opts.onClip(captureWithNote, evaluation); }
       catch { this.showError('Failed to clip. Please try again.'); return; }
       this.removePreview();
-      await this.broadcastWithUnlock(
+      await this.publishWithUnlock(
         () => this.opts!.onCast(captureWithNote, evaluation),
-        'Clipped! 📡 Broadcasting…',
+        'Clipped! 📡 Casting…',
         captureWithNote.id,
       );
     }
@@ -1822,15 +1825,15 @@ ${themeVarsBlock(this.effectiveTheme)}
   }
 
   /**
-   * Run a broadcast, unlocking a stored key first if needed. A stored key (nsec)
+   * Run a publish, unlocking a stored key first if needed. A stored key (nsec)
    * can be locked because the decrypted key lives only in the background SW's
    * memory and Chrome recycles the SW aggressively. Two paths land here:
-   *  - pre-check: `needsUnlock()` is already true → prompt before broadcasting.
+   *  - pre-check: `needsUnlock()` is already true → prompt before publishing.
    *  - mid-cast race: the SW dies between the pre-check and the sign call, so the
    *    cast rejects with `PIN_REQUIRED` → prompt, then auto-retry once unlocked.
    * `clipId` (set in `both` mode) keeps the "View in Clips" link on the result.
    */
-  private async broadcastWithUnlock(
+  private async publishWithUnlock(
     cast: () => Promise<string | undefined>,
     loadingText: string,
     clipId?: string,
@@ -1841,9 +1844,9 @@ ${themeVarsBlock(this.effectiveTheme)}
     if (this.needsUnlock()) {
       const unlocked = await this.promptUnlockInLoading();
       if (!unlocked) {
-        // User cancelled — keep the local clip (both mode) but report no broadcast.
-        if (clipId) this.showSuccess('Clipped 🔒 · not broadcast', { clipId });
-        else this.showError('Broadcast cancelled — key locked.');
+        // User cancelled — keep the local clip (both mode) but report no publish.
+        if (clipId) this.showSuccess('Clipped · not cast', { clipId });
+        else this.showError('Cast cancelled — your key is still locked.');
         return;
       }
     }
@@ -1856,8 +1859,8 @@ ${themeVarsBlock(this.effectiveTheme)}
         // SW was recycled between the pre-check and signing — prompt then retry once.
         const unlocked = await this.promptUnlockInLoading();
         if (!unlocked) {
-          if (clipId) this.showSuccess('Clipped 🔒 · not broadcast', { clipId });
-          else this.showError('Broadcast cancelled — key locked.');
+          if (clipId) this.showSuccess('Clipped · not cast', { clipId });
+          else this.showError('Cast cancelled — your key is still locked.');
           return;
         }
         this.showLoading(loadingText);
@@ -1872,8 +1875,9 @@ ${themeVarsBlock(this.effectiveTheme)}
         log(LL.WARN, 'Discerned: cast failed', err instanceof Error ? err.message : err);
       }
       // Local clip already saved (both mode) — surface the failure but keep the link.
-      if (clipId) this.showSuccess('Clipped 🔒 · broadcast failed', { clipId });
-      else this.showError('Broadcast failed. Please try again.');
+      // Name the likely cause: this is usually the signer declining, which the user can fix.
+      if (clipId) this.showSuccess('Clipped · cast failed', { clipId });
+      else this.showError('Cast failed — your signer may have declined or timed out.');
     }
   }
 
