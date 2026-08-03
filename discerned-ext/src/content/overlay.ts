@@ -118,6 +118,19 @@ export class DiscernedOverlay {
     }
 
     this.outsideClickHandler = (e: PointerEvent) => {
+      // Only a REAL user click dismisses the overlay. `isTrusted` is false for
+      // any event a page dispatches itself, and a page-dispatched pointerdown
+      // should never be able to throw away an evaluation the user is part-way
+      // through — hide() is destructive (it drops the typed note and rating).
+      //
+      // Hardening, NOT a diagnosed fix. Verified: one dispatched PointerEvent
+      // does tear the overlay down without this guard. NOT verified: that any
+      // real site actually does this. A 60s instrumented watch of msn.com
+      // (dispatchEvent + .click() wrapped, capture-phase listeners on
+      // pointer/mouse/click) recorded ZERO untrusted events, so the reported
+      // sporadic MSN dismissal is still UNEXPLAINED — don't treat this as its
+      // root cause, and keep looking if it recurs.
+      if (!e.isTrusted) return;
       if (!e.composedPath().includes(this.host) && !this.previewHost?.contains(e.target as Node)) this.hide();
     };
     document.addEventListener('pointerdown', this.outsideClickHandler);
