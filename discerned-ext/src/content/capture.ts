@@ -109,6 +109,29 @@ function querySelectorAllDeep(root: ParentNode, selector: string): Element[] {
   return out;
 }
 
+/**
+ * closest() that escapes OPEN shadow roots. Native closest() stops dead at the
+ * first shadow boundary, so an ancestor test fails for any element rendered
+ * inside a web component — on shadow-heavy sites (MSN puts the whole page
+ * behind ~350 shadow hosts) that silently returns null and an ancestor-based
+ * guard never fires. Walks up parentElement, hopping to the host when it runs
+ * out of parents inside a shadow root.
+ */
+function closestDeep(el: Element, selector: string): Element | null {
+  let cur: Element | null = el;
+  while (cur) {
+    try { if (cur.matches(selector)) return cur; }
+    catch { return null; } // invalid selector on this engine
+    const parent: Element | null = cur.parentElement;
+    if (parent) { cur = parent; continue; }
+    // No parentElement: either a shadow root's top node (hop to its host) or
+    // we've reached the document root (stop).
+    const root = cur.getRootNode();
+    cur = (root as ShadowRoot).host ?? null;
+  }
+  return null;
+}
+
 /** Walk every element under root including those inside open shadow roots. */
 function forEachDeepElement(root: ParentNode, fn: (el: Element) => void): void {
   root.querySelectorAll('*').forEach(el => {
@@ -1632,6 +1655,13 @@ function findArticleElement(smartDetection: boolean): Element | null {
     const el = querySelectorAllDeep(document.body, sel).find(e => {
       try {
         if (e.matches(COMMENT_WIDGET_SELECTOR) || e.closest(COMMENT_WIDGET_SELECTOR)) return false;
+        // An infinite-scroll feed's PRELOADED next article (MSN slideshows: the
+        // viewed gallery has no <article>, the preloaded next stories do) — see
+        // PRELOADED_NEXT_SELECTOR. Taking it captures a different story than the
+        // one the user is reading. closestDeep, not closest: MSN renders the
+        // whole page inside web components, so a native closest() from the
+        // <article> never reaches the feed wrapper.
+        if (closestDeep(e, PRELOADED_NEXT_SELECTOR)) return false;
         // Only the `article` selectors can yield a card; <main>/[role=main]
         // are page-level, never a card, so skip the (costly) card check for them.
         if (e.tagName.toLowerCase() === 'article' && looksLikeArticleCard(e)) return false;
@@ -1717,7 +1747,38 @@ const SPONSORED_WIDGET_SELECTOR = [
   '[class*="articletrendinglist" i]', '[class*="trendinglist" i]',             // trending story-link lists
   '[class*="photosslider" i]', '[class*="photoslider" i]', '[class*="photostor" i]', // photo-teaser sliders
   '[class*="recirc" i]', '[class*="related-stories" i]', '[class*="morestories" i]', // generic recirc modules
+  // Ad-slot custom elements + programmatic-exchange cards. A full-page capture
+  // of a feed reader (MSN) otherwise ships the "Sponsored Content" strip and the
+  // native-ad river — insurance/clickbait teasers rendered as ordinary content
+  // cards. Element NAMES and id prefixes here are ad-tech conventions (an
+  // `-ad-card` custom element, an `adnxs`/`nativead` id), not one site's markup.
+  '[class*="ad-card" i]', '[class*="adcard" i]',                               // *-ad-card custom elements
+  '[id^="nativead" i]', '[id*="adnxs" i]', '[class*="nativead" i]',            // native-ad / AppNexus slots
+  '[class*="sponsored" i]', '[id*="sponsored" i]',                             // explicit sponsored blocks
+  '[data-ad-slot]', '[data-adunit]', '[aria-label*="advertisement" i]',        // generic ad-slot markers
 ].join(', ');
+// Infinite-scroll feed readers PRELOAD the next article(s) into the SAME DOM,
+// below the one the user is actually viewing. MSN is the reference case: an
+// `/ss-<id>` slideshow page carries four `consumption-page` elements — the
+// viewed gallery plus three preloaded "next" stories — and the ONLY <article>
+// elements on the page belong to the preloaded ones (a gallery has none). Tier 1
+// therefore matched the NEXT story's <article class="article-reader-container">
+// and shipped a clip whose title was the slideshow but whose body was an
+// unrelated story. The layout finder has the same problem for a different
+// reason: a preloaded article is contiguous prose, so it outscores a gallery
+// whose text is split across per-slide fragments.
+//
+// This is generic, not per-site: "render the next item into the DOM ahead of
+// time" is how feed readers avoid a navigation flash, and the wrappers are
+// named descriptively. Matching the WRAPPER (not the article) means the viewed
+// article is never touched — it is not inside one of these.
+const PRELOADED_NEXT_SELECTOR = [
+  '[class*="nextArticle" i]', '[class*="next-article" i]',   // MSN consumptionFeed_nextArticle
+  '[class*="nextPost" i]', '[class*="next-post" i]',         // blog/feed readers
+  '[class*="infiniteScrollItem" i]', '[class*="infinite-scroll-item" i]',
+  '[data-next-article]', '[data-preload-article]',
+].join(', ');
+
 const LAYOUT_SKIP_TAGS = new Set([
   'script', 'style', 'noscript', 'nav', 'header', 'footer', 'aside',
   'svg', 'path', 'button', 'input', 'select', 'textarea', 'form', 'iframe',
@@ -1773,6 +1834,11 @@ function scoreContentBlock(el: Element, hasLayout: boolean): BlockScore | null {
   // Likewise never pick a sponsored-content / native-ad recirculation widget
   // (Taboola/Outbrain/…) — a grid of paid teaser cards that can outscore the story.
   if (el.matches(SPONSORED_WIDGET_SELECTOR) || el.closest(SPONSORED_WIDGET_SELECTOR)) return null;
+  // Never pick an infinite-scroll feed's PRELOADED next article. It is contiguous
+  // prose, so on a page whose real content is fragmented (an MSN gallery, split
+  // across per-slide metadata blocks) it would otherwise win outright.
+  // closestDeep — these pages are web-component trees (see findArticleElement).
+  if (closestDeep(el, PRELOADED_NEXT_SELECTOR)) return null;
 
   if (hasLayout) {
     // Reject INVISIBLE elements — zero rendered width OR height. Some SPAs keep a
@@ -1977,6 +2043,27 @@ function proseText(root: Element, imageUrls?: string[]): string {
   return parts.join('\n\n');
 }
 
+/**
+ * Prepend the page's og:image to a captured body that ended up with no images.
+ *
+ * Some layouts keep the hero image in a subtree the capture root doesn't cover
+ * (MSN renders the article body and the hero in sibling web components), so the
+ * clip lands with full prose and zero images. The CAST still shows the picture —
+ * it renders `thumbnailUrl` — which is exactly the reported symptom: "the image
+ * shows in the cast but not the clip". The thumbnail is already captured and
+ * inlined at this point, so this only decides whether the clip BODY gets it too.
+ *
+ * Applied to every article tier (Tier 1 / layout finder / Readability), so the
+ * clip and the cast agree about the article's imagery regardless of which tier
+ * won. No-op when the body already has an <img> — a real in-body hero wins.
+ */
+function withThumbnailFallback(html: string, thumbUrl: string | null, title: string): string {
+  if (/<img[\s>]/i.test(html)) return html;
+  if (!thumbUrl || !isSafeImageSrc(thumbUrl)) return html;
+  const alt = title.replace(/"/g, '&quot;');
+  return `<figure><img src="${thumbUrl}" alt="${alt}"></figure>\n${html}`;
+}
+
 async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const base = baseFields();
   log(LL.DEBUG, `Discerned: extractArticle — smartArticleDetection=${opts.smartArticleDetection} stripInlineStyles=${opts.stripInlineStyles}`, 'url:', base.url);
@@ -2044,13 +2131,19 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     const imgsAfter = clone.querySelectorAll('img[style]').length;
     log(LL.DEBUG, `Discerned: sanitiseTreeInPlace done — ${imgsBefore} imgs, ${imgsAfter} with remaining inline style, stripInlineStyles=${opts.stripInlineStyles}`, 'url:', base.url);
     log(LL.TRACE, `Discerned: sanitised bodyHtml (first 2000 chars): ${clone.innerHTML.slice(0, 2000)}`, 'url:', base.url);
-    const { html: inlined, imageUrls } = await inlineAllImages(clone.innerHTML.trim());
+    // Recover the hero when the semantic root held no images — see
+    // withThumbnailFallback (keeps the clip and the cast consistent).
+    const tier1Html = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, base.title);
+    const { html: inlined, imageUrls } = await inlineAllImages(tier1Html);
     log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
+    const tier1BodyRoot = imageUrls.length > 0
+      ? (new DOMParser().parseFromString(`<div>${tier1Html}</div>`, 'text/html').body.firstElementChild ?? clone)
+      : clone;
     return {
       ...base,
       format: 'article',
       bodyHtml: inlined,
-      bodyText: proseText(clone, imageUrls),
+      bodyText: proseText(tier1BodyRoot, imageUrls),
       thumbnail: inlinedThumbnail,
       thumbnailUrl,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
@@ -2109,13 +2202,21 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     substituteVideoEmbeds(clone);
     tagSemanticStructure(clone);
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
-    const { html: inlined, imageUrls } = await inlineAllImages(clone.innerHTML.trim());
+    // Before inlining, so a recovered hero is inlined + counted in imageUrls
+    // (the cast's image set) exactly like an in-body image would be.
+    const layoutHtml = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, base.title);
+    const { html: inlined, imageUrls } = await inlineAllImages(layoutHtml);
     log(LL.DEBUG, `Discerned: layout-finder imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
+    // proseText walks the CLONE, which has no <figure> we just prepended — pass
+    // the body we actually shipped so an interleaved image URL isn't dropped.
+    const layoutBodyRoot = imageUrls.length > 0
+      ? (new DOMParser().parseFromString(`<div>${layoutHtml}</div>`, 'text/html').body.firstElementChild ?? clone)
+      : clone;
     return {
       ...base,
       format: 'article',
       bodyHtml: inlined,
-      bodyText: proseText(clone, imageUrls),
+      bodyText: proseText(layoutBodyRoot, imageUrls),
       thumbnail: inlinedThumbnail,
       thumbnailUrl,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
@@ -2126,11 +2227,9 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const parsed = parseReadability();
   if (parsed) {
     log(LL.DEBUG, 'Discerned: article captured via Readability', 'url:', base.url);
-    let sanitized = sanitizeHtmlString(parsed.content);
-    if (!/<img[\s>]/i.test(sanitized) && thumbnailUrl && isSafeImageSrc(thumbnailUrl)) {
-      const alt = (parsed.title || base.title).replace(/"/g, '&quot;');
-      sanitized = `<figure><img src="${thumbnailUrl}" alt="${alt}"></figure>\n${sanitized}`;
-    }
+    const sanitized = withThumbnailFallback(
+      sanitizeHtmlString(parsed.content), thumbnailUrl, parsed.title || base.title,
+    );
     const { html: inlined, imageUrls } = await inlineAllImages(sanitized);
     log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     // Readability hands back a string, not a tree — when cast images exist,
@@ -2306,6 +2405,18 @@ function markExcluded(root: HTMLElement = document.body): () => void {
   // removeMarked prunes it from the clip. Same rationale as the comment widgets.
   try {
     querySelectorAllDeep(root, SPONSORED_WIDGET_SELECTOR).forEach(w => {
+      w.setAttribute(EXCL_MARKER, '1');
+    });
+  } catch { /* invalid selector on some engine — skip */ }
+
+  // Infinite-scroll feed readers' PRELOADED next articles (MSN's
+  // consumptionFeed_nextArticle, …). A full-page / whole-<main> capture would
+  // otherwise carry one or more unrelated follow-on stories after the real one.
+  // Safe for the same reason as the widgets above: the finder and Tier 1 both
+  // refuse to pick a root INSIDE one of these, so pruning them can't empty the
+  // capture — they are siblings of the viewed article, never ancestors of it.
+  try {
+    querySelectorAllDeep(root, PRELOADED_NEXT_SELECTOR).forEach(w => {
       w.setAttribute(EXCL_MARKER, '1');
     });
   } catch { /* invalid selector on some engine — skip */ }

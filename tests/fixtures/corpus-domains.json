@@ -980,6 +980,11 @@
       "name": "librarything-catalog",
       "url": "https://www.librarything.com/catalog/Kardiaa",
       "note": "PHASE 4.5 — ENTITY: LibraryThing member CATALOG (list/table of a user library). CAPTURE DEFECT (not a wall): the table lives in a CHILD IFRAME (catalog_bottom.php) while the top document holds only the masthead (134 chars, 0 tables), so the clip is the 20-YEARS badge + 3 nav links. Needs cross-frame capture; do not chase as a layout-finder mis-pick."
+    },
+    {
+      "name": "msn-slideshow",
+      "url": "https://www.msn.com/en-us/entertainment/celebrities/paramount-s-star-trek-reboot-drops-kirk-for-new-era/ss-AA29f2aF",
+      "note": "PHASE 4.6 — FEED READER: MSN /ss- SLIDESHOW (a gallery, not prose). Guards the PRELOADED-NEXT-ARTICLE regression (user report 2026-08-03, 'the wrong thing is clipped'): MSN's infinite-scroll feed preloads the next stories into the SAME DOM (div.consumptionFeed_nextArticle), and the viewed gallery has NO <article> of its own — so Tier 1's first selector matched a PRELOADED story's <article class='article-reader-container'> and shipped a clip whose TITLE was this slideshow but whose BODY was an unrelated article. Fixed generically via PRELOADED_NEXT_SELECTOR at three layers (findArticleElement / scoreContentBlock / markExcluded), using closestDeep — native closest() stops at the first of MSN's ~350 open shadow roots. WATCH OUT: a regression here scores HEALTHY (the wrong body is full-length, well-formed prose), so the score alone will not catch it — check the clip screenshot actually shows Star Trek / Kirk, not whatever MSN preloaded next. Slideshow text lives in per-slide fragments, so expect lower text-coverage than a prose article."
     }
   ]
 }

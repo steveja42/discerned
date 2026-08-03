@@ -82,6 +82,10 @@ const TARGETS: Record<string, string> = {
   // links while the page renders a full 3-book catalog TABLE. Table-shaped content
   // (no <p> prose) is the suspected finder blind spot.
   'librarything-catalog': 'https://www.librarything.com/catalog/Kardiaa',
+  // User report (2026-08-03): "the wrong thing is clipped". MSN /ss- URLs are
+  // SLIDESHOWS — a slide deck, not a prose article — so there may be no single
+  // block holding the body at all. Diagnose before assuming a finder mis-pick.
+  'msn-slideshow': 'https://www.msn.com/en-us/entertainment/celebrities/paramount-s-star-trek-reboot-drops-kirk-for-new-era/ss-AA29f2aF?ocid=msedgntp&pc=U531&cvid=6a70743fd5b440abaf95817f01f76350&ei=15#image=1',
 };
 
 test.describe.configure({ mode: 'serial' });

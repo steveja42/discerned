@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<!--
+  Reduced repro of an MSN /ss-<id> SLIDESHOW page (2026-08-03 user report:
+  "the wrong thing is clipped").
+
+  The load-bearing shape, verified against the live page with
+  tests/e2e/tools/finder-diag-probe.msn.spec.ts:
+
+   1. MSN's infinite-scroll feed PRELOADS the next stories into the SAME DOM,
+      inside `div.consumptionFeed_nextArticle` wrappers.
+   2. The story the user is VIEWING is a gallery — its text is split across
+      per-slide `slide-metadata` fragments and it contains NO <article>.
+   3. The ONLY <article> elements on the page belong to the PRELOADED next
+      stories. So Tier 1 (`article` is the first ARTICLE_SELECTORS entry)
+      matched a preloaded story and shipped an unrelated article, while the
+      title (from page metadata) still read as the slideshow.
+
+  The live page nests all of this behind ~350 open shadow roots, which is why
+  the fix needs closestDeep() rather than closest() — but shadow nesting is
+  exercised by shadow-dom.test.ts, so this fixture keeps the light-DOM shape.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Paramount's Star Trek reboot drops Kirk for new era</title>
+  <meta property="og:title" content="Paramount's Star Trek reboot drops Kirk for new era">
+</head>
+<body>
+  <div class="consumptionFeed_root" id="consumption-feed-main-id">
+
+    <!-- ── The story the user is actually viewing: a GALLERY (no <article>) ── -->
+    <div class="consumption-feed-content" id="consumption-feed-content-AA29f2aF">
+      <div class="consumption-page" id="ViewsPageId-AA29f2aF">
+        <div class="consumption-page-structure gallery_content">
+          <div class="viewsHeaderWrapper">
+            <h1 class="viewsHeaderText">Paramount's Star Trek reboot drops Kirk for new era</h1>
+          </div>
+          <div class="consumption-page-content-wrapper gallery_content">
+            <div class="gallery-slideshow">
+              <div class="metadata-container">
+                <div class="slide-metadata">
+                  <div class="slide-title"><span class="title">Paramount's Star Trek reboot drops Kirk for new era</span></div>
+                  <span class="body">
+                    <p><strong>Kirk era ends:</strong> Paramount's next Star Trek film will not feature
+                    Captain Kirk or other original series characters, instead introducing a new crew set
+                    in a later period of the franchise timeline.</p>
+                  </span>
+                </div>
+                <div class="slide-metadata">
+                  <span class="body">
+                    <p>The studio confirmed the reboot will move away from the Kelvin-timeline cast that
+                    headlined the 2009 relaunch and its two sequels, ending a run that began seventeen
+                    years ago and never produced a fourth instalment despite repeated announcements.</p>
+                  </span>
+                </div>
+                <div class="slide-metadata">
+                  <span class="body">
+                    <p>Producers described the decision as a generational reset intended to let new
+                    audiences enter the franchise without needing to know the earlier films, while
+                    long-running characters are retired rather than recast.</p>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PRELOADED next article #1 — a DIFFERENT story, and it HAS <article> ── -->
+    <div class="consumption-feed-content consumptionFeed_nextArticle" id="consumption-feed-content-AA29fpnZ">
+      <div class="consumption-page" id="ViewsPageId-AA29fpnZ">
+        <div class="consumption-page-structure extended-right-rail">
+          <div class="viewsHeaderWrapper">
+            <h1 class="viewsHeaderText">Fetterman abandons his 2022 filibuster pledge</h1>
+          </div>
+          <div class="consumption-page-content-wrapper article_content">
+            <article class="article-reader-container">
+              <div class="article-body polished">
+                <p class="wp-block-paragraph">John Fetterman has reversed his position on the Senate
+                filibuster: the Pennsylvania Democrat now supports keeping it after he previously
+                campaigned to eliminate it in 2022, and he says Democrats were horribly wrong to push
+                the other way when they briefly held the majority.</p>
+                <h2 class="wp-block-heading article-sub-heading">What the filibuster actually does</h2>
+                <p class="wp-block-paragraph">The shift matters because Fetterman is not only revising an
+                old campaign promise but doing so while his party debates whether the rule protects them
+                in the minority, reviving a fight Democrats have never fully settled.</p>
+                <p class="wp-block-paragraph">Fetterman laid out his new position in a July 28 column,
+                arguing that the rule blocked action when his party held power but now shields whichever
+                side is out of power from the other's most sweeping legislation.</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PRELOADED next article #2 ── -->
+    <div class="consumption-feed-content consumptionFeed_nextArticle" id="consumption-feed-content-AA29hEQs">
+      <div class="consumption-page" id="ViewsPageId-AA29hEQs">
+        <div class="consumption-page-content-wrapper article_content">
+          <article class="article-reader-container">
+            <div class="article-body polished">
+              <p class="wp-block-paragraph">Mortgage rates edged lower for a third consecutive week,
+              offering modest relief to buyers who have spent the year contending with the highest
+              borrowing costs in more than two decades and a persistent shortage of listings.</p>
+              <p class="wp-block-paragraph">Economists cautioned that the decline is unlikely to change
+              affordability materially until inventory improves in the larger metropolitan markets.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
