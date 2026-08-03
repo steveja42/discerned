@@ -1,0 +1,11 @@
+{
+  "format": "article",
+  "title": { "contains": "AstraZeneca suffers" },
+  "url": "http://127.0.0.1:4173/article-og-image-no-body-img.html",
+  "bodyText": {
+    "minLength": 900,
+    "contains": ["AstraZeneca shares have taken", "Bristol Myers Squibb"]
+  },
+  "bodyHtml": { "hasImgs": true, "noScripts": true },
+  "thumbnail": "present"
+}

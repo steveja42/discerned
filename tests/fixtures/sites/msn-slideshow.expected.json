@@ -1,0 +1,12 @@
+{
+  "format": "article",
+  "title": { "contains": "Star Trek reboot drops Kirk" },
+  "url": "http://127.0.0.1:4173/msn-slideshow.html",
+  "bodyText": {
+    "minLength": 400,
+    "contains": ["Kirk era ends", "Kelvin-timeline"],
+    "excludes": ["Fetterman", "filibuster", "Mortgage rates"]
+  },
+  "bodyHtml": { "noScripts": true },
+  "thumbnail": "absent"
+}
