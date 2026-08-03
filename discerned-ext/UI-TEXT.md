@@ -55,7 +55,7 @@ Opens in a tab on first install. [src/onboarding/onboarding.html](src/onboarding
 | [Step 2](src/onboarding/onboarding.html#L153) | Find **Discerned** in the list. |
 | [Step 3](src/onboarding/onboarding.html#L157) | Click the **pin** icon 📌 next to it so the Discerned beacon stays visible in your toolbar. |
 | [Step 4](src/onboarding/onboarding.html#L161) | Browse to any page, then **right-click** or click the Discerned beacon to clip and rate what you're reading. |
-| [Hint](src/onboarding/onboarding.html#L165-L168) | Your clips stay on this device until you choose to publish. Publishing uses Nostr — an open social network where you own your identity and your posts. |
+| [Hint](src/onboarding/onboarding.html#L165-L168) | Your clips stay on this device unless you choose to publish them. Publishing uses Nostr — an open social network where you own your identity and your posts. |
 | [Button](src/onboarding/onboarding.html#L170) | Got it — start using Discerned → |
 | [Footer](src/onboarding/onboarding.html#L172-L175) | Something not working? [Report it](https://discerned.online/feedback?target=extension). |
 
@@ -88,7 +88,7 @@ The first screen a new user sees. [src/content/overlay.ts](src/content/overlay.t
 |---|---|
 | Icon | 🔒 |
 | Title | Start local, publish when ready |
-| Body | Clip what's worth reading, rate it, and build a library of high-quality information. It all stays on this device. When you want to publish, connect a Nostr identity — your ratings stay yours, on an open network no company controls. |
+| Body | Clip what's worth reading, rate it, and build a library of high-quality information. It all stays on this device. Connect a Nostr identity to publish as you go — your ratings stay yours, on an open network no company controls. |
 | Primary button | Connect a Nostr identity → |
 | Secondary button | Not now — keep clips on this device |
 

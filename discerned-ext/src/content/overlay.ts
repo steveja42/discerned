@@ -432,8 +432,8 @@ ${themeVarsBlock(this.effectiveTheme)}
       ? `Your Nostr signing extension is ready. Sign in to publish your discerns under your own
          identity — they'll appear in any Nostr client, to the people who already follow you.`
       : `Clip what's worth reading, rate it, and build a library of high-quality information. It
-         all stays on this device. When you want to publish, connect a Nostr identity — your
-         ratings stay yours, on an open network no company controls.`;
+         all stays on this device. Connect a Nostr identity to publish as you go — your ratings
+         stay yours, on an open network no company controls.`;
     const primaryLabel = signerDetected ? 'Sign in →' : 'Connect a Nostr identity →';
 
     this.shadow.innerHTML = `
