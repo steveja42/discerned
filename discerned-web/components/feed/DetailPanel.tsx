@@ -137,6 +137,21 @@ function NoteEditor({
   );
 }
 
+// Cast images are HOTLINKED from the source site — the cast publishes a real
+// http(s) URL because data: URIs are far too large for relays (the private clip
+// keeps the inlined base64 instead). Many sites, WordPress news sites in
+// particular, serve a 403 when the Referer is a foreign origin: off-guardian.org
+// returns 200 with no referer and 403 for `https://discerned.online/`, so the
+// article's banner silently failed to load and the cast rendered image-less
+// while the clip looked fine. `no-referrer` sends none at all, which those
+// hotlink rules allow. Applied to EVERY cast-image path (markdown, hero,
+// gallery, inline) so the behaviour doesn't depend on which one renders.
+const MD_COMPONENTS = {
+  img: (props: React.ImgHTMLAttributes<HTMLImageElement>) =>
+    // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
+    <img {...props} referrerPolicy="no-referrer" />,
+};
+
 function renderTextWithBreaks(text: string, imageUrls?: Set<string>): React.ReactNode {
   return text.split(/\n{2,}/).map((para, i) => {
     // Cast bodies interleave image URLs as their own paragraphs at the image's
@@ -145,7 +160,7 @@ function renderTextWithBreaks(text: string, imageUrls?: Set<string>): React.Reac
     // URLs that happen to appear in the text.
     const trimmed = para.trim();
     if (imageUrls?.has(trimmed)) {
-      return <img key={i} className="cast-inline-img" src={trimmed} alt="" />;
+      return <img key={i} className="cast-inline-img" src={trimmed} alt="" referrerPolicy="no-referrer" />;
     }
     return (
       <p key={i}>
@@ -310,8 +325,8 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
             !!thumbnail && markdownHasImage(capture.markdown, thumbnail);
           return (
             <div className="clip-body">
-              {thumbnail && !heroInBody && <img className="longform-hero" src={thumbnail} alt="" />}
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{capture.markdown}</ReactMarkdown>
+              {thumbnail && !heroInBody && <img className="longform-hero" src={thumbnail} alt="" referrerPolicy="no-referrer" />}
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{capture.markdown}</ReactMarkdown>
             </div>
           );
         }
@@ -331,10 +346,10 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
               {galleryUrls.length > 0
                 ? (
                   <div className="cast-photos">
-                    {galleryUrls.map((src, i) => <img key={i} src={src} alt="" />)}
+                    {galleryUrls.map((src, i) => <img key={i} src={src} alt="" referrerPolicy="no-referrer" />)}
                   </div>
                 )
-                : photoUrls.length === 0 && thumbnail && <img src={thumbnail} alt="" />}
+                : photoUrls.length === 0 && thumbnail && <img src={thumbnail} alt="" referrerPolicy="no-referrer" />}
               {capture.selectionText && (
                 <blockquote
                   className="detail-excerpt"

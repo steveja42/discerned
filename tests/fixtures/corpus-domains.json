@@ -985,6 +985,11 @@
       "name": "msn-slideshow",
       "url": "https://www.msn.com/en-us/entertainment/celebrities/paramount-s-star-trek-reboot-drops-kirk-for-new-era/ss-AA29f2aF",
       "note": "PHASE 4.6 — FEED READER: MSN /ss- SLIDESHOW (a gallery, not prose). Guards the PRELOADED-NEXT-ARTICLE regression (user report 2026-08-03, 'the wrong thing is clipped'): MSN's infinite-scroll feed preloads the next stories into the SAME DOM (div.consumptionFeed_nextArticle), and the viewed gallery has NO <article> of its own — so Tier 1's first selector matched a PRELOADED story's <article class='article-reader-container'> and shipped a clip whose TITLE was this slideshow but whose BODY was an unrelated article. Fixed generically via PRELOADED_NEXT_SELECTOR at three layers (findArticleElement / scoreContentBlock / markExcluded), using closestDeep — native closest() stops at the first of MSN's ~350 open shadow roots. WATCH OUT: a regression here scores HEALTHY (the wrong body is full-length, well-formed prose), so the score alone will not catch it — check the clip screenshot actually shows Star Trek / Kirk, not whatever MSN preloaded next. Slideshow text lives in per-slide fragments, so expect lower text-coverage than a prose article."
+    },
+    {
+      "name": "offguardian",
+      "url": "https://off-guardian.org/2026/07/20/faking-water-bankruptcy-part-2-climate-change/",
+      "note": "PHASE 4.6 — HOTLINK-PROTECTED IMAGES: WordPress long-form article (banner hero + donation-button images). Guards the CAST-IMAGE regression (user report 2026-08-03, 'the clip shows an image but the cast doesn't'): the site 403s any request carrying a foreign Referer (200 with no referer, 403 for https://discerned.online/), so every cast image silently failed to load while the CLIP looked perfect — the clip renders inlined base64, the cast must publish a real URL because data: URIs are too large for relays. Fixed in the WEB APP, not the extension (which was emitting correct markdown + imeta all along): DetailPanel now sets referrerPolicy='no-referrer' on every cast-image path (markdown via MD_COMPONENTS, hero, gallery, inline). WATCH OUT: the sweep's CLIP screenshot cannot catch this — check {domain}--3-cast.png specifically, and confirm the FAKING WATER BANKRUPTCY banner is visible rather than a blank gap."
     }
   ]
 }
