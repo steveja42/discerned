@@ -78,11 +78,6 @@ export default defineConfig({
       retries: 0,
     },
     {
-      name: 'msn-tmp-probe',
-      testMatch: /tools\/finder-diag-probe\.msn\.spec\.ts$/,
-      retries: 0,
-    },
-    {
       name: 'hidden-prose-probe',
       testMatch: /tools\/hidden-prose-probe\.spec\.ts$/,
       retries: 0,

@@ -367,6 +367,21 @@ function getPageThumbnail(): string | null {
 }
 
 /**
+ * True when the page DECLARED this thumbnail as its social/preview image
+ * (`og:image`), as opposed to getPageThumbnail's first-<img>-on-the-page guess.
+ *
+ * The guess is fine for a library-row thumbnail — any picture beats none — but
+ * it is NOT a hero, and withThumbnailFallback must not promote it into the clip
+ * body. On Hacker News the first <img> is `y18.gif`, a 1×1 transparent spacer:
+ * injecting it added an invisible figure that shifted the whole thread down
+ * 32px and broke the pixel baseline. It inlines perfectly well, so a
+ * "did it fetch?" check can't catch it — provenance is the real signal.
+ */
+function isDeclaredThumbnail(): boolean {
+  return !!document.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content;
+}
+
+/**
  * Returns true when the page has at least one selected character. Looks inside
  * open shadow roots too (some sites render content there — see Shadow-DOM
  * helpers above).
@@ -2056,10 +2071,31 @@ function proseText(root: Element, imageUrls?: string[]): string {
  * Applied to every article tier (Tier 1 / layout finder / Readability), so the
  * clip and the cast agree about the article's imagery regardless of which tier
  * won. No-op when the body already has an <img> — a real in-body hero wins.
+ *
+ * TWO guards, and both are load-bearing — each caught a real regression:
+ *
+ *  1. The thumbnail must be a DECLARED og:image (isDeclaredThumbnail), not
+ *     getPageThumbnail's first-<img> guess. Hacker News's first <img> is a 1×1
+ *     transparent spacer; promoting it into the body added an invisible figure
+ *     that pushed the thread down 32px and broke the HN pixel baseline.
+ *  2. `inlinedThumb` must be a successfully-fetched data: URI. inlineImage hands
+ *     back the original URL when the fetch fails, so an unreachable og:image
+ *     (offline fixtures, hotlink-blocked CDNs, a stale meta tag) would inject a
+ *     permanently-broken <img> — alt text plus a broken-image glyph — into a
+ *     clip that previously rendered cleanly. That broke four baselines at once.
+ *
+ * Between them this can only ever ADD an image the page itself nominated AND
+ * that is known to display.
  */
-function withThumbnailFallback(html: string, thumbUrl: string | null, title: string): string {
+function withThumbnailFallback(
+  html: string, thumbUrl: string | null, inlinedThumb: string | null, title: string,
+): string {
   if (/<img[\s>]/i.test(html)) return html;
   if (!thumbUrl || !isSafeImageSrc(thumbUrl)) return html;
+  // Guard 1 — the page nominated this image, we didn't guess it.
+  if (!isDeclaredThumbnail()) return html;
+  // Guard 2 — the thumbnail actually fetched (data: URI, not the fallback URL).
+  if (!inlinedThumb || !inlinedThumb.startsWith('data:')) return html;
   const alt = title.replace(/"/g, '&quot;');
   return `<figure><img src="${thumbUrl}" alt="${alt}"></figure>\n${html}`;
 }
@@ -2133,7 +2169,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     log(LL.TRACE, `Discerned: sanitised bodyHtml (first 2000 chars): ${clone.innerHTML.slice(0, 2000)}`, 'url:', base.url);
     // Recover the hero when the semantic root held no images — see
     // withThumbnailFallback (keeps the clip and the cast consistent).
-    const tier1Html = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, base.title);
+    const tier1Html = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title);
     const { html: inlined, imageUrls } = await inlineAllImages(tier1Html);
     log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     const tier1BodyRoot = imageUrls.length > 0
@@ -2204,7 +2240,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
     // Before inlining, so a recovered hero is inlined + counted in imageUrls
     // (the cast's image set) exactly like an in-body image would be.
-    const layoutHtml = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, base.title);
+    const layoutHtml = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title);
     const { html: inlined, imageUrls } = await inlineAllImages(layoutHtml);
     log(LL.DEBUG, `Discerned: layout-finder imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     // proseText walks the CLONE, which has no <figure> we just prepended — pass
@@ -2228,7 +2264,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   if (parsed) {
     log(LL.DEBUG, 'Discerned: article captured via Readability', 'url:', base.url);
     const sanitized = withThumbnailFallback(
-      sanitizeHtmlString(parsed.content), thumbnailUrl, parsed.title || base.title,
+      sanitizeHtmlString(parsed.content), thumbnailUrl, inlinedThumbnail, parsed.title || base.title,
     );
     const { html: inlined, imageUrls } = await inlineAllImages(sanitized);
     log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);

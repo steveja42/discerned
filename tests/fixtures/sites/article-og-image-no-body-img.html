@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<!--
+  An article whose HERO lives OUTSIDE the capture root: the page declares an
+  og:image, but the article body itself contains no <img> at all.
+
+  Real-world case (MSN /ar- articles, user report 2026-08-03: "this site has an
+  image which shows up in the cast, but not in the clip"). MSN renders the hero
+  in a sibling web component the capture root doesn't cover, so the clip body
+  came out image-less while the CAST still showed the picture — the cast renders
+  `thumbnailUrl`, the clip renders `bodyHtml`. withThumbnailFallback closes that
+  gap for every article tier.
+
+  Deliberately has NO <img> in the body: adding one would make the fallback a
+  no-op and the test would pass for the wrong reason.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AstraZeneca suffers £18bn hit over US merger talks</title>
+  <meta property="og:image" content="https://cdn.example.com/hero-astrazeneca.jpg">
+  <meta property="og:title" content="AstraZeneca suffers £18bn hit over US merger talks">
+</head>
+<body>
+  <main>
+    <article>
+      <h1>AstraZeneca suffers £18bn hit over US merger talks</h1>
+      <p>AstraZeneca shares have taken an £18bn hit after investors baulked at reports it
+      was plotting a mega-merger with a US rival. Shares in Britain's second-most valuable
+      company slumped on Monday after it emerged that AstraZeneca had held talks about a
+      potential $400bn tie-up with Bristol Myers Squibb.</p>
+      <p>If completed, the merger would create one of the world's largest pharmaceutical
+      businesses. The potential deal would also raise fears that AstraZeneca could shift
+      its business to the US in a blow to Britain, where the company is one of the largest
+      private investors in research and development.</p>
+      <p>However, analysts said it was a high-risk deal that risked destroying more value
+      than it created. It would be one of the biggest mergers of all time, meaning any
+      missteps could prove costly for shareholders on both sides of the Atlantic.</p>
+      <p>Shares closed down sharply, wiping billions from the company's market value in a
+      single session and prompting questions about the strategy from institutional
+      investors who had backed the group's independent path.</p>
+    </article>
+  </main>
+</body>
+</html>
