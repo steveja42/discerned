@@ -87,37 +87,26 @@ Paste these into the corresponding fields. Each states the concrete mechanism, b
 
 ### `host_permissions: <all_urls>`
 
-> Discerned is a web clipper: its core function is to capture the content of whatever
-> page the user is reading. We cannot predict or enumerate in advance which sites a user
-> will want to clip, so access cannot be limited to a fixed list of hosts.
->
-> Content is only ever read when the user actively invokes the extension — via the
-> toolbar button or the right-click context menu. The extension does not read, monitor,
-> or transmit page content in the background, does not build a browsing history, and
-> sends no page data to any server we operate. We operate no such server.
->
-> The content script that loads on all pages is idle until it receives an explicit
-> activation message triggered by the user's own click.
+
+> Discerned is a user-initiated web clipper. Its single purpose is to let users capture, rate, and save content from whichever public webpage they are currently reading. Because a user may choose to clip content from any web domain, access cannot be limited to a static list of host URLs.
+
+>The extension is strictly passive: content scripts remain completely idle and do not read, process, or monitor page data until the user actively initiates a capture via the toolbar beacon or right-click context menu. Discerned does not run background tracking, does not monitor browsing history, and operates no backend server to receive page content.
+
 
 ### `scripting`
 
-> Used for one specific feature: capturing embedded tweets that appear inside articles
-> on third-party news sites.
->
-> Embedded tweets render inside cross-origin `platform.twitter.com` iframes whose content
-> is unreadable from the parent page's content script. To capture the tweet as the user
-> actually sees it, the extension uses `chrome.scripting.executeScript` to run a small
-> read-only extractor inside those specific tweet-embed frames, reading the author,
-> text, and images. The extractor is limited to frames matching the tweet-embed URL and
-> only runs as part of a user-initiated capture.
+>Used exclusively for a single read-only feature: extracting embedded tweet content (author, text, images) rendered inside cross-origin platform.twitter.com iframes on news and article pages. 
+
+> Because cross-origin iframe content cannot be accessed by the parent page's content script, chrome.scripting.executeScript runs a small, bundled, read-only extractor targeted strictly at those specific iframe targets. This script contains no remote code, executes only during a user-initiated capture event, and makes no network requests.
+
+
 
 ### `webNavigation`
 
-> Paired with `scripting`, for the same embedded-tweet feature.
-> `chrome.webNavigation.getAllFrames` enumerates the frames present in the current tab so
-> the extension can identify which are tweet embeds and target only those for extraction.
-> It is called only during a user-initiated capture. We do not observe navigation events
-> or track which pages the user visits.
+>Paired directly with the scripting permission for embedded tweet extraction. The chrome.webNavigation.getAllFrames API is called solely during an active, user-initiated capture to enumerate frame IDs and identify matching platform.twitter.com tweet embeds for target extraction. 
+
+>It is never used to track navigation history, monitor tab changes, or observe user browsing behavior.
+
 
 ### `contextMenus`
 
@@ -136,6 +125,10 @@ Paste these into the corresponding fields. Each states the concrete mechanism, b
 > that page's content at the moment of the user's click.
 
 ### `tabs`
+
+> Used solely to query open browser tabs for existing instances of the extension's onboarding page and internal web application (discerned.online). This allows the extension to focus an already-open tab rather than spawning redundant duplicate tabs during the identity connect flow. 
+
+This permission is never used to monitor, record, or transmit user tab history or general browsing activity.
 
 > Used to open and focus the extension's own pages — the onboarding page after install,
 > and the Discerned web app tab used for the Nostr signing flow. The extension reuses an
