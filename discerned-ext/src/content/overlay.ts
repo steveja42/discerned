@@ -36,6 +36,20 @@ const PREVIEW_FORMATS: ClipFormat[] = ['selection', 'article', 'bookmark'];
 export const OVERLAY_HOST_ID = 'discerned-overlay';
 
 /**
+ * Sticky "show developer options" flag, armed by Alt-clicking the ⚙ gear.
+ *
+ * Module scope, NOT an instance field: content.ts builds a fresh
+ * DiscernedOverlay on every activation, so per-instance state dies the moment
+ * the overlay closes and the user would have to hold Alt every single time.
+ * Lives as long as the content script does — i.e. until the page navigates or
+ * reloads, which is the "session" the user sees.
+ *
+ * One-way latch: Alt-clicking arms it, and an ordinary click thereafter leaves
+ * it armed. Reload the page to clear it.
+ */
+let devOptionsUnlocked = false;
+
+/**
  * The overlay was originally a Custom Element (`<discerned-overlay>`) but
  * `window.customElements` is null in content-script isolated worlds on at
  * least Chromium and Brave for some pages, which makes `customElements.define`
@@ -951,8 +965,11 @@ ${themeVarsBlock(this.effectiveTheme)}
       `;
     }
 
-    // Dev-only relay toggle. Tree-shaken out of production builds via the flag.
-    const relayDevCard = __DISCERNED_TEST_BUILD__ ? `
+    // Dev-only relay toggle. Hidden unless Settings was opened with Alt held
+    // (see the #open-settings handler). Test builds keep it always-on so the e2e
+    // specs that flip the relay mode don't have to synthesise a modifier click.
+    const showDevCard = __DISCERNED_TEST_BUILD__ || devOptionsUnlocked;
+    const relayDevCard = showDevCard ? `
           <div class="settings-card">
             <div class="card-label">Developer</div>
             <label class="toggle-row">
@@ -1140,8 +1157,11 @@ ${themeVarsBlock(this.effectiveTheme)}
     try {
       const stored = await chrome.storage.local.get([STORAGE_KEYS.RELAYS]);
 
-      // Dev relay toggle (test builds only — the element is absent in production).
-      if (__DISCERNED_TEST_BUILD__) {
+      // Dev relay toggle. Present in test builds, and in any build when Settings
+      // was opened with Alt held — so the existence check, not the build flag,
+      // decides whether to wire it up. (Gating this on __DISCERNED_TEST_BUILD__
+      // alone would render an inert checkbox in an Alt-opened production build.)
+      {
         const relayEl = this.shadow.getElementById('opt-local-relay') as HTMLInputElement | null;
         if (relayEl) {
           relayEl.checked = resolveRelayMode(stored[STORAGE_KEYS.RELAYS] as string | undefined) === 'local';
@@ -1334,7 +1354,11 @@ ${themeVarsBlock(this.effectiveTheme)}
     const isConnected = this.isConnected();
 
     this.shadow.getElementById('close')?.addEventListener('click', () => this.hide());
-    this.shadow.getElementById('open-settings')?.addEventListener('click', () => {
+    this.shadow.getElementById('open-settings')?.addEventListener('click', (e) => {
+      // Alt-click (Option on macOS) unlocks the Developer card. Latch it rather
+      // than assigning altKey outright: once armed it stays armed for the rest of
+      // the session, so an ordinary gear click later still shows the card.
+      if ((e as MouseEvent).altKey) devOptionsUnlocked = true;
       this.view = 'settings';
       this.render();
     });
