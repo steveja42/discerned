@@ -104,26 +104,35 @@ The first screen a new user sees. [src/content/overlay.ts](src/content/overlay.t
 
 ## 5. Overlay — identity flow
 
-### 5a. Chooser — [overlay.ts:466-495](src/content/overlay.ts#L466-L495)
+### 5a. Chooser — [overlay.ts:481-546](src/content/overlay.ts#L481-L546)
 
 | Element | Text |
 |---|---|
 | Header | Connect identity |
 | Sign-in card (only when a signer is detected) | **Sign in →** / Signing extension detected. Sign in to Discerned to start casting. |
 | Existing card | **Connect existing identity →** / Already on Nostr? Use a signing extension, remote signer, or your private key. |
-| Create card | **Create new Nostr account →** / New to Nostr? Generate a fresh keypair and back it up. |
+| Create card | **Create new Nostr account →** / New to Nostr? Get set up with a guided walkthrough at nstart.me. |
 
-### 5b. Create account — [overlay.ts:527-546](src/content/overlay.ts#L527-L546)
+### 5b. Create account — [overlay.ts:548-593](src/content/overlay.ts#L548-L593)
+
+Hands off to [nstart.me] rather than minting a keypair in the extension — it introduces
+newcomers to Nostr, walks them through backup, and sets up a profile. The in-house
+generator (`GENERATE_NSEC` + the key-backup screen, 5d) is still in the codebase but is
+no longer reachable from the UI.
 
 | Element | Text |
 |---|---|
 | Header | Create account |
-| Body | This generates a brand-new Nostr keypair right here in your browser. You'll see both keys once and must back them up — your private key can never be recovered if lost. Nothing is saved until you store it next. |
-| Button | Generate keypair |
-| Status | Generating… |
-| Error | Failed to generate key. Please try again. |
+| Body | New to Nostr? [nstart.me] is a free guided setup that explains how Nostr works, creates your identity, and helps you back it up safely. It takes a couple of minutes. |
+| Primary button | Create account at nstart.me → |
+| Follow-up body | Once you're done, come back here and connect the identity you just made — whichever way nstart set you up: a signing extension, a `bunker://` link, or your `nsec`. |
+| Secondary button | I've created my account — connect it |
 
-### 5c. Connect existing — tabs — [overlay.ts:613-652](src/content/overlay.ts#L613-L652)
+The secondary button probes the live page for `window.nostr` before switching (cached auth
+state can't know about an extension installed during the nstart trip), then lands on the
+**Extension** tab if a signer is now detected, else **Remote signer** — nstart's default.
+
+### 5c. Connect existing — tabs — [overlay.ts:594-677](src/content/overlay.ts#L594-L677)
 
 Tab labels: **Extension** (with ✓ when detected) · **Remote signer** · **Store key**
 
@@ -143,9 +152,11 @@ button *Connect account*
 encrypted with a PIN before being stored — only you can unlock it. — placeholders
 `nsec1…` / `PIN (minimum 6 characters)` / `Confirm PIN`, button *Encrypt and store*
 
-### 5d. Key backup — [overlay.ts:781-802](src/content/overlay.ts#L781-L802)
+### 5d. Key backup — [overlay.ts:794-841](src/content/overlay.ts#L794-L841)
 
-Shown once, after generating a new account.
+**Currently unreachable.** It was shown once after the extension generated an account;
+account creation now hands off to nstart.me (5b). The screen and its `GENERATE_NSEC`
+backend are kept intact should in-house generation come back.
 
 | Element | Text |
 |---|---|

@@ -505,7 +505,7 @@ ${themeVarsBlock(this.effectiveTheme)}
           </button>
           <button class="choice-card" id="choice-create" type="button">
             <div class="choice-title">Create new Nostr account →</div>
-            <div class="choice-desc">New to Nostr? Generate a fresh keypair and back it up.</div>
+            <div class="choice-desc">New to Nostr? Get set up with a guided walkthrough at nstart.me.</div>
           </button>
         </div>
       </div>
@@ -537,7 +537,14 @@ ${themeVarsBlock(this.effectiveTheme)}
     });
   }
 
-  /** "Create new Nostr account" step — generate a keypair, then go to backup. */
+  /**
+   * "Create new Nostr account" step — hand the user off to nstart.me rather than
+   * minting a keypair here. nstart walks newcomers through what Nostr is, backup,
+   * and a profile, which a bare "here are two long strings" screen can't. It ends
+   * with either a bunker:// link (its default) or an nsec, so this screen offers a
+   * route back for both. The in-house generator (GENERATE_NSEC / renderKeyBackup)
+   * is deliberately kept in the codebase, just no longer reachable from the UI.
+   */
   private renderCreateAccount() {
     this.shadow.innerHTML = `
       <style>${this.getStyles()}</style>
@@ -551,11 +558,17 @@ ${themeVarsBlock(this.effectiveTheme)}
         </header>
         <div class="panel-body identity-body">
           <p class="panel-desc">
-            This generates a brand-new Nostr keypair right here in your browser.
-            You'll see both keys once and must back them up — your private key can
-            never be recovered if lost. Nothing is saved until you store it next.
+            New to Nostr? <a href="https://nstart.me" target="_blank" rel="noopener noreferrer">nstart.me</a>
+            is a free guided setup that explains how Nostr works, creates your identity,
+            and helps you back it up safely. It takes a couple of minutes.
           </p>
-          <button class="btn btn-primary" id="btn-generate-nsec" type="button">Generate keypair</button>
+          <button class="btn btn-primary" id="btn-open-nstart" type="button">Create account at nstart.me →</button>
+          <p class="panel-desc">
+            Once you're done, come back here and connect the identity you just made —
+            whichever way nstart set you up: a signing extension, a <code>bunker://</code>
+            link, or your <code>nsec</code>.
+          </p>
+          <button class="btn btn-secondary" id="btn-connect-after-nstart" type="button">I've created my account — connect it</button>
           <p class="identity-status" id="create-status"></p>
         </div>
       </div>
@@ -565,21 +578,26 @@ ${themeVarsBlock(this.effectiveTheme)}
       this.identityStep = 'choose';
       this.render();
     });
-    this.shadow.getElementById('btn-generate-nsec')?.addEventListener('click', async () => {
-      const status = this.shadow.getElementById('create-status');
-      const btn    = this.shadow.getElementById('btn-generate-nsec') as HTMLButtonElement | null;
-      this.setIdentityStatus(status, 'Generating…', 'spin');
-      if (btn) btn.disabled = true;
-      const res = await chrome.runtime.sendMessage({ type: 'GENERATE_NSEC' }).catch(() => null);
-      if (btn) btn.disabled = false;
-      if (res?.success && typeof res.data?.nsec === 'string' && typeof res.data?.npub === 'string') {
-        this.generatedNsec = res.data.nsec;
-        this.generatedNpub = res.data.npub;
-        this.view = 'keyBackup';
-        this.render();
-      } else {
-        this.setIdentityStatus(status, res?.error ?? 'Failed to generate key. Please try again.', 'error');
+    // Content scripts have no chrome.tabs — the anchor above is the actual opener;
+    // the button mirrors it for users who reach for the primary action first.
+    this.shadow.getElementById('btn-open-nstart')?.addEventListener('click', () => {
+      window.open('https://nstart.me', '_blank', 'noopener,noreferrer');
+    });
+    this.shadow.getElementById('btn-connect-after-nstart')?.addEventListener('click', async () => {
+      // nstart can finish by installing a signing extension. If the user did that
+      // while away, cached auth state doesn't know yet — probe the live page for
+      // window.nostr first (same reason as btn-detect-nip07), then land on the tab
+      // that matches how they were actually set up. Falls back to bunker://,
+      // nstart's default hand-off.
+      const probed = await detectAuthState().catch(() => null);
+      if (probed?.type === 'pro') {
+        await chrome.runtime.sendMessage({ type: 'NIP07_DETECTED', hasNIP07: true }).catch(() => { /* non-fatal */ });
+        const res = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }).catch(() => null);
+        if (res?.success && res.data) this.authState = res.data as AuthState;
       }
+      this.identityStep = 'existing';
+      this.initialConnectTab = this.authState.type === 'pro' ? 'nip07' : 'nip46';
+      this.render();
     });
   }
 
