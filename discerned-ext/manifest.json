@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Discerned",
   "version": "0.2.1",
-  "description": "Web clipper with ratings and publishing. Rate what's worth reading, keep a private library, publish to Nostr when you choose.",
+  "description": "A web clipper with a Signal Rating. Keep what's worth reading, skip the rest, and publish your ratings when you choose.",
   "permissions": [
     "contextMenus",
     "storage",

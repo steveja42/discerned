@@ -360,7 +360,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: 'discerned-capture',
-      title: 'Discerned: Evaluate → Clip',
+      title: 'Clip with Discerned',
       contexts: ['page', 'selection'],
     });
   });

@@ -3,7 +3,7 @@
 // bridge (postMessage) and the public Nostr cast feed.
 
 export type ClipFormat = 'selection' | 'article' | 'full-page' | 'bookmark';
-export type SignalLevel = 'Toxic' | 'Noise' | 'Passable' | 'Worthwhile' | 'Masterpiece';
+export type SignalLevel = 'Toxic' | 'Noise' | 'Ordinary' | 'Worthwhile' | 'Masterpiece';
 export type Category = string;
 
 export interface Capture {

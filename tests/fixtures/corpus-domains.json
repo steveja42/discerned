@@ -990,6 +990,11 @@
       "name": "offguardian",
       "url": "https://off-guardian.org/2026/07/20/faking-water-bankruptcy-part-2-climate-change/",
       "note": "PHASE 4.6 — HOTLINK-PROTECTED IMAGES: WordPress long-form article (banner hero + donation-button images). Guards the CAST-IMAGE regression (user report 2026-08-03, 'the clip shows an image but the cast doesn't'): the site 403s any request carrying a foreign Referer (200 with no referer, 403 for https://discerned.online/), so every cast image silently failed to load while the CLIP looked perfect — the clip renders inlined base64, the cast must publish a real URL because data: URIs are too large for relays. Fixed in the WEB APP, not the extension (which was emitting correct markdown + imeta all along): DetailPanel now sets referrerPolicy='no-referrer' on every cast-image path (markdown via MD_COMPONENTS, hero, gallery, inline). WATCH OUT: the sweep's CLIP screenshot cannot catch this — check {domain}--3-cast.png specifically, and confirm the FAKING WATER BANKRUPTCY banner is visible rather than a blank gap."
+    },
+    {
+      "name": "postguam",
+      "url": "https://www.postguam.com/news/national/ancient-dna-shows-ice-age-humans-targeted-female-mammoths/article_926a34f9-7e9d-522f-8c98-aeadfb90c27c.html",
+      "note": "PHASE 4.6 — BLUR-UP LAZY IMAGES: TownNews/BLOX local-news article. Guards the DUPLICATE-IMAGE regression (user report 2026-08-03, 'shows each of the first two images twice on clips and cast'): each photo is rendered as a PAIR — the real <img> (still lazy, src is a 4x3 base64 spacer, real URL only in srcset) plus an aria-hidden='true' low-res `tnt-blurred-image` placeholder holding the http URL. Live CSS layers them; sanitisation strips it and BOTH render. Neither existing dedup pass could catch it (they key on a shared URL stem or a shared >10-char alt, and this pair shares NEITHER), so markExcluded now drops img[aria-hidden='true'] — the page's own declaration that the image is decorative. Generic: tnt-blurred-image ships on hundreds of TownNews local-news sites. WATCH OUT: duplicated images do NOT lower the score — check the clip screenshot for each photo appearing twice."
     }
   ]
 }

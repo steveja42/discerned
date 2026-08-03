@@ -5,7 +5,7 @@ import { LL, log } from '@/lib/logger';
 import type { ClipData } from '@/lib/types';
 
 // Signal rating vocabulary (low → high) — mirrors SIGNAL_LEVELS in the extension's shared/types.ts.
-export const SIGNAL_LEVELS = ['Toxic', 'Noise', 'Passable', 'Worthwhile', 'Masterpiece'] as const;
+export const SIGNAL_LEVELS = ['Toxic', 'Noise', 'Ordinary', 'Worthwhile', 'Masterpiece'] as const;
 
 // Built-in qualifier chips — mirrors QUALIFIER_GROUPS in the extension's shared/types.ts. Keep in sync.
 export const QUALIFIER_GROUPS: readonly { label: string; items: readonly string[] }[] = [

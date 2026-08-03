@@ -429,11 +429,11 @@ ${themeVarsBlock(this.effectiveTheme)}
     // IndexedDB row's `encrypted` field holds plaintext JSON; NIP-44 is stubbed),
     // so nothing here may imply encryption.
     const desc = signerDetected
-      ? `Your Nostr signing extension is ready. Sign in to publish your ratings under your own
+      ? `Your Nostr signing extension is ready. Sign in to publish your discerns under your own
          identity — they'll appear in any Nostr client, to the people who already follow you.`
-      : `Your clips and ratings stay on this device. Connect a Nostr identity to publish them —
-         Nostr is an open social network where you own your identity and your posts, and no
-         company can take them away.`;
+      : `Clip what's worth reading, rate it, and build a library of high-quality information. It
+         all stays on this device. When you want to publish, connect a Nostr identity — your
+         ratings stay yours, on an open network no company controls.`;
     const primaryLabel = signerDetected ? 'Sign in →' : 'Connect a Nostr identity →';
 
     this.shadow.innerHTML = `
@@ -1686,7 +1686,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       // While unrated the first press SELECTS rather than moves.
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown'].includes(e.key)) {
         e.preventDefault();
-        commit(2); // Passable (midpoint)
+        commit(2); // Ordinary (midpoint)
       } else if (e.key === 'Home') {
         e.preventDefault();
         commit(0);

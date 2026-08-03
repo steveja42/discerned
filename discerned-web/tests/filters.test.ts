@@ -40,7 +40,7 @@ describe('matchesSignal', () => {
     expect(matchesSignal('Worthwhile', ['Toxic', 'Worthwhile'])).toBe(true);
     expect(matchesSignal('Masterpiece', ['Worthwhile'])).toBe(false);
     // Exact-level semantics: selecting a level is NOT a minimum threshold.
-    expect(matchesSignal('Masterpiece', ['Passable'])).toBe(false);
+    expect(matchesSignal('Masterpiece', ['Ordinary'])).toBe(false);
   });
 
   it('excludes unrated clips once any level is selected', () => {

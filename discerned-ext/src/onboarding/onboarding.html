@@ -72,6 +72,15 @@
 
     h1 { font-size: 1.4rem; font-weight: 600; }
 
+    /* Benefit line above the pinning steps — frames the instructions as a means
+       to an end rather than the first thing the product says about itself. */
+    .lede {
+      color: var(--p-ink-2);
+      font-size: 1rem;
+      line-height: 1.5;
+      margin-bottom: -12px;
+    }
+
     .steps-list { display: flex; flex-direction: column; gap: 20px; }
 
     .step-item { display: flex; gap: 16px; align-items: flex-start; }
@@ -128,9 +137,10 @@
     </svg>
     <span>Discerned</span>
   </div>
-  <p class="tagline">Filter the noise. Clip, rate, and publish what's actually worth reading.</p>
+  <p class="tagline">Clip it, rate it, keep it. Build your own library of what's worth reading.</p>
 
   <div class="card">
+    <p class="lede">Discerned helps you build your own trusted library of high-quality information.</p>
     <h1>Pin Discerned to your toolbar</h1>
 
     <div class="steps-list">
@@ -153,9 +163,8 @@
     </div>
 
     <p class="hint">
-      Your clips stay on this device until you choose to publish. To publish your ratings and clips,
-      connect a Nostr identity — Nostr is an open social network where you own your identity and
-      your posts.
+      Your clips stay on this device until you choose to publish. Publishing uses Nostr — an open
+      social network where you own your identity and your posts.
     </p>
 
     <button class="btn-done" id="btn-done">Got it — start using Discerned →</button>

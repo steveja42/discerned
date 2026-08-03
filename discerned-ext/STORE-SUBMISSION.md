@@ -35,7 +35,9 @@ today.
 >
 > **CLIP AND RATE WHAT MATTERS**
 > • Save full articles, a text selection, or a plain bookmark in one click.
-> • Score it on a five-level Signal rating, from "Toxic" to "Masterpiece".
+> • Give it a Signal Rating — five levels, from "Toxic" through "Ordinary" to
+>   "Masterpiece". It's the whole point: a library you can sort by what was actually
+>   worth reading.
 > • Tag it by tone, utility, and longevity — or add your own qualifiers.
 > • Sort into categories, with your own alongside the built-in ones.
 >
@@ -186,7 +188,7 @@ Verified for the current build:
 - [x] No sourcemaps in the production build
 - [x] No test hooks (`__DISCERNED_TEST_*`) in the production build
 - [x] `pnpm type-check`, `pnpm lint`, `pnpm test` all clean
-- [x] Short description written (`manifest.json` `description`, 124/132 chars)
+- [x] Short description written (`manifest.json` `description`, 119/132 chars)
 - [x] Detailed description drafted (see the Store listing section above)
 - [ ] Privacy policy **deployed** and reachable at https://discerned.online/privacy
 - [ ] Screenshots (1280×800 or 640×400) — at least one, up to five

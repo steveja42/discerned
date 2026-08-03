@@ -2457,6 +2457,28 @@ function markExcluded(root: HTMLElement = document.body): () => void {
     });
   } catch { /* invalid selector on some engine — skip */ }
 
+  // Decorative IMAGES the page itself marks as non-content. Blur-up lazy-load
+  // wrappers render a low-res placeholder <img aria-hidden="true"> next to the
+  // real photo; on the live page CSS layers one over the other, but once
+  // sanitisation strips that CSS BOTH show and every photo appears twice.
+  // postguam.com (TownNews/BLOX `tnt-blurred-image`, used across hundreds of
+  // local-news sites) is the reference case.
+  //
+  // The existing dedup passes cannot catch this pair: the real <img> is
+  // lazy-loaded, so its `src` is still a 4x3 base64 spacer while the blur copy
+  // holds the http URL — the two share neither a URL stem nor an alt (the
+  // placeholder's is empty). `aria-hidden` is the page's own statement that the
+  // element is decorative, which is a better signal than either.
+  //
+  // Scoped to <img> deliberately: aria-hidden on a text container is common and
+  // legitimate (icon fonts beside visible labels), and excluding those would
+  // drop real content.
+  try {
+    querySelectorAllDeep(root, 'img[aria-hidden="true"]').forEach(img => {
+      img.setAttribute(EXCL_MARKER, '1');
+    });
+  } catch { /* invalid selector on some engine — skip */ }
+
   forEachDeepElement(root, el => {
     if (el.id === 'discerned-overlay') return;
     const s = window.getComputedStyle(el);

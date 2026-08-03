@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!--
+  Blur-up lazy-load image pairs (TownNews/BLOX `tnt-blurred-image`), reduced from
+  postguam.com (user report 2026-08-03: "shows each of the first two images twice
+  on clips and cast").
+
+  The shape that matters, verified against the live page:
+
+    <img class="... blur lazyloaded" alt="<real alt>" src="data:…4x3 spacer…"
+         srcset="<real url>">           ← the REAL photo, still lazy
+    <img aria-hidden="true" src="<real url>?resize=200,…">   ← blur placeholder
+
+  Why the existing dedup passes cannot catch it:
+   • dedupAdjacentImages keys on a shared URL stem OR a shared >10-char alt. The
+     real <img> is still lazy so its src is a 4x3 base64 spacer (NO url stem),
+     and the placeholder carries alt="" — so the pair shares NEITHER key.
+   • dedupGalleryThumbnails needs a real alt on BOTH copies; the placeholder's
+     is empty.
+
+  `aria-hidden="true"` is the page's own statement that the element is
+  decorative, which is why markExcluded keys on that instead.
+
+  The 4x3 base64 below is the real spacer from the live page (decoded: PNG,
+  width 4, height 3) — keeping it real matters, because a full-size data: src
+  would give the pair a matching key and the test would pass without the fix.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Ancient DNA shows Ice Age humans targeted female mammoths</title>
+</head>
+<body>
+  <main>
+    <article>
+      <h1>Ancient DNA shows Ice Age humans targeted female mammoths</h1>
+
+      <figure class="photo layout-horizontal hover-expand">
+        <div class="image">
+          <div>
+            <img class="img-responsive full blur lazyloaded"
+                 alt="Cavemen targeted female mammoths, suggests new research"
+                 width="1662" height="1247"
+                 sizes="813px"
+                 srcset="https://cdn.example.com/assets/346466e1/6a70beb6319f9.image.jpg?resize=990%2C743 990w"
+                 src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAQAAAAe/WZNAAAAEElEQVR42mM8U88ABoZRMIwAAAeQAAGvQBk0AAAAAElFTkSuQmCC">
+          </div>
+          <div class="tnt-blurred-image">
+            <img aria-hidden="true" loading="lazy" alt="" width="200" height="150"
+                 src="https://cdn.example.com/assets/346466e1/6a70beb6319f9.image.jpg?resize=200%2C150">
+          </div>
+        </div>
+        <figcaption>Mammoth herds were targeted selectively, the study suggests.</figcaption>
+      </figure>
+
+      <p>Ancient DNA recovered from mammoth remains across Eurasia and North America
+      indicates that Ice Age hunters killed female mammoths far more often than males,
+      a pattern researchers say points to deliberate selection rather than chance
+      encounters on the open steppe.</p>
+
+      <figure class="photo layout-horizontal hover-expand">
+        <div class="image">
+          <div>
+            <img class="img-responsive full blur lazyloaded"
+                 alt="pexels-theshuttervision-9660890"
+                 width="1280" height="853"
+                 sizes="813px"
+                 srcset="https://cdn.example.com/assets/171449de/6a70beb66217d.image.jpg?resize=990%2C660 990w"
+                 src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAQAAAAe/WZNAAAAEElEQVR42mM8U88ABoZRMIwAAAeQAAGvQBk0AAAAAElFTkSuQmCC">
+          </div>
+          <div class="tnt-blurred-image">
+            <img aria-hidden="true" loading="lazy" alt="" width="200" height="133"
+                 src="https://cdn.example.com/assets/171449de/6a70beb66217d.image.jpg?resize=200%2C133">
+          </div>
+        </div>
+      </figure>
+
+      <p>The team analysed nuclear DNA from more than five hundred specimens, assigning
+      sex to each and comparing the ratios found at butchery sites with those expected
+      from natural mortality. The imbalance held across regions and millennia.</p>
+
+      <p>Because mammoth herds were matriarchal, targeting females would have been both
+      easier and more disruptive to herd survival, which may help explain the pace of
+      the species' decline as human populations expanded northward.</p>
+    </article>
+  </main>
+</body>
+</html>

@@ -32,7 +32,7 @@ itself promises no reputation score and no follow graph.
 | Field | Text |
 |---|---|
 | Name | Discerned |
-| Description (132 char max; currently 124) | Web clipper with ratings and publishing. Rate what's worth reading, keep a private library, publish to Nostr when you choose. |
+| Description (132 char max; currently 119) | A web clipper with a Signal Rating. Keep what's worth reading, skip the rest, and publish your ratings when you choose. |
 
 Shown in store search results, on the store item page, in `chrome://extensions`, and in
 the puzzle-piece menu. Also indexed by store search — "web clipper" is the load-bearing
@@ -48,15 +48,20 @@ Opens in a tab on first install. [src/onboarding/onboarding.html](src/onboarding
 |---|---|
 | Title (browser tab) | Welcome to Discerned |
 | Wordmark | Discerned |
-| [Tagline](src/onboarding/onboarding.html#L131) | Filter the noise. Clip, rate, and publish what's actually worth reading. |
-| [Card heading](src/onboarding/onboarding.html#L134) | Pin Discerned to your toolbar |
-| [Step 1](src/onboarding/onboarding.html#L139) | Click the `Extensions` puzzle-piece icon in Chrome's top-right toolbar. |
-| [Step 2](src/onboarding/onboarding.html#L143) | Find **Discerned** in the list. |
-| [Step 3](src/onboarding/onboarding.html#L147) | Click the **pin** icon 📌 next to it so the Discerned beacon stays visible in your toolbar. |
-| [Step 4](src/onboarding/onboarding.html#L151) | Browse to any page, then **right-click** or click the Discerned beacon to clip and rate what you're reading. |
-| [Hint](src/onboarding/onboarding.html#L155-L158) | Your clips stay on this device until you choose to publish. To publish your ratings and clips, connect a Nostr identity — Nostr is an open social network where you own your identity and your posts. |
-| [Button](src/onboarding/onboarding.html#L160) | Got it — start using Discerned → |
-| [Footer](src/onboarding/onboarding.html#L162-L165) | Something not working? [Report it](https://discerned.online/feedback?target=extension). |
+| [Tagline](src/onboarding/onboarding.html#L140) | Clip it, rate it, keep it. Build your own library of what's worth reading. |
+| [Lede](src/onboarding/onboarding.html#L143) | Discerned helps you build your own trusted library of high-quality information. |
+| [Card heading](src/onboarding/onboarding.html#L144) | Pin Discerned to your toolbar |
+| [Step 1](src/onboarding/onboarding.html#L149) | Click the `Extensions` puzzle-piece icon in Chrome's top-right toolbar. |
+| [Step 2](src/onboarding/onboarding.html#L153) | Find **Discerned** in the list. |
+| [Step 3](src/onboarding/onboarding.html#L157) | Click the **pin** icon 📌 next to it so the Discerned beacon stays visible in your toolbar. |
+| [Step 4](src/onboarding/onboarding.html#L161) | Browse to any page, then **right-click** or click the Discerned beacon to clip and rate what you're reading. |
+| [Hint](src/onboarding/onboarding.html#L165-L168) | Your clips stay on this device until you choose to publish. Publishing uses Nostr — an open social network where you own your identity and your posts. |
+| [Button](src/onboarding/onboarding.html#L170) | Got it — start using Discerned → |
+| [Footer](src/onboarding/onboarding.html#L172-L175) | Something not working? [Report it](https://discerned.online/feedback?target=extension). |
+
+The **lede** sits above the pinning steps so the first thing the page says is what the
+product is for, not how to pin it. It carries a `.lede` rule of its own (the card is a
+flex column, so it inherits card spacing and only needs type styling).
 
 ---
 
@@ -75,7 +80,7 @@ Shown only when the toolbar icon is clicked on a page where content scripts can'
 
 ## 4. Overlay — gate (first run, guests)
 
-The first screen a new user sees. [src/content/overlay.ts](src/content/overlay.ts#L397-L427)
+The first screen a new user sees. [src/content/overlay.ts](src/content/overlay.ts#L424-L455)
 
 ### 4a. No signing extension detected
 
@@ -83,7 +88,7 @@ The first screen a new user sees. [src/content/overlay.ts](src/content/overlay.t
 |---|---|
 | Icon | 🔒 |
 | Title | Start local, publish when ready |
-| Body | Your clips and ratings stay on this device. Connect a Nostr identity to publish them — Nostr is an open social network where you own your identity and your posts, and no company can take them away. |
+| Body | Clip what's worth reading, rate it, and build a library of high-quality information. It all stays on this device. When you want to publish, connect a Nostr identity — your ratings stay yours, on an open network no company controls. |
 | Primary button | Connect a Nostr identity → |
 | Secondary button | Not now — keep clips on this device |
 
@@ -93,7 +98,7 @@ The first screen a new user sees. [src/content/overlay.ts](src/content/overlay.t
 |---|---|
 | Icon | 🔑 |
 | Title | You're one click from publishing |
-| Body | Your Nostr signing extension is ready. Sign in to publish your ratings under your own identity — they'll appear in any Nostr client, to the people who already follow you. |
+| Body | Your Nostr signing extension is ready. Sign in to publish your discerns under your own identity — they'll appear in any Nostr client, to the people who already follow you. |
 | Primary button | Sign in → |
 | Secondary button | Not now — keep clips on this device |
 
@@ -221,7 +226,7 @@ Tooltips per tick:
 |---|---|
 | Toxic | 1 ★ — Outright fraud, dangerous disinformation, or malicious propaganda. |
 | Noise | 2 ★ — Clickbait, low-effort engagement bait, or highly manipulative spin. |
-| Passable | 3 ★ — Fine for a quick glance. Nothing wrong with it, but nothing that stays with you. |
+| Ordinary | 3 ★ — Fine for a quick glance. Nothing wrong with it, but nothing that stays with you. |
 | Worthwhile | 4 ★ — Solid, high-signal content. It delivered exactly what it promised. |
 | Masterpiece | 5 ★ — Exceptional execution. Flawless utility, deep wisdom, or elite artistic craft. |
 
@@ -287,8 +292,8 @@ Full-page identity setup, opened from the popup when no identity exists.
 |---|---|
 | Tab title | Connect — Discerned |
 | [Page title](src/connect/connect.html#L323) | Connect a Nostr identity |
-| [Intro](src/connect/connect.html#L324-L329) | A Nostr identity lets you publish your ratings publicly, signed so they're verifiably yours. Nostr is an open social network — you own your identity and everything you post, it works across every Nostr app, and no company can take it away. Choose how to connect; all methods are free and take about a minute. |
-| Connected state | ✓ Already connected / You can close this tab and start evaluating. |
+| [Intro](src/connect/connect.html#L324-L329) | Publishing lets your discerns leave this device — signed, so they're verifiably yours, and readable in any Nostr app. Nostr is an open network: you own your identity and everything you post, and no company can take it away. All methods below are free and take about a minute. |
+| Connected state | ✓ Already connected / You can close this tab and start discerning. |
 
 **Method 1 — 🔌 [Signing extension](src/connect/connect.html#L346)** · badge *Recommended*
 Install a signing extension like [Alby] or [nos2x] to sign with your Nostr identity.
@@ -316,7 +321,7 @@ link and try again. · Failed to save key. Please try again.
 
 | Element | Text |
 |---|---|
-| Right-click entry (page + selection) | Discerned: Evaluate → Clip |
+| Right-click entry (page + selection) | Clip with Discerned |
 
 ---
 
@@ -324,12 +329,12 @@ link and try again. · Failed to save key. Please try again.
 
 Not defects, but worth a decision if the copy gets another pass:
 
-1. **"Evaluate" alongside "rate".** The context menu says "Discerned: Evaluate → Clip"
-   ([background.ts:363](src/background/background.ts#L363)) and the connect tab says
-   "start evaluating" ([connect.html:336](src/connect/connect.html#L336)), while most of
-   the UI says *rate*. **Kept deliberately** — "evaluate" carries the considered-judgement
-   sense the product is about, where "rate" is the lighter everyday verb. Not a defect;
-   noted so it isn't "fixed" by accident.
+1. **"Discern" is a noun and a gerund, never an imperative.** A published evaluation is a
+   *discern* ("publish your discerns", "start discerning") — used only on screens the user
+   reaches after they know the product. Keep it out of first-contact strings: the context
+   menu says "Clip with Discerned" ([background.ts:363](src/background/background.ts#L363)),
+   not "Discern this page", because that's where a new user most needs to know what the
+   click does. *Rate* is the verb throughout.
 
 2. **Emoji vs. custom SVG for the same concepts.** The publish slider uses the
    `ICON_CAST` / `ICON_CLIP` line SVGs ([overlay.ts:1998-2003](src/content/overlay.ts#L1998-L2003)),

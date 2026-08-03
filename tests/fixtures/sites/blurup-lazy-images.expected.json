@@ -1,0 +1,11 @@
+{
+  "format": "article",
+  "title": { "contains": "targeted female mammoths" },
+  "url": "http://127.0.0.1:4173/blurup-lazy-images.html",
+  "bodyText": {
+    "minLength": 600,
+    "contains": ["Ancient DNA recovered from mammoth remains", "matriarchal"]
+  },
+  "bodyHtml": { "hasImgs": true, "noScripts": true },
+  "thumbnail": "present"
+}

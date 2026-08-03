@@ -236,7 +236,7 @@ Evaluation is emitted as NIP-32 label tags (namespaced `l` values):
 ### Evaluation
 | Field | Values |
 |---|---|
-| Signal (optional; absent = unrated) | Toxic · Noise · Passable · Worthwhile · Masterpiece (1★ → 5★) |
+| Signal (optional; absent = unrated) | Toxic · Noise · Ordinary · Worthwhile · Masterpiece (1★ → 5★) |
 | Qualifiers (multi-select) | Humorous / Satire · Academic / Dense · Opinion / Essay · Practical Tool · Primary Source · Quick Read · Timeless · Current Event · Passing Trend · (custom) |
 | Category | General · Tech · Finance · Health · Politics · Philosophy · Science · Culture · (custom) |
 

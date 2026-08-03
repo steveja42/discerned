@@ -24,18 +24,18 @@ export interface LogRelayMessage {
   serialized: string[];
 }
 
-export type SignalLevel = 'Toxic' | 'Noise' | 'Passable' | 'Worthwhile' | 'Masterpiece';
+export type SignalLevel = 'Toxic' | 'Noise' | 'Ordinary' | 'Worthwhile' | 'Masterpiece';
 export type Category = string; // Predefined: General, Tech, Finance, Health, Politics, Philosophy, Science, Culture; or custom
 export type PublishMode = 'cast' | 'local' | 'both';
 
 // Low → high; star count = index + 1.
-export const SIGNAL_LEVELS = ['Toxic', 'Noise', 'Passable', 'Worthwhile', 'Masterpiece'] as const;
+export const SIGNAL_LEVELS = ['Toxic', 'Noise', 'Ordinary', 'Worthwhile', 'Masterpiece'] as const;
 
 // Hover-tooltip descriptions for each signal level (shown on the overlay ticks).
 export const SIGNAL_DESCRIPTIONS: Record<SignalLevel, string> = {
   Toxic: '1 ★ — Outright fraud, dangerous disinformation, or malicious propaganda.',
   Noise: '2 ★ — Clickbait, low-effort engagement bait, or highly manipulative spin.',
-  Passable: '3 ★ — Fine for a quick glance. Nothing wrong with it, but nothing that stays with you.',
+  Ordinary: '3 ★ — Fine for a quick glance. Nothing wrong with it, but nothing that stays with you.',
   Worthwhile: '4 ★ — Solid, high-signal content. It delivered exactly what it promised.',
   Masterpiece: '5 ★ — Exceptional execution. Flawless utility, deep wisdom, or elite artistic craft.',
 };
