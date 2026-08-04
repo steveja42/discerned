@@ -21,10 +21,17 @@ manifest. Plain text with basic line breaks; the Store strips most formatting.
 
 **Claim discipline applies here as much as in-product** (see [UI-TEXT.md](UI-TEXT.md)): clips
 are NOT encrypted at rest, so nothing below says "encrypted", "secure", or pairs a
-padlock with local storage. Discerned has no follow graph and no reputation score, so
-neither is promised — ownership and portability are attributed to Nostr, which does
-deliver them. Don't add "you own your social graph" here; it isn't true of this extension
-today.
+padlock with local storage. Discerned has no reputation score, so none is promised —
+ownership and portability are attributed to Nostr, which does deliver them. Don't add
+"you own your social graph" here; it isn't true of this extension today.
+
+**The shared-feed claim** describes what ships: `lib/nostr/feed.ts` subscribes with no
+`authors` filter, so `/discerns` shows every published discern from every publisher, and
+the feed UI already supports follows + per-author filtering. Keep it in the present
+tense and keep it mechanical — "a public feed you can filter", not "a globally curated
+knowledge base". There is no curation, no ranking, and no reputation, so don't imply
+any; and don't describe the publisher population ("readers everywhere", "thousands of
+curators") until it exists.
 
 > ## Turn your daily reading into signal worth keeping.
 >
@@ -55,6 +62,14 @@ today.
 > • Nostr is an open social network: you own your identity and your posts, they work
 >   across every Nostr app, and no company can take them away.
 >
+> **A SHARED RECORD OF WHAT'S WORTH READING**
+> Published ratings land in a public feed at discerned.online, open to read whether or
+> not you use the extension. Filter it by Signal Rating, category, or qualifier to see
+> what people rated highly and why — and follow the readers whose judgement you trust.
+> Every rating there was published by someone who chose to, signed with their own key,
+> on an open protocol no company controls. The more readers who publish, the more useful
+> the record becomes.
+>
 > **CAPTURE THAT LOOKS LIKE WHAT YOU READ**
 > Discerned reproduces the page's real structure — headline, byline, images, comment
 > threads — rather than flattening it into plain text. Sites that defeat ordinary
@@ -63,7 +78,7 @@ today.
 > were actually looking at.
 >
 > Stop saving articles to a read-later graveyard. Start keeping a record of what was
-> worth reading.
+> worth reading — and, if you choose, help build one worth sharing.
 
 ---
 
