@@ -68,7 +68,6 @@ Current social media amplifies engagement-driven signals (likes, shares) that of
 ├─────────────────────────────────────────────┤
 │  Extension Pages                             │
 │  ├─ popup.html — auth status & usage stats  │
-│  ├─ connect.html — identity setup           │
 │  └─ onboarding.html — first-run welcome     │
 ├─────────────────────────────────────────────┤
 │  Storage                                     │
@@ -150,8 +149,6 @@ pnpm lint         # ESLint on src/**/*.ts
 | [src/content/web-bridge.ts](src/content/web-bridge.ts) | Extension ↔ web app bridge messaging |
 | [src/onboarding/onboarding.ts](src/onboarding/onboarding.ts) | First-run welcome page |
 | [src/onboarding/onboarding.html](src/onboarding/onboarding.html) | Onboarding page markup |
-| [src/connect/connect.ts](src/connect/connect.ts) | Identity setup (NIP-07/46/nsec) |
-| [src/connect/connect.html](src/connect/connect.html) | Connect page markup |
 | [src/popup/popup.ts](src/popup/popup.ts) | Auth status, usage stats, disconnect |
 | [src/popup/popup.html](src/popup/popup.html) | Popup markup |
 | [src/shared/types.ts](src/shared/types.ts) | All interfaces, message types, storage keys |

@@ -674,10 +674,15 @@ ${themeVarsBlock(this.effectiveTheme)}
           <div id="panel-nip07" class="identity-panel"${panelHidden('nip07')}>${nip07Panel}</div>
           <div id="panel-nip46" class="identity-panel"${panelHidden('nip46')}>
             <p class="panel-desc">
-              Create a free account at
-              <a href="https://nstart.me" target="_blank" rel="noopener noreferrer">nstart.me</a>,
-              then paste your <code>bunker://</code> link below.
-              Your private key never leaves the remote signer.
+              If you already use a remote signer, paste its <code>bunker://</code> link below.
+              Your private key never leaves the signer — Discerned only sends it events to sign.
+            </p>
+            <p class="panel-desc">
+              Don't have one yet? You can create an account at
+              <a href="https://nstart.me" target="_blank" rel="noopener noreferrer">nstart.me</a>
+              or other bunker signers, then copy the <code>bunker://</code> link it gives you.
+              Setting up a signer is a separate step outside Discerned — if you don't end up with
+              a link to paste, the Extension tab is easier and better supported.
             </p>
             <textarea id="bunker-input" rows="3" placeholder="bunker://…"></textarea>
             <button class="btn btn-primary" id="btn-connect-nip46" type="button">Connect account</button>

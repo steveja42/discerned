@@ -283,38 +283,6 @@ Section head **Qualifiers**, custom input placeholder `+ add custom tag`.
 
 ---
 
-## 9. Connect tab
-
-Full-page identity setup, opened from the popup when no identity exists.
-[src/connect/connect.html](src/connect/connect.html)
-
-| Element | Text |
-|---|---|
-| Tab title | Connect — Discerned |
-| [Page title](src/connect/connect.html#L323) | Connect a Nostr identity |
-| [Intro](src/connect/connect.html#L324-L329) | Publishing lets your discerns leave this device — signed, so they're verifiably yours, and readable in any Nostr app. Nostr is an open network: you own your identity and everything you post, and no company can take it away. All methods below are free and take about a minute. |
-| Connected state | ✓ Already connected / You can close this tab and start discerning. |
-
-**Method 1 — 🔌 [Signing extension](src/connect/connect.html#L346)** · badge *Recommended*
-Install a signing extension like [Alby] or [nos2x] to sign with your Nostr identity.
-After installing, browse any page — Discerned detects it automatically.
-Links *Install Alby →* / *Install nos2x →*, button *I already have one — detect it now*
-
-**Method 2 — 🔗 Remote signer** · subtitle *via bunker:// link*
-Create a free account at [nstart.me], then paste your `bunker://` link below. Your
-private key never leaves the remote signer. — button *Connect account*
-
-**Method 3 — 🔑 Account key** · subtitle *nsec import*
-⚠️ Your account key gives full access to your identity. It will be encrypted with a PIN
-before being saved — only you can unlock it. — button *Encrypt and save*
-
-**Status messages** — [connect.ts:59-152](src/connect/connect.ts#L59-L152)
-Checking… · Connecting… · Encrypting… · ✓ Extension detected — you're connected! ·
-✓ Connected! · ✓ Saved! · Could not check — try again. · Connection failed. Check the
-link and try again. · Failed to save key. Please try again.
-
----
-
 ## 10. Context menu
 
 [background.ts:363](src/background/background.ts#L363)

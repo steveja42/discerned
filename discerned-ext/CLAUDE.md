@@ -63,7 +63,7 @@ So `discerned-web/public/icons/` is **no longer a byte-mirror** of the extension
 
 **All icons are transparent and full-bleed.** No background tile: Chrome composites the toolbar icon onto whatever theme the user runs, and browsers composite a favicon onto a tab strip that is near-white in light mode and near-black in dark mode, so an opaque tile would show as a coloured square. Consequences worth knowing before editing a master:
 
-- The mark is scaled to its own **tight bounding box** — `4 3 24 30` in `MiniBeacon`'s `0 0 32 36` coordinate system, measured with `getBBox()`. The raw viewBox carries ~4 units of slack per side, which is the "margin" that made the old icons look small. The same tight viewBox is used by the inline brand marks in `overlay.ts` / `popup.html` / `onboarding.html` / `connect.html`, so a CSS `height` there is the mark's real rendered height.
+- The mark is scaled to its own **tight bounding box** — `4 3 24 30` in `MiniBeacon`'s `0 0 32 36` coordinate system, measured with `getBBox()`. The raw viewBox carries ~4 units of slack per side, which is the "margin" that made the old icons look small. The same tight viewBox is used by the inline brand marks in `overlay.ts` / `popup.html` / `onboarding.html`, so a CSS `height` there is the mark's real rendered height.
 - **Opacities are raised from MiniBeacon's**: rays `0.5 → 0.75`, lamp halo `0.12 → 0.28`. Those values were tuned against an opaque near-black tile; composited onto an arbitrary background, `0.12` azure becomes an ~alpha-30 smudge that makes the lamp read as a pale hole punched in the tower.
 
 **The 16px problem.** A 16×16 downscale of the full mark is an unreadable smudge: the mark lands ~4px wide and only 22 of 256 pixels carry any ink. So 16px has its own simplified drawing (`art/icon-small.svg`, and `discerned-web/art/icon-small.svg` for the light side) — three rays instead of five, one rung, a solid tower instead of an outline. `gen-icons.mjs` picks it via `masterFor()` for `icon16.png` and the 16px `favicon.ico` frame only. Two traps that cost a round of rework there:
@@ -85,7 +85,7 @@ The geometry in `art/icon.svg` is copied verbatim from `discerned-web/components
 
 ### The in-app brand mark
 
-The extension UI used a 📡 emoji as its logo. That's now the beacon, as an **inline SVG in `currentColor`**, in four places: the overlay panel header (`overlay.ts`, via the `BRAND_MARK` constant — used by both the gate and main views), `popup.html`, `onboarding.html`, and `connect.html`.
+The extension UI used a 📡 emoji as its logo. That's now the beacon, as an **inline SVG in `currentColor`**, in three places: the overlay panel header (`overlay.ts`, via the `BRAND_MARK` constant — used by both the gate and main views), `popup.html`, and `onboarding.html`.
 
 `currentColor`, **not** the toolbar icon's azure: the overlay's accent is amber (`shared/theme.ts`), so a blue mark would clash. Inheriting the surrounding ink is what `MiniBeacon` does on the web too. Each host sets the size in CSS.
 
