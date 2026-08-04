@@ -2473,9 +2473,57 @@ function markExcluded(root: HTMLElement = document.body): () => void {
   // Scoped to <img> deliberately: aria-hidden on a text container is common and
   // legitimate (icon fonts beside visible labels), and excluding those would
   // drop real content.
+  //
+  // The rule is about the PAIR, not about aria-hidden alone. Within one figure
+  // the two copies are: a lazy <img> whose src is a tiny data: spacer (its real
+  // URL, if any, lives in srcset) and an aria-hidden low-res <img> holding a
+  // plain http src. Exactly one of them should survive, and which one depends on
+  // whether the lazy copy can actually resolve:
+  //
+  //   • lazy copy HAS srcset  → it will inline the full-size photo; drop the
+  //     aria-hidden placeholder (postguam's hero).
+  //   • lazy copy has NO srcset → its src is a dead 4x3 spacer and the
+  //     aria-hidden copy is the only real image; drop the SPACER instead
+  //     (postguam's lower two photos — dropping the wrong one deleted them).
+  //
+  // Keying on "which copy can actually produce pixels" rather than on
+  // aria-hidden is what makes this correct for both shapes.
+  const DATA_SPACER_MAX = 512; // a real inlined photo is orders of magnitude bigger
+  const isDeadSpacer = (im: Element): boolean => {
+    const src = im.getAttribute('src') ?? '';
+    if (!src.startsWith('data:') || src.length > DATA_SPACER_MAX) return false;
+    // Recoverable from srcset → not dead; the inliner will fetch the real bytes.
+    return !(im.getAttribute('srcset') || im.getAttribute('data-srcset')
+      || im.getAttribute('data-src') || im.getAttribute('data-lazy-src'));
+  };
   try {
+    const scopes = new Set<Element>();
     querySelectorAllDeep(root, 'img[aria-hidden="true"]').forEach(img => {
-      img.setAttribute(EXCL_MARKER, '1');
+      // Climb to the nearest ancestor that actually holds BOTH copies. A plain
+      // closest() on image-ish class names is wrong here: the placeholder's own
+      // wrapper is `div.tnt-blurred-image`, which matches [class*="image"] and
+      // yields a scope containing only the placeholder — the pair is never seen.
+      let scope: Element | null = img.parentElement;
+      for (let i = 0; i < 5 && scope; i++) {
+        if (scope.querySelectorAll('img').length >= 2) break;
+        scope = scope.parentElement;
+      }
+      if (scope && scope.querySelectorAll('img').length >= 2) scopes.add(scope);
+    });
+    scopes.forEach(scope => {
+      const imgs = Array.from(scope.querySelectorAll('img'));
+      if (imgs.length < 2) return;
+      const hidden = imgs.filter(i => i.getAttribute('aria-hidden') === 'true');
+      const shown = imgs.filter(i => i.getAttribute('aria-hidden') !== 'true');
+      if (!hidden.length || !shown.length) return;
+      // Drop whichever side cannot produce pixels; default to dropping the
+      // decorative placeholder when both sides are viable.
+      const deadShown = shown.filter(isDeadSpacer);
+      if (deadShown.length === shown.length) {
+        deadShown.forEach(i => i.setAttribute(EXCL_MARKER, '1'));
+      } else {
+        hidden.forEach(i => i.setAttribute(EXCL_MARKER, '1'));
+      }
     });
   } catch { /* invalid selector on some engine — skip */ }
 
@@ -4741,9 +4789,21 @@ function annotateLiveImageSizes(liveRoot: Element): () => void {
     // detached clone inlineAllImages parses, so without this the clip inlines a
     // 1×1 spacer and renders a blank box (The Hindu's 924×520 hero gap).
     const cur = img.currentSrc;
+    const own = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('src');
     if (cur && !isPlaceholderImgUrl(cur)) {
-      const own = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('src');
       if (!own || isPlaceholderImgUrl(own)) img.setAttribute(CURRENTSRC_ATTR, cur);
+    } else if (!own || isPlaceholderImgUrl(own)) {
+      // Never painted AND its own src is a spacer — a lazy image below the fold,
+      // whose real URL is declared only in srcset/data-srcset. `currentSrc` is
+      // the spacer here, so the branch above can't rescue it, and the sanitiser
+      // strips srcset from the clone (not in ALLOWED_ATTRS_PER_TAG) long before
+      // inlineAllImages runs. Resolve it HERE, on the live element, while the
+      // attribute still exists. postguam's lower two photos are this case: they
+      // kept a 122-byte 4x3 spacer and rendered as blank gaps.
+      const best = widestSrcsetCandidate(
+        img.getAttribute('srcset') || img.getAttribute('data-srcset'),
+      );
+      if (best && !isPlaceholderImgUrl(best)) img.setAttribute(CURRENTSRC_ATTR, best);
     }
     const rect = img.getBoundingClientRect();
     let w = Math.round(rect.width);
@@ -6495,6 +6555,29 @@ function isPlaceholderImgUrl(url: string): boolean {
 // Resolve an <img>'s real URL. Many news sites (CNN, etc.) lazy-load with
 // data-src; prefer it over a placeholder 1×1 src. Also check data-lazy-src
 // used by some WordPress themes. Relative srcs resolve against the live page.
+/**
+ * Pick the highest-resolution candidate URL out of a srcset/data-srcset string.
+ * Entries are "url [width]w" or "url [density]x", comma-separated; a bare URL
+ * with no descriptor is also legal. Returns null for an empty/unparseable set.
+ */
+function widestSrcsetCandidate(srcset: string | null): string | null {
+  if (!srcset) return null;
+  let bestUrl: string | null = null;
+  let bestWeight = -1;
+  for (const part of srcset.split(',')) {
+    const bits = part.trim().split(/\s+/);
+    const url = bits[0];
+    if (!url) continue;
+    const desc = bits[1] ?? '';
+    // Width descriptors ("990w") sort by pixels; density ("2x") by multiplier;
+    // a bare URL counts as 1 so it still beats nothing.
+    const m = /^(\d+(?:\.\d+)?)([wx])$/.exec(desc);
+    const weight = m ? (m[2] === 'w' ? Number(m[1]) : Number(m[1]) * 1000) : 1;
+    if (weight > bestWeight) { bestWeight = weight; bestUrl = url; }
+  }
+  return bestUrl;
+}
+
 function resolveImgSrc(img: HTMLImageElement, baseUrl: string): string | null {
   const raw =
     img.getAttribute('data-src') ||
@@ -6509,6 +6592,19 @@ function resolveImgSrc(img: HTMLImageElement, baseUrl: string): string | null {
   const painted = img.getAttribute(CURRENTSRC_ATTR);
   if (painted && (!raw || isPlaceholderImgUrl(raw))) {
     try { return new URL(painted, baseUrl).toString(); } catch { /* fall through */ }
+  }
+  // Still a placeholder and never painted: a lazy image BELOW THE FOLD has no
+  // currentSrc to recover (the browser never fetched it), so the branch above
+  // can't help. Its real URL is still declared in srcset/data-srcset — parse the
+  // widest candidate out of it. Without this, postguam's lower photos kept their
+  // 122-byte 4x3 spacer and rendered as blank gaps, while the hero (which HAD
+  // been painted) came through fine.
+  if (!raw || isPlaceholderImgUrl(raw)) {
+    const set = img.getAttribute('srcset') || img.getAttribute('data-srcset');
+    const best = widestSrcsetCandidate(set);
+    if (best) {
+      try { return new URL(best, baseUrl).toString(); } catch { /* fall through */ }
+    }
   }
   if (!raw) return null;
   try {

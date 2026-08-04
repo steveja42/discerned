@@ -1,4 +1,5 @@
 {
+  "_comment": "No hasImgs assertion on purpose. The og:image hero recovery is environment-dependent and this sidecar runs in BOTH: under Vitest the INLINE_IMAGE stub always succeeds so the hero is injected, but under Playwright the fixture's cdn.example.com og:image cannot be fetched, so withThumbnailFallback correctly declines (it only injects an image known to display). Asserting hasImgs here would fail the e2e run for correct behaviour. The recovery itself is covered properly by discerned-ext/tests/extraction/thumbnail-fallback.test.ts, which controls the fetch outcome and checks BOTH directions.",
   "format": "article",
   "title": { "contains": "AstraZeneca suffers" },
   "url": "http://127.0.0.1:4173/article-og-image-no-body-img.html",
@@ -6,6 +7,6 @@
     "minLength": 900,
     "contains": ["AstraZeneca shares have taken", "Bristol Myers Squibb"]
   },
-  "bodyHtml": { "hasImgs": true, "noScripts": true },
+  "bodyHtml": { "noScripts": true },
   "thumbnail": "present"
 }
