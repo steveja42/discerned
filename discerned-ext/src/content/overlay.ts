@@ -2422,11 +2422,13 @@ ${themeVarsBlock(this.effectiveTheme)}
       .signal-slider.unrated input[type="range"]::-webkit-slider-thumb { opacity: 0; }
       .signal-slider input[type="range"]:focus-visible { outline: 2px solid var(--p-accent); outline-offset: 2px; }
       .signal-ticks { display: flex; justify-content: space-between; }
+      /* --p-ink-3, not --p-ink-4: these are the only labels for the scale, so
+         they must be readable unhovered. --p-ink-4 is for de-emphasised chrome. */
       .signal-tick {
         background: none; border: none; padding: 0;
         font-family: var(--p-mono); font-size: 10px;
         text-transform: uppercase; letter-spacing: 0.03em;
-        color: var(--p-ink-4); cursor: pointer; transition: color .12s;
+        color: var(--p-ink-3); cursor: pointer; transition: color .12s;
       }
       .signal-tick:hover { color: var(--p-ink-2); }
       .signal-tick.selected { color: var(--p-ink); font-weight: 700; }

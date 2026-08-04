@@ -73,13 +73,21 @@ export const THEME_TOKENS: Record<ResolvedTheme, Record<string, string>> = {
     // (discerned-web/app/globals.css :root) — warm cream surfaces, near-black
     // warm ink, and an amber/ochre accent — so the extension and companion
     // web app read as one product in light mode.
-    '--p-bg':          'rgba(232, 223, 204, 0.55)',
-    '--p-surface':     'rgba(246, 241, 232, 0.75)',
-    '--p-surface-2':   'rgba(239, 232, 218, 0.80)',
+    // Opacity mirrors dark's --p-bg (0.92). It was 0.55, which let a DARK page
+    // composite through and drag the whole panel toward olive-gray — the muted
+    // tokens below (--p-ink-4 tick labels, placeholders) then fell under 2:1 and
+    // the Signal scale became unreadable. The backdrop-filter still supplies the
+    // frosted look; the surfaces are likewise near-opaque for the same reason.
+    '--p-bg':          'rgba(232, 223, 204, 0.92)',
+    '--p-surface':     'rgba(246, 241, 232, 0.94)',
+    '--p-surface-2':   'rgba(239, 232, 218, 0.94)',
     '--p-ink':         '#1a1714',
     '--p-ink-2':       '#3a342c',
     '--p-ink-3':       '#6b6357',
-    '--p-ink-4':       '#948b7d',
+    // Darkened from #948b7d (~2.6:1 on cream — under the 4.5:1 text minimum even
+    // before page bleed-through). --p-ink-4 labels real text here: the Signal
+    // tick scale, qualifier group labels, the "Unrated" readout, placeholders.
+    '--p-ink-4':       '#6f6658',
     '--p-rule':        'rgba(26, 23, 20, 0.16)',
     '--p-rule-soft':   'rgba(26, 23, 20, 0.08)',
     '--p-accent':      'oklch(0.62 0.12 65)',
