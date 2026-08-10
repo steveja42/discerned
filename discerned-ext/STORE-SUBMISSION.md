@@ -153,9 +153,9 @@ This permission is never used to monitor, record, or transmit user tab history o
 ### Remote code
 
 > **No.** All JavaScript is bundled in the package. The extension loads no remote scripts,
-> uses no `eval` or `new Function`, and pulls in no CDN-hosted libraries. The CSP declares
-> `script-src 'self' 'wasm-unsafe-eval'`; `wasm-unsafe-eval` is required by the
-> cryptography library used for Nostr event signing.
+> uses no `eval` or `new Function`, pulls in no CDN-hosted libraries, and executes no
+> WebAssembly. The CSP declares `script-src 'self'; object-src 'self'`. Nostr event
+> signing uses pure-JavaScript cryptography.
 
 ---
 
