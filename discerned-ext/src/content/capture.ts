@@ -2612,8 +2612,10 @@ function cloneBodyClean(): HTMLElement {
 
 /**
  * Tag primal.net note threads. Stable anchors:
- *   - `[class*="_primaryNote_"]`  the main note container
- *   - `[class*="_noteThread_"]`   each reply in the replies holder
+ *   - `[class*="_primaryNote_"]`  the main note container (THREAD pages only —
+ *     a profile feed has no primary note, so never require this on its own)
+ *   - `[class*="_noteThread_"]`   each reply in the replies holder, and each
+ *     row of a profile feed
  *   - `[class*="_mentionedNote_"]` or `[class*="embeddedNote"]` quoted note
  *   - `[class*="_header_"]` or `[class*="_headerInfo_"]`  avatar+name row
  *
@@ -3626,7 +3628,13 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     name: 'primal',
     match: h => /(^|\.)primal\.net$/i.test(h),
     tag: tagPrimal,
-    anchors: ['[class*="_primaryNote_"]', '[class*="_noteThread_"]'],
+    // Page-shape variants must be ONE grouped anchor, not two required ones:
+    // a thread page renders `_primaryNote_` (the main note) + `_noteThread_`
+    // (replies), but a PROFILE feed renders only `_noteThread_` rows and has no
+    // primary note at all. Listing them separately made the canary report
+    // `_primaryNote_ → 0` as a dead selector on every profile URL — a false
+    // redesign alarm. Same idiom as bsky's feedItem/postThreadItem group.
+    anchors: ['[class*="_primaryNote_"], [class*="_noteThread_"]', '[class*="_footer_"]'],
   },
   {
     name: 'bsky',

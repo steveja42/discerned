@@ -47,6 +47,7 @@ test('tagger-canary: every tagger anchor still matches the live DOM', async () =
   try {
     for (const target of TAGGER_CANARY_TARGETS) {
       const url = process.env[target.urlEnv] || target.url;
+      const label = target.label ?? target.name;
       const page = await ctx.newPage();
       try {
         try {
@@ -55,7 +56,7 @@ test('tagger-canary: every tagger anchor still matches the live DOM', async () =
           await page.waitForSelector(target.renderWait, { timeout: 30_000 });
           await page.waitForTimeout(2_000);
         } catch (navErr) {
-          const msg = `SKIP  ${target.name.padEnd(14)} — page did not load/render (${(navErr as Error).message.split('\n')[0]})`;
+          const msg = `SKIP  ${label.padEnd(14)} — page did not load/render (${(navErr as Error).message.split('\n')[0]})`;
           skips.push(msg);
           summary.push(msg);
           continue;
@@ -78,19 +79,42 @@ test('tagger-canary: every tagger anchor still matches the live DOM', async () =
         )) as TaggerAnchorReport | null;
 
         if (!report) {
-          const msg = `FAIL  ${target.name.padEnd(14)} — no tagger resolved for host ${target.hostOverride} (registry/target drift)`;
+          const msg = `FAIL  ${label.padEnd(14)} — no tagger resolved for host ${target.hostOverride} (registry/target drift)`;
           failures.push(msg);
           summary.push(msg);
           continue;
         }
 
+        // Shape-specific anchors: selectors only THIS page shape renders, which
+        // the shared (variant-grouped) manifest can't assert on its own. Counted
+        // in the page and folded into the report so they fail identically.
+        //
+        // NB: plain `querySelectorAll`, so unlike the manifest's
+        // `querySelectorAllDeep` this does NOT pierce shadow roots. Fine for the
+        // current users (primal is shadow-free); if you add extraAnchors for a
+        // shadow-DOM site, route them through the __DISCERNED_TEST_ANCHORS
+        // bridge instead of counting them here.
+        if (target.extraAnchors?.length) {
+          const extra = await page.evaluate(
+            sels => sels.map(selector => ({
+              selector,
+              count: (() => {
+                try { return document.querySelectorAll(selector).length; } catch { return 0; }
+              })(),
+            })),
+            target.extraAnchors,
+          );
+          report.anchors = [...report.anchors, ...extra];
+          report.dead = [...report.dead, ...extra.filter(a => a.count === 0).map(a => a.selector)];
+        }
+
         const detail = report.anchors.map(a => `${a.selector} → ${a.count}`).join('\n                  ');
         if (report.dead.length > 0) {
-          const msg = `FAIL  ${target.name.padEnd(14)} — DEAD anchor(s): ${report.dead.join(' | ')}\n                  ${detail}`;
+          const msg = `FAIL  ${label.padEnd(14)} — DEAD anchor(s): ${report.dead.join(' | ')}\n                  ${detail}`;
           failures.push(msg);
           summary.push(msg);
         } else {
-          summary.push(`OK    ${target.name.padEnd(14)} — ${report.anchors.length} anchors live\n                  ${detail}`);
+          summary.push(`OK    ${label.padEnd(14)} — ${report.anchors.length} anchors live\n                  ${detail}`);
         }
       } finally {
         await page.close();

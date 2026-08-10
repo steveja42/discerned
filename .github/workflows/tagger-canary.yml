@@ -5,14 +5,26 @@
 # tagger. See tests/e2e/tagger-canary.spec.ts and CLAUDE.md → "Tagger canary /
 # repair loop".
 #
-# IMPORTANT — coverage caveat: several canary targets (Reddit, YouTube,
-# StackOverflow) sit behind Cloudflare / bot-walls that a stock GitHub-hosted
-# runner has no warm `cf_clearance` for. Those targets will report as SKIP here
-# (page-load failure → skip, not fail — the canary never flakes on infra). The
-# sites that DO load headless-unauthenticated (primal, bsky, goodreads) are
-# covered fully. For complete weekly coverage of the walled sites, run the
-# canary LOCALLY against the warm `test` Chrome profile — see
-# `scripts/tagger-canary-local.ps1` and CLAUDE.md.
+# IMPORTANT — coverage caveat: several canary targets (Reddit, StackOverflow,
+# Hacker News) sit behind Cloudflare / bot-walls or per-IP rate limits that a
+# stock GitHub-hosted runner has no warm `cf_clearance` for. Those targets will
+# report as SKIP here (page-load failure → skip, not fail — the canary never
+# flakes on infra). The sites that DO load headless-unauthenticated (primal,
+# bsky, goodreads, youtube) are covered fully. For complete weekly coverage of
+# the walled sites, run the canary LOCALLY against the warm `test` Chrome
+# profile — see `scripts/tagger-canary-local.ps1` and CLAUDE.md.
+#
+# Note primal has TWO targets (profile feed + thread) because the two page
+# shapes render different note containers. The thread one loads a note by
+# nevent, which can stall on relay fetch and SKIP; the profile one is the
+# reliable signal. A SKIP on `primal:thread` alone is not a regression.
+#
+# The `test` profile is gitignored (.vscode/browser-test-profiles/), so this job
+# does NOT get it — Chromium creates an empty profile and the walled sites skip.
+# That is expected here; it is not a regression to chase.
+#
+# HN specifically: news.ycombinator.com returns 429 to shared cloud IPs, so it
+# skips on CI regardless of selectors. Verified 2026-08-10.
 #
 # The workflow is still worthwhile: it catches redesigns on the open sites for
 # free, and a run where a normally-loading site suddenly SKIPs is itself a
@@ -31,13 +43,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -58,9 +70,30 @@ jobs:
         # a failure; only a dead selector fails the job.
         run: pnpm exec playwright test -c tests/e2e/playwright.config.ts --project=tagger-canary
 
+      # Put the report in the run summary so a failure email is actionable
+      # without downloading the artifact — the dead selector (or the "everything
+      # skipped" shape) is visible straight from the notification.
+      - name: Publish canary report to job summary
+        if: always()
+        run: |
+          if [ -f test-output/tagger-canary.txt ]; then
+            {
+              echo '## Tagger canary'
+              echo ''
+              echo 'Walled sites (reddit / stackoverflow / hackernews) SKIP on CI by design —'
+              echo 'no warm profile here. See the workflow header.'
+              echo ''
+              echo '```'
+              cat test-output/tagger-canary.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'No canary report produced (the run failed before the canary wrote one).' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Upload canary report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tagger-canary-report
           path: test-output/tagger-canary.txt
