@@ -10,7 +10,10 @@
     "noUnusedParameters": false,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "types": ["node"],
+    // "chrome": several specs call chrome.* inside page.evaluate() — that code
+    // runs in the extension's context, so the types are real, not a shim.
+    // Resolved from discerned-ext's @types via typeRoots below.
+    "types": ["node", "chrome"],
     "typeRoots": ["../discerned-ext/node_modules/@types", "../node_modules/@types"]
   },
   "include": ["./**/*"]

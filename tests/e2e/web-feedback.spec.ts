@@ -145,7 +145,10 @@ test.describe('web feedback form', () => {
       website: '', // honeypot left empty by a real interaction
       turnstileToken: 'stub-token',
     });
-    expect(String(posted?.ua)).toContain('Mozilla');
+    // Cast at the use site: `posted` is only ever assigned inside the route
+    // callback, so TS's control-flow analysis still has it narrowed to `null`
+    // here and a bare `posted?.ua` resolves to `never`.
+    expect(String((posted as Record<string, unknown> | null)?.ua)).toContain('Mozilla');
   });
 
   test('a server error keeps the typed message and offers the GitHub fallback', async ({ page }) => {
