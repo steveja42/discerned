@@ -19,8 +19,31 @@ import { LL, log } from '@/lib/logger';
 
 const SIGN_TIMEOUT_MS = 30_000;
 
+// Some wallets (nos2x and relatives) latch into a "cancelled" state after a
+// dismissed or stuck approval popup and then reject EVERY subsequent
+// window.nostr call on this page without prompting. The flag lives in the
+// injected window.nostr's closure, which is page-scoped — so only a reload of
+// the signing tab clears it. Retrying from the extension can't:
+// signEventViaWebApp reuses that same tab, hence the same poisoned
+// window.nostr. Detect it and say what actually works instead of surfacing the
+// raw wallet string.
+const WALLET_LATCHED_RE = /rejecting further|until the next reload/i;
+
+// "the discerned.online tab", not "this tab" — this message is relayed back to
+// the extension and shown in the overlay on the page being cast, which is a
+// DIFFERENT tab from the signing tab the user needs to reload.
+const WALLET_LATCHED_MESSAGE =
+  'Your signing extension is refusing further requests after a cancelled prompt. '
+  + 'Reload the discerned.online tab, then cast again.';
+
 function npubShort(pk: string): string {
   try { return `${npubEncode(pk).slice(0, 12)}…`; } catch { return `${pk.slice(0, 12)}…`; }
+}
+
+function describeSignError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : '';
+  if (WALLET_LATCHED_RE.test(raw)) return WALLET_LATCHED_MESSAGE;
+  return raw || 'Wallet rejected the sign';
 }
 
 export default function PendingSignModal() {
@@ -78,7 +101,9 @@ export default function PendingSignModal() {
         settled = true;
         clearTimeout(timeout);
         setPending(false);
-        sendSignRejectedToExtension(id, err instanceof Error ? err.message : 'Wallet rejected the sign');
+        // Covers both window.nostr calls above — a latched wallet rejects
+        // getPublicKey() just as readily as signEvent().
+        sendSignRejectedToExtension(id, describeSignError(err));
       }
     });
     return cleanup;

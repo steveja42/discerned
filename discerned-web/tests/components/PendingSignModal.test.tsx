@@ -94,6 +94,47 @@ describe('PendingSignModal', () => {
     expect(sendRejected).not.toHaveBeenCalled();
   });
 
+  it('translates a latched wallet into reload-the-tab guidance', async () => {
+    // nos2x-style: after a cancelled prompt the wallet rejects every call.
+    const latched = new Error('window.nostr call cancelled (rejecting further window.nostr calls until the next reload)');
+    (window as unknown as { nostr: unknown }).nostr = {
+      getPublicKey: vi.fn().mockResolvedValue(PUBKEY_A),
+      signEvent: vi.fn().mockRejectedValue(latched),
+    };
+
+    render(<PendingSignModal />);
+    await act(async () => {
+      dispatchPendingSign('sign_latched', PUBKEY_A);
+    });
+
+    await vi.waitFor(() => expect(sendRejected).toHaveBeenCalled());
+    const [id, message] = sendRejected.mock.calls[0];
+    expect(id).toBe('sign_latched');
+    expect(message).toMatch(/reload the discerned\.online tab/i);
+    // The raw wallet string must not leak through to the overlay.
+    expect(message).not.toMatch(/rejecting further/i);
+    expect(sendSigned).not.toHaveBeenCalled();
+  });
+
+  it('translates a latched wallet that rejects getPublicKey', async () => {
+    // The latch hits the identity guard first, before signEvent is ever reached.
+    const latched = new Error('window.nostr call cancelled (rejecting further window.nostr calls until the next reload)');
+    const signEvent = vi.fn();
+    (window as unknown as { nostr: unknown }).nostr = {
+      getPublicKey: vi.fn().mockRejectedValue(latched),
+      signEvent,
+    };
+
+    render(<PendingSignModal />);
+    await act(async () => {
+      dispatchPendingSign('sign_latched_getpk', PUBKEY_A);
+    });
+
+    await vi.waitFor(() => expect(sendRejected).toHaveBeenCalled());
+    expect(signEvent).not.toHaveBeenCalled();
+    expect(sendRejected.mock.calls[0][1]).toMatch(/reload the discerned\.online tab/i);
+  });
+
   it('rejects with a locked-wallet message when signEvent never resolves', async () => {
     vi.useFakeTimers();
     // signEvent that never settles (locked wallet).

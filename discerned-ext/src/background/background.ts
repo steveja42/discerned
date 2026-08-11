@@ -1590,6 +1590,15 @@ async function markSignApproved(): Promise<void> {
   if (pubkey) await chrome.storage.local.set({ [STORAGE_KEYS.SIGN_APPROVED_PUBKEY]: pubkey });
 }
 
+// Un-stamp the approval after a failed sign. The stamp exists to skip the
+// focus-steal once a wallet has surfaced its prompt for this identity — but a
+// failure is evidence the prompt did NOT complete (a blank/stuck nos2x popup
+// is the reference case). Leaving it stamped makes every retry take the
+// no-focus branch, reproducing the same stuck popup indefinitely.
+async function clearSignApproved(): Promise<void> {
+  await chrome.storage.local.remove(STORAGE_KEYS.SIGN_APPROVED_PUBKEY).catch(() => { /* non-fatal */ });
+}
+
 async function signEventViaWebApp(
   template: Parameters<typeof finalizeEvent>[0],
 ): Promise<Record<string, unknown>> {
@@ -1632,6 +1641,8 @@ async function signEventViaWebApp(
   const signed = await new Promise<Record<string, unknown>>((resolve, reject) => {
     const timer = setTimeout(() => {
       pendingSigns.delete(id);
+      // This path bypasses rejectPendingSign, so re-arm the focus-steal here too.
+      void clearSignApproved();
       reject(new Error('User did not confirm the cast within 2 minutes'));
     }, PENDING_SIGN_TIMEOUT_MS);
     pendingSigns.set(id, { resolve, reject, timer });
@@ -1659,6 +1670,8 @@ function rejectPendingSign(id: string, error: string): void {
   if (!entry) return;
   clearTimeout(entry.timer);
   pendingSigns.delete(id);
+  // Re-arm the focus-steal for the next attempt — see clearSignApproved.
+  void clearSignApproved();
   entry.reject(new Error(error));
 }
 
