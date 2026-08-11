@@ -123,13 +123,8 @@ export class DiscernedOverlay {
       // should never be able to throw away an evaluation the user is part-way
       // through — hide() is destructive (it drops the typed note and rating).
       //
-      // Hardening, NOT a diagnosed fix. Verified: one dispatched PointerEvent
-      // does tear the overlay down without this guard. NOT verified: that any
-      // real site actually does this. A 60s instrumented watch of msn.com
-      // (dispatchEvent + .click() wrapped, capture-phase listeners on
-      // pointer/mouse/click) recorded ZERO untrusted events, so the reported
-      // sporadic MSN dismissal is still UNEXPLAINED — don't treat this as its
-      // root cause, and keep looking if it recurs.
+      // Hardening only. The sporadic MSN/Bloomberg dismissal turned out to be
+      // an inherited `pointer-events: none` (see getStyles()), not this.
       if (!e.isTrusted) return;
       if (!e.composedPath().includes(this.host) && !this.previewHost?.contains(e.target as Node)) this.hide();
     };
@@ -284,7 +279,11 @@ export class DiscernedOverlay {
       this.previewHost = document.createElement('div');
       this.previewHost.style.cssText =
         'position:fixed;left:390px;top:50%;transform:translateY(-50%);' +
-        'z-index:2147483646;display:block;max-width:320px;';
+        'z-index:2147483646;display:block;max-width:320px;' +
+        // Escape an inherited `pointer-events:none` from a paywall/interstitial
+        // that froze the page (see the :host rule in getStyles()). The preview
+        // is a separate body-child host, so it inherits independently.
+        'pointer-events:auto;';
       this.previewShadow = this.previewHost.attachShadow({ mode: 'closed' });
       // Stop host-page event delegation from firing on preview interactions.
       // pointerdown is NOT stopped here — it's handled by the outside-click guard
@@ -2132,6 +2131,12 @@ ${themeVarsBlock(this.effectiveTheme)}
            force visibility so we're never accidentally hidden. */
         visibility: visible !important;
 
+        /* pointer-events is INHERITED and inheritance crosses the shadow
+           boundary. Paywalls/interstitials that freeze the page set
+           pointer-events:none on body, which left the panel inert and made a
+           real click on it read as an outside click (bloomberg.com, msn.com). */
+        pointer-events: auto !important;
+
         /* Design tokens for the active theme (see shared/theme.ts). Includes
            color-scheme so shadow-root scrollbars/form controls follow the theme. */
 ${themeVarsBlock(this.effectiveTheme)}
@@ -2149,6 +2154,8 @@ ${themeVarsBlock(this.effectiveTheme)}
 
       .discerned-root.panel {
         visibility: visible;
+        /* Re-assert against an inherited pointer-events:none (see :host). */
+        pointer-events: auto;
         position: fixed; top: 0; left: 0; bottom: 0;
         width: 380px; max-width: 90vw;
         background: var(--p-bg);
