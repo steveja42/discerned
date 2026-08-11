@@ -2306,7 +2306,7 @@ ${themeVarsBlock(this.effectiveTheme)}
         box-shadow: 0 6px 18px rgba(0,0,0,0.5);
       }
       .combobox-list.open { display: block; }
-      .combobox-list li { padding: 7px 10px; color: var(--p-ink); font-size: 12px; cursor: pointer; font-family: inherit; }
+      .combobox-list li { padding: 4px 10px; line-height: 1.3; color: var(--p-ink); font-size: 12px; cursor: pointer; font-family: inherit; }
       .combobox-list li:hover { background: var(--p-accent); color: var(--p-on-accent); }
       .combobox-list li.custom-entry { color: var(--p-ink-3); font-style: italic; }
 
