@@ -311,6 +311,9 @@ ${themeVarsBlock(this.effectiveTheme)}
           animation:fadeIn .18s ease-out;
           user-select:text; cursor:text;
         }
+        /* Rebuilt on every render (theme changes restyle this separate shadow
+           root), so replay the entry animation only on the card's first build. */
+        :host(.no-anim) .preview-card { animation:none; }
         @keyframes fadeIn { from { opacity:0; transform:translateX(-6px); } to { opacity:1; transform:none; } }
         .preview-label {
           font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; color:var(--p-accent);
@@ -332,6 +335,9 @@ ${themeVarsBlock(this.effectiveTheme)}
       </style>
       ${this.renderPreviewContent()}
     `;
+    // Suppress the fade-in on subsequent rebuilds (same rationale as the panel's
+    // no-anim guard in render()) — the card must not re-animate on a theme change.
+    this.previewHost!.classList.add('no-anim');
   }
 
   private renderPreviewContent(): string {
@@ -400,6 +406,10 @@ ${themeVarsBlock(this.effectiveTheme)}
     this.hasRendered = true;
     this.blockHostPageEvents();
     this.applyHighlightForCurrentFormat();
+    // The preview card lives in its OWN closed shadow root outside the panel, so
+    // re-rendering the panel can't restyle it. Refresh it here or a theme change
+    // leaves it on the previous theme's tokens until the next capture/format click.
+    this.updatePreview();
   }
 
   private blockHostPageEvents() {
