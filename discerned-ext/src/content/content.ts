@@ -358,10 +358,10 @@ window.addEventListener('pageshow', (e) => {
   }
 });
 
-// Dev-mode test bridge — Vite tree-shakes this when __DISCERNED_TEST_BUILD__
+// Dev-mode test bridge — Vite tree-shakes this when __DISCERNED_DEV_BUILD__
 // is false (production builds). Lets Playwright drive captureContext() and the
 // CLIP path without the overlay.
-if (__DISCERNED_TEST_BUILD__) {
+if (__DISCERNED_DEV_BUILD__) {
   window.addEventListener('message', async (e) => {
     // Note: in an extension content script, `window` is the isolated world's
     // wrapper — distinct from the page's `window` that's the message source.

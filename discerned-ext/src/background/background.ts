@@ -465,7 +465,7 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'BUILD_CAST':
       // Test-only: return the cast event templates without signing/publishing.
       // Tree-shaken from production builds (guard is a compile-time constant).
-      if (__DISCERNED_TEST_BUILD__) {
+      if (__DISCERNED_DEV_BUILD__) {
         const { noteTemplate, longFormTemplate } = await buildCastTemplates(
           message.data.capture,
           message.data.evaluation,

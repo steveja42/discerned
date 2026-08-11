@@ -3789,12 +3789,12 @@ function applyTaggerToClone(cloneRoot: Element | DocumentFragment): void {
 // Test-only host override. Set by the test bridge in content.ts so fixture
 // pages served from 127.0.0.1 can exercise the matching site tagger (which
 // otherwise gates on the live hostname). Tree-shaken in production: the
-// `__DISCERNED_TEST_BUILD__` guard around the setter in content.ts means the
-// var is only ever written under the test build, and `?? window.location.hostname`
+// `__DISCERNED_DEV_BUILD__` guard around the setter in content.ts means the
+// var is only ever written under a dev/test build, and `?? window.location.hostname`
 // keeps the production path identical.
 let testHostOverride: string | null = null;
 export function __setTestHostOverride(host: string | null): void {
-  if (__DISCERNED_TEST_BUILD__) testHostOverride = host;
+  if (__DISCERNED_DEV_BUILD__) testHostOverride = host;
 }
 
 // Tier 0 (Twitter/X) gates on the real page URL, which fixture pages served
@@ -3802,7 +3802,7 @@ export function __setTestHostOverride(host: string | null): void {
 // hostname override. This lets fixture-visual specs pass hostOverride:
 // 'x.com' (etc.) to exercise extractTweet() against a saved DOM snapshot.
 // Tree-shaken to the plain regex test in production (testHostOverride is
-// always null when __DISCERNED_TEST_BUILD__ is false).
+// always null when __DISCERNED_DEV_BUILD__ is false).
 function isTweetHost(url: string): boolean {
   if (testHostOverride && /(^|\.)(twitter|x)\.com$/i.test(testHostOverride)) return true;
   return /^https?:\/\/(www\.)?(twitter|x)\.com\//i.test(url);

@@ -23,12 +23,16 @@ export const LL = {
  * true  → logs from popup/background are relayed to the active tab so VSCode sees them
  * false → bridge is a no-op; only local console calls fire
  *
- * MUST be false in any build shipped to the Chrome Web Store. When true, background
- * and popup logs are broadcast via chrome.tabs.sendMessage into whatever page the user
- * is currently viewing — captured content, URLs and auth-flow details would land in
- * arbitrary third-party sites' console context. Flip to true only for local debugging.
+ * Derived from the build flag, not hand-set, so a production build CANNOT ship with the
+ * relay on: `pnpm dev` / `pnpm build:test` get true, while `pnpm build` / `pnpm pack:ext`
+ * get false and terser drops the relay branches from the bundle entirely.
+ *
+ * That guarantee matters because when this is true, background and popup logs are
+ * broadcast via chrome.tabs.sendMessage into whatever page the user is currently
+ * viewing — captured content, URLs and auth-flow details would land in arbitrary
+ * third-party sites' console context.
  */
-const REMOTE_LOGGING = false;
+const REMOTE_LOGGING = __DISCERNED_DEV_BUILD__;
 
 const LEVELS: LogLevel[] = ['log', 'warn', 'error', 'info', 'debug'];
 
@@ -163,11 +167,13 @@ export function relayLog(level: LogLevel, source: LogSource, serialized: string[
  * Minimum numeric level that will be emitted. Raise to suppress verbose output.
  * LL.TRACE=0, DEBUG=1, NORMAL=2, WARN=3, ERROR=4
  *
- * WARN is the shipping default: captured page content, URLs and auth details flow
- * through NORMAL/DEBUG calls, and content-script logs land in the visited page's own
- * console where any site script can read them. Lower it locally when debugging.
+ * Derived from the build flag for the same reason as REMOTE_LOGGING: WARN is the
+ * shipping default because captured page content, URLs and auth details flow through
+ * NORMAL/DEBUG calls, and content-script logs land in the visited page's own console
+ * where any site script can read them. Dev/test builds get TRACE automatically.
+ * Call setLogLevel() to override at runtime (tests/setup.ts pins WARN to keep Vitest quiet).
  */
-let activeLogLevel: AppLogLevel = LL.WARN;
+let activeLogLevel: AppLogLevel = __DISCERNED_DEV_BUILD__ ? LL.TRACE : LL.WARN;
 
 export function setLogLevel(level: AppLogLevel): void {
   activeLogLevel = level;

@@ -29,7 +29,7 @@ import { publishWithMinimum, getRelayHealth } from '@/background/relay-manager';
 
 const EVENT = { id: 'e'.repeat(64), kind: 1 } as unknown as NostrEvent;
 
-// In the Vitest build __DISCERNED_TEST_BUILD__ is true, so the default relay
+// In the Vitest build __DISCERNED_DEV_BUILD__ is true, so the default relay
 // mode is 'local' (a single ws://localhost:7777). Tests that need the 3-relay
 // production set store the mode in the chrome.storage.local shim.
 function setRelayMode(mode: 'local' | 'production'): void {

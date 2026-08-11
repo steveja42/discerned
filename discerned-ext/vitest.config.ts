@@ -5,7 +5,7 @@ export default defineConfig({
   // Vite build flag (see vite.config.ts). Unit tests exercise shared modules
   // (types.ts, events.ts) that read it at module load — define it as a dev build.
   define: {
-    __DISCERNED_TEST_BUILD__: JSON.stringify(true),
+    __DISCERNED_DEV_BUILD__: JSON.stringify(true),
   },
   resolve: {
     alias: { '@': resolve(__dirname, 'src') },

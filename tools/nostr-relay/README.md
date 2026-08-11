@@ -55,7 +55,7 @@ silently fall back to built-in defaults (ignoring our `max_event_bytes`, etc.).
 ## How the apps point at it
 
 - **Extension**: dev/test builds (`pnpm dev`, `pnpm build:test`) compile with
-  `__DISCERNED_TEST_BUILD__ = true`, which defaults the relay mode to `local` — so
+  `__DISCERNED_DEV_BUILD__ = true`, which defaults the relay mode to `local` — so
   `getEffectiveRelays()` (in `discerned-ext/src/shared/relays.ts`) resolves to
   `[ws://localhost:7777]`, replacing the public relays. Local mode is exclusive: the
   user's own relays are ignored, so test casts can never reach the real network.

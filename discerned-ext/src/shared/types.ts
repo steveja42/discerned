@@ -204,7 +204,7 @@ export type BackgroundMessage =
   // Test-only (dev/test builds): build the cast event templates a cast WOULD
   // publish (kind-1 note + companion kind-30023), without signing or publishing.
   // Lets the e2e visual specs render the real published-cast output. The handler
-  // is gated on __DISCERNED_TEST_BUILD__ and tree-shaken from production.
+  // is gated on __DISCERNED_DEV_BUILD__ and tree-shaken from production.
   | { type: 'BUILD_CAST'; data: { capture: Capture; evaluation: Evaluation } };
 
 export type BackgroundResponse =
@@ -323,7 +323,7 @@ export const SNIPPET_SENTINEL_CLOSE = '⁢⁡⁣⁢'; // invisible close marker
 
 // ── Runtime relay mode (dev toggle) ──────────────────────────────────────────
 // A 'local' | 'production' preference persisted in chrome.storage.local under
-// STORAGE_KEYS.RELAYS. When unset, the __DISCERNED_TEST_BUILD__ default wins —
+// STORAGE_KEYS.RELAYS. When unset, the __DISCERNED_DEV_BUILD__ default wins —
 // so production users who never touch the toggle behave exactly as before. The
 // extension is the source of truth; it mirrors this mode to the web app over the
 // bridge (DISCERNED_BRIDGE_RELAYS), and each side resolves its own URLs.
@@ -332,7 +332,7 @@ export type RelayMode = 'local' | 'production';
 // Resolve the effective mode from a stored value, falling back to the build flag.
 export function resolveRelayMode(stored: string | undefined): RelayMode {
   if (stored === 'local' || stored === 'production') return stored;
-  return __DISCERNED_TEST_BUILD__ ? 'local' : 'production';
+  return __DISCERNED_DEV_BUILD__ ? 'local' : 'production';
 }
 
 // Map a mode to its concrete relay URL list.

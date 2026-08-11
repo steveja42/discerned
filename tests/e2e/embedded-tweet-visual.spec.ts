@@ -69,7 +69,7 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
 
     await screenshotSourcePage(page, live.source());
 
-    // Capture via the dev test bridge (production-code path; __DISCERNED_TEST_BUILD__ enabled in dist-test).
+    // Capture via the dev test bridge (production-code path; __DISCERNED_DEV_BUILD__ enabled in dist-test).
     const cap = (await page.evaluate(async () => {
       return new Promise((resolveCap, rejectCap) => {
         const timer = setTimeout(() => rejectCap(new Error('capture timeout')), 30_000);

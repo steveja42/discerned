@@ -42,11 +42,12 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  // Test-only message hooks in content.ts/background.ts are gated on this flag.
-  // `pnpm build:test` runs with --mode test, which keeps them; `pnpm build`
-  // (default production) replaces the flag with false and tree-shakes them out.
+  // Dev/test-only hooks (test message bridges, verbose logging) are gated on this
+  // flag. `pnpm dev` (--mode development) and `pnpm build:test` (--mode test) keep
+  // them; `pnpm build` / `pnpm pack:ext` (default production) replace the flag with
+  // false and tree-shake them out.
   define: {
-    __DISCERNED_TEST_BUILD__: JSON.stringify(mode === 'test' || mode === 'development'),
+    __DISCERNED_DEV_BUILD__: JSON.stringify(mode === 'test' || mode === 'development'),
   },
   plugins: [
     stripVendorSourcemapRefs,

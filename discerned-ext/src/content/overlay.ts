@@ -1002,9 +1002,9 @@ ${themeVarsBlock(this.effectiveTheme)}
     }
 
     // Dev-only relay toggle. Hidden unless Settings was opened with Alt held
-    // (see the #open-settings handler). Test builds keep it always-on so the e2e
+    // (see the #open-settings handler). Dev/test builds keep it always-on so the e2e
     // specs that flip the relay mode don't have to synthesise a modifier click.
-    const showDevCard = __DISCERNED_TEST_BUILD__ || devOptionsUnlocked;
+    const showDevCard = __DISCERNED_DEV_BUILD__ || devOptionsUnlocked;
     const relayDevCard = showDevCard ? `
           <div class="settings-card">
             <div class="card-label">Developer</div>
@@ -1193,9 +1193,9 @@ ${themeVarsBlock(this.effectiveTheme)}
     try {
       const stored = await chrome.storage.local.get([STORAGE_KEYS.RELAYS]);
 
-      // Dev relay toggle. Present in test builds, and in any build when Settings
+      // Dev relay toggle. Present in dev/test builds, and in any build when Settings
       // was opened with Alt held — so the existence check, not the build flag,
-      // decides whether to wire it up. (Gating this on __DISCERNED_TEST_BUILD__
+      // decides whether to wire it up. (Gating this on __DISCERNED_DEV_BUILD__
       // alone would render an inert checkbox in an Alt-opened production build.)
       {
         const relayEl = this.shadow.getElementById('opt-local-relay') as HTMLInputElement | null;

@@ -148,6 +148,21 @@
       // lingers. Workaround: toggle Alby off/on in brave://extensions to
       // restart its SW without the debugger attached. nos2x has a trivial SW
       // and is unaffected. (See git log for the investigation.)
+      //
+      // The debugger wedges too, not just Alby. Clicking the Alby toolbar
+      // button kills the VSCode DEBUG CONSOLE for the whole session: all
+      // output stops (content scripts included) and the session keeps looking
+      // healthy -- it stays in the Call Stack, the CDP socket stays
+      // Established, and /json/list still lists every target. Only the panel
+      // is dead. Confirm with `console.log('x')` in the debug console REPL: no
+      // echo == wedged console, so stop debugging the extension and fix the
+      // debugger. Recovery is "Developer: Reload Window" (relaunching alone is
+      // not enough); each wedge also strands a half-closed FinWait1 socket on
+      // 9333 from the session that never terminated.
+      //
+      // If you need Alby responsive, use the "web-app only" config below -- it
+      // never attaches to Alby's SW, at the cost of third-party-site content
+      // script logs and extension SW breakpoints.
       /* --- Path for Windows --- */
       "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
       /* --- Path for macOS (Uncomment if needed) --- */
@@ -205,57 +220,6 @@
         "--remote-debugging-port=9333",
       ]
     },
-    {
-  "name": "Debug: Brave (nip07-alby)2",
-  "type": "chrome",
-  "request": "launch",
-  "webRoot": "${workspaceFolder}",
-  "cascadeTerminateToConfigurations": [
-    "Attach to Chrome (shared with extension debugger)"
-  ],
-  "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
-  "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-nip07-alby",
-  "forceCleanSession": true, // 👈 Encourages graceful CDP shutdown over hard process killing
-  "resolveSourceMapLocations": [
-    "${workspaceFolder}/**",
-    "!**/node_modules/**"
-  ],
-  "runtimeArgs": [
-    "--load-extension=${workspaceFolder}\\dist",
-    "--no-first-run",
-    "--remote-debugging-port=9333",
-    "--disable-background-networking",
-    "--disable-background-timer-throttling",
-    "--disable-backgrounding-occluded-windows",
-    "--disable-features=BackForwardCache,CalculateNativeWinOcclusion"
-  ]
-},
-{
-  "name": "Debug: Brave (nip07-alby)3",
-  "type": "chrome",
-  "request": "launch",
-  "webRoot": "${workspaceFolder}",
-  // 👇 Comment this out or remove it so VS Code handles this as a single session
-  // "cascadeTerminateToConfigurations": [
-  //   "Attach to Chrome (shared with extension debugger)"
-  // ],
-  "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
-  "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-nip07-alby",
-  "resolveSourceMapLocations": [
-    "${workspaceFolder}/**",
-    "!**/node_modules/**"
-  ],
-  "runtimeArgs": [
-    "--load-extension=${workspaceFolder}\\dist",
-    "--no-first-run",
-    "--remote-debugging-port=9333",
-    "--disable-background-networking",
-    "--disable-background-timer-throttling",
-    "--disable-backgrounding-occluded-windows",
-    "--disable-hang-monitor",
-    "--disable-features=BackForwardCache,CalculateNativeWinOcclusion"
-  ]
-},
     {
       "name": "Debug: Brave (stored key)",
       "type": "chrome",
