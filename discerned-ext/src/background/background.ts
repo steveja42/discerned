@@ -501,7 +501,15 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       return handleUpdateClipNote(message.id, message.note);
 
     case 'NIP07_DETECTED':
-      if (message.hasNIP07 && currentAuthState.type === 'guest') {
+      if (!message.hasNIP07 && currentAuthState.type === 'pro') {
+        // `pro` only asserts another extension exists, so it must not outlive it
+        // in storage. Identity is unchanged — profile/relay caches stay.
+        const prev = currentAuthState.pubkey;
+        currentAuthState = { type: 'guest' };
+        if (!guestPrivateKey) guestPrivateKey = generateSecretKey();
+        await chrome.storage.local.remove([STORAGE_KEYS.AUTH_STATE]);
+        log(LL.NORMAL, '[auth] NIP-07 signer gone — downgraded to guest, was:', prev ? npubEncode(prev).slice(0, 12) : '(no pubkey)');
+      } else if (message.hasNIP07 && currentAuthState.type === 'guest') {
         currentAuthState = { type: 'pro', hasNIP07: true, pubkey: message.pubkey };
         await chrome.storage.local.set({ [STORAGE_KEYS.AUTH_STATE]: currentAuthState });
         log(LL.NORMAL, '[auth] NIP-07 detected — pro mode, pubkey:', message.pubkey ? npubEncode(message.pubkey).slice(0, 12) : '(pending)');

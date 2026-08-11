@@ -736,9 +736,12 @@ ${themeVarsBlock(this.effectiveTheme)}
       // Actually probe the live page for window.nostr (GET_AUTH_STATE alone only
       // reads cached background state, which is stale right after a disconnect).
       const probed = await detectAuthState().catch(() => null);
-      if (probed?.type === 'pro') {
-        await chrome.runtime.sendMessage({ type: 'NIP07_DETECTED', hasNIP07: true }).catch(() => { /* non-fatal */ });
-      }
+      // Report the negative too — this button is pressed exactly when the user
+      // suspects the state is wrong, so it must clear a stale `pro` as well.
+      await chrome.runtime.sendMessage({
+        type: 'NIP07_DETECTED',
+        hasNIP07: probed?.type === 'pro',
+      }).catch(() => { /* non-fatal */ });
       const res = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }).catch(() => null);
       if (btn) btn.disabled = false;
       if (res?.success && res.data?.type === 'pro') {

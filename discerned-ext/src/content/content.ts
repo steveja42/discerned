@@ -9,7 +9,7 @@ import type { CaptureOptions } from './capture';
 import { DiscernedOverlay } from './overlay';
 import { htmlToMarkdown } from './html-to-markdown';
 import { sourceHtmlForLongForm } from '@/shared/nostr/events';
-import { detectAuthState, signWithNIP07, getNIP07Relays } from '@/shared/nostr/auth';
+import { detectAuthState, waitForNIP07, signWithNIP07, getNIP07Relays } from '@/shared/nostr/auth';
 import type { AuthState, BackgroundMessage, Capture, ClipFormat, Evaluation, ResolvedTheme } from '@/shared/types';
 import { STORAGE_KEYS, resolveThemePref, resolveEffectiveTheme } from '@/shared/types';
 import { themeVarsBlock, prefersDark } from '@/shared/theme';
@@ -142,10 +142,18 @@ async function handleActivation() {
   // guest→pro before the GET_AUTH_STATE read below.
   let detected: AuthState = { type: 'guest' };
   try { detected = await detectAuthState(); } catch { /* non-fatal */ }
-  if (detected.type === 'pro' && isContextValid()) {
+
+  // Report ABSENCE too — the background persists `pro`, so without a negative
+  // report it outlives the signer being uninstalled. Re-probe with a longer
+  // window first: a slow cold-start injection must not read as a removal.
+  let hasNIP07 = detected.type === 'pro';
+  if (!hasNIP07 && cachedAuthState.type === 'pro') {
+    hasNIP07 = await waitForNIP07(2000);
+  }
+  if (isContextValid()) {
     await chrome.runtime.sendMessage({
       type: 'NIP07_DETECTED',
-      hasNIP07: true,
+      hasNIP07,
     }).catch(() => {});
   }
 
