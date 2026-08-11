@@ -6,10 +6,13 @@ import { describe, it, expect } from 'vitest';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
 import { parseEvent } from '@/lib/nostr/parse';
 import {
+  stripDiscernedCta,
   stripDiscernedSnippet,
   SNIPPET_SENTINEL_OPEN,
   SNIPPET_SENTINEL_CLOSE,
 } from '@/lib/nostr/strip-snippet';
+
+const CTA = 'View more discerns at https://discerned.online/discerns';
 
 const SK = generateSecretKey();
 const PK = getPublicKey(SK);
@@ -32,6 +35,27 @@ describe('stripDiscernedSnippet', () => {
     expect(out).not.toContain('Discerned by');
     expect(out).not.toContain(SNIPPET_SENTINEL_OPEN);
     expect(out).toBe('# Heading');
+  });
+});
+
+describe('stripDiscernedCta', () => {
+  it('removes the trailing CTA and the blank line before it', () => {
+    expect(stripDiscernedCta(`Real body.\n\n${CTA}`)).toBe('Real body.');
+  });
+
+  it('is a no-op when the CTA is absent (legacy casts / foreign events)', () => {
+    const content = 'A Title\nhttps://example.com\n\nBody text.';
+    expect(stripDiscernedCta(content)).toBe(content);
+  });
+
+  it('leaves a mid-body occurrence alone — the writer only ever appends', () => {
+    const content = `Body one.\n\n${CTA}\n\nBody two.`;
+    expect(stripDiscernedCta(content)).toBe(content);
+  });
+
+  it('strips both the snippet and the CTA together (the real cast shape)', () => {
+    const content = `${snippet('Discerned → ★★★★ Worthwhile in Tech')}\n\nThe body.\n\n${CTA}`;
+    expect(stripDiscernedCta(stripDiscernedSnippet(content))).toBe('The body.');
   });
 });
 

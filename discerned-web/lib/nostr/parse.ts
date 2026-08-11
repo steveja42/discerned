@@ -7,7 +7,7 @@
 import type { Event } from 'nostr-tools';
 import type { ClipData, ClipFormat, SignalLevel } from '@/lib/types';
 import { SIGNAL_LEVELS } from '@/lib/constants';
-import { stripDiscernedSnippet } from './strip-snippet';
+import { stripDiscernedCta, stripDiscernedSnippet } from './strip-snippet';
 
 function getTag(event: Event, tagName: string, namespace?: string): string | null {
   for (const tag of event.tags) {
@@ -54,9 +54,10 @@ export function parseEvent(event: Event): ClipData {
   const note = getTag(event, 'note') ?? undefined;
   const thumbnail = getTag(event, 'image') ?? undefined;
   const imageUrls = getImetaUrls(event);
-  // Strip the attribution snippet before touching content — it must never reach
-  // the UI, and (for kind-1) it would shift the line-index title fallback.
-  const content = stripDiscernedSnippet(event.content);
+  // Strip the attribution snippet and the trailing web-app CTA before touching
+  // content — neither must reach the UI, and (for kind-1) the snippet would
+  // shift the line-index title fallback.
+  const content = stripDiscernedCta(stripDiscernedSnippet(event.content));
 
   if (event.kind === 30023) {
     // NIP-23 long-form: content is markdown; d is the source clip id; the
