@@ -747,9 +747,11 @@ ${themeVarsBlock(this.effectiveTheme)}
       const probed = await detectAuthState().catch(() => null);
       // Report the negative too — this button is pressed exactly when the user
       // suspects the state is wrong, so it must clear a stale `pro` as well.
+      // `trusted`: an explicit check overrides the stale-tab guard.
       await chrome.runtime.sendMessage({
         type: 'NIP07_DETECTED',
         hasNIP07: probed?.type === 'pro',
+        trusted: true,
       }).catch(() => { /* non-fatal */ });
       const res = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }).catch(() => null);
       if (btn) btn.disabled = false;

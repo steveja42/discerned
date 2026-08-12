@@ -501,13 +501,27 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       return handleUpdateClipNote(message.id, message.note);
 
     case 'NIP07_DETECTED':
+      if (message.hasNIP07) {
+        await chrome.storage.local.set({ [STORAGE_KEYS.NIP07_LAST_SEEN]: Date.now() });
+      }
       if (!message.hasNIP07 && currentAuthState.type === 'pro') {
+        // A negative only proves the signer is gone if the probing page loaded
+        // AFTER we last saw one — a page opened before the wallet was installed
+        // never receives window.nostr, however legitimate its origin. An explicit
+        // user check (`trusted`) bypasses this.
+        if (!message.trusted) {
+          const seen = (await chrome.storage.local.get(STORAGE_KEYS.NIP07_LAST_SEEN))[STORAGE_KEYS.NIP07_LAST_SEEN] as number | undefined;
+          if (seen && (message.pageLoadedAt ?? 0) < seen) {
+            log(LL.DEBUG, '[auth] ignoring negative NIP-07 probe from a tab older than the last sighting');
+            return { success: true };
+          }
+        }
         // `pro` only asserts another extension exists, so it must not outlive it
         // in storage. Identity is unchanged — profile/relay caches stay.
         const prev = currentAuthState.pubkey;
         currentAuthState = { type: 'guest' };
         if (!guestPrivateKey) guestPrivateKey = generateSecretKey();
-        await chrome.storage.local.remove([STORAGE_KEYS.AUTH_STATE]);
+        await chrome.storage.local.remove([STORAGE_KEYS.AUTH_STATE, STORAGE_KEYS.NIP07_LAST_SEEN]);
         log(LL.NORMAL, '[auth] NIP-07 signer gone — downgraded to guest, was:', prev ? npubEncode(prev).slice(0, 12) : '(no pubkey)');
       } else if (message.hasNIP07 && currentAuthState.type === 'guest') {
         currentAuthState = { type: 'pro', hasNIP07: true, pubkey: message.pubkey };
@@ -1575,7 +1589,15 @@ const PENDING_SIGN_TIMEOUT_MS = 120_000; // 2 min — user may not be at the key
 
 async function pushPendingSignToWebApp(id: string, event: Record<string, unknown>, tabId: number, expectedPubkey?: string): Promise<void> {
   const msg: BackgroundMessage = { type: 'PUSH_PENDING_SIGN', id, event, expectedPubkey };
-  await chrome.tabs.sendMessage(tabId, msg).catch(() => { /* non-fatal */ });
+  try {
+    await chrome.tabs.sendMessage(tabId, msg);
+  } catch (err) {
+    // Undelivered means nothing will ever resolve this sign, so fail now rather
+    // than let it wait out the 2-minute timeout with no explanation. Usual cause:
+    // the tab's content script belongs to an older extension build (reload it).
+    log(LL.WARN, '[sign] signing tab unreachable:', err);
+    rejectPendingSign(id, 'Could not reach the discerned.online tab. Reload it, then cast again.');
+  }
 }
 
 /**

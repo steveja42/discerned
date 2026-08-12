@@ -146,6 +146,7 @@ async function handleActivation() {
   // Report ABSENCE too — the background persists `pro`, so without a negative
   // report it outlives the signer being uninstalled. Re-probe with a longer
   // window first: a slow cold-start injection must not read as a removal.
+  // pageLoadedAt lets the background discount a stale tab's negative.
   let hasNIP07 = detected.type === 'pro';
   if (!hasNIP07 && cachedAuthState.type === 'pro') {
     hasNIP07 = await waitForNIP07(2000);
@@ -154,6 +155,7 @@ async function handleActivation() {
     await chrome.runtime.sendMessage({
       type: 'NIP07_DETECTED',
       hasNIP07,
+      pageLoadedAt: performance.timeOrigin,
     }).catch(() => {});
   }
 

@@ -165,7 +165,9 @@ export type BackgroundMessage =
   | { type: 'UPDATE_CATEGORIES'; categories: string[] }
   | { type: 'SYNC_CATEGORIES_TO_WEB' }
   | { type: 'PUSH_CATEGORIES'; categories: string[] }
-  | { type: 'NIP07_DETECTED'; hasNIP07: boolean; pubkey?: string }
+  // `pageLoadedAt` dates the probing page (performance.timeOrigin); `trusted`
+  // marks an explicit user check. Both gate whether a negative may clear auth.
+  | { type: 'NIP07_DETECTED'; hasNIP07: boolean; pubkey?: string; pageLoadedAt?: number; trusted?: boolean }
   | { type: 'GET_PROFILE' }
   | { type: 'CONNECT_NIP46'; bunkerUri: string }
   | { type: 'CONNECT_NSEC'; rawNsec: string; pin: string }
@@ -256,6 +258,10 @@ export const STORAGE_KEYS = {
   // focuses the signing tab so popup-per-sign wallets (nostr-wot) can prompt.
   // Reset implicitly by identity switch (the pubkey no longer matches).
   SIGN_APPROVED_PUBKEY:    'signApprovedPubkey',
+  // Epoch ms of the last probe that FOUND a NIP-07 signer. A negative probe from
+  // a page loaded before this is a stale tab (the wallet never injected into it),
+  // not a missing signer — see the NIP07_DETECTED handler.
+  NIP07_LAST_SEEN:         'nip07LastSeen',
 } as const;
 
 // Messages posted between the extension's web-bridge content script and the

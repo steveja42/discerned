@@ -36,6 +36,13 @@ const WALLET_LATCHED_MESSAGE =
   'Your signing extension is refusing further requests after a cancelled prompt. '
   + 'Reload the discerned.online tab, then cast again.';
 
+// Same "only a reload fixes it, and not of THIS tab" shape as above: a tab
+// opened before the signing extension was installed never receives
+// window.nostr, so the origin is fine but this page can't sign.
+const NO_WALLET_MESSAGE =
+  'No signing extension found in the discerned.online tab. '
+  + 'If you just installed one, reload that tab, then cast again.';
+
 function npubShort(pk: string): string {
   try { return `${npubEncode(pk).slice(0, 12)}…`; } catch { return `${pk.slice(0, 12)}…`; }
 }
@@ -54,7 +61,7 @@ export default function PendingSignModal() {
       if (msg.type !== 'DISCERNED_BRIDGE_PENDING_SIGN') return;
       const { id, event, expectedPubkey } = msg;
       if (!window.nostr) {
-        sendSignRejectedToExtension(id, 'NIP-07 extension not available');
+        sendSignRejectedToExtension(id, NO_WALLET_MESSAGE);
         return;
       }
 
