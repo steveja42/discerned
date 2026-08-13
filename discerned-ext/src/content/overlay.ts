@@ -1611,6 +1611,7 @@ ${themeVarsBlock(this.effectiveTheme)}
           <input type="range" id="signal-range" min="0" max="${max}" step="1"
                  value="${idx}" aria-labelledby="signal-label"
                  aria-valuetext="${this.signal ?? 'Unrated'}"${fill} />
+          <div class="signal-thumb" id="signal-thumb"></div>
         </div>
         <div class="signal-ticks" id="signal-ticks">${ticks}</div>
       </div>
@@ -1655,6 +1656,29 @@ ${themeVarsBlock(this.effectiveTheme)}
     if (!wrap || !range || !readout || !clear || !ticks) return;
 
     const max = SIGNAL_LEVELS.length - 1;
+    const thumb = this.shadow.getElementById('signal-thumb');
+
+    // Thumb x per level, relative to the slider box. The MIDDLE three sit on
+    // their label's centre (flex space-between + unequal word widths means the
+    // native even steps landed right of the word). The two ENDS keep the native
+    // track-end positions. Measured bold, the .selected weight, so selecting
+    // never shifts them.
+    const thumbStops = (): number[] => {
+      const wrapBox = wrap.getBoundingClientRect();
+      const r = range.getBoundingClientRect();
+      const nativeX = (i: number) =>
+        r.left + 4 + (i / max) * (r.width - 8) - wrapBox.left;
+      const els = [...ticks.querySelectorAll<HTMLElement>('.signal-tick')];
+      const was = els.map(el => el.classList.contains('selected'));
+      els.forEach(el => el.classList.add('selected'));
+      const xs = els.map((el, i) => {
+        if (i === 0 || i === max) return nativeX(i);
+        const b = el.getBoundingClientRect();
+        return b.left + b.width / 2 - wrapBox.left;
+      });
+      els.forEach((el, i) => { if (!was[i]) el.classList.remove('selected'); });
+      return xs;
+    };
 
     const paint = () => {
       const rated = this.signal !== null;
@@ -1664,8 +1688,14 @@ ${themeVarsBlock(this.effectiveTheme)}
       readout.textContent = rated ? `${signalRank(this.signal!)} ★ ${this.signal}` : 'Unrated';
       clear.hidden = !rated;
       range.setAttribute('aria-valuetext', this.signal ?? 'Unrated');
-      if (rated) range.style.setProperty('--sig-pct', `${(idx / max) * 100}%`);
-      else range.style.removeProperty('--sig-pct');
+      if (rated) {
+        const x = thumbStops()[idx]!;
+        thumb?.style.setProperty('--sig-thumb-x', `${x}px`);
+        // Fill the track to the thumb, not to an evenly-spaced percentage.
+        range.style.setProperty('--sig-pct', `${(x / wrap.getBoundingClientRect().width) * 100}%`);
+      } else {
+        range.style.removeProperty('--sig-pct');
+      }
       ticks.querySelectorAll<HTMLElement>('.signal-tick').forEach(el => {
         el.classList.toggle('selected', Number(el.dataset.idx) === idx);
       });
@@ -1687,15 +1717,36 @@ ${themeVarsBlock(this.effectiveTheme)}
     // Native `input` covers click/drag/keyboard once rated.
     range.addEventListener('input', () => commit(Number(range.value)));
 
-    // While unrated, a click landing exactly on the parked midpoint fires no
-    // `input` (value unchanged) — commit from the pointer position instead.
+    // Pick the level whose LABEL is nearest the click. The native even-step
+    // mapping put the boundary left of each word, so clicking above the "o" in
+    // Ordinary (or Worthwhile) selected the level below.
+    const nearestToX = (clientX: number): number => {
+      const x = clientX - wrap.getBoundingClientRect().left;
+      const xs = thumbStops();
+      let best = 0;
+      xs.forEach((c, i) => { if (Math.abs(c - x) < Math.abs(xs[best]! - x)) best = i; });
+      return best;
+    };
+
     wrap.addEventListener('pointerdown', e => {
-      if (this.signal !== null) return;
-      const r = range.getBoundingClientRect();
-      commit(((e.clientX - r.left) / r.width) * max);
+      e.preventDefault(); // stop the native even-step jump
+      // Hide the focus ring: our focus() is scripted, so unlike the native
+      // click it would match :focus-visible and outline the whole track.
+      range.classList.add('via-pointer');
+      range.focus();
+      commit(nearestToX(e.clientX));
+      const onMove = (m: PointerEvent) => commit(nearestToX(m.clientX));
+      const onUp = () => {
+        wrap.removeEventListener('pointermove', onMove);
+        wrap.removeEventListener('pointerup', onUp);
+      };
+      wrap.setPointerCapture(e.pointerId);
+      wrap.addEventListener('pointermove', onMove);
+      wrap.addEventListener('pointerup', onUp);
     });
 
     range.addEventListener('keydown', e => {
+      range.classList.remove('via-pointer'); // keyboard users get the ring back
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         clearSignal();
@@ -1715,6 +1766,8 @@ ${themeVarsBlock(this.effectiveTheme)}
       }
     });
 
+    range.addEventListener('blur', () => range.classList.remove('via-pointer'));
+
     clear.addEventListener('click', clearSignal);
 
     ticks.addEventListener('click', e => {
@@ -1722,6 +1775,9 @@ ${themeVarsBlock(this.effectiveTheme)}
       if (!t?.dataset.idx) return;
       commit(Number(t.dataset.idx));
     });
+
+    // Label centres move with the panel (max-width: 90vw), so re-place the thumb.
+    new ResizeObserver(() => paint()).observe(ticks);
   }
 
   private attachQualifierChips(): void {
@@ -2440,14 +2496,26 @@ ${themeVarsBlock(this.effectiveTheme)}
       .signal-slider.unrated input[type="range"]::-webkit-slider-runnable-track {
         background: var(--p-rule);
       }
+      /* The native thumb is hidden: its stops are evenly spaced, but the tick
+         labels are not (flex space-between), so #signal-thumb is positioned at
+         each label's measured centre instead. The input still owns the value. */
       .signal-slider input[type="range"]::-webkit-slider-thumb {
         -webkit-appearance: none; appearance: none;
         width: 8px; height: 18px; margin-top: -7px;
-        background: var(--p-accent);
+        background: transparent;
         border: none;
       }
-      .signal-slider.unrated input[type="range"]::-webkit-slider-thumb { opacity: 0; }
+      .signal-slider { position: relative; }
+      .signal-thumb {
+        position: absolute; top: 1px;
+        left: var(--sig-thumb-x, 0px); translate: -50% 0;
+        width: 8px; height: 18px;
+        background: var(--p-accent);
+        pointer-events: none;
+      }
+      .signal-slider.unrated .signal-thumb { opacity: 0; }
       .signal-slider input[type="range"]:focus-visible { outline: 2px solid var(--p-accent); outline-offset: 2px; }
+      .signal-slider input[type="range"].via-pointer:focus-visible { outline: none; }
       .signal-ticks { display: flex; justify-content: space-between; }
       /* --p-ink-3, not --p-ink-4: these are the only labels for the scale, so
          they must be readable unhovered. --p-ink-4 is for de-emphasised chrome. */
