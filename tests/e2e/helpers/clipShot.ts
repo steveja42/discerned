@@ -18,7 +18,19 @@ export async function screenshotSourcePage(
   path: string,
   maxHeight = 8000,
 ): Promise<void> {
-  const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+  // `documentElement` can be NULL if the site tears the document down between
+  // load and screenshot (a bot-mitigation reload or a redirect mid-capture —
+  // observed on ebay, which surfaced as a bare "TypeError: Cannot read
+  // properties of null (reading 'scrollHeight')" that reads like OUR bug rather
+  // than "the site navigated away". Fall back to the viewport height so the
+  // caller still gets a screenshot + an honest skip reason.
+  const pageHeight = await page.evaluate(
+    () => document.documentElement?.scrollHeight ?? 0,
+  ).catch(() => 0);
+  if (!pageHeight) {
+    await page.screenshot({ path }).catch(() => undefined);
+    return;
+  }
   if (pageHeight <= maxHeight) {
     await page.screenshot({ path, fullPage: true });
     return;

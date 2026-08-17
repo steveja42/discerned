@@ -211,7 +211,36 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
       // capturing — some walls (Zillow) render the listing THEN pop the gate ~2s
       // later, so an instant capture would grab a transitional mid-gate state.
       if (ctxIsHeaded) {
-        const GATE_RE = /press\s*&?\s*hold|robot or human|make sure you'?re a human|are you a robot|verify you are human/i;
+        // NOTE the `(?:&(?:amp;)?|and)?` separator: Zillow's wall says "press AND
+        // hold", which the old `&?` form did NOT match — so gateUp() reported "no
+        // gate", the loop exited after 3 clear polls (~6s), the manual prompt never
+        // printed, and the sweep advanced WHILE THE USER WAS STILL PRESS-AND-HOLDING.
+        // The interstitial detector below already lists 'press and hold to confirm',
+        // so the two checks disagreed on the same page. `&amp;` covers entity text.
+        // Covers BOTH wall families. It previously held only the PerimeterX
+        // press-and-hold phrasings, so on a CLOUDFLARE site gateUp() returned
+        // false immediately, the loop exited after 3 clear polls (~6s), and the
+        // window closed WHILE THE USER WAS CLICKING THE GATE (observed on
+        // librarything, whose wall reads "Verifying you are human" — note the
+        // -ING, which `verify you are human` does not match). Measured: 7 of 8
+        // real wall texts missed. Keep this in sync with the CHALLENGE list in
+        // the interstitial detector below — the two must agree on what a wall is.
+        const GATE_RE = new RegExp([
+          // PerimeterX
+          'press\\s*(?:&(?:amp;)?|and)?\\s*hold', 'robot or human',
+          "make sure you'?re a human", 'are you a robot',
+          // Cloudflare / generic bot checks
+          // "verif(y|ying) you are" — NOT the looser "verify your", which hits
+          // ordinary prose ("he would verify your identity at the polls").
+          'verif(?:y|ying)\\s+(?:that\\s+)?you\\s+are',
+          'checking your browser', 'checking your connection',
+          'security verification', 'needs to review the security',
+          // Anchored: bare "just a moment" appears mid-sentence in real prose
+          // ("after just a moment of hesitation"); CF renders it as the whole
+          // page/title, so require it at the start of the text.
+          '^\\s*just a moment',
+          'enable javascript and cookies', 'additional verification required',
+        ].join('|'), 'i');
         const gateUp = async () => page.evaluate((reStr: string) => {
           const re = new RegExp(reStr, 'i');
           const t = (document.body?.innerText ?? '').trim();
@@ -280,7 +309,33 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
     // signature text on a SHORT page and demote to a load-vs-capture SKIP —
     // same contract as the tagger canary's "page won't load" case. A CF wall is
     // flagged `challenged` so the driver retries it HEADED.
-    const interstitial = await page.evaluate(() => {
+    const interstitial = await page.evaluate((requestedUrl: string) => {
+      // ── DEAD PAGE / HOMEPAGE REDIRECT (scored `ok` before this check) ──────
+      // A 404 or a deep link silently bounced to the site root still RENDERS, so
+      // nothing above catches it: the sweep captured GitHub's 404 page
+      // ("This is not the web page you are looking for"), VentureBeat's "Not
+      // Found", and Home Depot's HOMEPAGE (product URL 403s → root) and scored
+      // all three as healthy clips. A block page that scores WELL is worse than
+      // an honest skip — same false-pass class as the phys.org / YouTube-Music
+      // stubs already handled below. These are NOT cf-retryable (a headed retry
+      // gets the same dead URL), so cf:false — fix the corpus entry instead.
+      const title = (document.title ?? '').toLowerCase();
+      const DEAD_TITLE = ['404', 'not found', 'page not found', 'page missing',
+        'no longer available', 'nothing here'];
+      const deadTitleHit = DEAD_TITLE.find(s => title.includes(s));
+      if (deadTitleHit) return { hit: `dead page (title: "${document.title}")`, len: title.length, cf: false };
+      try {
+        const want = new URL(requestedUrl);
+        const got = new URL(window.location.href);
+        // Only meaningful when a real path was requested: landing on the bare
+        // root ("/" or empty) means the deep link was thrown away.
+        const wantPath = want.pathname.replace(/\/+$/, '');
+        const gotPath = got.pathname.replace(/\/+$/, '');
+        if (wantPath.length > 1 && gotPath === '' && !got.search) {
+          return { hit: `redirected to homepage (wanted ${want.pathname})`, len: 0, cf: false };
+        }
+      } catch { /* unparseable URL — skip this check */ }
+
       // Gather text from the main document AND any same-origin iframes — some
       // walls (Reuters' "Access is temporarily restricted") render the block
       // inside an iframe, so document.body.innerText is EMPTY and a signature
@@ -339,6 +394,16 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
         // actual page, so this is CF-shaped (retryable), not a hard block.
         'is not optimized for your browser', 'unsupported browser',
         'browser is not supported', 'update your browser to continue',
+        // Rate-limit stubs. postguam served a bare "Too Many Requests /
+        // client_ip / request_id" page after the sweep hit it too fast, and the
+        // scorer read that as a healthy 100%-coverage clip (composite 0.200 —
+        // it even reached the worst-decile list as a fake finding). A pause +
+        // retry clears it, so this is CHALLENGE (cf:true), not HARD.
+        // NB: only UNAMBIGUOUS phrases here. 'slow down' and 'try again later'
+        // were tried and rejected — they occur in ordinary prose ("the council
+        // voted to slow down construction… residents could try again later"),
+        // and the 1500-char gate above would not save a SHORT real article.
+        'too many requests', '429 too many', 'rate limit exceeded',
       ];
       // HARD-block signatures — a headed retry won't help (IP/account level).
       const HARD = [
@@ -354,7 +419,7 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
       if (cfHit) return { hit: cfHit, len: t.length, cf: true };
       const hardHit = HARD.find(s => low.includes(s));
       return hardHit ? { hit: hardHit, len: t.length, cf: false } : null;
-    });
+    }, url);
     if (interstitial) {
       rec.skipReason = `challenge/error page ("${interstitial.hit}", ${interstitial.len} chars)`;
       rec.challenged = interstitial.cf; // driver retries CF challenges headed
@@ -498,6 +563,43 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
   }
 }
 
+/**
+ * Run captureDomain under a hard per-domain deadline.
+ *
+ * `captureDomain` is failure-ISOLATED (every throw becomes a skip record) but it
+ * was never TIME-boxed, and the individual awaits inside it don't all carry
+ * timeouts — so one domain that blocks in capture/render/cast stalls the entire
+ * serial sweep until the ~4.4h whole-test budget fires. Observed 2026-08-17:
+ * storygraph loaded fine (no gate — its source screenshot is a perfect book
+ * page) and then wedged for 23+ minutes with zero artifact writes, blocking the
+ * last 6 domains of the headed-retry pass.
+ *
+ * On timeout we persist an honest skip and move on, preserving the file's stated
+ * contract that one bad domain can never abort the sweep.
+ */
+const DOMAIN_TIMEOUT_MS = Number(process.env.SWEEP_DOMAIN_TIMEOUT_MS ?? 240_000);
+
+async function captureDomainDeadlined(
+  ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = false,
+): Promise<SweepDriverRecord> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<SweepDriverRecord>((res) => {
+    timer = setTimeout(() => {
+      const rec: SweepDriverRecord = {
+        domain: d.name, url: d.url, ranAt: new Date().toISOString(), status: 'skip',
+        skipReason: `domain timeout (>${Math.round(DOMAIN_TIMEOUT_MS / 1000)}s — wedged in capture/render/cast)`,
+      };
+      persist(rec);
+      res(rec);
+    }, DOMAIN_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([captureDomain(ctx, d, ctxIsHeaded), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // Merge one pass's records into the accumulator (by domain), preferring an 'ok'
 // over a prior 'skip' (the headed retry can only improve a domain's outcome).
 function mergeRecord(acc: Map<string, SweepDriverRecord>, rec: SweepDriverRecord): void {
@@ -513,7 +615,16 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
   // re-click retries can exceed it — and on a SMALL run (one domain, when
   // verifying a fix) that lands inside the whole test's budget with no slack.
   // Floor the budget so short runs aren't killed mid-capture.
-  test.setTimeout(Math.max(DOMAINS.length * 75_000, 300_000) + 120_000);
+  //
+  // A domain can ALSO be retried HEADED, and a headed gate wait is up to ~3.5min
+  // on its own (TOTAL_POLLS * 2s) — far more than the 75s steady-state figure.
+  // A `SWEEP_ONLY` run of 8 domains therefore got 720s total and was KILLED
+  // mid-retry (observed 2026-08-17, right after GATE_RE was widened so CF walls
+  // correctly hold the window open). Budget a possible headed retry for EVERY
+  // domain at the per-domain deadline, so the whole-test timeout can never be
+  // tighter than the per-domain timeouts it contains.
+  const perDomain = 75_000 + DOMAIN_TIMEOUT_MS;
+  test.setTimeout(Math.max(DOMAINS.length * perDomain, 300_000) + 120_000);
 
   const rawUserDataDir = process.env.RAW_USER_DATA_DIR ??
     resolve(__dirname, '..', '..', '.vscode', 'browser-test-profiles', 'chrome');
@@ -543,7 +654,7 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
     });
     try {
       for (const d of pxDomains) {
-        const rec = await captureDomain(pxCtx, d, true);
+        const rec = await captureDomainDeadlined(pxCtx, d, true);
         mergeRecord(acc, rec);
         // eslint-disable-next-line no-console
         console.log(rec.status === 'ok'
@@ -576,7 +687,7 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
       console.log(`   ⌫ purged ${purged} stored clip(s) from a previous run`);
     }
     for (const d of headlessDomains) {
-      const rec = await captureDomain(ctx, d);
+      const rec = await captureDomainDeadlined(ctx, d);
       mergeRecord(acc, rec);
       // eslint-disable-next-line no-console
       console.log(rec.status === 'ok'
@@ -605,7 +716,13 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
     });
     try {
       for (const d of cfDomains) {
-        const rec = await captureDomain(headedCtx, d);
+        // `true` = this context IS headed. It was omitted before, so the gate-wait
+        // loop (gated on ctxIsHeaded) NEVER RAN in the headed-retry pass — the one
+        // pass whose whole purpose is clearing walls in a real window. A CF wall
+        // therefore fell straight through to the interstitial detector and skipped
+        // in ~10s, which is why librarything's window closed under the user's click
+        // even after GATE_RE was widened. Both halves are needed.
+        const rec = await captureDomainDeadlined(headedCtx, d, true);
         mergeRecord(acc, rec);
         // eslint-disable-next-line no-console
         console.log(rec.status === 'ok'

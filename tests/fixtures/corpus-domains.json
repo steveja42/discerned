@@ -368,8 +368,8 @@
     },
     {
       "name": "venturebeat",
-      "url": "https://venturebeat.com/ai/anthropic-launches-claude-opus-4-5-with-improved-coding-and-computer-use/",
-      "note": "PHASE 4.3 — tech news article (direct; discovery listing was JS-walled)"
+      "url": "https://venturebeat.com/orchestration/writer-says-its-new-palmyra-x6-model-cuts-ai-agent-costs-by-52-as-token-spending-surges",
+      "note": "PHASE 4.3 — tech news article (direct; discovery listing was JS-walled). Replaced 2026-08-17: the old /ai/ URL 404s — VentureBeat moved articles to /orchestration/, /technology/, /security/ sections."
     },
     {
       "name": "theregister",
@@ -423,8 +423,8 @@
     },
     {
       "name": "homedepot",
-      "url": "https://www.homedepot.com/p/Milwaukee-M18-18V-Lithium-Ion-Cordless-SAWZALL-Reciprocating-Saw-Tool-Only-2621-20/205482388",
-      "note": "PHASE 4.3 — ENTITY: Home Depot product page (Milwaukee M18 reciprocating saw — spec tables + heavy commerce chrome). Bot-gated (serves an Error Page to automated Chrome); MANUAL HEADED pass w/ interaction."
+      "url": "https://www.homedepot.com/p/Anvil-10-oz-Ripping-Claw-Hammer-with-Hickory-Handle-91624/334097406",
+      "note": "PHASE 4.3 — ENTITY: Home Depot product page (Anvil claw hammer — spec tables + heavy commerce chrome). URL replaced 2026-08-17: the old Milwaukee SAWZALL deep link was being redirected to the HOMEPAGE for automated Chrome."
     },
     {
       "name": "etsy",
@@ -793,8 +793,8 @@
     },
     {
       "name": "github-issue",
-      "url": "https://github.com/facebook/react/issues/24502",
-      "note": "issue thread (comment timeline)"
+      "url": "https://github.com/microsoft/TypeScript/issues/13297",
+      "note": "issue thread (comment timeline). Replaced 2026-08-17: facebook/react/issues/24502 now 404s (the sweep captured GitHub's 404 page and scored it ok)."
     },
     {
       "name": "github-pr",
@@ -954,12 +954,12 @@
     {
       "name": "librarything",
       "url": "https://www.librarything.com/work/24789629/319692205",
-      "note": "PHASE 4.5 — ENTITY: LibraryThing WORK page (cover, author, description, tag cloud, member reviews + rating, members, classifications, statistics). Loads HEADLESS. An earlier /work/<id>/t/<slug> URL 403d; this /work/<id>/<id> form does not — the wall was URL-specific, NOT domain-wide."
+      "note": "PHASE 4.5 — ENTITY: LibraryThing WORK page (cover, author, description, tag cloud, member reviews + rating, members, classifications, statistics). Loads HEADLESS. An earlier /work/<id>/t/<slug> URL 403d; this /work/<id>/<id> form does not — the wall was URL-specific, NOT domain-wide. RATE-LIMITED 2026-08-17: repeated sweep attempts put this domain into a Cloudflare cooldown — the \"verifying you are human\" checkbox will not clear even headed with a human clicking. Leave it alone for several hours; do NOT retry in a loop, which only extends the cooldown."
     },
     {
       "name": "rateyourmusic",
       "url": "https://rateyourmusic.com/song/the-beatles/a-day-in-the-life/",
-      "note": "PHASE 4.5 — ENTITY: RYM SONG page (title, artist, genre, release date, all-time rank, ratings, lyrics). Needs the HEADED retry (Cloudflare challenge headless, clears headed). An earlier /release/album/... URL hard-403d; the /song/... form works."
+      "note": "PHASE 4.5 — ENTITY: RYM SONG page (title, artist, genre, release date, all-time rank, ratings, lyrics). Needs the HEADED retry (Cloudflare challenge headless, clears headed). An earlier /release/album/... URL hard-403d; the /song/... form works. RATE-LIMITED 2026-08-17: repeated sweep attempts put this domain into a Cloudflare cooldown — the \"verifying you are human\" checkbox will not clear even headed with a human clicking. Leave it alone for several hours; do NOT retry in a loop, which only extends the cooldown."
     },
     {
       "name": "spotify-album",
@@ -979,7 +979,7 @@
     {
       "name": "librarything-catalog",
       "url": "https://www.librarything.com/catalog/Kardiaa",
-      "note": "PHASE 4.5 — ENTITY: LibraryThing member CATALOG (list/table of a user library). CAPTURE DEFECT (not a wall): the table lives in a CHILD IFRAME (catalog_bottom.php) while the top document holds only the masthead (134 chars, 0 tables), so the clip is the 20-YEARS badge + 3 nav links. Needs cross-frame capture; do not chase as a layout-finder mis-pick."
+      "note": "PHASE 4.5 — ENTITY: LibraryThing member CATALOG (list/table of a user library). CAPTURE DEFECT (not a wall): the table lives in a CHILD IFRAME (catalog_bottom.php) while the top document holds only the masthead (134 chars, 0 tables), so the clip is the 20-YEARS badge + 3 nav links. Needs cross-frame capture; do not chase as a layout-finder mis-pick. RATE-LIMITED 2026-08-17: repeated sweep attempts put this domain into a Cloudflare cooldown — the \"verifying you are human\" checkbox will not clear even headed with a human clicking. Leave it alone for several hours; do NOT retry in a loop, which only extends the cooldown."
     },
     {
       "name": "msn-slideshow",
