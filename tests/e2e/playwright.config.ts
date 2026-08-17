@@ -78,6 +78,51 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'facebook-feed-fixture-visual',
+      testMatch: /facebook-feed-fixture-visual\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'fb-card-probe',
+      testMatch: /tools\/fb-card-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'snapshot-facebook-feed',
+      testMatch: /tools\/snapshot-facebook-feed\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'reel-tree-probe',
+      testMatch: /tools\/reel-tree-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'social-tagger-probe',
+      testMatch: /tools\/social-tagger-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'feed-clip-render',
+      testMatch: /tools\/feed-clip-render\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'feed-post-probe',
+      testMatch: /tools\/feed-post-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'instagram-probe',
+      testMatch: /tools\/instagram-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'modal-fp-probe',
+      testMatch: /tools\/modal-fp-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
       name: 'hidden-prose-probe',
       testMatch: /tools\/hidden-prose-probe\.spec\.ts$/,
       retries: 0,

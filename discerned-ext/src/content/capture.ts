@@ -1987,6 +1987,226 @@ function findContentBlockByLayout(): Element | null {
   return best.el;
 }
 
+// ── Endless-feed narrowing ───────────────────────────────────────────────────
+//
+// A THREAD and an ENDLESS FEED are structurally identical — repeating
+// same-signature siblings under one container — so maybeExpandToFeed (below)
+// cannot tell them apart and widens BOTH to the container. That is right for a
+// thread (primal/bsky/HN: you want the whole conversation) and wrong for a feed
+// (Instagram reels, Facebook video): the clip then carries every loaded post,
+// including preloaded ones the user never scrolled to. A direct /reels/ capture
+// came out at 106% of the visible page text, holding 4 reels.
+//
+// The two are separable by LAYOUT rather than markup. Measured across six real
+// pages (tests/e2e/tools/feed-post-probe.spec.ts):
+//
+//   site                     items  partVis  topShare
+//   instagram-reels (feed)       8        1      0.99   ← narrow to the one post
+//   hackernews-thread           22        6      0.22
+//   bsky-thread                 53        1      0.33
+//   primal-thread                9        0      0.00
+//   youtube grid                30        3      0.06
+//   instagram profile grid       4        1      0.19
+//
+// A feed shows exactly ONE post filling the screen; a thread shows several
+// sharing it. Both terms are required: bsky also has partVis=1, so a
+// visible-count test alone would misclassify it and break a pixel-baselined
+// site — topShare (0.33 vs 0.99) is what separates them.
+const FEED_MAX_VISIBLE_ITEMS = 1;      // more than one on screen ⇒ a thread
+const FEED_MIN_TOP_SHARE = 0.5;        // the post must OWN the viewport
+const FEED_MIN_SIBLINGS = 3;           // 2 similar blocks is a layout, not a feed
+
+/**
+ * Reorder a narrowed feed post so it LEADS with its media.
+ *
+ * A reel is laid out as two columns on the source — the video dominating the
+ * frame, the author/caption beside it — but in DOM order the caption comes
+ * FIRST. A clip is a single column, so document order stranded the video at the
+ * bottom: the opposite of the source's visual emphasis, where the video IS the
+ * post. (Instagram reels is the measured case; the same column-beside-media
+ * shape appears on other feed players.)
+ *
+ * Scoped deliberately to posts that `maybeNarrowToVisiblePost` selected. That is
+ * where the evidence is, and where a single dominant medium is the whole point
+ * of the post — an ARTICLE's images belong exactly where the author put them,
+ * so this must never run on the generic capture paths.
+ *
+ * Only reorders when the media element is VISUALLY ABOVE OR BESIDE the text on
+ * the live page (measured before cloning). A post whose media genuinely sits
+ * below its caption is left alone.
+ *
+ * Returns a marker attribute rather than mutating the live DOM: the reorder is
+ * applied to the detached clone by `hoistMarkedMedia`.
+ */
+const MEDIA_HOIST_MARKER = 'data-discerned-hoist';
+const MEDIA_HOIST_SCOPE_MARKER = 'data-discerned-hoist-scope';
+
+function markMediaForHoist(post: Element): void {
+  const media = Array.from(post.querySelectorAll('video, img'))
+    .filter(m => {
+      if (m.classList.contains('dx-avatar') || m.closest('.dx-header')) return false;
+      const r = m.getBoundingClientRect();
+      return r.width >= 150 && r.height >= 150; // a hero, not an icon
+    });
+  if (media.length === 0) return;
+  // The largest medium is the post's subject.
+  const hero = media.reduce((best, m) => {
+    const a = m.getBoundingClientRect(), b = best.getBoundingClientRect();
+    return (a.width * a.height) > (b.width * b.height) ? m : best;
+  });
+  const heroRect = hero.getBoundingClientRect();
+
+  // Find the post's leading text block, and bail unless the hero is above or
+  // beside it (i.e. document order disagrees with visual order).
+  const textEl = Array.from(post.querySelectorAll('p, span, div'))
+    .find(t => (t.textContent ?? '').trim().length > 60 && !t.contains(hero));
+  if (!textEl) return;
+  const textRect = textEl.getBoundingClientRect();
+  const heroIsAboveOrBeside = heroRect.top <= textRect.top + 8 || heroRect.left >= textRect.right - 8;
+  if (!heroIsAboveOrBeside) return;
+
+  // Descend to the SPLIT POINT: the deepest node that contains both the hero and
+  // the caption, where they live in DIFFERENT children. That node's child order
+  // is what the clip renders, so it is the only level worth reordering.
+  //
+  // Dumped from the real page (tests/e2e/tools/reel-tree-probe.spec.ts) — the
+  // split is FOUR levels below the narrowed post, not one:
+  //
+  //   0: <div> 1265x720 kids=1   ← the narrowed post
+  //   1: <div>  531x720 kids=1
+  //   2: <div>  459x688 kids=2   ← two children, but ONE holds both
+  //   3: <div>  387x688 kids=2   ← *** SPLIT: caption=#0, hero=#1 ***
+  //
+  // Earlier versions stopped at the post itself, or at the first node with >1
+  // child (level 2 here) — both one level short, so the hoist silently no-opped.
+  const splitOf = (root: Element): Element | null => {
+    let node: Element = root;
+    for (let i = 0; i < 12; i++) {
+      const kids = Array.from(node.children);
+      const heroKid = kids.find(k => k.contains(hero));
+      const textKid = kids.find(k => k.contains(textEl));
+      if (!heroKid || !textKid) return null;      // one of them is this node itself
+      if (heroKid !== textKid) return node;        // they diverge here — the split
+      node = heroKid;                              // still together: descend
+    }
+    return null;
+  };
+  const scope = splitOf(post);
+  if (!scope) return;
+  const heroBlock = Array.from(scope.children).find(c => c.contains(hero))!;
+  if (scope.children[0] === heroBlock) return;    // media already leads
+
+  // Mark the split node AND the hero's CHILD BRANCH of it — never the hero
+  // element itself. substituteVideosWithPosters REPLACES a <video> with a fresh
+  // <img> built from the poster frame, so a marker on the media is discarded
+  // before the clone-side reorder runs (measured: hero=false, scope=true). The
+  // branch element survives, and it is what actually gets moved.
+  const heroBranch = Array.from(scope.children).find(c => c.contains(hero))!;
+  heroBranch.setAttribute(MEDIA_HOIST_MARKER, '1');
+  scope.setAttribute(MEDIA_HOIST_SCOPE_MARKER, '1');
+  log(LL.DEBUG, 'Discerned: marked feed-post media for hoist above the caption',
+    'url:', window.location.href);
+}
+
+/** Apply the hoist marked by `markMediaForHoist` to the detached clone. */
+function hoistMarkedMedia(clone: Element): void {
+  // Both markers were placed on the LIVE page (where layout exists); read them
+  // back rather than re-deriving the split here, which the layout-less clone
+  // cannot do. The marked block is the hero's branch of the split node.
+  const scope = clone.matches(`[${MEDIA_HOIST_SCOPE_MARKER}]`)
+    ? clone
+    : clone.querySelector(`[${MEDIA_HOIST_SCOPE_MARKER}]`);
+  const block = clone.querySelector(`[${MEDIA_HOIST_MARKER}]`);
+  block?.removeAttribute(MEDIA_HOIST_MARKER);
+  scope?.removeAttribute(MEDIA_HOIST_SCOPE_MARKER);
+  if (!scope || !block || block.parentElement !== scope) return;
+  if (scope.firstElementChild === block) return;
+  scope.insertBefore(block, scope.firstElementChild);
+  log(LL.DEBUG, 'Discerned: hoisted feed-post media above the caption',
+    'url:', window.location.href);
+}
+
+/** Fraction of the viewport covered by `el`'s on-screen part. */
+function viewportShareOf(el: Element): number {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  if (vw <= 0 || vh <= 0) return 0;
+  const r = el.getBoundingClientRect();
+  const overlapY = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+  const overlapX = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+  return (overlapX * overlapY) / (vw * vh);
+}
+
+/**
+ * When `el` sits in an ENDLESS FEED, return the one post the user is actually
+ * looking at. Returns `el` unchanged for threads, grids, and everything else —
+ * so every existing capture path is untouched unless the feed signature holds.
+ *
+ * Runs BEFORE maybeExpandToFeed: if this narrows, expansion is skipped (they
+ * are exact opposites).
+ */
+function maybeNarrowToVisiblePost(el: Element): Element {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  if (vw <= 0 || vh <= 0) return el; // jsdom / no layout — can't judge visibility
+
+  // Where the feed track sits depends on which tier chose `el`:
+  //   • Tier 1.5 (layout finder) picks the track itself or one card → el / parent.
+  //   • Tier 1 (semantic) picks a page-level <main>/[role=main] on Instagram and
+  //     Facebook, with the track nested several levels DOWN — so descendants
+  //     must be searched too, or narrowing silently never fires on exactly the
+  //     sites it was built for.
+  const containers: Element[] = [el];
+  if (el.parentElement && el.parentElement !== document.body) containers.push(el.parentElement);
+  // Descendant containers, largest first — the feed track is a big block.
+  const descendants = Array.from(el.querySelectorAll('div, section, ul, main'))
+    .filter(d => d.children.length >= FEED_MIN_SIBLINGS)
+    .map(d => ({ d, area: d.getBoundingClientRect().width * d.getBoundingClientRect().height }))
+    .filter(x => x.area > 0)
+    .sort((a, b) => b.area - a.area)
+    .slice(0, 40) // cap the scan — feeds are near the top of the tree
+    .map(x => x.d);
+  containers.push(...descendants);
+
+  for (const container of containers) {
+    const kids = Array.from(container.children);
+    if (kids.length < FEED_MIN_SIBLINGS) continue;
+
+    // Group by the same signature maybeExpandToFeed uses, and take the largest
+    // group — a feed track's cards share one hashed class.
+    const bySig = new Map<string, Element[]>();
+    for (const k of kids) {
+      const sig = `${k.tagName.toLowerCase()}|${k.className}`;
+      const arr = bySig.get(sig) ?? [];
+      arr.push(k);
+      bySig.set(sig, arr);
+    }
+    let items: Element[] = [];
+    for (const group of bySig.values()) if (group.length > items.length) items = group;
+    if (items.length < FEED_MIN_SIBLINGS) continue;
+
+    const shares = items.map(viewportShareOf);
+    const visibleCount = shares.filter(s => s > 0.05).length;
+    const topShare = Math.max(...shares);
+    if (visibleCount > FEED_MAX_VISIBLE_ITEMS || topShare < FEED_MIN_TOP_SHARE) continue;
+
+    const winner = items[shares.indexOf(topShare)];
+    // The post must carry real content on its own — otherwise we'd narrow to a
+    // spacer/sentinel element that some feeds interleave between cards.
+    const hasContent = (winner.textContent ?? '').trim().length > 0
+      || winner.querySelector('img, video') !== null;
+    if (!hasContent) continue;
+
+    log(LL.DEBUG,
+      `Discerned: narrowed to visible feed post — ${items.length} siblings, ` +
+      `${visibleCount} on screen, topShare=${topShare.toFixed(2)}`,
+      'url:', window.location.href);
+    // Measure the media/text arrangement NOW, while the live layout still
+    // exists; the reorder itself is applied to the clone (see hoistMarkedMedia).
+    markMediaForHoist(winner);
+    return winner;
+  }
+  return el;
+}
+
 /**
  * When `el` is one of several structurally-similar siblings (a feed or thread
  * card), return its parent so the whole feed is captured. Otherwise return `el`.
@@ -2138,7 +2358,12 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   // Tier 1: semantic article element — preserves images at their correct positions.
   // Skipped when a site tagger pinned an explicit capture root (Tier 1.5 below
   // uses it): the tagger's root is more precise than a page-level <main>/<article>.
-  const articleEl = siteTaggerRoot ? null : findArticleElement(opts.smartArticleDetection);
+  const semanticEl = siteTaggerRoot ? null : findArticleElement(opts.smartArticleDetection);
+  // An ENDLESS FEED often HAS a semantic root (Instagram's <main>, Facebook's
+  // [role=main]) holding every loaded post, so Tier 1 wins and the clip carries
+  // the whole feed. Narrow to the post on screen when the feed signature holds;
+  // otherwise this returns the element unchanged and Tier 1 behaves as before.
+  const articleEl = semanticEl ? maybeNarrowToVisiblePost(semanticEl) : null;
   if (articleEl) {
     log(LL.DEBUG, `Discerned: article captured via semantic element <${articleEl.tagName.toLowerCase()}>`, 'url:', base.url);
     const cleanup = markExcluded(document.body);
@@ -2161,6 +2386,9 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     substituteStarRatings(clone);
     await substituteEmbeddedTweets(clone, harvestedTweets);
     substituteVideoEmbeds(clone);
+    // Feed posts only: lead with the media when the source laid it out
+    // above/beside the caption (no-op unless markMediaForHoist marked it).
+    hoistMarkedMedia(clone);
     tagSemanticStructure(clone);
     const imgsBefore = clone.querySelectorAll('img').length;
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
@@ -2198,12 +2426,22 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     const cleanup = markExcluded(document.body);
     const sizeCleanup = annotateLiveImageSizes(layoutEl);
     // A tagger-supplied root is already the intended scope — don't widen it.
-    const expanded = siteTaggerRoot ? layoutEl : maybeExpandToFeed(layoutEl);
+    // Otherwise: on an ENDLESS FEED narrow to the post actually on screen; on a
+    // thread (or anything else) fall through to the usual widen-to-feed. The two
+    // are opposites, so narrowing wins when its signature holds.
+    const narrowed = siteTaggerRoot ? layoutEl : maybeNarrowToVisiblePost(layoutEl);
+    const expanded = siteTaggerRoot ? layoutEl
+      : (narrowed !== layoutEl ? narrowed : maybeExpandToFeed(layoutEl));
     // When a site tagger has scoped the capture root, clear EXCL markers on
     // elements inside it: the tagger authoritatively said this is content,
     // so a sticky-positioned cover/sidebar inside that root is content too
     // (e.g. Goodreads's <div class="Sticky"> wrapping the book cover).
     if (siteTaggerRoot) {
+      // The ROOT ITSELF too, not just its descendants: a tagger may legitimately
+      // pin a fixed-position element (Facebook's permalink post is a
+      // role="dialog" lightbox), which markExcluded marks — and removeMarked
+      // then deletes the entire capture, yielding an empty clip.
+      siteTaggerRoot.removeAttribute(EXCL_MARKER);
       siteTaggerRoot.querySelectorAll(`[${EXCL_MARKER}]`).forEach(el => el.removeAttribute(EXCL_MARKER));
       // After unmasking, re-promote the tagger's own excludes — elements
       // stamped with `dx-excl` are interactive widgets we know don't belong
@@ -2236,6 +2474,9 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     substituteStarRatings(clone);
     await substituteEmbeddedTweets(clone, harvestedTweets);
     substituteVideoEmbeds(clone);
+    // Feed posts only: lead with the media when the source laid it out
+    // above/beside the caption (no-op unless markMediaForHoist marked it).
+    hoistMarkedMedia(clone);
     tagSemanticStructure(clone);
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
     // Before inlining, so a recovered hero is inlined + counted in imageUrls
@@ -2545,6 +2786,20 @@ function markExcluded(root: HTMLElement = document.body): () => void {
          s.clip.startsWith('rect(0px') ||
          s.clipPath.startsWith('inset('))) {
       el.setAttribute(EXCL_MARKER, '1');
+      return;
+    }
+    // aria-hidden containers that occupy NO SPACE. Facebook's feed carries 88
+    // hidden `<blockquote>…<span>Facebook</span>` placeholders, which surfaced
+    // in the clip as "Facebook" repeated 22 times above the post.
+    //
+    // Both halves are required. `aria-hidden` alone is far too broad — it is
+    // legitimately used on icon spans beside visible labels, and excluding those
+    // drops real content (see the blur-up note above). Requiring a ZERO-AREA box
+    // as well keeps this to elements the page renders nowhere, which is exactly
+    // the placeholder case.
+    if (el.getAttribute('aria-hidden') === 'true') {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) el.setAttribute(EXCL_MARKER, '1');
     }
   });
   return () => querySelectorAllDeep(root, `[${EXCL_MARKER}]`).forEach(el => el.removeAttribute(EXCL_MARKER));
@@ -3623,7 +3878,362 @@ interface SiteTagger_Entry {
   anchors: string[];
 }
 
+// ── Social feed taggers (Instagram / Facebook / TikTok) ─────────────────────
+//
+// These three home feeds cannot be scoped generically. Measured across eight
+// real pages (tests/e2e/tools/feed-post-probe.spec.ts), all three candidate
+// generic signals FAIL to separate an instagram-home post from a bsky thread
+// reply — which must keep expanding to the whole thread:
+//
+//   signal                     instagram-home  facebook-home  bsky (must not narrow)
+//   viewport dominance                   0.28           0.19  0.33   ← overlapping
+//   self-contained <article> items          0              0     0   ← useless
+//   grows on scroll                     no             no     no     ← useless
+//
+// The generic viewport-dominance rule (maybeNarrowToVisiblePost) still handles
+// the REELS shapes, where one post genuinely fills the screen (0.92-0.99). It is
+// only the column-card home feeds that need per-site knowledge, which is exactly
+// the case CLAUDE.md reserves site taggers for.
+//
+// Each tagger scopes the capture to the post nearest the top of the viewport by
+// returning it as the capture root, and stamps dx-* markers on its parts.
+
+/**
+ * Pick the feed post the user is looking at: the one covering the most of the
+ * viewport, preferring posts whose top edge is at or above the fold. Shared by
+ * the three social taggers, whose feeds are all vertical column-card lists.
+ */
+function pickVisibleFeedPost(posts: Element[]): Element | null {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  if (!posts.length || vw <= 0 || vh <= 0) return null;
+  let best: Element | null = null;
+  let bestArea = 0;
+  for (const p of posts) {
+    const r = p.getBoundingClientRect();
+    const oy = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+    const ox = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+    const area = ox * oy;
+    if (area > bestArea) { bestArea = area; best = p; }
+  }
+  return bestArea > 0 ? best : null;
+}
+
+/**
+ * Instagram home feed (instagram.com/). Each post is a real `<article>` — the
+ * one stable hook on the page (every class is a hashed atomic name like
+ * `x1qjc9v5`, rebuilt per deploy). Measured anatomy of one post: a 32x32 avatar
+ * `img[alt$="profile picture"]`, an author anchor, a `<time>`, the photo/video,
+ * and a Like/Comment/Share row.
+ *
+ * The /reels/ player route is deliberately NOT handled here — the generic
+ * viewport-dominance narrowing already scopes it correctly (verified live:
+ * coverage 111% → 17%).
+ */
+function tagInstagram(root: Document | Element): Element | void {
+  const posts = Array.from(root.querySelectorAll('article'))
+    .filter(a => (a.textContent ?? '').trim().length > 0 || a.querySelector('img, video'));
+  if (!posts.length) return;
+
+  for (const post of posts) {
+    appendClass(post, 'dx-post');
+    // Avatar: Instagram labels it "<user>'s profile picture".
+    const avatar = post.querySelector('img[alt*="profile picture" i]');
+    if (avatar) appendClass(avatar, 'dx-avatar');
+    // Author + time anchors sit in the post header.
+    const time = post.querySelector('time');
+    const authorLink = Array.from(post.querySelectorAll('a[href^="/"]'))
+      .find(a => (a.textContent ?? '').trim().length > 0
+        && !(a.textContent ?? '').includes(' ')) ?? null;
+    if (avatar && authorLink) {
+      const header = commonWrapper(avatar, authorLink, post);
+      if (header) appendClass(header, 'dx-header');
+    }
+    if (authorLink && time) {
+      const byline = commonWrapper(authorLink, time, post);
+      if (byline && byline !== post) appendClass(byline, 'dx-author');
+    }
+  }
+
+  const visible = pickVisibleFeedPost(posts);
+  if (visible) {
+    log(LL.DEBUG, `Discerned: tagInstagram scoped to the visible post of ${posts.length}`,
+      'url:', window.location.href);
+    return visible;
+  }
+}
+
+
+/**
+ * Facebook home feed (facebook.com/). Facebook's `[role="article"]` elements are
+ * EMPTY placeholders (measured: 2 matches, zero text, zero images, share 0), so
+ * they are not the hook. The real post body is marked
+ * `[data-ad-rendering-role="story_message"]` / `[data-ad-comet-preview="message"]`
+ * — ad-tooling attributes Facebook applies to ordinary posts too. Climb from
+ * there to the post container (the ancestor that is one of several
+ * same-signature siblings, measured at share 0.43).
+ *
+ * KNOWN GAP — the author byline is NOT inside the captured card. Photos and
+ * caption render correctly; the "<name> · <date>" header does not. THREE fixes
+ * were tried against the live feed and all three made the clip WORSE (page
+ * chrome: "Facebook" repeated, or the composer + stories rail), so each was
+ * reverted:
+ *
+ *   1. climb until the card contains the author element  → overshot
+ *   2. same, plus a viewport-size ceiling                → overshot
+ *   3. climb until the ancestor's byline count > 0       → overshot
+ *
+ * Why they all overshoot: Facebook's card boundary is not expressible as
+ * "contains a byline". A SHARED post nests two bylines (sharer + original
+ * author) and a TAGGED post ("X was tagged.") renders its header ABOVE the
+ * card — so byline-presence keeps testing true past the card, all the way into
+ * the feed wrapper. The measured chain plateaus at an identical box size for
+ * ~10 levels, which gives the climb nothing to stop on.
+ *
+ * A fourth attempt should NOT be another climb rule. The remaining options are
+ * to locate the card top-down (find the feed track, then take the child that
+ * contains this story_message) or to accept the gap. Do not retry 1-3.
+ */
+const FB_MSG_SEL = '[data-ad-rendering-role="story_message"], [data-ad-comet-preview="message"]';
+const FB_BYLINE_SEL = 'h3 a, h4 a, h2 a, strong a[role="link"]';
+
+function tagFacebook(root: Document | Element): Element | void {
+  // ── PERMALINK (a single post: /photo/, /posts/, /permalink.php) ────────────
+  // A permalink is a wholly different page shape from the feed, and a much
+  // better capture target: ONE post, deterministic, no neighbouring cards.
+  // Measured on /photo/?fbid=… — there are NO story_message markers at all, and
+  // `role="article"` marks the COMMENTS (352x79 each), not the post. The post
+  // is the lightbox dialog: photo on the left, byline + caption + stats on the
+  // right. So match the dialog and scope to it, before any feed logic runs.
+  const permalink = /\/(photo|posts|permalink\.php|share\/p)\b/.test(window.location.pathname)
+    || /\bfbid=/.test(window.location.search);
+  if (permalink) {
+    // The byline is a PLAIN profile anchor — no h2/h3/strong wrapper:
+    //   <a href="https://www.facebook.com/eduardodias?__tn__=-UC*F"
+    //      role="link" tabindex="0">Eduardo Dias Brito</a>
+    // Match it by SHAPE (a role=link anchor to a profile URL carrying a short
+    // human name), not by heading tags, which do not exist on this page.
+    const isProfileHref = (h: string): boolean =>
+      /^https?:\/\/(www\.)?facebook\.com\/(profile\.php\?id=\d+|[A-Za-z0-9.]+)(\?|$|\/$)/.test(h);
+    // Skip COMMENT authors: comments are role="article" here and their bylines
+    // are the same anchor shape, appearing EARLIER in document order — taking
+    // the first match picked the commenter ("Jane Archambau") over the post's
+    // own author ("Eduardo Dias Brito"). The post byline is the topmost such
+    // anchor that is NOT inside a comment.
+    const authorLink = Array.from(root.querySelectorAll('a[role="link"][href]'))
+      .filter(a => {
+        const txt = (a.textContent ?? '').trim();
+        if (txt.length < 2 || txt.length > 60 || txt.includes('\n')) return false;
+        if (a.querySelector('img, svg')) return false;      // avatar link, not the name
+        // A COMMENT's byline sits in a small role="article" card (measured:
+        // 352x79). The POST's own byline is also inside a role="article" on this
+        // page, so presence alone cannot separate them — filtering on it dropped
+        // every candidate. Use the card's SIZE: a comment card is short.
+        const card = a.closest('[role="article"]');
+        if (card && card.getBoundingClientRect().height < 160) return false;
+        return isProfileHref(a.getAttribute('href') ?? '');
+      })
+      // Highest on the page wins — the post header sits above the comment list.
+      .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0] ?? null;
+
+    // The post's photo: the largest image on the page.
+    const photo = Array.from(root.querySelectorAll('img'))
+      .filter(im => {
+        const r = im.getBoundingClientRect();
+        return r.width >= 200 && r.height >= 200;
+      })
+      .sort((a, b) => {
+        const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+        return (rb.width * rb.height) - (ra.width * ra.height);
+      })[0] ?? null;
+
+    // Scope to the nearest ancestor holding BOTH — the lightbox is split into an
+    // image pane and a byline/caption/comments pane, and either alone is a
+    // partial clip (scoping to the image pane gave a photo with no byline).
+    let post: Element | null = null;
+    if (authorLink && photo) {
+      let node: Element | null = authorLink.parentElement;
+      for (let i = 0; i < 20 && node && node !== document.body; i++) {
+        if (node.contains(photo)) { post = node; break; }
+        node = node.parentElement;
+      }
+    }
+    // Fall back to the largest dialog when the pair can't be resolved.
+    if (!post) {
+      post = Array.from(root.querySelectorAll('[role="dialog"], [role="main"]'))
+        .filter(d => {
+          const r = d.getBoundingClientRect();
+          return r.width > window.innerWidth * 0.5 && r.height > window.innerHeight * 0.5;
+        })
+        .sort((a, b) => {
+          const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+          return (rb.width * rb.height) - (ra.width * ra.height);
+        })[0] ?? null;
+    }
+    if (post) {
+      appendClass(post, 'dx-post');
+      // Comments are role="article" here — tag them as replies so they lay out
+      // as a thread instead of being mistaken for the post body.
+      post.querySelectorAll('[role="article"]').forEach(c => appendClass(c, 'dx-reply'));
+      if (authorLink && post.contains(authorLink)) appendClass(authorLink, 'dx-author');
+      log(LL.DEBUG,
+        `Discerned: tagFacebook scoped to a permalink post (byline=${!!authorLink} photo=${!!photo})`,
+        'url:', window.location.href);
+      return post;
+    }
+  }
+
+  // ── FEED (home timeline) ───────────────────────────────────────────────────
+  // Facebook wraps ONE post body in BOTH marker attributes on nested elements
+  // (measured in the fixture: 2 story_message + 2 comet-preview = 4 matches for
+  // 2 real posts, the pair 170 chars apart). Keep only the OUTERMOST of each
+  // nested pair, or every post is counted twice — which is what made the
+  // "encloses one message" card test never succeed during the live attempts.
+  const raw = Array.from(root.querySelectorAll(FB_MSG_SEL));
+  const bodies = raw.filter(el => !raw.some(other => other !== el && other.contains(el)));
+  if (!bodies.length) return;
+
+  const posts: Element[] = [];
+  for (const body of bodies) {
+    // Climb to the post CARD: the first ancestor that has acquired a byline
+    // while still enclosing only THIS post. Measured on the saved fixture
+    // (tests/e2e/tools/fb-card-probe.spec.ts), the chain reads:
+    //
+    //   2: 1264x6538  sibs=2  bylines=0            ← body block, no author
+    //   3: 1264x7693  sibs=1  bylines=1  "Diana Hulce"   ← THE CARD
+    //   4+: identical box, unchanged for ~12 levels      ← wrapper plateau
+    //
+    // Both conditions are load-bearing. Byline-presence alone overshoots (a
+    // SHARED post nests two bylines and a TAGGED post's header sits above the
+    // card, so the test keeps passing upward into page chrome — that is what
+    // broke the four live attempts). Requiring that the ancestor still contain
+    // exactly ONE post body stops the climb at the card, because the level
+    // above it starts pulling in the neighbouring post.
+    let post: Element | null = null;
+    let node: Element | null = body;
+    for (let i = 0; i < 14 && node && node.parentElement; i++) {
+      const parent: HTMLElement | null = node.parentElement;
+      if (!parent || parent === document.body) break;
+      node = parent;
+      const ownBodies = Array.from(node.querySelectorAll(FB_MSG_SEL))
+        .filter(el => !Array.from(node!.querySelectorAll(FB_MSG_SEL))
+          .some(o => o !== el && o.contains(el)));
+      if (ownBodies.length > 1) break;                       // reached the feed track
+      if (node.querySelectorAll(FB_BYLINE_SEL).length >= 1) { // byline acquired
+        post = node;
+        break;
+      }
+    }
+    // No byline found anywhere below the track — fall back to the body's own
+    // block so the post is still captured (just without its header).
+    if (!post) post = body.parentElement ?? body;
+    if (post !== document.body && !posts.includes(post)) posts.push(post);
+  }
+  if (!posts.length) return;
+
+  for (const post of posts) {
+    appendClass(post, 'dx-post');
+    const avatar = post.querySelector('img[src*="fbcdn"]');
+    if (avatar) {
+      const r = avatar.getBoundingClientRect();
+      // Only a small square image is the byline avatar; a post PHOTO is also an
+      // fbcdn img and must not get the round 44px pin.
+      if (r.width > 0 && r.width <= 64 && Math.abs(r.width - r.height) <= 8) {
+        appendClass(avatar, 'dx-avatar');
+      }
+    }
+    const authorLink = post.querySelector('h3 a, h4 a, strong a[role="link"], h2 a');
+    if (authorLink) {
+      appendClass(authorLink, 'dx-author');
+      // The byline strip: the wrapper holding the author link (and the
+      // timestamp beside it), so it lays out as one muted row.
+      const header = authorLink.closest('h3, h4, h2')?.parentElement ?? null;
+      if (header && post.contains(header)) appendClass(header, 'dx-header');
+    }
+  }
+
+  const visible = pickVisibleFeedPost(posts);
+  if (visible) {
+    log(LL.DEBUG, `Discerned: tagFacebook scoped to the visible post of ${posts.length}`,
+      'url:', window.location.href);
+    return visible;
+  }
+}
+
+/**
+ * TikTok. Unlike Instagram/Facebook, TikTok DOES publish stable `data-e2e`
+ * hooks, so the post containers are directly addressable:
+ *   - `[data-e2e="recommend-list-item-container"]`  a For You feed item
+ *   - `[data-e2e="user-post-item"]`                 a profile grid tile
+ * The For You feed is one-video-at-a-time (like reels), so scoping to the
+ * visible item is right; the profile GRID is many tiles at once, and scoping
+ * there would drop the grid the user is looking at — so only the feed shape
+ * returns a root.
+ */
+function tagTikTok(root: Document | Element): Element | void {
+  const feedItems = Array.from(root.querySelectorAll(
+    '[data-e2e="recommend-list-item-container"], [data-e2e="feed-video"]'));
+  const items = feedItems.length ? feedItems
+    : Array.from(root.querySelectorAll('[data-e2e="user-post-item"]'));
+  if (!items.length) return;
+
+  for (const item of items) {
+    appendClass(item, 'dx-post');
+    const avatar = item.querySelector('[data-e2e="video-author-avatar"] img, span[data-e2e*="avatar"] img');
+    if (avatar) appendClass(avatar, 'dx-avatar');
+    const author = item.querySelector('[data-e2e="video-author-uniqueid"], [data-e2e="video-author-nickname"]');
+    if (author) appendClass(author, 'dx-author');
+    const desc = item.querySelector('[data-e2e="video-desc"], [data-e2e="browse-video-desc"]');
+    if (desc) appendClass(desc, 'dx-byline');
+    // Like/comment/share column.
+    const likeEl = item.querySelector('[data-e2e="like-count"], [data-e2e="browse-like-count"]');
+    const shareEl = item.querySelector('[data-e2e="share-count"], [data-e2e="browse-share-count"]');
+    if (likeEl && shareEl) {
+      const statsRow = commonWrapper(likeEl, shareEl, item);
+      if (statsRow) appendClass(statsRow, 'dx-stats');
+    }
+  }
+
+  // Only the one-at-a-time FEED gets scoped; a profile grid must stay whole.
+  if (!feedItems.length) return;
+  const visible = pickVisibleFeedPost(items);
+  if (visible) {
+    log(LL.DEBUG, `Discerned: tagTikTok scoped to the visible feed item of ${items.length}`,
+      'url:', window.location.href);
+    return visible;
+  }
+}
+
 const SITE_TAGGERS: SiteTagger_Entry[] = [
+  {
+    name: 'instagram',
+    match: h => /(^|\.)instagram\.com$/i.test(h),
+    tag: tagInstagram,
+    // `article` is the only stable hook (all classes are hashed atomic names).
+    // The avatar alt text is Instagram's own accessibility string.
+    anchors: ['article', 'img[alt*="profile picture" i]'],
+  },
+  {
+    name: 'facebook',
+    match: h => /(^|\.)facebook\.com$/i.test(h),
+    tag: tagFacebook,
+    // Facebook serves two mutually-exclusive page shapes, so they must be ONE
+    // grouped anchor (same idiom as primal's `_primaryNote_, _noteThread_`):
+    //   • FEED      — posts carry the ad-rendering markers
+    //   • PERMALINK — /photo/, /posts/: NO story_message anywhere; the post is a
+    //                 role="dialog" lightbox
+    // Listing them separately made checkTaggerAnchors report "all dead" on every
+    // permalink and skip the tagger entirely, falling back to the generic
+    // pipeline and capturing nothing.
+    anchors: ['[data-ad-rendering-role="story_message"], [data-ad-comet-preview="message"], [role="dialog"]'],
+  },
+  {
+    name: 'tiktok',
+    match: h => /(^|\.)tiktok\.com$/i.test(h),
+    tag: tagTikTok,
+    // Feed item OR profile tile — mutually exclusive page shapes, so ONE grouped
+    // anchor (same idiom as primal's `_primaryNote_, _noteThread_`).
+    anchors: ['[data-e2e="recommend-list-item-container"], [data-e2e="user-post-item"]'],
+  },
   {
     name: 'primal',
     match: h => /(^|\.)primal\.net$/i.test(h),
@@ -6434,6 +7044,26 @@ function applyFlexSeparation(root: Element): void {
   }
 }
 
+// Invisible characters some sites interleave into text as a scraping defence.
+// Facebook is the reference case: its post text arrives as
+// "s͏n͏t͏r͏p͏o͏e͏S͏d͏o͏g͏9͏" — every visible character separated by U+034F
+// (COMBINING GRAPHEME JOINER), which renders identically on the page but makes
+// the captured text unreadable and unsearchable. Also covers zero-width
+// space/non-joiner/joiner and the BOM, which are used the same way.
+const ZERO_WIDTH_RE = /[͏​‌‍⁠﻿]/g;
+
+/** Remove invisible scraping-defence characters from every text node. */
+function stripZeroWidthChars(root: Element): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const hits: Text[] = [];
+  let n: Node | null;
+  while ((n = walker.nextNode())) {
+    if (ZERO_WIDTH_RE.test(n.nodeValue ?? '')) hits.push(n as Text);
+    ZERO_WIDTH_RE.lastIndex = 0; // global regex — reset between tests
+  }
+  for (const t of hits) t.nodeValue = (t.nodeValue ?? '').replace(ZERO_WIDTH_RE, '');
+}
+
 function sanitiseTreeInPlace(root: Element, stripStyles = false) {
   // Drop dangerous elements outright before walking. <foreignObject> can host
   // arbitrary HTML inside <svg>; drop it explicitly even though it's not in the
@@ -6444,6 +7074,51 @@ function sanitiseTreeInPlace(root: Element, stripStyles = false) {
   // consumes the live-layout markers, then drop text-identified page chrome.
   applyFlexSeparation(root);
   removeGenericChrome(root);
+  stripZeroWidthChars(root);
+
+  // VIDEO-PLAYER CONTROL CHROME. A player's control layer is a row of icon
+  // buttons — play/pause, captions, cast, volume, settings, fullscreen, picture
+  // -in-picture. They are invisible on the live page (they sit over the video,
+  // often revealed on hover) but survive into the clip as a column of ~30 stray
+  // glyphs after the video itself is replaced by a poster frame. Observed on a
+  // Facebook reel capture; the vocabulary below is the standard HTML5-player
+  // control set, so this is generic rather than per-site.
+  //
+  // Matched on the element's OWN accessible name so a content link merely
+  // containing the word (e.g. an article titled "Play it again") is unaffected.
+  const PLAYER_CONTROL_RE = new RegExp('^(' + [
+    'play', 'pause', 'play video', 'pause video', 'replay', 'mute', 'unmute',
+    'volume', 'volume up', 'volume down', 'seek', 'seek slider', 'progress bar',
+    'captions', 'subtitles', 'closed captions', 'cc', 'audio track',
+    'full ?screen', 'exit full ?screen', 'enter full ?screen',
+    'picture[- ]in[- ]picture', 'exit picture[- ]in[- ]picture',
+    'settings', 'playback speed', 'quality', 'cast', 'chromecast',
+    'airplay', 'next video', 'previous video', 'skip forward', 'skip back',
+    'rewind', 'fast forward', 'loop', 'autoplay',
+  ].join('|') + ')$', 'i');
+  const accessibleName = (el: Element): string => {
+    const aria = el.getAttribute('aria-label');
+    if (aria) return aria.replace(/\s+/g, ' ').trim();
+    // An <svg> is commonly labelled by a direct <title> child. Find it by tag
+    // rather than `:scope > title` — inside SVG the parser namespaces the
+    // element, and the selector misses it.
+    for (const kid of Array.from(el.children)) {
+      if (kid.tagName.toLowerCase() === 'title') {
+        return (kid.textContent ?? '').replace(/\s+/g, ' ').trim();
+      }
+    }
+    return (el.getAttribute('title') ?? '').replace(/\s+/g, ' ').trim();
+  };
+  root.querySelectorAll('svg, button, [role="button"], [role="slider"]').forEach(el => {
+    // NOTE: no isConnected check — this runs on a DETACHED clone, where every
+    // node reports isConnected === false and the pass would never fire.
+    if (el.closest('.tweet-card')) return; // tweet cards build their own controls
+    if (!PLAYER_CONTROL_RE.test(accessibleName(el))) return;
+    // Remove the button wrapper when there is one, so an empty shell is not left.
+    const target = el.closest('button, [role="button"]') ?? el;
+    target.remove();
+  });
+
 
   const walk = (node: Node) => {
     Array.from(node.childNodes).forEach(walk);

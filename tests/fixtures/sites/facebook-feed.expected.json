@@ -1,0 +1,10 @@
+{
+  "format": "article",
+  "url": "https://www.facebook.com/",
+  "hostOverride": "www.facebook.com",
+  "bodyText": {
+    "minLength": 200,
+    "contains": ["Diana Hulce"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

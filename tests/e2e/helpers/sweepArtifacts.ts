@@ -57,22 +57,6 @@ export interface SweepRecord {
   scores?: SweepScores;
 }
 
-/**
- * A human visual-review verdict for a domain, kept SEPARATE from the auto-scored
- * SweepRecord so re-running the sweep never overwrites it. Stored in
- * `visual-findings.json` (domain → verdict) and merged into the gallery, which can
- * sort by verdict severity. The heuristic composite is a cheap triage signal; this
- * is the ground truth a person confirmed by eyeballing the clip/cast.
- */
-export interface VisualFinding {
-  /** worst → best: 'critical' (no real content) · 'flaw' (partial/chrome/layout) · 'clean'. */
-  verdict: 'critical' | 'flaw' | 'clean';
-  /** Which render(s) the verdict is about. */
-  where?: 'clip' | 'cast' | 'clip+cast';
-  /** One-line human summary of what's wrong (or right). */
-  note?: string;
-}
-
 export interface SweepScores {
   /** clip body text length / visible page text length (0..1+). */
   textCoverage: number;

@@ -68,6 +68,19 @@ const PERIMETERX_SITES = new Set([
   'walmart', 'zillow', 'etsy', 'yelp', 'homedepot', 'goodreads-book', 'goodreads-author',
 ]);
 
+// Phase 4.4 — logged-in SOCIAL FEEDS (Instagram / Facebook / TikTok). These need
+// a real session in the warm profile, and they serve a login wall (or an empty
+// shell) to a headless hit even when cookies are present, so they run HEADED in
+// Pass 0 alongside the PerimeterX set rather than being scored as skips.
+// A logged-OUT profile still yields an honest skip (the interstitial detector
+// catches the login page), so the sweep degrades gracefully.
+const SOCIAL_FEED_SITES = new Set([
+  'instagram-reels', 'instagram-home', 'facebook-home', 'facebook-reels',
+  // TikTok needs no login, but a HEADLESS hit gets "Something went wrong" — so
+  // it belongs in the headed pass for the bot-detection reason, not a session one.
+  'tiktok-foryou', 'tiktok-profile',
+]);
+
 const DOMAINS: DomainEntry[] = (() => {
   const raw = JSON.parse(
     readFileSync(resolve(__dirname, '..', 'fixtures', 'corpus-domains.json'), 'utf8'),
@@ -511,8 +524,9 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
 
   // Split the corpus: PerimeterX-walled sites run HEADED-FIRST (Pass 0) and are
   // NEVER hit headless; everyone else runs headless (Pass 1). See PERIMETERX_SITES.
-  const pxDomains = DOMAINS.filter(d => PERIMETERX_SITES.has(d.name));
-  const headlessDomains = DOMAINS.filter(d => !PERIMETERX_SITES.has(d.name));
+  // Headed-first group = PerimeterX walls + logged-in social feeds (see above).
+  const pxDomains = DOMAINS.filter(d => PERIMETERX_SITES.has(d.name) || SOCIAL_FEED_SITES.has(d.name));
+  const headlessDomains = DOMAINS.filter(d => !PERIMETERX_SITES.has(d.name) && !SOCIAL_FEED_SITES.has(d.name));
 
   // ── Pass 0: HEADED-FIRST for PerimeterX sites (before any headless hit) ──
   // A clean headed session's FIRST impression is the best chance to clear
@@ -522,7 +536,7 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
   // which is discouraged — kept as an escape hatch).
   if (pxDomains.length && !process.env.SWEEP_NO_PX_FIRST) {
     // eslint-disable-next-line no-console
-    console.log(`\n── PerimeterX headed-first pass (${pxDomains.length}): ${pxDomains.map(d => d.name).join(', ')} ──`);
+    console.log(`\n── headed-first pass (${pxDomains.length}) — PerimeterX + logged-in social feeds: ${pxDomains.map(d => d.name).join(', ')} ──`);
     const { ctx: pxCtx } = await launchWithExtension({
       rawUserDataDir, profileDirectory, channel, preinstalledExtension: true, headed: true,
       clearSwCacheForRawDir: true,
@@ -580,7 +594,8 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
   // EXCLUDE PerimeterX sites — they already had their headed shot in Pass 0, and
   // re-hitting them would only escalate the wall (and they'd have been captured or
   // legitimately skipped there, never marked `challenged` from a headless pass).
-  const cfDomains = DOMAINS.filter(d => acc.get(d.name)?.challenged && !PERIMETERX_SITES.has(d.name));
+  const cfDomains = DOMAINS.filter(d => acc.get(d.name)?.challenged
+    && !PERIMETERX_SITES.has(d.name) && !SOCIAL_FEED_SITES.has(d.name));
   if (cfDomains.length && !process.env.SWEEP_NO_HEADED_RETRY) {
     // eslint-disable-next-line no-console
     console.log(`\n── headed retry for ${cfDomains.length} CF-challenged domain(s): ${cfDomains.map(d => d.name).join(', ')} ──`);

@@ -995,6 +995,36 @@
       "name": "postguam",
       "url": "https://www.postguam.com/news/national/ancient-dna-shows-ice-age-humans-targeted-female-mammoths/article_926a34f9-7e9d-522f-8c98-aeadfb90c27c.html",
       "note": "PHASE 4.6 — BLUR-UP LAZY IMAGES: TownNews/BLOX local-news article. Guards the DUPLICATE-IMAGE regression (user report 2026-08-03, 'shows each of the first two images twice on clips and cast'): each photo is rendered as a PAIR — the real <img> (still lazy, src is a 4x3 base64 spacer, real URL only in srcset) plus an aria-hidden='true' low-res `tnt-blurred-image` placeholder holding the http URL. Live CSS layers them; sanitisation strips it and BOTH render. Neither existing dedup pass could catch it (they key on a shared URL stem or a shared >10-char alt, and this pair shares NEITHER), so markExcluded now drops img[aria-hidden='true'] — the page's own declaration that the image is decorative. Generic: tnt-blurred-image ships on hundreds of TownNews local-news sites. WATCH OUT: duplicated images do NOT lower the score — check the clip screenshot for each photo appearing twice."
+    },
+    {
+      "name": "instagram-reels",
+      "url": "https://www.instagram.com/reels/DbnxT2Duur8/",
+      "note": "PHASE 4.4 social feed - reel player; generic viewport-dominance narrowing (maybeNarrowToVisiblePost). LOGIN REQUIRED in the warm profile"
+    },
+    {
+      "name": "instagram-home",
+      "url": "https://www.instagram.com/",
+      "note": "PHASE 4.4 social feed - home feed; tagInstagram scopes to the visible <article>. LOGIN REQUIRED"
+    },
+    {
+      "name": "facebook-home",
+      "url": "https://www.facebook.com/",
+      "note": "PHASE 4.4 social feed - home feed; tagFacebook scopes via data-ad-rendering-role. LOGIN REQUIRED"
+    },
+    {
+      "name": "facebook-reels",
+      "url": "https://www.facebook.com/reel/",
+      "note": "PHASE 4.4 social feed - reel player; generic narrowing. LOGIN REQUIRED. Known gap: player sits outside the narrowed post, so no video frame"
+    },
+    {
+      "name": "tiktok-foryou",
+      "url": "https://www.tiktok.com/foryou",
+      "note": "PHASE 4.4 social feed - For You one-at-a-time video feed; tagTikTok scopes to the visible item. NO login needed (loads headed; a headless hit gets 'Something went wrong')"
+    },
+    {
+      "name": "tiktok-profile",
+      "url": "https://www.tiktok.com/@nasa",
+      "note": "PHASE 4.4 social feed - profile grid; tagTikTok tags tiles but deliberately does NOT scope a grid. Logged-out shows an empty grid"
     }
   ]
 }
