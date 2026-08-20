@@ -3515,6 +3515,307 @@ function tagHackerNews(root: Document | Element): Element | void {
 }
 
 /**
+ * Tag bitcointalk.org (Simple Machines Forum) topic pages. SMF is server-
+ * rendered nested-table soup with stable, unhashed class names:
+ *   - `td.msgcl1`            one message wrapper per post
+ *   - `td.poster_info`       author panel (16%-wide cell: name, rank, stars,
+ *                            Activity/Merit counts, avatar, profile button)
+ *   - `td.td_headerandpost`  the post column (subject + date + body)
+ *   - `div.subject`          per-post subject line
+ *   - `div.post`             the post body prose
+ *   - `div.signature`        the poster's per-post ad/signature footer
+ *   - `td.td_buttons`        the "#N" permalink chrome
+ *
+ * Two defects this fixes, both caused by the table layout being flattened:
+ *
+ * 1. **Narrow vertical columns.** `td.poster_info` is a `width="16%"` cell
+ *    holding a stack of very short strings. Once the table geometry is gone it
+ *    renders as a one-word-per-line sliver at the tail of the clip. The panel is
+ *    rebuilt as a flat `dx-byline` (author + rank + activity/merit) so it lays
+ *    out as a single muted row, and the decorative rank stars / online dot /
+ *    profile-button images are dropped.
+ *
+ * 2. **Cast duplication.** Every post carries a `div.signature` — the same
+ *    advertising block repeated verbatim for each of that member's posts (the
+ *    topic-starter's appears 3× in a 20-post thread). It is not content, and
+ *    `htmlToMarkdown` flattens it into the cast body, so the public cast reads
+ *    as the same ad over and over. Excluded outright.
+ *
+ * Returns the message-list form as the narrowed root so the forum masthead,
+ * breadcrumb nav, page-number strip and the quick-reply form drop out.
+ */
+function tagBitcointalk(root: Document | Element): Element | void {
+  const posts = Array.from(root.querySelectorAll('td.msgcl1'));
+  if (!posts.length) return undefined;
+
+  posts.forEach(msg => {
+    appendClass(msg, 'dx-post');
+
+    // Rebuild the author panel as a flat byline. Only the identity-bearing
+    // text is kept: name, membership rank, and the Activity/Merit reputation
+    // counts. Everything else in the cell is decoration (star .gif runs, the
+    // online/offline dot, the "View Profile" button) that sanitises into a row
+    // of stray glyphs.
+    const info = msg.querySelector('td.poster_info');
+    if (info) {
+      appendClass(info, 'dx-byline');
+      const avatar = info.querySelector('img.avatar');
+      if (avatar) appendClass(avatar, 'dx-avatar');
+      // Rank stars, on/offline indicator, profile/PM buttons — all <img> in
+      // the panel except the avatar itself.
+      info.querySelectorAll('img').forEach(img => {
+        if (img !== avatar) appendClass(img, 'dx-excl');
+      });
+      // The profile-link anchors that wrapped those buttons are left empty.
+      info.querySelectorAll('a').forEach(a => {
+        if (!(a.textContent ?? '').trim()) appendClass(a, 'dx-excl');
+      });
+    }
+
+    // The per-post subject line is a heading; the date sits beside it. SMF
+    // gives every reply the topic title prefixed with "Re:", so in a 20-post
+    // thread the same sentence repeats 19 times — harmless-looking in the
+    // clip, but the cast's markdown renders it as the title stuttering down
+    // the page. Keep a subject only when it says something new.
+    const subject = msg.querySelector('div.subject');
+    if (subject) {
+      if (/^\s*Re:/i.test(subject.textContent ?? '')) appendClass(subject, 'dx-excl');
+      else appendClass(subject, 'dx-author');
+    }
+
+    // Signature ad footers — the cast-duplication source. Also drop the <hr>
+    // that separates the body from the signature, which would otherwise be a
+    // dangling rule at the foot of every post.
+    msg.querySelectorAll('div.signature').forEach(sig => appendClass(sig, 'dx-excl'));
+
+    // "#1" permalink cell and the IP-report / modify-message chrome row.
+    msg.querySelectorAll('td.td_buttons, div[id^="ignmsgbttns"], td[id^="modified_"]').forEach(el => appendClass(el, 'dx-excl'));
+  });
+
+  // Forum chrome outside the message list: masthead tabs, breadcrumbs, the
+  // page-number strip ("Pages: [1] 2 » [All]") and the quick-reply form.
+  root.querySelectorAll('.maintab_back, .maintab_first, .maintab_last, .nav, .prevnext, #quickReplyOptions, form[name="postmodify"]')
+    .forEach(el => appendClass(el, 'dx-excl'));
+
+  // Scope to the message-list form so the surrounding page furniture drops.
+  return root.querySelector('#quickModForm') ?? undefined;
+}
+
+/**
+ * Tag phpBB topic pages. phpBB is the most widely deployed self-hosted forum
+ * engine after Discourse, and its prosilver-derived themes ship STOCK, unhashed
+ * classes — so this one tagger covers thousands of independent forums rather
+ * than a single site:
+ *   - `div.post`            one message per post (also `.has-profile`)
+ *   - `dl.postprofile`      author side-column (name, rank, post count, joined)
+ *   - `div.postbody`        the post column
+ *   - `div.content`         the message prose
+ *   - `div.signature`       the poster's per-post signature footer
+ *   - `p.author`            the "by X » date" attribution strip
+ *
+ * Same two defects as the SMF/bitcointalk case, same causes: `dl.postprofile`
+ * is a narrow side-column of short fragments that flattens into a vertical
+ * sliver, and `div.signature` repeats per post so the cast reads as the same
+ * block over and over. phpBB positions with CSS rather than nested tables, so
+ * there is no indentation defect to fix here.
+ */
+function tagPhpBB(root: Document | Element): Element | void {
+  const posts = Array.from(root.querySelectorAll('div.post.has-profile, div.post'));
+  if (!posts.length) return undefined;
+
+  posts.forEach(post => {
+    appendClass(post, 'dx-post');
+
+    const profile = post.querySelector('dl.postprofile');
+    if (profile) {
+      appendClass(profile, 'dx-byline');
+      const avatar = profile.querySelector('.avatar-container img, img.avatar');
+      if (avatar) appendClass(avatar, 'dx-avatar');
+    }
+
+    // The "by <author> » <date>" strip above the message body.
+    const author = post.querySelector('p.author');
+    if (author) appendClass(author, 'dx-byline');
+
+    // Same title-stutter as SMF: phpBB titles every reply "Re: <topic>", so a
+    // long thread repeats the same heading down the whole cast. Keep a subject
+    // only when it isn't just an echo of the topic title.
+    const title = post.querySelector('h3');
+    if (title && /^\s*Re:/i.test(title.textContent ?? '')) appendClass(title, 'dx-excl');
+
+    post.querySelectorAll('div.signature').forEach(sig => appendClass(sig, 'dx-excl'));
+
+    // Per-post chrome: quote/edit/report button strips and the back-to-top link.
+    post.querySelectorAll('.post-buttons, .back2top, .notice').forEach(el => appendClass(el, 'dx-excl'));
+  });
+
+  // Page chrome outside the posts: breadcrumbs, pagination, jump-to box,
+  // search-mini form and the quick-reply editor.
+  root.querySelectorAll('.navbar, .breadcrumbs, .pagination, .jumpbox, .search-box, #qr_editor_div, .action-bar')
+    .forEach(el => appendClass(el, 'dx-excl'));
+
+  return root.querySelector('#page-body') ?? undefined;
+}
+
+/**
+ * Rebuild each phpBB author side-column as one compact line, mirroring what
+ * postCloneBitcointalk does for SMF. `dl.postprofile` is a <dt>/<dd> stack
+ * (username, rank, "Posts: N", "Joined: <date>") laid out in a narrow rail, so
+ * flattening it leaves a one-word-per-line sliver beside every post.
+ */
+function postClonePhpBB(clone: Element): void {
+  const doc = clone.ownerDocument;
+  if (!doc) return;
+
+  // Delete outright rather than mark: see the tagger-root EXCL_MARKER note in
+  // CLAUDE.md — a tagger-scoped root clears markers and re-promotes only
+  // dx-excl, and we restructure below.
+  clone.querySelectorAll('div.signature, [class*="signature"]').forEach(sig => sig.remove());
+
+  // Avatars whose src never resolved (phpBB serves them from a relative
+  // download/file.php URL) would render as a broken-image glyph in the byline.
+  clone.querySelectorAll('img.dx-avatar:not([src]), img.avatar:not([src])')
+    .forEach(img => img.remove());
+
+  clone.querySelectorAll('dl.postprofile, .dx-byline').forEach(panel => {
+    if (!panel.matches('dl, .postprofile') && !panel.querySelector('.profile-rank, .profile-posts')) return;
+    const avatar = panel.querySelector('img.dx-avatar, img.avatar');
+    const name = (panel.querySelector('a.username, .username, dt a')?.textContent ?? '').trim();
+    const text = (panel.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+    const rank = (panel.querySelector('.profile-rank')?.textContent ?? '').trim();
+    const postCount = text.match(/Posts:\s*([\d,]+)/)?.[1] ?? '';
+    const joined = text.match(/Joined:\s*([^,]+,[^,]+\d{4})/)?.[1]?.trim() ?? '';
+
+    const stats = [
+      postCount ? `Posts: ${postCount}` : '',
+      joined ? `Joined: ${joined}` : '',
+    ].filter(Boolean);
+
+    panel.replaceChildren();
+    // Only re-attach an avatar that actually resolved — phpBB lazy-loads them,
+    // so a src-less <img> would render as a broken-image glyph in the clip.
+    if (avatar?.getAttribute('src')) panel.appendChild(avatar);
+    const line = doc.createElement('span');
+    line.textContent = [[name, rank].filter(Boolean).join(' · '), stats.join(' · ')]
+      .filter(Boolean).join(' — ');
+    panel.appendChild(line);
+  });
+}
+
+/**
+ * Flatten SMF's layout tables on the clone. bitcointalk nests ~5 tables deep to
+ * position a single post (bordercolor wrapper › windowbg › post table › header
+ * table › buttons cell). `table`/`tr`/`td` are all in ALLOWED_TAGS, so that
+ * scaffolding survives sanitisation intact — and `.clip-body td` carries
+ * `padding: 6px 10px` plus a border, which every level then stacks. The result
+ * is a post indented further and further right the deeper it sits, boxed in
+ * nested rules. None of these tables are tabular DATA; they are pure layout.
+ *
+ * Unwrap each one into plain `<div>`s, preserving any `dx-*` markers stamped on
+ * the cells so the byline/post layout still applies. Genuine data tables (a
+ * user posting an actual table in a message) live inside `div.post` and are
+ * left alone.
+ *
+ * Runs on the detached clone — the live tagger must stay non-destructive.
+ */
+function postCloneBitcointalk(clone: Element): void {
+  const doc = clone.ownerDocument;
+  if (!doc) return;
+
+  // Mark signatures BEFORE unwrapping anything. A signature can itself contain
+  // layout tables (the ASCII-art ad banners are built from them), and the
+  // unwrap pass below re-parents cell contents — which would lift banner markup
+  // out of the subtree removeMarked is going to delete. Marking first, and
+  // skipping marked subtrees during the unwrap, keeps the exclusion intact.
+  // Drop signatures outright rather than marking them. The live tagger already
+  // stamped `dx-excl`, but when a tagger returns a capture root the pipeline
+  // clears every EXCL_MARKER inside that root and re-promotes only surviving
+  // `dx-excl` classes — and SMF nests layout tables INSIDE the signature, so
+  // the unwrap pass below would re-parent the ad-banner markup out of the
+  // subtree that removeMarked is going to delete. Removing here, before any
+  // unwrapping, is unconditional and can't be undone downstream.
+  clone.querySelectorAll('div.signature, [class*="signature"]').forEach(sig => sig.remove());
+
+  // Rebuild each author panel as a single compact line. SMF separates the
+  // panel's fields with <br>, which renders as a tall stack of one-word blocks
+  // beside the post. Collect the identity-bearing text (name, rank, activity,
+  // merit) and re-emit it as one muted strip with the avatar as a round pin.
+  clone.querySelectorAll('.dx-byline').forEach(panel => {
+    const avatar = panel.querySelector('img.dx-avatar, img.avatar');
+    const name = (panel.querySelector('b')?.textContent ?? '').trim();
+    const text = (panel.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+    const rank = text.match(/\b(Newbie|Jr\. Member|Member|Full Member|Sr\. Member|Hero Member|Legendary|Staff|Global Moderator|Administrator)\b/)?.[1] ?? '';
+    const activity = text.match(/Activity:\s*([\d,]+)/)?.[1] ?? '';
+    const merit = text.match(/Merit:\s*([\d,]+)/)?.[1] ?? '';
+
+    // "(OP)" marks the thread starter — worth keeping, it identifies who is
+    // answering whom across a 20-post thread.
+    const op = /\(OP\)/.test(text) ? ' (OP)' : '';
+    const bits = [name ? `${name}${op}` : '', rank].filter(Boolean);
+    const stats = [
+      activity ? `Activity: ${activity}` : '',
+      merit ? `Merit: ${merit}` : '',
+    ].filter(Boolean);
+
+    panel.replaceChildren();
+    // Only re-attach a resolved avatar — a src-less <img> renders as a
+    // broken-image glyph once the surrounding table chrome is gone.
+    if (avatar?.getAttribute('src')) panel.appendChild(avatar);
+    const line = doc.createElement('span');
+    line.textContent = [bits.join(' · '), stats.join(' · ')].filter(Boolean).join(' — ');
+    panel.appendChild(line);
+  });
+
+  // Deepest-first, so unwrapping a parent can't invalidate a pending child.
+  const tables = Array.from(clone.querySelectorAll('table')).reverse();
+
+  tables.forEach(table => {
+    // Leave a table the user actually posted as content.
+    if (table.closest('div.post')) return;
+    // Never unwrap inside an excluded subtree — dx-excl has already been
+    // promoted to EXCL_MARKER by this point, and removeMarked runs AFTER us.
+    // Rebuilding those cells as plain divs would strip the marker and let the
+    // signature ads / rank glyphs survive into the clip and cast.
+    if (table.closest(`[${EXCL_MARKER}]`)) return;
+
+    const replacement = doc.createElement('div');
+    const cls = table.getAttribute('class') ?? '';
+    const kept = cls.split(/\s+/).filter(t => t.startsWith('dx-')).join(' ');
+    if (kept) replacement.setAttribute('class', kept);
+
+    // Pull every cell up as a div, discarding the tr/tbody scaffolding.
+    // Only direct-descendant cells: a nested table has already been flattened
+    // into a div by this deepest-first walk, so its cells are no longer td/th.
+    table.querySelectorAll('td, th').forEach(cell => {
+      const box = doc.createElement('div');
+      const cellCls = (cell.getAttribute('class') ?? '')
+        .split(/\s+/).filter(t => t.startsWith('dx-')).join(' ');
+      if (cellCls) box.setAttribute('class', cellCls);
+      // Carry the exclusion marker across so removeMarked still drops it.
+      if (cell.hasAttribute(EXCL_MARKER)) box.setAttribute(EXCL_MARKER, '1');
+      while (cell.firstChild) box.appendChild(cell.firstChild);
+      replacement.appendChild(box);
+    });
+
+    table.replaceWith(replacement);
+  });
+
+  // The unwrap leaves behind the empty spacer cells SMF used for column widths
+  // and the message-icon / IP-report gif cells. As divs they render as stray
+  // rules and orphan glyphs down the left edge of every post.
+  clone.querySelectorAll('div').forEach(div => {
+    if (div.children.length || (div.textContent ?? '').trim()) return;
+    div.remove();
+  });
+  // Bare forum gifs (message icon, IP report, on/offline dot) that outlived
+  // their cell — they carry no meaning once the table chrome is gone.
+  clone.querySelectorAll('img[src*="/images/post/"], img[src*="/images/ip.gif"], img[src*="/images/useron"], img[src*="/images/useroff"]')
+    .forEach(img => img.remove());
+}
+
+/**
  * Tag youtube.com watch pages. YT's content lives in `<ytd-watch-flexy>` with
  * `<div id="primary-inner">` as the actual content column (title, description,
  * comments) and `<div id="secondary">` as the "Up next" sidebar — the latter is
@@ -4281,6 +4582,13 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     anchors: ['#hnmain', 'table.fatitem', 'tr.athing.comtr'],
   },
   {
+    name: 'bitcointalk',
+    match: h => /(^|\.)bitcointalk\.org$/i.test(h),
+    tag: tagBitcointalk,
+    postClone: postCloneBitcointalk,
+    anchors: ['td.msgcl1', 'td.poster_info', 'div.post'],
+  },
+  {
     name: 'stackoverflow',
     match: h => /(^|\.)stackoverflow\.com$/i.test(h),
     tag: tagStackOverflow,
@@ -4309,6 +4617,19 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     match: h => /(^|\.)yelp\.com$/i.test(h),
     tag: tagYelp,
     anchors: ['[data-testid="photoHeader"], [class*="photoHeader"]'],
+  },
+  // ENGINE tagger, not a site tagger — keep it LAST so any host-specific
+  // entry above claims its page first. phpBB ships stock, unhashed classes
+  // across thousands of independent forums, so matching the MARKUP covers
+  // all of them; a hostname list never could. This is the only entry that
+  // ignores `host` and sniffs the live DOM instead.
+  {
+    name: 'phpbb',
+    match: () => typeof document !== 'undefined' &&
+      !!document.querySelector('#page-body dl.postprofile, #page-body div.post.has-profile'),
+    tag: tagPhpBB,
+    postClone: postClonePhpBB,
+    anchors: ['#page-body', 'div.post', 'dl.postprofile'],
   },
 ];
 

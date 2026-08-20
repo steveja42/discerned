@@ -1,0 +1,22 @@
+{
+  "format": "article",
+  "url": "https://bitcointalk.org/index.php?topic=5591579.0",
+  "hostOverride": "bitcointalk.org",
+  "title": { "contains": "market speculations worth it" },
+  "bodyText": {
+    "minLength": 2000,
+    "contains": [
+      "Cryptohygenic",
+      "famososMuertos",
+      "speculation",
+      "Activity:",
+      "Merit:"
+    ],
+    "excludes": [
+      "Need Project Advertising",
+      "██",
+      "Re: Is paying curious attentions"
+    ]
+  },
+  "bodyHtml": { "noScripts": true }
+}

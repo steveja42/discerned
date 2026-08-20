@@ -126,6 +126,14 @@ export const TAGGER_CANARY_TARGETS: TaggerCanaryTarget[] = [
     renderWait: '#hnmain, table.fatitem',
     urlEnv: 'HACKERNEWS_URL',
   },
+  {
+    name: 'bitcointalk',
+    // A multi-reply topic so td.msgcl1 / td.poster_info / div.post all render.
+    url: 'https://bitcointalk.org/index.php?topic=5591579.0',
+    hostOverride: 'bitcointalk.org',
+    renderWait: 'td.msgcl1, div.post',
+    urlEnv: 'BITCOINTALK_URL',
+  },
 ];
 
 /** Shape returned by the __DISCERNED_TEST_ANCHORS bridge (mirrors capture.ts). */

@@ -273,6 +273,16 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'bitcointalk-thread-fixture-visual',
+      testMatch: /bitcointalk-thread-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'phpbb-thread-fixture-visual',
+      testMatch: /phpbb-thread-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
       name: 'youtube-viewcount-fixture-visual',
       testMatch: /youtube-viewcount-fixture-visual\.spec\.ts/,
       retries: 0,

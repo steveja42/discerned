@@ -1,0 +1,11 @@
+{
+  "_comment": "Deliberately thin. tagPhpBB matches on live MARKUP, not a hostname, so hostOverride can't activate it under jsdom — this sidecar guards the GENERIC path only. The tagger's dx-* output is asserted by phpbb-thread-fixture-visual (Playwright).",
+  "format": "article",
+  "url": "https://www.phpbb.com/community/viewtopic.php?t=2535096",
+  "title": { "contains": "Forumbook for phpBB" },
+  "bodyText": {
+    "minLength": 100,
+    "contains": ["Forumbook"]
+  },
+  "bodyHtml": { "noScripts": true }
+}
