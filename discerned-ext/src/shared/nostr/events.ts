@@ -11,14 +11,22 @@ import type { Capture, Evaluation } from '@/shared/types';
 import { signalRank, SNIPPET_SENTINEL_OPEN, SNIPPET_SENTINEL_CLOSE } from '@/shared/types';
 
 /**
- * Casts on rich-format clips inline the body in the event content only when the
- * plain-text body is shorter than this threshold (≈8 KB). Longer bodies cast as
- * URL-summary only — full content stays in the user's IndexedDB.
+ * Casts on rich-format clips inline the body in the kind-1 note only when the
+ * plain-text body is shorter than this threshold (≈8 KB); longer bodies are
+ * truncated there. The full article still goes public via the companion
+ * kind-30023 long-form — unless it exceeds LONGFORM_MARKDOWN_MAX_CHARS below.
  *
  * Tuned to leave headroom under typical relay 64 KB event-size limits after
  * tag overhead, signature, and JSON encoding.
  */
 export const CAST_INLINE_BODY_MAX_CHARS = 8000;
+
+/**
+ * Soft ceiling on the companion long-form markdown — beyond this the event would
+ * be too large for relays, so the markdown is truncated to fit. Generous: NIP-23
+ * is meant for long content, so real articles effectively never hit this.
+ */
+export const LONGFORM_MARKDOWN_MAX_CHARS = 400_000;
 
 /**
  * Version stamped as the third element of the NIP-89 `client` tag on every

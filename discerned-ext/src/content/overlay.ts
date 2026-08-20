@@ -13,7 +13,7 @@ import { STORAGE_KEYS, SIGNAL_LEVELS, SIGNAL_DESCRIPTIONS, QUALIFIER_GROUPS, sig
 import { getEffectiveRelays } from '@/shared/relays';
 import { themeVarsBlock, prefersDark, onSystemThemeChange } from '@/shared/theme';
 import { LL, log } from '@/shared/logger';
-import { CAST_INLINE_BODY_MAX_CHARS } from '@/shared/nostr/events';
+import { LONGFORM_MARKDOWN_MAX_CHARS } from '@/shared/nostr/events';
 import { showArticleHighlight, hideArticleHighlight } from './highlighter';
 import { npubEncode } from 'nostr-tools/nip19';
 
@@ -86,6 +86,10 @@ export class DiscernedOverlay {
   private selectedQualifiers = new Set<string>();
   private customQualifiers: string[] = [];
   private category: Category = 'General';
+  // The optional block (notes + signal + qualifiers) renders dimmed, lifting on
+  // hover/focus. Setting a rating drops the dim for the rest of the appearance —
+  // instance state, not a DOM class, so it survives the re-renders show() does.
+  private ratingTouched = false;
   private previewHost: HTMLElement | null = null;
   private previewShadow: ShadowRoot | null = null;
   private outsideClickHandler: ((e: PointerEvent) => void) | null = null;
@@ -219,6 +223,7 @@ export class DiscernedOverlay {
     // Always open unrated — capturing without touching the form saves as unrated.
     this.signal = null;
     this.selectedQualifiers.clear();
+    this.ratingTouched = false;
     // Initial render immediately so the user sees the panel chrome, then
     // load persisted evaluation defaults and re-render main (if needed).
     this.render();
@@ -1330,11 +1335,6 @@ ${themeVarsBlock(this.effectiveTheme)}
           <div class="format-row">${chipHtml}</div>
 
           <div class="form-block">
-            <label class="block-label" for="note-input">Notes</label>
-            <textarea id="note-input" maxlength="2000" placeholder="Add a note or comment (optional)…">${this.escapeHtml(this.note)}</textarea>
-          </div>
-
-          <div class="form-block">
             <label for="category">Category</label>
             <div class="combobox" id="category-combobox">
               <input type="text" id="category" value="${this.escapeHtml(this.category)}" autocomplete="off" spellcheck="false" />
@@ -1344,11 +1344,16 @@ ${themeVarsBlock(this.effectiveTheme)}
             </div>
           </div>
 
-          ${this.renderSignalBlock()}
+          <div class="optional-block${this.ratingTouched ? ' touched' : ''}" id="optional-block">
+            <div class="form-block">
+              <label class="block-label" for="note-input">Notes</label>
+              <textarea id="note-input" maxlength="2000" placeholder="Add a note or comment (optional)…">${this.escapeHtml(this.note)}</textarea>
+            </div>
 
-          ${this.renderQualifiersBlock()}
+            ${this.renderSignalBlock()}
 
-          <div class="cast-notice" id="cast-notice">${this.renderCastNotice(isConnected)}</div>
+            ${this.renderQualifiersBlock()}
+          </div>
 
         </div>
 
@@ -1363,26 +1368,28 @@ ${themeVarsBlock(this.effectiveTheme)}
               ${needsUnlock ? `<button class="link-btn" id="nostr-unlock-link"${this.publishMode === 'local' ? ' style="display:none"' : ''}>Unlock →</button>` : ''}
               ${isConnected && !needsUnlock ? '<span class="nostr-tip" id="nostr-tip" role="tooltip"></span>' : ''}
             </div>
+            <div class="cast-notice" id="cast-notice">${this.renderCastNotice(isConnected)}</div>
             <div class="inline-unlock" id="inline-unlock" style="display:none">
               <input type="password" class="pin-input" id="inline-pin" placeholder="PIN" autocomplete="off" />
               <button class="btn btn-secondary" id="inline-unlock-btn" type="button">Unlock</button>
               <span class="inline-unlock-error" id="inline-unlock-error"></span>
             </div>
-            <div class="publish-mode-slider${!isConnected ? ' guest' : ''}" role="radiogroup" aria-label="Publish mode">
-              <div class="slider-track">
-                <div class="slider-pill" id="slider-pill"></div>
-                <button class="slider-seg${this.publishMode === 'cast' ? ' active' : ''}"
-                        id="seg-cast" role="radio" aria-checked="${this.publishMode === 'cast'}"
-                        ${!isConnected ? 'disabled' : ''}
-                        title="Publish to Nostr — your clip is public and signed with your identity">${DiscernedOverlay.ICON_CAST}Cast</button>
-                <button class="slider-seg${this.publishMode === 'both' ? ' active' : ''}"
-                        id="seg-both" role="radio" aria-checked="${this.publishMode === 'both'}"
-                        ${!isConnected ? 'disabled' : ''}
-                        title="Save locally and publish to Nostr — your clip is public and signed with your identity">${DiscernedOverlay.ICON_CAST}${DiscernedOverlay.ICON_CLIP}Both</button>
-                <button class="slider-seg${this.publishMode === 'local' ? ' active' : ''}"
-                        id="seg-local" role="radio" aria-checked="${this.publishMode === 'local'}"
-                        title="Keep local — stored only on this device, not published">${DiscernedOverlay.ICON_CLIP}Clip</button>
-              </div>
+          </div>
+
+          <div class="publish-mode-slider${!isConnected ? ' guest' : ''}" role="radiogroup" aria-label="Publish mode">
+            <div class="slider-track">
+              <div class="slider-pill" id="slider-pill"></div>
+              <button class="slider-seg${this.publishMode === 'cast' ? ' active' : ''}"
+                      id="seg-cast" role="radio" aria-checked="${this.publishMode === 'cast'}"
+                      ${!isConnected ? 'disabled' : ''}
+                      title="Publish to Nostr — your clip is public and signed with your identity">${DiscernedOverlay.ICON_CAST}Cast</button>
+              <button class="slider-seg${this.publishMode === 'both' ? ' active' : ''}"
+                      id="seg-both" role="radio" aria-checked="${this.publishMode === 'both'}"
+                      ${!isConnected ? 'disabled' : ''}
+                      title="Save locally and publish to Nostr — your clip is public and signed with your identity">${DiscernedOverlay.ICON_CAST}${DiscernedOverlay.ICON_CLIP}Both</button>
+              <button class="slider-seg${this.publishMode === 'local' ? ' active' : ''}"
+                      id="seg-local" role="radio" aria-checked="${this.publishMode === 'local'}"
+                      title="Keep local — stored only on this device, not published">${DiscernedOverlay.ICON_CLIP}Clip</button>
             </div>
           </div>
           <button class="btn btn-clip" id="clip" disabled>
@@ -1526,11 +1533,10 @@ ${themeVarsBlock(this.effectiveTheme)}
     const bodyText = cap.bodyText ?? '';
     if (bodyText.length === 0) return '';
 
-    if (bodyText.length <= CAST_INLINE_BODY_MAX_CHARS) {
-      const kb = (bodyText.length / 1024).toFixed(1);
-      return `<span class="notice ok">Cast includes the full text — ~${this.escapeHtml(kb)} KB.</span>`;
-    }
-    return `<span class="notice warn">Long body — cast publishes title, URL, note &amp; rating; full text stays local.</span>`;
+    // Casting the full article is the norm, so say nothing about it — warn only
+    // when the companion long-form will actually be cut short.
+    if (bodyText.length <= LONGFORM_MARKDOWN_MAX_CHARS) return '';
+    return `<span class="notice warn">Very long article — the cast will be truncated.</span>`;
   }
 
   private async refreshCapture() {
@@ -1705,12 +1711,14 @@ ${themeVarsBlock(this.effectiveTheme)}
       const clamped = Math.max(0, Math.min(max, Math.round(idx)));
       this.signal = SIGNAL_LEVELS[clamped]!;
       range.value = String(clamped);
+      this.markRatingTouched();
       paint();
     };
 
     const clearSignal = () => {
       this.signal = null;
       range.value = '2'; // park at midpoint; invisible while .unrated
+      this.markRatingTouched();
       paint();
     };
 
@@ -1793,6 +1801,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       if (this.selectedQualifiers.has(q)) this.selectedQualifiers.delete(q);
       else this.selectedQualifiers.add(q);
       chipEl.classList.toggle('active', this.selectedQualifiers.has(q));
+      this.markRatingTouched();
     });
 
     // Typed custom qualifiers persist (like custom categories) and select immediately.
@@ -1807,6 +1816,7 @@ ${themeVarsBlock(this.effectiveTheme)}
         block.querySelectorAll<HTMLElement>('.qchip').forEach(el => {
           if (el.dataset.q === existing) el.classList.add('active');
         });
+        this.markRatingTouched();
         return;
       }
       this.customQualifiers.push(trimmed);
@@ -1818,6 +1828,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       btn.dataset.q = trimmed;
       btn.textContent = trimmed;
       customRow.insertBefore(btn, input);
+      this.markRatingTouched();
     };
 
     input.addEventListener('keydown', e => {
@@ -1907,6 +1918,15 @@ ${themeVarsBlock(this.effectiveTheme)}
     const isValid = !!category && !!this.capture && !this.capturing;
     const clipBtn = this.shadow.getElementById('clip') as HTMLButtonElement | null;
     if (clipBtn) clipBtn.disabled = !isValid;
+  }
+
+  // Latch the optional block to full opacity. Called from every rating mutation;
+  // stays latched for the rest of the appearance even if the rating is cleared
+  // again, so the block never dims back out under the user mid-edit.
+  private markRatingTouched(): void {
+    if (this.ratingTouched) return;
+    this.ratingTouched = true;
+    this.shadow.getElementById('optional-block')?.classList.add('touched');
   }
 
   private getEvaluation(): Evaluation {
@@ -2262,27 +2282,32 @@ ${themeVarsBlock(this.effectiveTheme)}
       .panel-body {
         flex: 1 1 auto;
         overflow-y: auto;
-        padding: 14px 16px;
-        display: flex; flex-direction: column; gap: 12px;
+        padding: 12px 16px;
+        display: flex; flex-direction: column; gap: 10px;
       }
 
+      /* --p-ink-4, not --p-rule: light mode's --p-rule is rgba(26,23,20,.16),
+         too faint to separate the publish/CTA section from the scrolling form. */
       .panel-footer {
         flex: 0 0 auto;
         padding: 14px 16px;
-        border-top: 1px solid var(--p-rule);
+        border-top: 2px solid var(--p-ink-4);
         background: transparent;
         display: flex; flex-direction: column; gap: 10px;
       }
 
-      /* Format chips */
-      .format-row { display: flex; flex-wrap: wrap; gap: 6px; }
+      /* Format chips. Sized so all four fit one row in the 380px panel (348px
+         inside padding) — wrapping Bookmark to a second row cost a whole row of
+         panel height. nowrap + min-width:0 keeps them on one line if a longer
+         label ever lands here; the flex-shrink lets them give ground instead. */
+      .format-row { display: flex; flex-wrap: nowrap; gap: 4px; }
       .chip {
         background: var(--p-surface); border: 1px solid var(--p-rule);
         color: var(--p-ink-2); font-size: 12px;
-        padding: 6px 10px;
+        padding: 6px 7px;
         cursor: pointer; transition: all 0.15s;
-        display: inline-flex; align-items: center; gap: 6px;
-        font-family: inherit;
+        display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+        font-family: inherit; white-space: nowrap; min-width: 0; flex: 0 1 auto;
       }
       /* :not(.active) so hover never overrides the active chip's text colour — without
          it, hover (higher specificity than .chip.active) keeps the active text dark
@@ -2333,7 +2358,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       }
 
       textarea#note-input {
-        width: 100%; min-height: 56px;
+        width: 100%; min-height: 44px;
         background: var(--p-surface); border: 1px solid var(--p-rule);
         color: var(--p-ink);
         font-family: inherit; font-size: 13px;
@@ -2385,23 +2410,35 @@ ${themeVarsBlock(this.effectiveTheme)}
       .combobox-list li:hover { background: var(--p-accent); color: var(--p-on-accent); }
       .combobox-list li.custom-entry { color: var(--p-ink-3); font-style: italic; }
 
-      /* Cast notice */
-      .cast-notice { min-height: 0; }
-      .notice { font-size: 11px; line-height: 1.4; }
+      /* Cast notice — shares the status row, right-aligned in whatever space is
+         left. min-width:0 lets it shrink/wrap instead of shoving the status text.
+         Baseline-aligned with the status text via .footer-meta, so the differing
+         line-heights don't leave it sitting low. */
+      .cast-notice { min-height: 0; flex: 1 1 auto; min-width: 0; text-align: right; }
+      .cast-notice:empty { display: none; }
+      /* 1.25, not 1.4: the warn notice wraps to two lines in the footer row and
+         1.4 left a visible gap between them. Still baseline-aligns with the
+         status text via .footer-meta. */
+      .notice { font-size: 11px; line-height: 1.25; }
       .notice.ok   { color: var(--p-accent-ink); }
       .notice.warn { color: var(--p-warn-ink); }
 
       /* Footer meta */
-      /* Top-align so the status row stays put when the Unlock link wraps below it
-         (it grows downward instead of recentering the whole column). */
-      .footer-meta { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+      /* Baseline-align so the cast notice's text sits on the same line as the
+         status text despite their differing line-heights. flex-start aligns the
+         BOXES, which leaves the notice sitting visibly low — its 1.4 line-height
+         puts leading above the text. The row still grows downward when the
+         Unlock link wraps beneath the status. */
+      .footer-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
       /* flex-wrap stays enabled so #nostr-unlock-link (flex-basis: 100%, below)
          can drop to its own line — but the dot+text pair itself must never
          split across lines, so it's wrapped in its own inline-flex (nowrap)
          group. Without this, dark mode's --p-mono (a real monospace font,
          wider per-char than light's sans stack) pushed "Connected to Nostr"
          past the row's width and wrapped the text below the dot. */
-      .nostr-status { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin-top: -3px; }
+      /* flex:0 0 auto — the cast notice now shares this row and takes the slack;
+         without it the status box stretches and squeezes the notice into a column. */
+      .nostr-status { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; flex: 0 0 auto; }
       .nostr-status.has-tip { position: relative; cursor: default; }
       .status-dot-text { display: inline-flex; align-items: center; flex-wrap: nowrap; gap: 6px; min-width: 0; }
       .status-dot { width: 12px; height: 12px; background: var(--p-ink-4); border-radius: 50%; flex-shrink: 0; }
@@ -2427,13 +2464,14 @@ ${themeVarsBlock(this.effectiveTheme)}
         content: ''; position: absolute; top: 100%; left: 10px;
         border: 4px solid transparent; border-top-color: var(--p-surface-2);
       }
-      /* Nudge up so its centre lines up with the (now top-aligned) status row,
-         and pull right toward the panel edge a touch. */
-      .publish-mode-slider { display: flex; align-items: center; margin-top: -11px; margin-right: -6px; }
+      /* Full-width row of its own. It used to share the status row with negative
+         margins, which made the panel's most consequential control read as a
+         widget crammed into a status bar. */
+      .publish-mode-slider { display: flex; align-items: center; }
       .slider-track {
         position: relative; display: grid; grid-template-columns: repeat(3, 1fr);
-        background: var(--p-surface); border: 1px solid var(--p-rule);
-        overflow: hidden; height: 37px; width: 232px;
+        background: var(--p-surface-2); border: 1px solid var(--p-ink-4);
+        overflow: hidden; height: 38px; width: 100%;
       }
       .slider-pill {
         position: absolute; top: 2px; bottom: 2px; left: 2px;
@@ -2457,12 +2495,64 @@ ${themeVarsBlock(this.effectiveTheme)}
       /* :not(.active) — see .chip note; keep the active segment's text colour on hover. */
       .slider-seg:hover:not(:disabled):not(.active) { color: var(--p-ink); }
       .slider-seg.active { color: var(--p-on-accent); font-weight: 600; }
-      .slider-seg:disabled { opacity: 0.4; cursor: not-allowed; }
-      .publish-mode-slider.guest .slider-seg:not(#seg-local) { opacity: 0.4; cursor: not-allowed; }
+      /* 0.55, not 0.4: at 0.4 two of the three segments were so faint the whole
+         control read as disabled chrome rather than an active choice. */
+      .slider-seg:disabled { opacity: 0.55; cursor: not-allowed; }
+      .publish-mode-slider.guest .slider-seg:not(#seg-local) { opacity: 0.55; cursor: not-allowed; }
       .slider-seg:focus-visible { outline: 2px solid var(--p-accent); outline-offset: -2px; }
 
+      /* ── Optional block (notes + signal + qualifiers) ──────────────────── */
+      /* Dimmed at rest so it reads as skippable, full strength on hover/focus.
+         .touched latches it bright once the user sets a rating (see
+         markRatingTouched) so it can't fade back out mid-edit.
+         Labels fade with the controls — dimming only the controls left the block
+         reading as fully present. The tick labels are the Signal scale's only
+         labels (--p-ink-4 was raised once for their contrast, see shared/theme.ts),
+         so the floor here is 0.6, not lower. */
+      /* Gap MUST match .panel-body's: the wrapper replaced three panel-body
+         children with one, so anything larger here nets out taller than before the
+         grouping. (display:contents would drop the gap entirely but also kills the
+         opacity — the wrapper has to keep its box.) */
+      .optional-block {
+        display: flex; flex-direction: column; gap: 10px;
+        opacity: 0.5; transition: opacity 0.16s ease;
+      }
+      .optional-block:hover,
+      .optional-block:focus-within,
+      .optional-block.touched { opacity: 1; }
+      /* Italic on the LABELS only, in step with the dim — opacity alone reads as
+         "washed out", italic reads as "aside". Chips/inputs stay upright so the
+         values themselves never look like a different kind of text. */
+      .optional-block .block-label,
+      .optional-block .section-head,
+      .optional-block .qual-group-label,
+      .optional-block .signal-tick {
+        font-style: italic; transition: font-style 0.16s ease;
+      }
+      /* Pin the label line-height. --p-mono resolves to the SANS stack in light
+         mode (see shared/theme.ts), whose default line-height is taller than the
+         monospace stack's — that alone made the light panel ~19px taller than the
+         dark one and was the reason only light mode overflowed. */
+      .optional-block .block-label,
+      .optional-block .section-head,
+      .optional-block .qual-group-label,
+      .optional-block .signal-tick { line-height: 1.2; }
+      .optional-block:hover .block-label,
+      .optional-block:hover .section-head,
+      .optional-block:hover .qual-group-label,
+      .optional-block:hover .signal-tick,
+      .optional-block:focus-within .block-label,
+      .optional-block:focus-within .section-head,
+      .optional-block:focus-within .qual-group-label,
+      .optional-block:focus-within .signal-tick,
+      .optional-block.touched .block-label,
+      .optional-block.touched .section-head,
+      .optional-block.touched .qual-group-label,
+      .optional-block.touched .signal-tick { font-style: normal; }
+      @media (prefers-reduced-motion: reduce) { .optional-block { transition: none; } }
+
       /* ── Signal rating (single horizontal slider) ─────────────────────── */
-      .signal-block { gap: 8px; }
+      .signal-block { gap: 6px; }
       .section-head {
         font-family: var(--p-mono); font-size: 11px; font-weight: 700;
         text-transform: uppercase; letter-spacing: 0.08em;
@@ -2484,7 +2574,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       .signal-readout.unset { color: var(--p-ink-4); font-weight: 400; }
       .signal-slider input[type="range"] {
         -webkit-appearance: none; appearance: none;
-        display: block; width: 100%; height: 20px;
+        display: block; width: 100%; height: 16px;
         background: transparent; cursor: pointer; outline: none;
       }
       .signal-slider input[type="range"]::-webkit-slider-runnable-track {
@@ -2507,7 +2597,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       }
       .signal-slider { position: relative; }
       .signal-thumb {
-        position: absolute; top: 1px;
+        position: absolute; top: -1px;
         left: var(--sig-thumb-x, 0px); translate: -50% 0;
         width: 8px; height: 18px;
         background: var(--p-accent);
@@ -2529,8 +2619,8 @@ ${themeVarsBlock(this.effectiveTheme)}
       .signal-tick.selected { color: var(--p-ink); font-weight: 700; }
 
       /* ── Qualifier chips ──────────────────────────────────────────────── */
-      .qualifiers-block { gap: 8px; }
-      .qual-group { display: flex; flex-direction: column; gap: 5px; }
+      .qualifiers-block { gap: 6px; }
+      .qual-group { display: flex; flex-direction: column; gap: 4px; }
       .qual-group-label {
         font-family: var(--p-mono); font-size: 10px;
         text-transform: uppercase; letter-spacing: 0.06em;
@@ -2548,10 +2638,13 @@ ${themeVarsBlock(this.effectiveTheme)}
         background: var(--p-cta-bg); border-color: var(--p-cta-bg);
         color: var(--p-cta-ink); font-weight: 500;
       }
+      /* Wide enough for the full "+ add custom tag" placeholder — at the old 76px
+         it clipped to "+ add custo". Dark mode's --p-mono is a real monospace
+         (wider per char than light's sans stack), so this is sized for dark. */
       .qual-input {
         background: transparent; border: 1px dashed var(--p-rule);
         color: var(--p-ink); font-family: var(--p-mono); font-size: 11px;
-        padding: 4px 8px; width: 76px; outline: none;
+        padding: 4px 8px; width: 128px; outline: none;
       }
       .qual-input::placeholder { color: var(--p-ink-4); }
       .qual-input:focus { border-style: solid; border-color: var(--p-accent); }

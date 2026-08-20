@@ -10,6 +10,7 @@
 
 import {
   CAST_INLINE_BODY_MAX_CHARS,
+  LONGFORM_MARKDOWN_MAX_CHARS,
   createQuoteNoteEvent,
   createResourceNoteEvent,
   createLongFormEvent,
@@ -1252,19 +1253,16 @@ async function handleClip(data: { capture: Capture; evaluation: Evaluation }): P
   }
 }
 
-// Soft ceiling on the long-form markdown — a pathological page whose body
-// exceeds this would produce an event too large for relays; skip the long-form
-// (kind-1 still casts). Generous: NIP-23 is meant for long content.
-const LONGFORM_MARKDOWN_MAX_CHARS = 400_000;
-
 // The markdown for a companion kind-30023, precomputed in the content script
 // (turndown needs a DOM the background SW lacks) and carried on the capture.
 // Present only for long-form-eligible captures — see deriveLongFormMarkdown in
-// content.ts. Empty/oversize → no long-form (note-only cast).
+// content.ts. Oversize markdown is truncated to stay under relay event-size
+// limits rather than dropped, so the bulk of the article still casts.
 function longFormMarkdownFor(capture: Capture): string | undefined {
   const md = capture.longFormMarkdown?.trim();
-  if (!md || md.length > LONGFORM_MARKDOWN_MAX_CHARS) return undefined;
-  return md;
+  if (!md) return undefined;
+  if (md.length <= LONGFORM_MARKDOWN_MAX_CHARS) return md;
+  return md.slice(0, LONGFORM_MARKDOWN_MAX_CHARS) + '\n\n[Content truncated due to length]';
 }
 
 // Fetch the signed-in identity's kind-0 profile (name / verified nip05) for
