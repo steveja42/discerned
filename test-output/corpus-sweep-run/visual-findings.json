@@ -1,0 +1,995 @@
+{
+  "_comment": "Human visual-review verdicts per domain (worst→best: critical/flaw/clean, plus 'blocked' for domains with no capture to review — hard 403 / bot wall), kept separate from auto-scored *--score.json so re-running the sweep never overwrites them. The gallery merges these and can sort by verdict. Notes describe the CURRENT state only (no fix history). Update after eyeballing a re-captured clip/cast.",
+  "findings": {
+    "youtube-watch": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Good capture: poster, title, round channel avatar, subscriber count, clean \"1.8B views · 16 years ago\" dx-stats row, description. CAST-ONLY DEFECT: that stats row degrades to a bare \"1.8B\" in the kind-30023 markdown (word \"views\" + date lost). Verified 2026-08-17."
+    },
+    "imdb": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Title, poster, rating/runtime, genre chips, synopsis, Videos rail, Photos and Top Cast all captured. FLAWS (cosmetic, CONFIRMED still present 2026-08-17): (1) TOP CAST stacks ONE HEADSHOT PER ROW down the page instead of a grid — same known-residual as metacritic; (2) a 'prime video / Enjoy unlimited streaming' ad block survives; (3) the Videos clip rail renders as a long vertical run of large stills. Verified 2026-08-17."
+    },
+    "nytimes": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article, all sections + images (manual headed pass)."
+    },
+    "theatlantic": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Source shows a paywall CSS-fade over later paragraphs, but the clip captured the full underlying text faithfully (it was present in the DOM, not actually removed) along with title, byline, and hero image. Faithful, complete capture. Verified 2026-08-17."
+    },
+    "reuters": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Full article (headed)."
+    },
+    "apnews": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "The headline 'Ukraine fires 400 drones toward Moscow as Zelenskyy grapples with protests' and byline are missing from both the clip and cast, which jump straight into the photo gallery. All body paragraphs are otherwise present and complete. Verified 2026-08-17."
+    },
+    "amazon-product": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Product title, price, images, and details captured faithfully in both clip and cast with no leaked cross-sell rails or review-section bloat. Verified 2026-08-17."
+    },
+    "hackernews": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "tagHackerNews working well: each comment is a bordered dx-post/dx-reply card with author + date byline, body prose, quoted '>' text and links preserved; reply nesting shown by indentation; the orange masthead, vote arrows and nav chrome are gone. Only the Guidelines/FAQ/Lists footer strip survives. The tiny source screenshot is HN's minimal design, NOT a block page. Verified 2026-08-17."
+    },
+    "bloomberg": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "FALSE PASS: the clip is Bloomberg's BOT-BLOCK page (\"Why did this happen? … Block reference ID: c22710c4-…\", \"SUBSCRIBE NOW\"), not an article — yet it scored ok 0.111. No article content at all. Not a capture defect; the sweep should SKIP it. Detector extended 2026-08-17 with \"block reference id\" / \"why did this happen\" so this becomes an honest skip. Needs a re-capture (headed, warm profile) to get a real verdict."
+    },
+    "reddit-thread": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "FALSE PASS: clip is Reddit's BLOCK PAGE (\"You've been blocked by network security\" + Snoo mascot), scored ok 0.076 at 100% coverage. Reddit's hand-tuned tagger was never exercised. Detector extended 2026-08-17 with \"you've been blocked\" / \"blocked by network security\" (the existing 'you have been blocked' missed the CONTRACTION). Needs a headed re-capture for a real verdict."
+    },
+    "goodreads-book": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Book hero (cover, title, rating), About the author, Friends & Following, and a long review thread with reaction GIFs all captured cleanly with good structure. Matches the documented reference-target quality. Both clip and cast clean. Verified 2026-08-17."
+    },
+    "cnn": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Excellent BODY capture: hero image with full caption + Getty credit, and the complete multi-paragraph article with inline links and quotes; no ads or recirculation chrome. FLAW (minor): the HEADLINE and BYLINE are missing — the clip opens straight on the hero. Verified 2026-08-17."
+    },
+    "aljazeera": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Excellent capture: breadcrumb, headline, italic standfirst, byline + date, hero photo with caption/credit, every Q&A section heading (When will polls open…, Who can vote?, …), and the full prose with inline links. FLAWS (chrome): a 'Recommended Stories' 4-link recirculation box mid-article, two bare 'Advertisement' labels, a 'Get instant alerts and updates…' notification prompt, and a Listen/Save/Share + 'Add Al Jazeera on Google' control strip. Verified 2026-08-17."
+    },
+    "espn": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Headline, video thumbnail, ESPN-staff byline + timestamp, intro prose with player links, and the '2026 NFL free agency coverage' link block all captured. FLAW: the clip STOPS at the 'Free agency and trade market updates / Last updated' heading — the actual tracker entries (the substance of the page) are absent. Minor chrome: a bare 'play' label, a Like control and a reaction-emoji row (116.4K). Verified 2026-08-17."
+    },
+    "css-tricks": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Excellent technical capture: title, byline + date, every section heading, ALL code blocks with monospace formatting and indentation preserved, the pseudo-class/JS-equivalent comparison table intact, inline code spans, and full prose. Confirms the hero-only defect from memory project_hero_only_capture_defect is FIXED here (80% coverage). Verified 2026-08-17."
+    },
+    "wikipedia-en": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Excellent reference capture: title, hatnotes, the architecture diagram, every section heading (History, Predecessors, Attention with seq2seq, Parallelizing attention, Training, Architecture, Tokenization…), full prose with inline wikilinks and [n] footnote markers, and the maintenance-notice boxes. Only per-section [edit] links survive as chrome. Verified 2026-08-17."
+    },
+    "stackoverflow-q": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Full question plus top answer captured with code blocks preserved and readable in both clip and cast. No dropped content, no layout defects. Verified 2026-08-17."
+    },
+    "medium-generic": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article with diagrams."
+    },
+    "danluu": {
+      "verdict": "clean",
+      "where": "both",
+      "note": "CLIP: complete essay, section headings and prose intact — correct for a minimal-chrome text-only site; the 100% coverage flag is the healthy case, not chrome. CAST: full essay renders correctly in markdown. Verified 2026-08-17."
+    },
+    "techcrunch": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Full article body text is captured cleanly in both clip and cast, but the headline ('Trump's latest AI czar has already resigned'), byline/date, and hero photo are all missing -- the clip starts directly at the first body paragraph with no title. Verified 2026-08-17."
+    },
+    "theverge": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Excellent capture: topic chips, headline, standfirst, byline + timestamp, author avatar + bio line, hero illustration with full credit, and the complete prose with inline links. Only a trailing 'Follow topics and authors' chip row survives. Verified 2026-08-17."
+    },
+    "arstechnica": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Excellent capture: headline, standfirst, byline + date + comment count, all race photos with full credits, section headings, complete prose, and the author bio block with avatar. FLAW (minor): an 'Ars Video / How The Callisto Protocol's Team Designed Its Terrifying, Immersive Audio' promo box rides mid-article, plus a stray 'I tried to be positive' fragment at the head. Confirms the hero-only defect from memory is FIXED here (71% coverage). Verified 2026-08-17."
+    },
+    "politico": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "A \"National Security Daily\" newsletter promo box with a tall icon causes its heading text to collapse into a one-word-per-line vertical strip in the clip; the cast repairs this into normal flowing text. Article hero image is absent from both clip and cast, only body text present. Verified 2026-08-17."
+    },
+    "axios": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Article body is complete and well-formatted, but a 'What to read next' recirculation block leaks through at the end with 5 empty unloaded Axios-logo placeholder cards in the clip (reduced to bare bullet points in the cast). Chrome leak occurs only after all real content. Verified 2026-08-17."
+    },
+    "economist": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Source article is paywalled after two sentences; clip faithfully captures the truncated paragraph and paywall CTA, but a large 'More from Science & technology' related-articles rail leaks in and dominates the rest of the clip as if it were article content. Cast mirrors the clip closely. Verified 2026-08-17."
+    },
+    "npr": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Excellent body capture: section kicker, headline, updated timestamp + byline, hero photo with full caption and Getty credit, complete prose with inline links. FLAW: FOUR related-story recirculation cards (thumbnail + section + headline) are INTERLEAVED INTO THE BODY between paragraphs, not appended at the end — more disruptive than a trailing box. Plus a Facebook/Flipboard/Email share row at the foot. Confirms hero-only defect is FIXED here (72% coverage). Verified 2026-08-17."
+    },
+    "nbcnews": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Multi-story 'Morning Rundown' digest captured faithfully: title, hero, all sub-story sections with images, embedded video-still thumbnails, and quiz section preserved in source order for both clip and cast; only a small 'NBC Selected' shopping promo leaks in at the very bottom. Verified 2026-08-17."
+    },
+    "theguardian": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Title, byline, hero image, all inline images with captions, and full prose body are completely and faithfully captured in both clip and cast. Verified 2026-08-17."
+    },
+    "bbc-news": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Headline, byline, hero image, all body paragraphs, subheads, and an embedded diagram captured faithfully and completely in both clip and cast. Verified 2026-08-17."
+    },
+    "wired": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Excellent long-form capture: kicker, headline, byline + date, hero and all inline photos with PHOTOGRAPH credits, the featured pull-quote, and the complete multi-thousand-word prose. FLAWS (chrome): several bare 'Advertisement' labels and a 'Featured Video / Ms. Rachel Answers Parenting Questions' promo block mid-article. Verified 2026-08-17."
+    },
+    "vox": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Source is a rolling liveblog/hub page ('US strikes Iran: What you need to know') linking out to multiple stories; the clip faithfully reproduces this structure -- intro text plus each linked story's hero image, headline, byline, and teaser, matching the source layout. One embedded video renders as an expected blank/black placeholder box, matching the source's loading state. Verified 2026-08-17."
+    },
+    "newyorker": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Strong capture: headline, byline, date, hero image with credit, full article prose, inline photos, cartoon. Residual chrome (minor): a \"Download and Connect with the Ants\" bar at the very top, several bare \"Advertisement\" labels, a newsletter sign-up block mid-article, and a \"Video From The New Yorker\" promo strip. 95% coverage flag is benign. Verified 2026-08-17."
+    },
+    "quantamagazine": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Full photo gallery with captions, hero images, and complete body text all captured faithfully and match closely between clip and cast. Verified 2026-08-17."
+    },
+    "nature": {
+      "verdict": "critical",
+      "where": "clip+cast",
+      "note": "Article is paywalled on the source; clip captured only the headline, byline, and a single-sentence teaser plus the 'Access options' subscription pitch box — the actual article body is absent. Large amounts of irrelevant chrome (5 'Nature Careers' job postings with employer logos, References list) leaked in instead. Cast mirrors the same stub. Verified 2026-08-17."
+    },
+    "sciencedaily": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Title, byline, hero image, full body text, and journal reference/citation section all captured faithfully and match well between clip and cast. Verified 2026-08-17."
+    },
+    "arxiv": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Abstract, metadata table, and links captured completely and legibly in both clip and cast. Verified 2026-08-17."
+    },
+    "mdn": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Technical reference documentation (Array methods) captured excellently: headings, prose, code blocks, and tables all preserved in both clip and cast. Verified 2026-08-17."
+    },
+    "python-docs": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Clean docs capture: page heading with inline code styling, prose, all bullet lists with API links, the REPL code block in monospace, Availability/Changed-in-version notes, and the Reference section list. Only a small social-card preview strip at the head. Verified 2026-08-17."
+    },
+    "reactdev": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Interactive mockup table, code blocks, and full tutorial body text all captured faithfully in both clip and cast, matching source structure and content closely. Verified 2026-08-17."
+    },
+    "github-blog": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Thorough capture with hero image, table of contents, all headings, and full long-form body text preserved in both clip and cast. A 'GitHub Copilot trial' promo module leaks in mid-article but is a minor chrome leak. Verified 2026-08-17."
+    },
+    "stackoverflow-blog": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Clean blog capture: date line, headline, standfirst, hero graphic, and the complete prose with all inline links preserved, ending on the 'Take the survey now' link. No ads, no recirculation, no chrome. Verified 2026-08-17."
+    },
+    "smashingmagazine": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Title, byline, \"About the Author\" card, code blocks, embedded bar-chart image, and pull quotes all captured faithfully and match closely in both clip and cast. Verified 2026-08-17."
+    },
+    "martinfowler": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Pattern-index page's 3-column grid sensibly reflows to a single column with all entry titles, descriptions, and the book cover image intact. No chrome leakage; cast matches clip. Verified 2026-08-17."
+    },
+    "paulgraham": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Plain-text essay page captured faithfully end to end in both clip and cast, matching the simple source layout exactly. Verified 2026-08-17."
+    },
+    "overreacted": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "SVG node diagrams (blog/aggregator/feedly illustration) lose their visual layout and collapse into smashed concatenated text like \"alice'sblogbob'sblogaggregatorfeedly\" in both clip and cast; rest of the essay body captures cleanly. Verified 2026-08-17."
+    },
+    "lobsters": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Threaded discussion captured faithfully: nested comments with authors, timestamps, and scores all present and readable in both clip and cast (cast loses visual indentation but keeps all content and structure via numbering). Verified 2026-08-17."
+    },
+    "hackaday": {
+      "verdict": "critical",
+      "where": "cast",
+      "note": "Clip is clean: title, byline, hero, prose, and shell-script code blocks all preserved with proper <pre> formatting. In the cast, htmlToMarkdown misreads shell-script comment lines (e.g. '# Scan /etc/hosts for .local addresses...') as markdown headers, rendering them as giant bold H1/H2 fake section headings mid-article, badly breaking the article's structure. Verified 2026-08-17."
+    },
+    "ghost-blog": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Near-perfect capture of title, subtitle, headings, embedded images, and gallery content. No notable defects in clip or cast. Verified 2026-08-17."
+    },
+    "dev-to": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Article body complete with all images. Residual (minor cosmetic, CONFIRMED still present 2026-08-17): dev.to's reaction glyphs + author avatar repeat 2-3x from its top/sticky/foot engagement bars."
+    },
+    "substack-generic": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Excellent, COMPLETE capture: title, author, date, the full ACX essay with all numbered sections, the illustration, and the embedded tweet card. The 2.3% coverage is a denominator artifact (Substack loads a long comment thread the clip rightly excludes). Verified 2026-08-17."
+    },
+    "usatoday": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "The clip's entire body text renders as a flex/grid-collapsed single-character-per-line vertical column running the full page height -- completely unreadable, a classic narrow-column/flex-collapse defect, even though title and byline are intact. The cast, built from the same captured HTML via htmlToMarkdown, is completely clean and fully readable (title, byline, full body, both images) -- textbook case of the cast masking a clip-only CSS layout defect. Verified 2026-08-17."
+    },
+    "time": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Body prose and section headings (AI's impact on cybersecurity, Cybersecurity's challenging future) captured in full with inline links. FLAWS: (1) NO HEADLINE, BYLINE OR HERO — the clip opens mid-sentence on the first body paragraph; (2) a 'Recommended Stories' 3-item recirculation box with thumbnails sits mid-article; (3) four bare 'Advertisement' labels survive. Verified 2026-08-17."
+    },
+    "newsweek": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Article headline is missing from both clip and cast (jumps to byline/body). The clip additionally has a 'Read More on News' recirculation widget that renders as a narrow-column flex-collapse text strip (each word/letter wrapping to its own line); the cast fixes this same widget into normal readable text/links, confirming a clip-only CSS layout defect. Verified 2026-08-17."
+    },
+    "businessinsider": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Article text and hero image captured well, but a large 'BUSINESS INSIDER' watermark placeholder box appears mid-article (failed embedded image), and a 6-card related-stories grid at the bottom leaks through as broken/empty gray image cards in the clip (cast renders these as plain text links, cleaner). Verified 2026-08-17."
+    },
+    "forbes": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full contributor article."
+    },
+    "fortune": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Hero image, full body prose, headings, and blockquotes all preserved cleanly. Article headline text itself is absent from the very top of the clip/cast (starts at hero image), a minor omission. Otherwise clean in both. Verified 2026-08-17."
+    },
+    "cnbc": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Excellent capture: kicker, headline, published/updated dates, byline with avatar + handle, Key Points bullets, both images with captions + credits, full prose with inline links, WATCH video card. Residual chrome (minor): a bare 'Share' label, 'In this article / Follow your favorite stocks CREATE FREE ACCOUNT' promo strip, and a 'Choose CNBC as your preferred source on Google' footer line. Also the Published/Updated timestamps run together ('Sat, Jul 25 20261:00 AM EDTUpdated'). Verified 2026-08-17."
+    },
+    "foxnews": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Thorough capture: title, byline, all headings, inline images, full body text, and even the comments section are preserved. Video hero collapses to a plain black box in both clip and cast, a minor cosmetic issue. Verified 2026-08-17."
+    },
+    "cbsnews": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Full article body, hero image, and byline captured cleanly; sidebar recirculation and the 'AI: Artificial Intelligence' related-cards grid are correctly excluded from both clip and cast. Verified 2026-08-17."
+    },
+    "apnews-tech": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Same recurring AP News defect as apnews: the clip and cast start directly with the photo gallery, omitting the headline ('Wildfires in France drive 250,000 people from their homes...') and byline. Body text is otherwise complete. Verified 2026-08-17."
+    },
+    "independent": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Excellent capture: headline, standfirst, byline+date, both hero images with captions and credits, full body prose, section headings. The 31% blank is image gaps, not dropped content. Cast leaks minor chrome (a stray \"5\", \"Removed from bookmarks\", \"open image in gallery\"). Verified 2026-08-17."
+    },
+    "spiegel": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Paywalled article (SPIEGEL+ gate) — capture is faithful to source: byline avatar, author, dek, date, hero image with caption/credit, then the paywall block, all matching the live page. Minor chrome leak: \"SPIEGEL bei Google bevorzugen\" preferred-source link + Startseite/Feedback footer nav survive. Cast matches clip cleanly. Verified 2026-08-17."
+    },
+    "aljazeera-tech": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Excellent capture: EXPLAINER kicker, breadcrumb, headline, standfirst, byline + date, both photos with full captions/credits, all section headings (What has happened?, What did Hugging Face say?, Why does this matter?), full prose, and an embedded TWEET CARD rendered correctly with avatar, handle, body and timestamp. FLAWS (chrome): 'Recommended Stories' 4-link box, two 'Advertisement' labels, a notification prompt, and a Listen/Save/Share strip. Verified 2026-08-17."
+    },
+    "timesofindia": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Good capture: headline, byline + source + IST timestamp, hero image with caption, section headings, full prose, About-the-Author block. FLAWS (chrome): a 'Preferred on G' badge, a Comments/Share/AA/'+ Text Size' control strip with a Small/Medium/Large bullet list, a 'Download the TOI App' promo, a 'Continue Reading' label, and a large empty grey TOI placeholder box. Verified 2026-08-17."
+    },
+    "scmp": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Title, byline, hero photo, and body text captured faithfully matching the source's visible article length (textCoverage 0.783); article appears to end shortly after the \"Calculated, long-term sacrifice\" subheading in the source itself, not a capture truncation. Verified 2026-08-17."
+    },
+    "engadget": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Good capture overall: title, byline, hero, product photos, full prose. FLAW: the per-product SPEC BLOCKS (Screen/Processor/RAM/Storage/Weight/Ports) collapse into narrow one-word-per-line columns — same dx-stats/flex-collapse signature as wikivoyage's climate table (cf. memory project_dx_stats_flex_collapse). The 98% coverage flag itself is benign. Verified 2026-08-17."
+    },
+    "gizmodo": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Full article body text captured cleanly and completely, but the headline and byline are missing entirely from the top of both clip and cast (content starts mid-article), and a stray audio-player time readout ('00:00 02:08' / '00·02') leaks in as chrome. Verified 2026-08-17."
+    },
+    "zdnet": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Good article capture: headline, standfirst, byline + avatar + date, hero, product screenshots, ZDNET-key-takeaways box, full prose, bullet lists. FLAWS: (1) a \"most read\" promo block rides near the top and a related-articles image rail at the bottom (the scorer also counts 3 chrome strings); (2) a narrow one-word-per-line collapsed column appears mid-page beside the Zorin section. Verified 2026-08-17."
+    },
+    "pcmag": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Headline and hero image are missing entirely from both clip and cast -- content starts mid-article with the first body paragraph. A \"You May Also Like\" recirculation widget leaks in as chrome. textCoverage score of 0.488 corroborates roughly half the article missing. Body prose that is present reads cleanly. Verified 2026-08-17."
+    },
+    "macrumors": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Article title, byline, hero image, and full bulleted body text captured with no chrome leakage — 'Popular Stories' and 'Top Rated Comments' sidebar sections correctly excluded. Cast matches clip exactly. Verified 2026-08-17."
+    },
+    "9to5mac": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Full article body captured well (title, hero images, numbered list, related-guides chip row, author card). CLIP-ONLY defects: byline name \"Ryan Christoffel\" collapses into a narrow vertical column (flex-collapse pattern), and the \"Check out 9to5Mac on YouTube\" embed placeholder stacks one word per line. Both are FIXED in the cast — byline renders as a clean single-line \"Ryan Christoffel · Jul 23 2026...\" and the YouTube embed becomes a proper video thumbnail card, so htmlToMarkdown conversion sidesteps the CSS collapse. Verified 2026-08-17."
+    },
+    "kotaku": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Article title, byline, hero image and full body text captured correctly, but a 'You May Also Like' recirculation module (6 unrelated article thumbnails/links) leaks into the bottom of both the clip and the cast. Verified 2026-08-17."
+    },
+    "signalvnoise": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "The small circular author avatar is aspect-distorted into a large full-width rectangular portrait in both clip and cast; the title heading (\"Sitting down with Senra\"), date, and author name label above it are missing, with body text starting directly. Verified 2026-08-17."
+    },
+    "venturebeat": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "DEAD URL at review time — clip was VentureBeat's \"Not Found / Could not find requested resource\" page. URL replaced 2026-08-17; needs a re-capture before this verdict can be trusted."
+    },
+    "theregister": {
+      "verdict": "flaw",
+      "where": "cast",
+      "note": "Clip is clean and complete (title, byline, hero image, full body, MORE CONTEXT sidebar list). Byline shows a minor glyph glitch ('Joab Jackson' rendered with odd dot separators and a stray '11'). The cast has a real defect: the 'MORE CONTEXT' bullet list items leak literal markdown '###' heading prefixes into the visible text (e.g. '### OpenAI won't let some customers export their chats'). Verified 2026-08-17."
+    },
+    "rottentomatoes": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Tomatometer/audience scores, synopsis, critic + audience reviews, cast and Related News captured. Re-verified 2026-08-17: the review-card column collapse and full-width cast headshots in the 2026-07-30 note are FIXED — review prose is full-width, headshots at source size."
+    },
+    "metacritic": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Content is all there: title, synopsis, director/writer credits, Metascore + user score, Where to Watch, Top Cast, Critic Reviews. FLAW (cosmetic, CONFIRMED still present 2026-08-17): the TOP CAST list stacks ONE LARGE HEADSHOT PER ROW down the whole page instead of a grid — the known-residual documented in the handoff (re-flowing needs markup restructuring; photos are already capped at source size). 93% coverage flag is benign."
+    },
+    "tmdb": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Title, overview, full 10-person cast grid with headshots, a user review, keywords, and content score are all captured well in both clip and cast. The circular 'User Score' percentage widget degrades to a vertical stack of reaction emoji with the score number lost, in both clip and cast. Verified 2026-08-17."
+    },
+    "letterboxd": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Source screenshot shows a Cloudflare 'Security check' interstitial, but the clip itself captured a fully rendered, detailed film entity page (poster, synopsis, full cast list, crew, releases-by-country table) with no bot-wall stub content — capture evidently succeeded before/without the challenge. Clip and cast both render the rich content cleanly and completely. Verified 2026-08-17."
+    },
+    "imdb-name": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "Captures the HEADSHOT ONLY — no name, no bio, no filmography (0% text coverage). Same image-captured/text-dropped signature as spotify-album + ytmusic-album. Verified 2026-08-17."
+    },
+    "steam": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Store page content (About This Game, screenshots, bundle offers, achievements) is present in both clip and cast, but the screenshot gallery renders as a long vertical stack of thumbnail-sized images with heavy commerce chrome (bundle/DLC offer cards) ahead of the actual game description. Readable but cluttered, matching the product-page nature of the source. Verified 2026-08-17."
+    },
+    "homedepot": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Real product page captured (hammer photo, title, $5.97, star rating, feature bullets, stock/aisle, returns policy) after the URL was replaced 2026-08-17. Residual cosmetics: breadcrumb renders one item per line with stray \"/\" separators; three empty \"Loading Recommendations\" headings survive."
+    },
+    "ebay": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "Clip is BLANK (443-byte PNG, 0% text, 85% blank space) while the source renders a full product page (title, $3.99, gallery, item-specifics table, long seller description, seller feedback). Worst capture in the corpus. Verified 2026-08-17."
+    },
+    "target": {
+      "verdict": "critical",
+      "where": "clip+cast",
+      "note": "The clip is missing the entire product-identity block (title 'Razer Ornata V3...', price, star rating, primary hero image) and instead starts directly with secondary marketing panels, 'About this item', a 'Discover more options' cross-sell rail, and a large 'Compare similar items' table. The cast has the identical omission. A shopper capturing this page would have no idea what product or price it refers to. Verified 2026-08-17."
+    },
+    "walmart": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Excellent capture: title, price, key features, spec sections, popular-items rail, 4.7-star rating block, customer photos, full review prose. Coverage moved 66%→21% between runs because the SOURCE rendered more chrome (denominator), not because the clip lost anything. Verified 2026-08-17."
+    },
+    "newegg": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Product page: cart/price/similar-products chrome at top correctly skipped; clip captures the manufacturer's marketing content and the full 'Model Specifications' table cleanly. Cast renders the same table as a readable markdown table. Verified 2026-08-17."
+    },
+    "goodreads-author": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Author photo, bio, followers, bookshelves, friends, book series, and blog excerpt all captured with reasonable structure. A 'Discover new books on Goodreads' promo banner leaks in at the top, and a long repeated 'Want to Read' book-list bullet chain adds noise, but content is otherwise faithful. Cast matches clip. Verified 2026-08-17."
+    },
+    "discogs": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Facts, full tracklist, credits/notes/barcode, Other-Versions, recommendations, reviews. (Requires headed.)"
+    },
+    "bandcamp": {
+      "verdict": "critical",
+      "where": "clip+cast",
+      "note": "The layout finder picked the wrong content block entirely — clip and cast contain ONLY the 'you may also like' recommendation rail; the actual album (DELTARUNE Chapter 5 title, cover art, 38-track tracklist, credits) is completely missing. Clip additionally shows severe narrow-column flex-collapse text in the recommendation cards (e.g. 'Cel/este/Ori/gin/al/Sou/ndt/rac/k' one/two characters per line); cast fixes the column collapse but still shows the wrong content. Verified 2026-08-17."
+    },
+    "genius": {
+      "verdict": "flaw",
+      "where": "cast",
+      "note": "Clip cleanly captures full lyrics, About section, Q&A, and related-song links. Cast, however, has an unrelated recommended-video promo module ('KARLEE GIRL Right Back Lyrics & Meaning', 'NOW PLAYING') leak in between the hero and credits that isn't present in the clip. Verified 2026-08-17."
+    },
+    "allrecipes": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Strong recipe capture: title, star rating + review count, byline + dates, hero photos with credits, 'Secret to Crispy' explainer, Chef John's tips, prep/cook time block, full Ingredients list and numbered Directions with per-step photos. FLAWS: (1) a 'Local Offers' retailer block (Instacart/Walmart/Target/Kroger/Whole Foods logos + zip field + 'Buy all 21 ingredients' CTA) survives mid-recipe; (2) several later step images render as BROKEN-IMAGE placeholders showing alt text instead of the photo. Verified 2026-08-17."
+    },
+    "yelp": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Title, hours, photo gallery, menu images, popular dishes, People Also Searched, Location & Hours table, and similar-restaurant reviews are all captured in both clip and cast. Two defects: star-rating icons render as solid black squares/tofu boxes instead of stars, and a block of roughly 18 literal 'Loading...' placeholder lines (unrendered lazy-load text) leaks in just above the review-prompt section. Verified 2026-08-17."
+    },
+    "tripadvisor": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Attraction entity page — title, hero, About, nearby experiences, reviews. (Requires headed.)"
+    },
+    "zillow": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Full property: photos, address, beds/baths/sqft/price, Zestimate, market insights, comparable homes, facts & features. (Requires headed — PerimeterX Press & Hold wall.)"
+    },
+    "etsy": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Hero image, title, price, and item details capture fine, but the product description section is garbled: long runs of dash separator lines ('---------------') and bracket placeholder artifacts (e.g. '[MORE DETAILS ABOUT OUR PRODUCT]') leak through as literal text. Same garbling present in cast. Verified 2026-08-17."
+    },
+    "producthunt": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Title, tagline, rating/reviews/followers, launches, forum threads, review summary + user reviews. Minor: one stretched screenshot thumb. (Requires headed.)"
+    },
+    "npmjs": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Clean README capture: package name, description, Note callout, Usage CODE BLOCK with formatting + indentation preserved, Documentation and API sections with links. Cosmetic only: the npm logo renders full-width at the head. Verified 2026-08-17."
+    },
+    "pypi": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Code/install command blocks lose whitespace in both clip and cast, e.g. \"pip install requests\" and the git clone command render as run-together unspaced text, making copied commands unusable. Sidebar metadata (maintainers, classifiers) captures cleanly otherwise. Verified 2026-08-17."
+    },
+    "github-repo": {
+      "verdict": "flaw",
+      "where": "cast",
+      "note": "Clip captures the README (badges, headings, code sample) cleanly with correct formatting. Cast mangles the embedded JSX code sample, collapsing its line breaks/indentation into a single squished line with odd extra spacing around punctuation. Verified 2026-08-17."
+    },
+    "wikipedia-person": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Title, portrait, fully-labeled infobox (Born, Died, Alma mater, etc.), and complete prose body with section headings and inline captioned images are all faithfully captured in both clip and cast. Verified 2026-08-17."
+    },
+    "haaretz": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "Headline, standfirst and byline captured, but the ARTICLE BODY IS ABSENT — replaced by a SUBSCRIPTION WALL ('Read differently. Understand more.', SUBSCRIBE NOW, 'Keep reading for free', 'Already signed up? Log in') followed by a VERY LONG READER-COMMENTS THREAD that dominates the clip, then an 'In the News' recirculation rail with headline images. Same comment-widget-outscores-the-story shape the AP News fix addressed, but here on a PAYWALLED page — run hidden-prose-probe to tell paywall from finder mis-pick before any fix. Verified 2026-08-17."
+    },
+    "folha": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "Hero photo, 'Inteligencia artificial' kicker, headline and the two summary bullets captured — but the ARTICLE BODY IS ABSENT (cov 5.2%); the clip ends at a share-icon row. Folha is paywalled, so this MAY be a faithful capture of a gated page rather than a finder miss — memory project_low_coverage_paywall_vs_finder says run tools/hidden-prose-probe.spec.ts (HIDDEN=1 HIDDEN_ONLY=folha) to tell the two apart BEFORE any fix. Not yet distinguished. Verified 2026-08-17."
+    },
+    "rfc-editor": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "RFC spec text with table of contents, headings, and the status-codes table all captured faithfully and readably in both clip and cast. Verified 2026-08-17."
+    },
+    "thehindu": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Good capture: headline, standfirst, published date, byline, hero photo with credit, and the full prose. FLAW (clear NARROW-COLUMN COLLAPSE): an inline related-article link renders ONE CHARACTER-ISH TOKEN PER LINE down a narrow strip ('Anthr/opic/rolls/out/Opus/5 AI/model/in/efficie/ncy/upgra/de') — the purest example of the dx-stats/flex-collapse defect in this sweep (cf. wikivoyage, engadget, zdnet, zenodo). Minor chrome: READ LATER / Read Comments / Related Topics. Verified 2026-08-17."
+    },
+    "japantimes": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "HERO IMAGE + its Reuters caption ONLY. No headline, byline or body, though the source shows the full story (~20 paragraphs, 3 inline photos) and it is NOT paywalled. Verified 2026-08-17."
+    },
+    "gutenberg": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "CORRECT capture: a complete, well-formatted letter from Pride & Prejudice with paragraph structure and italics preserved. The 1.4% coverage is meaningless here — the source file is the ENTIRE NOVEL in one HTML page. Verified 2026-08-17."
+    },
+    "asahi": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Paywalled Japanese article (有料記事) — clip and cast faithfully capture only the visible preview text, byline, hero image, and paywall notice, matching what the live page actually shows. A few small gallery thumbnails failed to inline (blank bullets) but this is minor. Verified 2026-08-17."
+    },
+    "chicagotribune": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Article is paywalled on the source (subscription flash-sale modal, body text truncated mid-word at '...as yet anoth ...'); clip and cast faithfully capture exactly the visible preview content, image, and byline available. Clean given the paywall constraint. Verified 2026-08-17."
+    },
+    "yahoofinance": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Excellent capture: Yahoo mark + headline, byline (avatar, title, date, '1 min read'), full prose with inline links, hero photo with Getty credit, author bio line. FLAWS (chrome): a 'More from Yahoo Scout' AI question carousel with prev/next arrows mid-article, a CL=F ticker chip + star, and footer promo links plus Terms/Privacy/'Your Privacy Choices'. The scorer's 1 distorted image is the small ticker/star glyph. Verified 2026-08-17."
+    },
+    "appstore": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Good capture: app icon, title, description, user reviews with star ratings, What's New, App Privacy, information table. The 105% coverage flag is the known >100% artifact (clip holds more text than the throttled live DOM measured), not chrome. Verified 2026-08-17."
+    },
+    "lesswrong": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Good capture: title, byline, hero image, full article prose, track listing with lyrics. 121% coverage is the >100% measurement artifact, not chrome. Verified 2026-08-17."
+    },
+    "postgresql-docs": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Excellent content capture: section heading, prose, SQL CODE BLOCKS with formatting preserved, monospace query-result tables intact, footnote. Residual chrome (minor): the supported/unsupported VERSION LIST nav and the Prev/Up/Next bars survive top and bottom, plus a full-width PostgreSQL elephant logo at the head and a \"Submit correction\" footer. The 96% coverage flag is benign. Verified 2026-08-17."
+    },
+    "slashdot": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Story captured correctly: headline + source + comment count, \"Posted by BeauHD … from the bot-ban dept.\" byline, and the full multi-paragraph summary with inline links and blockquote styling. The 3.8% coverage is a denominator artifact — the COMMENT THREAD (the bulk of a Slashdot page) is excluded, which is right for an article capture. Verified 2026-08-17."
+    },
+    "superuser": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Question title, tags, and full answer thread with code blocks captured completely and legibly in both clip and cast; sidebar/related-questions chrome correctly dropped. Verified 2026-08-17."
+    },
+    "github-pr": {
+      "verdict": "critical",
+      "where": "cast",
+      "note": "Clip faithfully captures the PR description, code samples, comment thread, and CI benchmark 'Comparison Report' data as properly formatted HTML tables. In the cast, htmlToMarkdown breaks down those same benchmark tables into a giant unreadable wall of raw numbers with no column/row structure, making a large portion of the cast content unreadable. Verified 2026-08-17."
+    },
+    "weather-gov": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Dense legacy government forecast page captured impressively completely: current conditions, 7-day extended forecast icons/temps, detailed forecast table, additional-forecast links, map, radar/satellite thumbnails, and hourly chart all present and legible in both clip and cast. Verified 2026-08-17."
+    },
+    "aljazeera-ar": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "LIVE BLOG captured well: headline, byline row, 'Last updated' line, and the full stream of timestamped entries with photos + captions, bullet lists, embedded social posts and Arabic RTL text rendering correctly alongside English. FLAWS (chrome): repeated 'advertisement' labels between entries, and stray bare control glyphs/labels around each entry. Good evidence RTL + mixed-script capture works. Verified 2026-08-17."
+    },
+    "seattletimes": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Headline and byline are missing from the top of both clip and cast -- content starts directly with the hero image; an Instagram embed is appropriately dropped. Cast additionally shows unrendered markdown syntax, with literal \"**Markets + Shopping**\" asterisks instead of bold text. Verified 2026-08-17."
+    },
+    "cbc": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Article text, byline, and hero image captured completely; the related-stories grid and footer link grid visible on the source page are correctly excluded from both clip and cast. No narrow-column or chrome-leak defects. Verified 2026-08-17."
+    },
+    "msnbc": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Body text, embedded video-still images, and byline/date are captured correctly, but the article headline ('Why Hegseth and Trump keep contradicting themselves about U.S. munitions') and subheading are missing from the top of both clip and cast, which jump directly from date/byline to body prose. Sponsored/promo grid at the bottom of source correctly excluded. Verified 2026-08-17."
+    },
+    "netflix-techblog": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Title + byline + hero figure with caption + full technical prose: headings, architecture diagrams, bullet lists all intact. Cloudflare-gated: needs a warm cf_clearance (visit headed once), then captures headless."
+    },
+    "lemmy-thread": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "VERIFIED LIVE after the dx-stats fix. Post + full comment thread render as readable, properly indented prose in BOTH the clip and the cast. Previously nested replies collapsed to ~79px one-character-wide strips and the cast degraded to a bare run of vote numbers. Root cause was not capture: the generic dx-stats heuristic tagged the comment <ul>/<li> wrappers (every comment carries a vote/reply svg, so a thread reads as 'action-shaped') and .dx-stats is display:flex, so each reply list became a flex row. Fixed generically via an isProseContainer guard on both dx-stats passes. Cloudflare-gated: captures on the sweep's HEADED retry."
+    },
+    "storygraph": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Good capture, 72% coverage. Verified 2026-08-17 (headed)."
+    },
+    "librarything": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "GOOD capture, and the richest of this site class: cover strip, title, author + illustrator, series, book info, description, tag cloud, MEMBER REVIEWS with rating, members, author info, classifications and statistics — the full review payload storygraph is missing. Loads HEADLESS. One flaw: the ~90-entry \"Recommendations\" list rides along as a stacked column of bare title links (cross-sell, should drop)."
+    },
+    "rateyourmusic": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Song page captures title, artist, genre (Art Rock), release date, \"Ranked #4 all time / #14 of 1967\", parent-release track link, rating counts and the LYRICS. Needs the headed retry. Flaw: below \"Lists\" the clip becomes a long expanse of near-empty rows holding tiny thumbnails — the list/chart rail loses its grid and wastes most of the clip height (same image-grid-collapse class as letterboxd/metacritic)."
+    },
+    "spotify-album": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "Captures the album COVER ART ONLY (Dark Side of the Moon) — no title, artist or track list (0% text). Verified 2026-08-17."
+    },
+    "applemusic-album": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Clip shows a black rectangle glitch overlapping the album title ('The Dark Side of the Moon█') and the track list renders as a jumbled vertical stack of numbers/buttons/times rather than rows. Cast fixes both issues — clean title text and a readable linear track list — so cast is clearly better than clip here. Verified 2026-08-17."
+    },
+    "ytmusic-album": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "Cover art only, 0% text — no album title/artist header, no track list. Verified 2026-08-17."
+    },
+    "librarything-catalog": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "CAPTURE DEFECT — clip is only the \"20 YEARS\" badge + Sign in/English/Help nav links, while the source renders a full 3-book catalog table (covers, titles, authors, dates, tags, ratings). Diagnosed with finder-diag-probe + a frame dump: the table lives in a CHILD IFRAME (catalog_bottom.php, 3 tables / 6 rows) and the TOP document has only 134 chars and ZERO tables, so there is nothing for the finder to pick. NOT a scoring/layout mis-pick — needs cross-frame capture (the chrome.scripting frame round-trip the embedded-tweet path already uses). Scorer caught it via blank-space 41%."
+    },
+    "github-issue": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "DEAD URL at review time — clip was GitHub's 404 page (\"This is not the web page you are looking for\"). URL replaced 2026-08-17 (microsoft/TypeScript#13297); needs a re-capture."
+    },
+    "postguam": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "Clip is a bare \"Too Many Requests / client_ip / request_id\" rate-limit stub — WE caused it by hitting the site too fast. Not a capture defect; re-run after a cooldown. Verified 2026-08-17."
+    },
+    "msn-slideshow": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Shows the SMITHSONIAN content matching the URL (title, photo credit, summary, references) — the preloaded-next-article regression this entry guards is NOT present. Gap: the slideshow IMAGES did not come through (text only). Verified 2026-08-17 on the replacement URL."
+    },
+    "wikivoyage": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Good overall capture: hero, district maps + photos, full prose, section headings, Get-in/Get-around detail. FLAW: the CLIMATE TABLE collapses into a one-character-per-line vertical column (dx-stats flex-collapse signature — cf. memory project_dx_stats_flex_collapse). The 98% coverage flag itself is benign. Verified 2026-08-17."
+    },
+    "noahpinion": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Strong capture: title, byline, hero photo + credit, full essay prose, embedded tweet cards, inline chart. FLAW (minor): a Substack subscribe/share chrome bar rides at the very top (\"Discover more…\", \"By subscribing, you agree to Terms of Use\", Facebook/email share row). The 93% coverage flag is benign. Verified 2026-08-17."
+    },
+    "smh": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Excellent capture: headline, byline (avatar + date), both photos with captions/credits, full body prose, author bio. Residual chrome (minor): two bare \"Advertisement\" labels, an \"Add us as a preferred source on Google\" link, a \"Listen to this article\" remnant, and a \"From our partners\" heading. Verified 2026-08-17."
+    },
+    "w3c-spec": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full technical spec captured: numbered section headings (5. The Roles Model, 5.1 Relationships…), definition lists, prose and inline links intact. The long single-column role-name lists are the SPEC'S OWN index format, not a column collapse. Verified 2026-08-17."
+    },
+    "facebook-home": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "KNOWN-FLAWED AREA (user-confirmed, pre-existing — not a regression). Clip is bare post text: no author, avatar, timestamp, memory card or photo, though the source renders all of them. Root cause: FB_BYLINE_SEL (capture.ts:3997) wants a heading/strong-wrapped byline but the feed serves a plain a[role=\"link\"] profile anchor, so the climb falls to the header-less fallback. The pixel-baseline spec facebook-feed-fixture-visual FAILS on the post-body assertion. Verified 2026-08-17."
+    },
+    "boardgamegeek": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Box art and the FULL multi-paragraph game description captured cleanly, no chrome. FLAW: the entity HEADER is missing — no title heading, no BGG rating/rank, no player count / playing time / age, no designer-publisher credits. Prose-only partial of a structured entity page (milder version of the imdb-name / spotify pattern, which drop the text instead). Verified 2026-08-17."
+    },
+    "gitlab-repo": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Clean README capture: every section heading (Canonical source, Editions, Licensing, Installation, Software stack, …), all bullet lists, the inline code block, and links preserved in order. No repo chrome. Cosmetic only: the GitLab logo renders large at the head. Verified 2026-08-17."
+    },
+    "sec-edgar": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "FALSE PASS (7th): clip is SEC.gov's BOT-BLOCK page — 'Your Request Originates from an Undeclared Automated Tool' + Reference ID + Internet Security Policy — scored ok 0.053 at 98.6% coverage. No filing content at all. This one is LONG well-formed prose, so no length gate could catch it; detector extended 2026-08-17 with 'undeclared automated tool' / 'declare your traffic'. Needs re-capture with a declared UA. Verified 2026-08-17."
+    },
+    "aws-blog": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Excellent capture: title, byline with all tag links, keynote photo + both architecture diagrams + livestream card, every 'New in agents…' section heading, the full nested announcement bullet lists with links, and the AWS News Blog Team author bio. FLAW (minor): a large 'Voiced by Amazon Polly' TTS banner survives near the top, plus an 'Add AWS as a preferred source on Google' link. Verified 2026-08-17."
+    },
+    "abc-au": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Excellent capture: headline, topic tag, posted/updated dates, hero + inline images with captions and credits, the 'In short' summary block, every section heading, full prose with indented pull-quotes, and the AP credit. Only a trailing 'Make ABC a preferred source in Google' link survives. Verified 2026-08-17."
+    },
+    "meduza": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Clean capture: Meduza-branded headline card, article headline, timestamp, 'Source: Interfax' credit, and the full prose with inline links. Only a trailing 'How we use AI to translate' disclosure link. No ads or recirculation chrome. Verified 2026-08-17."
+    },
+    "newscientist": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Excellent capture: section kicker, headline, standfirst, byline + date, all three images with captions/credits, every section heading (What happened?, So, is this illegal?, What happens now?), full prose with inline links, closing Topics line. FLAWS (chrome): a 'Sign up to Editor's Highlights / Sign up to newsletter' block mid-article, bare 'Advertisement' and 'Read more' labels, and a 'Subscriber-only content' line. Verified 2026-08-17."
+    },
+    "simonwillison": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "The TIL entry is captured (title link, summary text, 'Posted 29th July 2026' date, tag list). FLAWS: (1) a 'Recent articles' SIDEBAR list of three unrelated posts is included as if it were content; (2) a 'Monthly briefing / Sponsor me for $10 a month / Sponsor & subscribe' promo block rides at the end; (3) the entry body is only the short summary — a small thumbnail of the linked page sits at the top instead of the post content. Verified 2026-08-17."
+    },
+    "playstore": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Content is largely present: screenshots strip, What's new, Data safety list, Rate-this-app, the full 'About this app' description, More-apps-to-try rail. FLAWS: (1) ORDER IS WRONG — the app HEADER (Spotify: Music and Podcasts, developer, 4.3-star, downloads, Editors' Choice) sits at the very BOTTOM instead of the top; (2) Material ICON LIGATURE NAMES leak as literal text throughout ('chevron_right', 'arrow_forward', 'expand_more', 'phone_android', 'tablet_android'); (3) the More-apps rail is cross-sell that should be dropped. Verified 2026-08-17."
+    },
+    "instagram-home": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "tagInstagram narrowing WORKS: one post captured with round avatar, handle, video frame, engagement row and caption + 'more'. FLAWS: (1) the post it selected is an AD (labelled 'Ad', 'See details') rather than organic content — pickVisibleFeedPost has no ad filter; (2) the like/comment/share counts STACK VERTICALLY (heart, 94, speech bubble, 1, bookmark each on its own line) instead of one horizontal dx-stats row. Verified 2026-08-17."
+    },
+    "pubmed": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Complete academic record captured: journal/date header, title, FULL author list with affiliations, PMID/PMCID/DOI, the entire Abstract, Keywords, Figures, Comment-in, Similar articles, Cited by, References, Publication types, MeSH terms, Substances, Grants and LinkOut. Structured-entity capture done right — the counter-example to imdb-name/spotify. Verified 2026-08-17."
+    },
+    "musicbrainz": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Excellent structured capture: artist name, the full Wikipedia biography prose, and the complete DISCOGRAPHY TABLES (Album and Album+Compilation) with Year / Title / Artist / Rating / Releases columns all intact and correctly aligned — no column collapse. Another counter-example (with pubmed) proving structured entity pages CAN capture correctly. Verified 2026-08-17."
+    },
+    "zenodo": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Good record capture: published date + version, title, author link, description, Notes, the Files TABLE (name/size/download with md5), Additional details, Related works and the citations list. FLAW: the citation table's YEAR COLUMN IS TOO NARROW and wraps each year across lines ('201' / '8'), and the ads/arxiv/doi link column stacks one letter-ish token per line — the narrow-column collapse pattern again (cf. wikivoyage, engadget, zdnet). Verified 2026-08-17."
+    },
+    "facebook-reels": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Reel captured: video poster frame, page name (Tucker Carlson Network), caption line, Follow control and the like/comment/share counts (20.8K / 2.3K / 8.1K). FLAWS: (1) the engagement counts STACK VERTICALLY — glyph then number, one per line — instead of one horizontal dx-stats row (same as instagram-home); (2) stray UI glyphs leak (search magnifier, megaphone, a blue blob, prev/next chevrons, '...'); (3) no author avatar. Verified 2026-08-17."
+    },
+    "straitstimes": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Article itself captured well: headline, hero + caption, byline with avatar, published/updated dates, the bullet summary and full prose with subheads and an inline screenshot. FLAWS (heavy chrome): (1) a 'Top stories' RECIRCULATION RAIL of ~8 thumbnail cards is injected MID-ARTICLE; (2) a newsletter signup block ('Get ST's newsletters', email field, subscribe CTA); (3) a SHOPPING PRODUCT RAIL with product photos and prices (earbuds, tumblers, etc.) runs at the end — commerce cross-sell that removeCrossSellRails did not catch. Verified 2026-08-17."
+    },
+    "thenation": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Clean capture of a CARTOON feature: OppArt masthead + tagline, section/date, headline, subhead, byline, the full four-panel comic with its caption block, the 'Check out all installments' link and the author bio. FLAW (minor): an AUDIO-PLAYER control strip (pause, mute, 00:00 03:52, settings, fullscreen) survives at the foot — the audio-widget remover missed it (cf. aws-blog's Polly banner). Verified 2026-08-17."
+    },
+    "crates-io": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Excellent capture: the crates.io header CARD (crate name, tag chips, description, author, and the releases/version/license/SLOC/size badge row), the summary, the 'You may be looking for' link list, and a fully SYNTAX-HIGHLIGHTED Rust code block with colouring and indentation intact, plus the Getting help prose with all inline links. Verified 2026-08-17."
+    },
+    "lefigaro": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Good French-language capture: headline, 'Par Le Figaro avec AFP' byline, published/updated dates, topic tags, section headings, and the full prose with French guillemet quotes and italics preserved. FLAWS (chrome): an 'Ajouter Le Figaro a vos sources preferees' Google badge, a Sauvegarder/Copier le lien/X/LinkedIn control list, an 'Ecouter l'article 2 min 36 s' audio line, an 'A decouvrir' PODCAST promo card, and a 'Publicite' label. Verified 2026-08-17."
+    },
+    "tildes": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Excellent threaded-discussion capture: post title, submitter + date, full tag list, the 'Link information' summary block, and the entire comment tree — each comment with author, date, Link/Parent controls, vote count and body prose, with NESTED REPLIES CORRECTLY INDENTED and blockquotes preserved. No collapse, no chrome. A good example of thread capture done right. Verified 2026-08-17."
+    },
+    "instagram-reels": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Good reel capture: video poster frame with burned-in captions, creator avatar, handle + Follow, the FULL multi-paragraph caption with emoji preserved, and the hashtag row. tagInstagram narrowing works. FLAW: the engagement counts STACK VERTICALLY (heart / 20.8K / bubble / 1,057 / share / bookmark / '...') instead of one horizontal dx-stats row — same as instagram-home and facebook-reels. Verified 2026-08-17."
+    },
+    "anthropic-news": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Full article body, headings, and embedded charts/tables render cleanly in both clip and cast with no dropped content or layout defects. Verified 2026-08-17."
+    },
+    "aws-docs": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Full documentation page with headings, code structure, and links captured cleanly in both clip and cast with no dropped sections. Verified 2026-08-17."
+    },
+    "bbc-sport": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "All 25 club Premier League pre-season fixture lists captured accurately and completely in both clip and cast with no defects. Verified 2026-08-17."
+    },
+    "biorxiv": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Abstract, metadata, and funder info fully captured, but the 'Reviews and Context' review-count badges render as solid full-width blue/gray color bars instead of small numbered badges in the clip. Cast renders these as plain 'o' bullet text instead, so cast is cleaner than clip here. Verified 2026-08-17."
+    },
+    "bleacherreport": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Article body, hero image, and embedded video thumbnail captured completely and cleanly, but the 'TRENDING ON B/R' recirculation carousel leaks through at the bottom with 8 unrelated article thumbnails/links in both clip and cast, taking up more space than the article itself. Verified 2026-08-17."
+    },
+    "britannica": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Full biography text and section headings captured, but two embedded video players (in 'The Entscheidungsproblem' and 'The Church-Turing thesis' sections) fail to inline and leave large empty gray placeholder boxes in the clip. Cast drops the broken placeholders entirely and reads cleaner. Verified 2026-08-17."
+    },
+    "chosun": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Core article text (heat wave/temperature story) is intact and readable, but heavy unrelated chrome leaks into the body flow in both clip and cast: two inline related-article thumbnail cards, multiple subscription/ad banners (조선멤버십 가입, 조선일보 1개월 무료구독), an embedded video thumbnail, an unrelated flooding-disaster teaser, and a horoscope widget with zodiac icons at the end. Verified 2026-08-17."
+    },
+    "cloudflare-blog": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Full article prose and headings captured well, but every embedded data chart/graph (6-7 throughout this traffic-disruption post) renders as a gray placeholder box with a broken-image file icon in the clip. Cast drops these broken placeholders entirely, reading cleaner though still without the charts. Verified 2026-08-17."
+    },
+    "coindesk": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Faithful capture of title, byline, hero image, and full article body. A 'Latest Crypto News' sidebar-style module leaks in but is minor and doesn't disrupt readability. Cast matches clip closely with no added defects. Verified 2026-08-17."
+    },
+    "deepmind-blog": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Title and full prose body captured correctly, but embedded videos collapse to blank gray (clip) / black (cast) placeholder boxes and their captions repeat 2-3 times in a row under separate empty boxes, creating clutter. Text content itself is complete and readable in both clip and cast. Verified 2026-08-17."
+    },
+    "discourse-meta": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Full forum post text and related-topics list captured cleanly and readably. Cast even adds a nice OG-image hero not present in the clip. No notable defects in either. Verified 2026-08-17."
+    },
+    "dockerhub": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Full README with headings, code blocks, and tag/version lists preserved with correct monospace formatting in both clip and cast. No defects observed. Verified 2026-08-17."
+    },
+    "go-docs": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Thorough capture of the Effective Go page: title, table of contents, all headings, prose, and code blocks with correct monospace formatting preserved in both clip and cast. Verified 2026-08-17."
+    },
+    "huffpost": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Article body text captures correctly, but the headline is missing from the top, and a large 'Don't Let Disinformation Win / Support HuffPost' donation-drive module (membership tiers, editor headshot) leaks in as if it were article content, taking up roughly half the clip. A stray audio-widget time readout also leaks in. Cast matches clip with the same issues. Verified 2026-08-17."
+    },
+    "huggingface": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Model card content, license text, code samples, and benchmark tables all preserved with correct formatting in both clip and cast. No notable defects. Verified 2026-08-17."
+    },
+    "investopedia": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Title, byline, definition box, key takeaways, formulas, tip callouts, and tables all captured cleanly with good structure in both clip and cast. A 'Google Cloud' ad banner leaks in at the very top of the clip, a minor chrome leak. Verified 2026-08-17."
+    },
+    "jvns": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Personal blog post captured faithfully: title, date, full prose body, and code/output blocks all present in both clip and cast with no chrome leakage. Verified 2026-08-17."
+    },
+    "kaggle": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Dataset entity page: About/description text captured correctly, but large amounts of page chrome leak in — 'Metadata', 'Activity Overview', repeated broken widget placeholder text (literal 'kaboard_arrow_down' strings repeated many times), 'Related Notebooks', and 'You May Also Like' cross-sell rail. Cast mirrors the same chrome leakage. Verified 2026-08-17."
+    },
+    "kubernetes-docs": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Technical documentation page captured excellently — headings, note/tip callout boxes, code blocks, and tables all preserved and readable in both clip and cast. Verified 2026-08-17."
+    },
+    "lastfm": {
+      "verdict": "critical",
+      "where": "clip+cast",
+      "note": "Artist entity page: hero banner text overlaps illegibly on the dark background image, and the Top Tracks list and Albums grid (major content sections visible on the live source) are entirely missing from both clip and cast. Similar-artist names are broken across multiple lines ('Tho/m/as Yor/ke'). Cast reads slightly better than clip for prose but still lacks Top Tracks/Albums. Verified 2026-08-17."
+    },
+    "longreads": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Interview/Q&A body text is fully captured, but the article headline and byline visible on the source ('The Longreads Questionnaire, Featuring...') are missing from the top of both clip and cast, which jump straight to the book-cover image. A 'More questionnaires' recirculation block with 3 unrelated articles also leaks in. Verified 2026-08-17."
+    },
+    "mathoverflow": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Q&A page with question, multiple answers, vote counts, and math/code formatting all captured correctly and readably in both clip and cast, no chrome leakage observed. Verified 2026-08-17."
+    },
+    "motherjones": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Long-form investigative article's title, byline, hero, and full body text are captured correctly, but a 'Mother Jones Top Stories' video-promo widget module leaks into the middle of the article body in both clip and cast. Verified 2026-08-17."
+    },
+    "myanimelist": {
+      "verdict": "critical",
+      "where": "cast",
+      "note": "Clip is a reasonably good entity-page capture (poster, stats, synopsis, related entries) with some marketing-tile chrome leakage but overall readable. The cast, however, is badly broken: htmlToMarkdown mangled the layout into a garbled table with dozens of narrow columns holding 1-2 character text fragments, rendering the cast almost entirely unreadable. Verified 2026-08-17."
+    },
+    "nownownow-brave": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Technical blog post (Brave) captured excellently: title, byline, headings, architecture diagram box, and multiple in-order screenshots all present and readable in both clip and cast. Verified 2026-08-17."
+    },
+    "nypost": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Article title, byline, images, and full body text are captured correctly, but a 'Today's Video Headlines' video-player widget leaks its on-screen control text into the clip and cast ('00:00 00:00 00:50 180p 270p 360p 540p 720p HD1080p HDAuto(360p)'). Verified 2026-08-17."
+    },
+    "offguardian": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Title, byline, hero image, and full body text all captured faithfully in both clip and cast. No notable defects. Verified 2026-08-17."
+    },
+    "openlibrary": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "The Book Details / Edition Notes table (Contributors, Edition Identifiers, etc.) suffers severe flex/grid collapse in the clip, rendering as a narrow vertical strip with characters scrambled one-per-line, unreadable. The cast fixes this completely via htmlToMarkdown flattening into normal readable lines. Verified 2026-08-17."
+    },
+    "openstreetmap": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Source is a data/tags page (no article prose); clip faithfully captures the tags table and member list as readable text, matching the non-article nature of the page. Verified 2026-08-17."
+    },
+    "plato-stanford": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Table of contents and full article body captured faithfully, matching source structure closely in both clip and cast. Verified 2026-08-17."
+    },
+    "propublica": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Hero image, title, byline, and full body text all present and faithfully rendered in both clip and cast; minor trivial byline punctuation artifact from multi-author link separators. Verified 2026-08-17."
+    },
+    "reason": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Title, byline, hero illustration, and full article body captured faithfully. An embedded Bloomberg video widget (with caption) appears in clip/cast that wasn't visible in the static source screenshot, but this is genuine lazy-loaded page content, not a capture defect. Verified 2026-08-17."
+    },
+    "rust-book": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Text, code blocks, and the memory-layout diagram figures (4-1, 4-2, 4-3) with their table illustrations all captured faithfully in both clip and cast. Verified 2026-08-17."
+    },
+    "scientificamerican": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Hero image, embedded diagrams with captions and math formulas, and full body text all captured faithfully in both clip and cast. Verified 2026-08-17."
+    },
+    "stripe-docs": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Full tutorial prose, headings, and section structure captured cleanly in both clip and cast. The tabbed code-sample widget only carries over as a filename label with no actual code text, so the code snippets themselves are lost even though the surrounding documentation reads fine. Verified 2026-08-17."
+    },
+    "thedailybeast": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Full article body, inline images with captions, an embedded video thumbnail card, and a legal-document screenshot are all captured in both clip and cast, but the main headline ('Peter Thiel's Bombshell...') is missing -- content starts directly at body prose. Verified 2026-08-17."
+    },
+    "theintercept": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Source has an email-gate overlay mid-article but the full underlying text was present in the DOM and captured completely, including the faded paragraph. Title, byline, hero photo with caption, and full body all present in clip and cast; a 'Latest Stories' recirculation block at the very end is a trivial, non-disruptive addition. Verified 2026-08-17."
+    },
+    "tiktok-foryou": {
+      "verdict": "flaw",
+      "where": "cast",
+      "note": "Clip captures the video poster frame, title, caption/hashtags, and stat icons (heart/comment/bookmark/share) with counts intact and legible -- about as good as a video feed capture can be. The cast strips the icons down to bare numbers ('6659 . 94 . 886 . 284') with no icon or label context, so the meaning of each figure is lost; it also shows a different video frame than the clip's poster. Verified 2026-08-17."
+    },
+    "tiktok-profile": {
+      "verdict": "flaw",
+      "where": "cast",
+      "note": "Source page itself shows TikTok's own 'Something went wrong / Please try again later' error in place of the video grid (real site behavior when logged out, not a capture defect); clip faithfully reproduces the profile header plus that error state. The cast additionally pulls in a large off-screen 'Suggested accounts' celebrity-follow list (dozens of names/follower counts) that never appeared in the clip -- notable chrome leak unique to the cast. Verified 2026-08-17."
+    },
+    "wikidata": {
+      "verdict": "flaw",
+      "where": "clip+cast",
+      "note": "Statement values (human, images, signature, male, United Kingdom, dates, etc.) are all present in both clip and cast, but the bold left-column property labels (instance of, sex or gender, country of citizenship, date of birth, etc.) that give each value meaning are entirely missing -- the two-column property:value layout collapsed to a flat unlabeled list of values. Verified 2026-08-17."
+    },
+    "wiktionary": {
+      "verdict": "clean",
+      "where": "clip+cast",
+      "note": "Every dictionary section (Etymology, Pronunciation, Noun senses, Synonyms, Derived terms, Translations, See also, Verb, Further reading, Anagrams, Categories) captured completely and legibly in both clip and cast. Verified 2026-08-17."
+    }
+  }
+}
