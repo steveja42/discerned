@@ -77,10 +77,14 @@ function build() {
   // Human visual-review verdicts (visual-findings.json) — merged in + sortable.
   // Kept separate from the auto-scored *--score.json so a re-run never clobbers
   // them. worst→best rank so "sort by finding" surfaces the real problems first.
-  // `blocked` ranks last: there is no capture to review (hard 403 / bot wall), so
-  // it is neither a defect in our pipeline nor a verified-clean clip. Keeping it
-  // after `clean` stops permanently-walled domains from squatting the top of the
-  // "sort by finding" view, where the actionable flaws belong.
+  // `clean`/`flaw`/`critical` are judgments on OUR clipping pipeline — this
+  // includes a paywalled page where we faithfully captured everything visible
+  // up to the gate (that's `clean`: nothing our pipeline could have done
+  // differently short of bypassing the paywall). `blocked` is NOT a pipeline
+  // judgment — it means we never reached real page content at all (bot-wall
+  // interstitial, 403, dead/404 URL, rate-limit stub), so there is nothing to
+  // evaluate visually. Ranked last so permanently-walled domains don't squat
+  // the top of the "sort by finding" view, where actionable flaws belong.
   const VERDICT_RANK = { critical: 0, flaw: 1, clean: 2, blocked: 3 };
   let findings = {};
   try {
@@ -200,12 +204,16 @@ function build() {
   const details = data.filter(d => d.status !== 'skip').map((d) => `
     <section class="detail" id="site-${d.site}">
       <div class="detail-bar">
-        <button class="back" type="button">← back</button>
-        ${badge(d)}
-        <h2>${d.site}</h2>
-        ${d.url ? `<a class="src-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">source ↗</a>` : ''}
-        <span class="detail-flags">${scoreDetail(d)}</span>
-        <span class="restore-wrap"><button class="restore-cols" hidden>show all columns</button></span>
+        <div class="detail-bar-row">
+          <button class="back" type="button">← back</button>
+          ${badge(d)}
+          ${verdictPill(d)}
+          <h2>${d.site}</h2>
+          ${d.url ? `<a class="src-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">source ↗</a>` : ''}
+          <span class="detail-flags">${scoreDetail(d)}</span>
+          <span class="restore-wrap"><button class="restore-cols" hidden>show all columns</button></span>
+        </div>
+        ${verdictNote(d)}
       </div>
       <div class="detail-cols">
         ${detailCol('source', 'source (live site)', d.source)}
@@ -264,12 +272,16 @@ function build() {
   .verdict.v-critical { background: #c6282822; color: #e05555; }
   .verdict.v-flaw     { background: #f9a82522; color: #f9a825; }
   .verdict.v-clean    { background: #2e7d3222; color: #4caf50; }
-  .verdict.v-blocked  { background: #60606022; color: #9aa0a6; }
+  /* Deliberately BLUE, not gray/muted — "blocked" is not a weaker or
+     uncertain version of the other verdicts, it's a different KIND of
+     result: we never reached real page content (bot-wall/403/dead URL/
+     rate-limit), so there is nothing about our clipping to judge here. */
+  .verdict.v-blocked  { background: #4a90d922; color: #4a90d9; }
   .vnote { font-size: 12.5px; margin: 0 0 6px; padding-left: 2px; border-left: 3px solid transparent; padding-left: 8px; }
   .vnote.v-critical { color: #e05555; border-color: #e05555; }
   .vnote.v-flaw     { color: #cc9a3d; border-color: #f9a825; }
   .vnote.v-clean    { color: #7aa; border-color: #4caf5066; }
-  .vnote.v-blocked  { color: #9aa0a6; border-color: #9aa0a655; }
+  .vnote.v-blocked  { color: #4a90d9; border-color: #4a90d966; }
 
   .cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
   .col { min-width: 0; }
@@ -288,9 +300,15 @@ function build() {
   body.detail-open #overview,
   body.detail-open .toolbar { display: none; }
   .detail-bar { position: sticky; top: 0; background: Canvas; padding: 8px 0 12px;
-    display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #8884; margin-bottom: 12px; z-index: 2; flex-wrap: wrap; }
+    border-bottom: 2px solid #8884; margin-bottom: 12px; z-index: 2; }
+  .detail-bar-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .detail-bar h2 { font-size: 18px; margin: 0; text-transform: capitalize; }
   .detail-bar .detail-flags { font-size: 12.5px; color: #999; display: flex; gap: 12px; flex-wrap: wrap; }
+  /* The verdict note under the sticky bar's top row — same visual language as
+     the overview's .vnote, but capped so a long note can't push the bar (and
+     therefore the sticky offset the columns below need) to an unpredictable
+     height; full text is still in the title attribute. */
+  .detail-bar .vnote { margin: 6px 0 0; max-width: 90ch; }
   .back { font: inherit; font-size: 14px; color: #4a90d9; border: 1px solid #4a90d966;
     border-radius: 6px; padding: 4px 10px; background: none; cursor: pointer; }
   .back:hover { background: #4a90d922; }
@@ -301,7 +319,7 @@ function build() {
      visible ones). Sticky so they stay on screen while the .scroll-driver spacer
      below gives the page scrollbar its range (script maps page scroll → panels). */
   .detail-cols { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 16px;
-    align-items: start; position: sticky; top: 62px; }
+    align-items: start; position: sticky; top: var(--bar-h, 62px); }
   .detail-cols .col { min-width: 0; }
   .detail-cols .col.hidden { display: none; }
   .detail-cols .col-label { font-size: 13px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
@@ -312,7 +330,7 @@ function build() {
      - the page scrollbar (right edge) or a wheel gesture over the columns scrolls
        ALL visible columns together (one motion, read straight down through them);
      - each panel's OWN scrollbar nudges just that one, to line it up with the others. */
-  .detail-cols .dscroll { height: calc(100vh - 90px); overflow: auto;
+  .detail-cols .dscroll { height: calc(100vh - var(--bar-h, 62px) - 28px); overflow: auto;
     border: 1px solid #8883; border-radius: 6px; background: #7771; overscroll-behavior: contain; }
   .detail-cols img { display: block; width: 100%; height: auto; }
   /* Invisible spacer that EXTENDS page height so the page scrollbar has a range;
@@ -331,7 +349,7 @@ function build() {
   </div>
   <div id="overview">
     <h1>Corpus sweep — source · clip · cast</h1>
-    <p class="hint">Click a scored domain to expand all three images full-page (page scroll / wheel moves them together; each panel's own scrollbar nudges just that one). Worst decile is at the top when sorted by score. Skips = page never loaded (infra, not a finding). Generated ${new Date().toLocaleString()}.</p>
+    <p class="hint">Click a scored domain to expand all three images full-page (page scroll / wheel moves them together; each panel's own scrollbar nudges just that one). Worst decile is at the top when sorted by score. <span style="font-weight:600; color:#4a90d9">Blocked</span> (blue) means we never reached real page content at all — bot-wall, 403, dead URL, rate-limit — and is not a verdict on our clipping. A paywalled page we captured faithfully up to the gate is <span style="font-weight:600; color:#4caf50">clean</span>, not blocked or flawed. Skips = page never loaded (infra, not a finding). Generated ${new Date().toLocaleString()}.</p>
     <div id="list">
       ${rows}
     </div>
@@ -427,8 +445,19 @@ function build() {
       const cols = [...group.querySelectorAll('.col')];
       const restoreBtn = detail.querySelector('.restore-cols');
       const driver = detail.querySelector('.scroll-driver');
+      const bar = detail.querySelector('.detail-bar');
       const visiblePanels = () => cols.filter((c) => !c.classList.contains('hidden'))
         .map((c) => c.querySelector('.dscroll'));
+
+      // The verdict pill/note make the sticky bar's height vary per-site (a
+      // long note wraps to more lines) and with viewport width (the flex row
+      // wraps sooner on a narrow window) — so --bar-h is measured, not a
+      // constant. Both .detail-cols' sticky top offset and .dscroll's height
+      // read this var, which is why sizeBar() must run BEFORE sizeDriver()
+      // (dscroll's clientHeight depends on it).
+      function sizeBar() {
+        detail.style.setProperty('--bar-h', bar.offsetHeight + 'px');
+      }
 
       cols.forEach((col) => {
         col.querySelector('.hide-col').addEventListener('click', () => {
@@ -448,6 +477,7 @@ function build() {
       // tallest visible panel's hidden overflow, so the page's own scroll range
       // equals the panels' → window.scrollY maps onto scrollTop.
       function sizeDriver() {
+        sizeBar();
         const panels = visiblePanels();
         const maxOverflow = Math.max(0, ...panels.map((p) => p.scrollHeight - p.clientHeight));
         driver.style.height = maxOverflow + 'px';

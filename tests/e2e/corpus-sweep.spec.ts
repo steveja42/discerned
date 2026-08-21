@@ -404,12 +404,26 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
         // voted to slow down construction… residents could try again later"),
         // and the 1500-char gate above would not save a SHORT real article.
         'too many requests', '429 too many', 'rate limit exceeded',
+        // Bot-block interstitials that explain themselves instead of naming
+        // the wall. Bloomberg serves "Why did this happen? … Block reference
+        // ID: <uuid>" and it scored ok 0.111 as if it were an article.
+        'block reference id', 'why did this happen',
       ];
       // HARD-block signatures — a headed retry won't help (IP/account level).
       const HARD = [
         'ray id', '403 forbidden', '403 error', 'access denied',
         'access to this page has been denied', 'request blocked',
         'you have been blocked', 'temporarily unavailable', 'rate limited',
+        // Reddit says "You'VE been blocked by network security" — the
+        // contraction missed 'you have been blocked' and the block page
+        // scored ok 0.076 at 100% coverage, hiding the fact that Reddit's
+        // hand-tuned tagger was never exercised at all.
+        "you've been blocked", 'blocked by network security',
+        // SEC.gov: "Your Request Originates from an Undeclared Automated
+        // Tool" — a long, well-formed prose page, so it scored ok 0.053 at
+        // 98.6% coverage. Length gates can never catch this one; only the
+        // signature can.
+        'undeclared automated tool', 'declare your traffic',
         // techxplore serves a bare "400 / Your request has been blocked by our
         // server's security policies." page. It is SHORT and chrome-free, so
         // without this signature the scorer read it as a healthy 92%-coverage

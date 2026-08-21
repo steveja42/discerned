@@ -9,6 +9,311 @@ clip with content-free heuristics, and writes 3 images/domain (source/clip/cast)
 to `test-output/corpus-sweep-run/`. A human visual review lives in
 `test-output/corpus-sweep-run/visual-findings.json` (the gallery sorts by it).
 
+## PHASE 4.6 (2026-08-17) — full re-run + harness false-pass fixes + visual re-review COMPLETE
+
+Triggered by a pre-ship regression check ("are we sure Rotten Tomatoes is still
+fine before we ship?"). Short answer: no regressions found (198/205 domains
+scored identically to the pre-session baseline), but the exercise found the
+**scorer has been silently certifying block/dead pages as healthy captures**
+seven separate times, plus two harness bugs that made the sweep undermine the
+user's own manual gate-clearing. All of the below is committed except the
+visual re-review, which is **now 100% done (185/185 clips + casts)** — see
+"RESUME POINT" at the end of this section for the final tally and two new
+findings the completion pass turned up.
+
+### Harness fixes (all in `tests/e2e/corpus-sweep.spec.ts`, tsc-clean)
+
+1. **`GATE_RE` (headed PerimeterX/Cloudflare gate-wait loop) matched only 1 of 8
+   real wall texts.** It was written for PerimeterX's "press & hold" phrasing
+   and never extended to Cloudflare's. Concretely: Zillow's wall says "press
+   **AND** hold" (no ampersand) and LibraryThing's says "verif**ying** you are
+   human" — neither matched the old `/press\s*&?\s*hold|.../i`. Effect: the
+   loop exited in ~6s instead of waiting the intended ~3.5 minutes, the
+   "please clear it in the window" prompt never printed, and **the sweep
+   advanced while the user was still clicking the gate** (reported live by the
+   user on both Zillow and LibraryThing). Fixed: `GATE_RE` now covers both
+   wall families — verified 11/11 real wall texts match, 0 false positives on
+   ordinary prose (two draft patterns, `verify your` and bare `just a moment`,
+   were REJECTED because they matched real article text — kept the tighter
+   `verif(y|ying)\s+(that\s+)?you\s+are` and anchored `^\s*just a moment`).
+2. **The headed-retry pass never actually ran the gate-wait loop at all**,
+   independent of bug #1. The loop is gated on a `ctxIsHeaded` boolean; the
+   retry call site (`captureDomainDeadlined(headedCtx, d)`) omitted the `true`
+   argument, so `ctxIsHeaded` was false in the ONE pass whose entire purpose is
+   clearing walls in a real window. A CF wall fell straight to the interstitial
+   detector and skipped in ~10s. **Both bugs had to be fixed together** — #1
+   alone would have made no difference, since the loop it improves was not
+   running. Confirmed fixed by watching the manual-clear prompt print live for
+   the first time ever, on rateyourmusic.
+3. **No per-domain timeout.** `captureDomain` was failure-isolated (every
+   throw becomes a skip record) but not time-boxed — the only guard was the
+   whole-test budget (~4.4h for a full run). Observed: storygraph loaded
+   PERFECTLY (its source screenshot is a flawless book page, no gate) then
+   wedged 23+ minutes downstream in capture/render/cast with zero artifact
+   writes, blocking the rest of the headed-retry queue. Added
+   `captureDomainDeadlined()` — `Promise.race` against a
+   `SWEEP_DOMAIN_TIMEOUT_MS` (default 240s) that persists an honest
+   `domain timeout` skip and lets the sweep move on.
+4. **Whole-test timeout didn't budget for a possible headed retry per domain.**
+   The old formula (`domains * 75s`) assumes headless steady-state cost; once
+   fix #2 made the gate-wait loop actually run in the retry pass, a small
+   `SWEEP_ONLY` run could need ~3.5 min/domain just for gate waits and got
+   killed mid-run by the outer Playwright test timeout (observed: an 8-domain
+   run got 720s total and died with `Test timeout of 720000ms exceeded`).
+   Fixed: budget now includes `DOMAIN_TIMEOUT_MS` per domain
+   (`domains * (75_000 + DOMAIN_TIMEOUT_MS)`).
+5. **`clipShot.ts` threw a confusing raw `TypeError` instead of an honest skip**
+   when a site tears down its own document mid-capture (observed on ebay: a
+   bot-mitigation reload nulled `document.documentElement` between page-load
+   and screenshot, surfacing as `Cannot read properties of null (reading
+   'scrollHeight')` — reads like OUR bug, isn't). Fixed: optional-chain +
+   `.catch(() => 0)`, falls back to a plain viewport screenshot.
+
+### The interstitial/block-page detector — 7 confirmed false passes, all now fixed
+
+The composite score has NO defense against a block/dead/rate-limited page that
+renders as well-formed prose — it scores `ok` with a healthy composite because
+there's nothing malformed about "Too Many Requests" as English text. Found by
+visually checking `--2-clip.png` against `score.json` rather than trusting the
+composite (this is now standard practice — see "the scorer lies" below).
+Confirmed false passes, all now caught by the extended `CHALLENGE`/`HARD` lists
+in `corpus-sweep.spec.ts`'s interstitial check:
+
+| Domain | Scored | Was actually | Signature added |
+|---|---|---|---|
+| homedepot (old URL) | ok 0.002 | 403 on deep link → silently redirected to the bare **homepage** | new homepage-redirect detector (any entity/article URL landing on `/` with no query) |
+| github-issue (old URL) | ok 0.051 | GitHub's 404 page | new dead-title detector (`404`, `not found`, `page not found`, …) |
+| venturebeat (old URL) | ok 0.177 | "Not Found — Could not find requested resource" | same dead-title detector |
+| postguam | ok 0.200 | "Too Many Requests" (WE caused it, sweeping too fast) | `too many requests`, `429 too many`, `rate limit exceeded` |
+| bloomberg | ok 0.111 | "Why did this happen? … Block reference ID" | `block reference id`, `why did this happen` |
+| reddit-thread | ok 0.076 @ 100% coverage | "**You've** been blocked by network security" (contraction missed `you have been blocked`) | `you've been blocked`, `blocked by network security` — **this one matters most: Reddit's hand-tuned tagger had never actually been exercised by the sweep** |
+| sec-edgar | ok 0.053 @ 98.6% coverage | SEC.gov's "Your Request Originates from an Undeclared Automated Tool" — long, well-formed prose, so NO length gate could have caught it | `undeclared automated tool`, `declare your traffic` |
+
+Dead corpus URLs were also replaced (not just detected): `github-issue` →
+`microsoft/TypeScript#13297` (a long real comment thread, matching the entry's
+"comment timeline" intent), `venturebeat` → a current `/orchestration/...`
+article (the site moved off `/ai/...` URLs), `msn-slideshow` → a live
+`/ss-AA28tMqG` Smithsonian gallery (kept the `/ss-` slideshow SHAPE on purpose —
+this entry guards the PRELOADED-NEXT-ARTICLE regression from Phase 4.something,
+and its own note warns a failure there scores healthy, so the replacement
+was verified to show Smithsonian content, not a preloaded story).
+`homedepot` was fixed with a user-supplied working product URL (Anvil claw
+hammer) after an AI-agent attempt to find one via curl 403s incorrectly
+concluded the whole domain was walled — see "mistakes made" below.
+
+**librarything, librarything-catalog, rateyourmusic are RATE-LIMITED as of
+2026-08-17 and need a real cooldown (hours) before re-attempting** — repeated
+sweep runs against them during this session's harness-testing put them into a
+Cloudflare "verifying you are human" state that would not clear even with a
+human clicking, headed, with the gate-wait loop finally working correctly.
+Noted directly in their `corpus-domains.json` entries. Do not loop-retry them.
+
+### Pixel-baseline fixture-visual suite: 22 passed, 1 failed
+
+**Trap for next time:** `pnpm exec playwright test <fixture-visual specs>` with
+no env vars reports `23 skipped, exit code 0` — a FALSE GREEN. Every spec is
+gated on its own flag. To actually run the gate:
+```
+BB_FIX=1 BCT=1 BLOG_FIX=1 BSKY_FIX=1 EMB_FIX=1 FB_FIX=1 GH_FIX=1 GR_FIX=1 \
+HN_FIX=1 HN_TAG=1 MED_FIX=1 NEWS_FIX=1 PHPBB=1 PRIM_FIX=1 REDDIT_FIX=1 \
+SHOW_FIX=1 SO_FIX=1 SUB_FIX=1 TWT_FIX=1 WIKI_FIX=1 XNEW_FIX=1 YT_FIX=1 YT_VC=1 \
+pnpm exec playwright test -c tests/e2e/playwright.config.ts --workers=1 \
+$(ls tests/e2e/*fixture-visual.spec.ts)
+```
+The one failure is `facebook-feed-fixture-visual` — the post-BODY assertion,
+not the byline one. This is the SAME known-flawed area as the live
+`facebook-home` finding below (same tagger, same commit `bdaac0e`), so it is
+not a new regression, but it means the gate is currently red and will stay red
+until `tagFacebook`'s feed branch is fixed. Diagnosed (do NOT re-derive): the
+fixture's "Facebook x22" placeholder noise and raw image-URL-as-text are
+FIXTURE ARTIFACTS (offline load, no external stylesheet, no image fetch) —
+NOT proof the `aria-hidden` zero-area filter is broken; that filter's target
+spans are not even inside `aria-hidden` wrappers. The missing post BODY is the
+real, non-artifactual failure: the fixture genuinely contains it
+("Give platelets", "special day for our beautiful") and both `FB_MSG_SEL`
+markers are present, so `tagFacebook`'s feed branch has everything it needs
+and still drops the body. Do not "fix" by loosening the aria-hidden filter.
+
+### `facebook-home` (live) — confirmed pre-existing, NOT a regression
+
+User-confirmed known-flawed area. Root cause (do not re-derive): `FB_BYLINE_SEL`
+in `capture.ts` requires a heading/`<strong>`-wrapped byline anchor, but the
+live feed serves a PLAIN `a[role="link"]` profile anchor with no such wrapper —
+so the ancestor climb never acquires a byline and falls to the header-less
+`if (!post) post = body.parentElement ?? body` fallback, which the code's own
+comment admits captures the post "just without its header." The PERMALINK
+branch of the same `tagFacebook` function already solved this exact problem by
+matching bylines BY SHAPE instead of by tag — the fix is porting that matcher
+to the feed branch. (An earlier working hypothesis in this session — "the old
+capture was richer, so this is a regression" — was WRONG and retracted: a
+surviving pre-tagger screenshot showed the OLD capture was also header-less
+AND truncated mid-sentence, so the new tagger is strictly better on text
+completeness, just still missing the header/avatar/photo.)
+
+### The composite score is unreliable in BOTH directions — treat it as sort order only
+
+Beyond the 7 false passes above, confirmed by eyeball against source screenshots:
+- **Low coverage ≠ bad clip**: `substack-generic` (2.3% coverage) and
+  `gutenberg` (1.4%) are both COMPLETE, EXCELLENT captures — the denominator
+  is inflated by a long comment thread / an entire novel in one HTML file,
+  not by dropped content. Same for `walmart`'s 66%→21% swing between two runs
+  (source rendered more chrome; the clip was excellent both times).
+- **High coverage ≠ chrome leak**: `appstore` (105%), `lesswrong` (121%),
+  `danluu`/`w3c-spec` (100%) are all clean — the >100% figure is a known
+  measurement artifact (clip legitimately holds more text than the throttled
+  live DOM measured).
+- Two counter-examples worth keeping: `pubmed` and `musicbrainz` are
+  STRUCTURED ENTITY pages that captured perfectly (full author lists / full
+  discography tables) — proof the imdb-name/spotify-album/ytmusic-album
+  image-only failures are a tagger/pipeline gap, not something inherent to
+  entity pages in general.
+
+### Real capture defects found (all pre-existing unless noted; NOT ship-blocking on their own)
+
+- **Flex-collapse / narrow-column text (6 sites and counting — a PATTERN, not
+  isolated):** rottentomatoes (was affected, now fixed — this is what
+  triggered the whole re-review), wikivoyage (climate table → 1 char/line),
+  engadget (product spec blocks → 1 word/line), zdnet (a mid-article column),
+  zenodo (citation-table year column wraps "2018"→"201"/"8"), **thehindu is
+  the cleanest repro** (a related-article link renders literally one
+  character-ish token per line down a vertical strip). This is the
+  `dx-stats`/flex-collapse signature documented in memory
+  `project_dx_stats_flex_collapse` — worth running `clip-width-probe` against
+  thehindu rather than guessing further.
+- **Image-only / text-dropped entity pages (4 sites, same signature):**
+  imdb-name (headshot only), spotify-album + ytmusic-album (cover art only),
+  ebay (BLANK — nothing at all, worst clip in the corpus, 443-byte PNG).
+- **Hero-only capture — the OLD memory-documented class is FIXED**: npr,
+  arstechnica, aljazeera, css-tricks, github-blog, wired now all capture full
+  bodies (71–87% coverage). BUT japantimes is a NEW instance of the same
+  symptom (hero image + caption only, ~20 paragraphs of visible non-paywalled
+  text dropped) that the existing fix does not cover.
+- **Comment-thread-outscores-story, on a PAYWALLED page:** haaretz — same
+  shape as the AP News fix (RESOLVED 2026-07-24 section above), but here the
+  story is ALSO paywalled, so run `hidden-prose-probe` before concluding
+  anything (per memory `project_low_coverage_paywall_vs_finder` — two guessed
+  fixes were wrong before on this exact ambiguity).
+- **Vertical-stacking engagement counts (3 social captures):** instagram-home,
+  instagram-reels, facebook-reels all stack like/comment/share counts one
+  per line instead of a horizontal row (distinct from the flex-collapse
+  pattern above — likely a different CSS selector gap).
+- **Cast-only defects (clip fine, kind-30023 markdown is not):** youtube-watch's
+  clean "1.8B views · 16 years ago" `dx-stats` row degrades to a bare "1.8B" in
+  the cast — word "views" AND the date both lost in `htmlToMarkdown`.
+- **Missing headline/byline on an otherwise-complete body (3 sites):** cnn,
+  time, and (during ads) espn all open mid-article with no headline/byline —
+  worth checking whether these share a cause.
+- **Audio-widget remover has gaps (2 sites):** aws-blog's "Voiced by Amazon
+  Polly" banner and thenation's audio-player control strip both survive —
+  CLAUDE.md documents this remover already exists (`[data-mp3u]`,
+  `Amplitude`, `Polly` id-matching); these two evaded it.
+- **Material Symbols ligature-name leak (new class, 1 site):** playstore
+  renders literal icon font ligature names (`chevron_right`, `arrow_forward`,
+  `expand_more`) as visible text — the icon font isn't loading/rendering, so
+  the fallback text (the ligature name itself) shows through. Also on
+  playstore: page ORDER is wrong (app header renders at the very BOTTOM
+  instead of the top).
+- **Ad selection, not a capture bug:** instagram-home's tagger narrowing works
+  correctly but picked an advertisement as "the" post — no ad-filter exists in
+  `pickVisibleFeedPost`.
+- **Commerce cross-sell gap:** straitstimes has a shopping-product rail with
+  prices surviving at the end — `removeCrossSellRails`'s heading regex list
+  doesn't cover it.
+- Numerous **minor chrome-leak-only flaws** (residual ad labels, newsletter
+  blocks, recirculation boxes, preferred-source badges) on otherwise-excellent
+  captures: cnbc, allrecipes, timesofindia, yahoofinance, noahpinion,
+  newyorker, postgresql-docs, smh, dev-to, aljazeera, aljazeera-tech, wired,
+  boardgamegeek, npr, simonwillison, straitstimes, lefigaro, zdnet. Not worth
+  individual write-ups here — see `visual-findings.json` per-domain notes.
+- **Unresolved, needs the hidden-prose-probe before any fix:** folha (body
+  entirely absent, 5.2% coverage — Folha is paywalled so this MAY be faithful).
+
+### Mistakes made this session (so the next pass doesn't repeat them)
+
+- Concluded "homedepot has no usable URL — domain-wide CDN block" from 4 curl
+  403s (including the bare homepage) despite having ALREADY WRITTEN that curl
+  403s prove nothing (no `cf_clearance`) and despite the real browser loading
+  the site fine. **Wrong** — the user supplied a working product URL on the
+  first try. Lesson: to test whether a URL works for the sweep, test it
+  headed in the sweep's own warm profile, not curl/WebFetch (both share a bot
+  fingerprint).
+- Inferred "the old facebook-home capture was richer" from a single scorer
+  field (`aspectDistorted: 1`) without looking at the actual old image first.
+  Wrong — a surviving pre-tagger screenshot proved the old capture was
+  equally header-less AND truncated. Corrected once challenged; the lesson
+  generalizes the letterboxd note in memory `project_low_coverage_paywall_vs_finder`-
+  adjacent territory: an image beats an inferred proxy metric every time.
+- Nearly recorded a `visual-findings.json` verdict as clean via an unread
+  placeholder note ("PLACEHOLDER - pending review") for `sec-edgar` before
+  actually opening the image — the image turned out to be a bot-block page.
+  Caught before it shipped, but it was a live near-miss. New rule adopted
+  mid-session: never write a verdict before reading the corresponding image.
+- Two test scripts written via shell heredocs silently had their `\s` escapes
+  eaten, producing a run of BOGUS regex-validation failures that looked like
+  the `GATE_RE` fix hadn't worked. Resolved by extracting the regex straight
+  out of the committed spec file and testing THAT, rather than a hand-retyped
+  copy — same principle as verifying against real files instead of memory.
+
+### RESUME POINT — visual re-review is 100% DONE (2026-08-17)
+
+Every verdict in `visual-findings.json` is a human/AI eyeball judgment against
+the ACTUAL rendered `--2-clip.png` and `--3-cast.png` — NOT the composite
+score, which this session repeatedly proved unreliable in both directions. A
+verdict written during this session's re-review has its `note` field end with
+(or contain) `Verified 2026-08-17` — that is the marker distinguishing a
+re-verified entry from a stale pre-2026-08-17 one still sitting in the file
+from an earlier pass.
+
+**Final: all 185/185 scored clips + casts re-verified.** Split across five
+parallel review passes (spiegel + 9to5mac done directly; the remaining 105
+domains split into five ~21-domain batches, each independently eyeballing
+every clip against its source and every cast against its clip, merged into
+`visual-findings.json`). Final tally across the 198 total entries in the file
+(185 from this pass + 13 pre-existing, unrelated to this batch — see below):
+**93 clean / 82 flaw / 23 critical.** Gallery rebuilt:
+`node tests/e2e/tools/sweep-gallery.mjs` → `test-output/corpus-sweep-run/sweep-gallery.html`.
+
+**13 entries remain unstamped (pre-2026-08-17), intentionally out of scope for
+this pass:** nytimes, reuters, medium-generic, forbes, discogs, tripadvisor,
+zillow, producthunt, netflix-techblog, lemmy-thread, librarything,
+rateyourmusic, librarything-catalog. Several of these are the domains this
+handoff already documents as needing the manual headed pass (§ "Which sites
+need HEADED runs") or are in the librarything/rateyourmusic rate-limit
+cooldown noted above — re-verify them once re-captured, not before.
+
+**Two new defects found during the completion pass, not previously
+documented, both worth a fix:**
+- **`theregister` cast — literal `###` markdown-heading syntax leaks as plain
+  text inside list items.** The "MORE CONTEXT" bulleted list renders items
+  like `### OpenAI won't let some customers export their chats, but this tool
+  will` with the hashes visible, instead of the heading syntax being
+  escaped/stripped by `htmlToMarkdown` when it appears inside a list-item's
+  inline text (the source these came from are `<h3>`-in-`<li>`-flavored link
+  cards). Same root family as the already-known `github-pr` /
+  `hackaday` / `myanimelist` cast-only markdown-conversion defects below.
+- **`target` clip — commerce entity page drops the entire product-identity
+  block.** Clip starts directly with marketing/spec images (no title, no
+  price, no star rating, no hero product photo), same class of defect as the
+  documented `imdb-name`/`spotify-album`/`ytmusic-album`/`ebay` image-only
+  entity-page failures, but inverted: this one keeps SOME text (highlights,
+  specs, cross-sell rails) while dropping the identity header specifically.
+
+**Recurring pattern confirmed at scale (23 critical findings total,
+up from 13 pre-session):** the cast-only `htmlToMarkdown` table/structure
+mangling seen on `github-pr` recurs independently on `myanimelist` (entity
+table explodes into narrow-column garbage) and `hackaday` (shell `#` comments
+misread as markdown headers, producing giant fake section titles) — three
+independent domains hitting the same conversion-layer bug class. Worth a
+dedicated fix pass on `htmlToMarkdown` / `deriveLongFormMarkdown` before the
+next full sweep, rather than chasing each site individually.
+
+To re-run this kind of review from scratch: read each
+`test-output/corpus-sweep-run/{domain}--2-clip.png` (and `--3-cast.png`)
+against `{domain}--1-source.png`, then record the verdict directly into
+`visual-findings.json` under `.findings.{domain} = {verdict, where, note}`
+(verdict ∈ clean/flaw/critical/blocked). After finishing, rebuild the gallery:
+`node tests/e2e/tools/sweep-gallery.mjs`.
+
 ## PHASE 4.5 (2026-07-30) — book/film/music review+catalogue sites
 
 Added the 6 missing sites in the "rate + review a work" class (the corpus already

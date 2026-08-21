@@ -42,14 +42,14 @@
       "note": "tagHackerNews working well: each comment is a bordered dx-post/dx-reply card with author + date byline, body prose, quoted '>' text and links preserved; reply nesting shown by indentation; the orange masthead, vote arrows and nav chrome are gone. Only the Guidelines/FAQ/Lists footer strip survives. The tiny source screenshot is HN's minimal design, NOT a block page. Verified 2026-08-17."
     },
     "bloomberg": {
-      "verdict": "critical",
+      "verdict": "blocked",
       "where": "clip",
-      "note": "FALSE PASS: the clip is Bloomberg's BOT-BLOCK page (\"Why did this happen? … Block reference ID: c22710c4-…\", \"SUBSCRIBE NOW\"), not an article — yet it scored ok 0.111. No article content at all. Not a capture defect; the sweep should SKIP it. Detector extended 2026-08-17 with \"block reference id\" / \"why did this happen\" so this becomes an honest skip. Needs a re-capture (headed, warm profile) to get a real verdict."
+      "note": "blocked — clip is Bloomberg's BOT-BLOCK page (\"Why did this happen? … Block reference ID: c22710c4-…\", \"SUBSCRIBE NOW\"), not the article. We never reached real page content; not a verdict on our clipping. Was previously a FALSE PASS in the auto-scorer (scored ok). Verified 2026-08-17."
     },
     "reddit-thread": {
-      "verdict": "critical",
+      "verdict": "blocked",
       "where": "clip",
-      "note": "FALSE PASS: clip is Reddit's BLOCK PAGE (\"You've been blocked by network security\" + Snoo mascot), scored ok 0.076 at 100% coverage. Reddit's hand-tuned tagger was never exercised. Detector extended 2026-08-17 with \"you've been blocked\" / \"blocked by network security\" (the existing 'you have been blocked' missed the CONTRACTION). Needs a headed re-capture for a real verdict."
+      "note": "blocked — clip is Reddit's BLOCK PAGE (\"You've been blocked by network security\" + Snoo mascot), not the thread. We never reached real page content; not a verdict on our clipping — Reddit's hand-tuned tagger has never actually been exercised by the sweep because of this. Was a FALSE PASS in the auto-scorer (scored ok at 100% coverage). Verified 2026-08-17."
     },
     "goodreads-book": {
       "verdict": "clean",
@@ -122,9 +122,9 @@
       "note": "Article body is complete and well-formatted, but a 'What to read next' recirculation block leaks through at the end with 5 empty unloaded Axios-logo placeholder cards in the clip (reduced to bare bullet points in the cast). Chrome leak occurs only after all real content. Verified 2026-08-17."
     },
     "economist": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip+cast",
-      "note": "Source article is paywalled after two sentences; clip faithfully captures the truncated paragraph and paywall CTA, but a large 'More from Science & technology' related-articles rail leaks in and dominates the rest of the clip as if it were article content. Cast mirrors the clip closely. Verified 2026-08-17."
+      "note": "Paywalled article — source truncates after two sentences behind a \"Continue with a free trial\" gate, then legitimately shows a \"More from Science & technology\" module below it (real page content, not paywalled). Clip and cast faithfully capture the full sequence in the same order as the source: title, illustration, byline, truncated intro, paywall CTA, then the recirculation module with its real thumbnails/links. Nothing invented or substituted for missing content. Verified 2026-08-17."
     },
     "npr": {
       "verdict": "flaw",
@@ -167,9 +167,9 @@
       "note": "Full photo gallery with captions, hero images, and complete body text all captured faithfully and match closely between clip and cast. Verified 2026-08-17."
     },
     "nature": {
-      "verdict": "critical",
+      "verdict": "clean",
       "where": "clip+cast",
-      "note": "Article is paywalled on the source; clip captured only the headline, byline, and a single-sentence teaser plus the 'Access options' subscription pitch box — the actual article body is absent. Large amounts of irrelevant chrome (5 'Nature Careers' job postings with employer logos, References list) leaked in instead. Cast mirrors the same stub. Verified 2026-08-17."
+      "note": "Paywalled article — source shows headline, byline, and a one-sentence teaser before the \"Access options\" subscription gate, followed by References, \"Latest on\" related-article cards, and a \"nature careers\" job-listing module — all genuinely present on the live page, not paywall-specific. Clip and cast capture this entire sequence faithfully and completely, matching the source. Verified 2026-08-17 (earlier note calling the careers/latest-on content \"irrelevant chrome\" was wrong — it is real page content the source itself shows below the gate)."
     },
     "sciencedaily": {
       "verdict": "clean",
@@ -367,9 +367,9 @@
       "note": "The small circular author avatar is aspect-distorted into a large full-width rectangular portrait in both clip and cast; the title heading (\"Sitting down with Senra\"), date, and author name label above it are missing, with body text starting directly. Verified 2026-08-17."
     },
     "venturebeat": {
-      "verdict": "critical",
+      "verdict": "blocked",
       "where": "clip",
-      "note": "DEAD URL at review time — clip was VentureBeat's \"Not Found / Could not find requested resource\" page. URL replaced 2026-08-17; needs a re-capture before this verdict can be trusted."
+      "note": "blocked — clip was VentureBeat's \"Not Found / Could not find requested resource\" page: the corpus URL was dead at capture time (old /ai/ path, since replaced 2026-08-17 with a working /orchestration/ URL). We never reached real page content; not a verdict on our clipping. Needs a re-capture against the new URL before a real quality verdict can be given. Verified 2026-08-17."
     },
     "theregister": {
       "verdict": "flaw",
@@ -502,14 +502,14 @@
       "note": "Title, portrait, fully-labeled infobox (Born, Died, Alma mater, etc.), and complete prose body with section headings and inline captioned images are all faithfully captured in both clip and cast. Verified 2026-08-17."
     },
     "haaretz": {
-      "verdict": "critical",
+      "verdict": "flaw",
       "where": "clip",
-      "note": "Headline, standfirst and byline captured, but the ARTICLE BODY IS ABSENT — replaced by a SUBSCRIPTION WALL ('Read differently. Understand more.', SUBSCRIBE NOW, 'Keep reading for free', 'Already signed up? Log in') followed by a VERY LONG READER-COMMENTS THREAD that dominates the clip, then an 'In the News' recirculation rail with headline images. Same comment-widget-outscores-the-story shape the AP News fix addressed, but here on a PAYWALLED page — run hidden-prose-probe to tell paywall from finder mis-pick before any fix. Verified 2026-08-17."
+      "note": "Paywalled article — headline, byline, and the intro paragraph are captured faithfully, matching everything visible on the source before the \"Keep reading for free / Subscribe now\" gate. FLAW (real, separate from the paywall): the paywall CTA box itself is skipped, and in its place the clip runs straight into the full reader-comments thread and an \"In the News\" recirculation rail — chrome that is not article content leaking in as if it were. Same comment-widget-outscores-the-story shape the AP News fix addressed. Verified 2026-08-17."
     },
     "folha": {
-      "verdict": "critical",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Hero photo, 'Inteligencia artificial' kicker, headline and the two summary bullets captured — but the ARTICLE BODY IS ABSENT (cov 5.2%); the clip ends at a share-icon row. Folha is paywalled, so this MAY be a faithful capture of a gated page rather than a finder miss — memory project_low_coverage_paywall_vs_finder says run tools/hidden-prose-probe.spec.ts (HIDDEN=1 HIDDEN_ONLY=folha) to tell the two apart BEFORE any fix. Not yet distinguished. Verified 2026-08-17."
+      "note": "Paywalled article (hard full-screen \"Você atingiu seu limite de matérias livres\" modal on the source, blocking everything). Clip faithfully captures exactly what is in the DOM before the gate: hero photo, \"Inteligência artificial\" kicker, headline, and the two summary bullets, ending cleanly at the share-icon row with no body paragraphs invented or missing chrome substituted. Paywall truncation is the site's doing, not a capture defect. Verified 2026-08-17 (resolves the earlier paywall-vs-finder-miss ambiguity noted in this entry — hidden-prose-probe not needed; the source screenshot confirms nothing further was ever visible)."
     },
     "rfc-editor": {
       "verdict": "clean",
@@ -539,7 +539,7 @@
     "chicagotribune": {
       "verdict": "clean",
       "where": "clip+cast",
-      "note": "Article is paywalled on the source (subscription flash-sale modal, body text truncated mid-word at '...as yet anoth ...'); clip and cast faithfully capture exactly the visible preview content, image, and byline available. Clean given the paywall constraint. Verified 2026-08-17."
+      "note": "Article is paywalled on the source (subscription flash-sale modal, body text truncated mid-word at '...as yet anoth ...'); clip and cast faithfully capture exactly the visible preview content, image, and byline available. Paywall truncation is the site's doing, not a capture defect. Verified 2026-08-17."
     },
     "yahoofinance": {
       "verdict": "flaw",
@@ -647,14 +647,14 @@
       "note": "CAPTURE DEFECT — clip is only the \"20 YEARS\" badge + Sign in/English/Help nav links, while the source renders a full 3-book catalog table (covers, titles, authors, dates, tags, ratings). Diagnosed with finder-diag-probe + a frame dump: the table lives in a CHILD IFRAME (catalog_bottom.php, 3 tables / 6 rows) and the TOP document has only 134 chars and ZERO tables, so there is nothing for the finder to pick. NOT a scoring/layout mis-pick — needs cross-frame capture (the chrome.scripting frame round-trip the embedded-tweet path already uses). Scorer caught it via blank-space 41%."
     },
     "github-issue": {
-      "verdict": "critical",
+      "verdict": "blocked",
       "where": "clip",
-      "note": "DEAD URL at review time — clip was GitHub's 404 page (\"This is not the web page you are looking for\"). URL replaced 2026-08-17 (microsoft/TypeScript#13297); needs a re-capture."
+      "note": "blocked — clip was GitHub's 404 page (\"This is not the web page you are looking for\"): the corpus URL was dead at capture time (facebook/react/issues/24502, since replaced 2026-08-17 with microsoft/TypeScript#13297). We never reached real page content; not a verdict on our clipping. Needs a re-capture against the new URL. Verified 2026-08-17."
     },
     "postguam": {
-      "verdict": "critical",
+      "verdict": "blocked",
       "where": "clip",
-      "note": "Clip is a bare \"Too Many Requests / client_ip / request_id\" rate-limit stub — WE caused it by hitting the site too fast. Not a capture defect; re-run after a cooldown. Verified 2026-08-17."
+      "note": "blocked — clip is a bare \"Too Many Requests / client_ip / request_id\" rate-limit stub, self-inflicted by the sweep hitting the site too fast (not a real bot-wall or dead URL). We never reached real page content; not a verdict on our clipping. Re-run after a cooldown. Verified 2026-08-17."
     },
     "msn-slideshow": {
       "verdict": "clean",
@@ -697,9 +697,9 @@
       "note": "Clean README capture: every section heading (Canonical source, Editions, Licensing, Installation, Software stack, …), all bullet lists, the inline code block, and links preserved in order. No repo chrome. Cosmetic only: the GitLab logo renders large at the head. Verified 2026-08-17."
     },
     "sec-edgar": {
-      "verdict": "critical",
+      "verdict": "blocked",
       "where": "clip",
-      "note": "FALSE PASS (7th): clip is SEC.gov's BOT-BLOCK page — 'Your Request Originates from an Undeclared Automated Tool' + Reference ID + Internet Security Policy — scored ok 0.053 at 98.6% coverage. No filing content at all. This one is LONG well-formed prose, so no length gate could catch it; detector extended 2026-08-17 with 'undeclared automated tool' / 'declare your traffic'. Needs re-capture with a declared UA. Verified 2026-08-17."
+      "note": "blocked — clip is SEC.gov's BOT-BLOCK page (\"Your Request Originates from an Undeclared Automated Tool\" + Reference ID + Internet Security Policy), not the filing. We never reached real page content; not a verdict on our clipping. Was the 7th confirmed FALSE PASS in the auto-scorer (scored ok at 98.6% coverage — a long, well-formed prose block that no length/coverage heuristic could have caught). Verified 2026-08-17."
     },
     "aws-blog": {
       "verdict": "flaw",
