@@ -90,6 +90,14 @@ const TARGETS: Record<string, string> = {
   // chars of text, while the page renders a full album header + track list.
   'spotify-album': 'https://open.spotify.com/album/4LH4d3cOWNNsVw41Gqt2kv',
   'ytmusic-album': 'https://music.youtube.com/browse/MPREb_nHbCAGX6uUL',
+  // Sweep "critical" entity pages (2026-08-22): the clip drops the identity
+  // block (title/price/rating/hero) and keeps marketing or rail content —
+  // ebay captures NOTHING at all. Suspected scoreContentBlock gap: an identity
+  // block is short, link/button-dense and <p>-free, so it scores near zero.
+  'imdb-name': 'https://www.imdb.com/name/nm0000138/',
+  ebay: 'https://www.ebay.com/itm/397652415204',
+  target: 'https://www.target.com/p/razer-ornata-v3-tenkeyless-espeon-umbreon-edition/-/A-95017977',
+  lastfm: 'https://www.last.fm/music/Radiohead',
 };
 
 test.describe.configure({ mode: 'serial' });

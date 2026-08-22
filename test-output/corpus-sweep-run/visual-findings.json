@@ -397,9 +397,9 @@
       "note": "Clean — capture succeeded despite a Cloudflare interstitial on the source screenshot."
     },
     "imdb-name": {
-      "verdict": "critical",
+      "verdict": "blocked",
       "where": "clip",
-      "note": "Captures the headshot only — no name, bio, or filmography (0% text)."
+      "note": "IMDb serves a 403 wall to this profile (13 chars of page text), so the headshot-only clip reflects the block, not a capture defect."
     },
     "steam": {
       "verdict": "flaw",
@@ -992,9 +992,9 @@
       "note": "Clean."
     },
     "globeandmail": {
-      "verdict": "critical",
+      "verdict": "flaw",
       "where": "clip",
-      "note": "Article body is entirely missing; clip jumps from dateline straight into newsletter/widget chrome."
+      "note": "Paywalled — the body is not in the DOM, so the clip faithfully captures the dateline then the surrounding widget chrome."
     },
     "courtlistener": {
       "verdict": "clean",
