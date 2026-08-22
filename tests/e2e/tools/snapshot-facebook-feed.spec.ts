@@ -11,6 +11,14 @@
 // Images are inlined as data URIs through the page's own session (fbcdn rejects
 // unauthenticated fetches), and scripts are stripped so the fixture is inert.
 //
+// Inlining is NOT optional housekeeping: fbcdn URLs carry expiring signed tokens
+// (oh=/oe=), so any image left remote 403s within days and the fixture rots into
+// a blank-photo capture. Two shapes must both be caught — <img src> AND the SVG
+// <image xlink:href> Facebook uses for avatars, which an <img>-only pass misses.
+// Anything still lazy-loaded at snapshot time is skipped here, so scroll the
+// feed before this runs, then verify: the saved file should contain NO
+// "scontent" reference except the inert <link rel=preconnect>.
+//
 // Run (Chrome fully closed, logged-in warm profile):
 //   FBSNAP=1 pnpm exec playwright test -c tests/e2e/playwright.config.ts \
 //     --project=snapshot-facebook-feed
@@ -89,8 +97,17 @@ test('snapshot-facebook-feed', async () => {
           return `data:image/png;base64,${btoa(bin)}`;
         } catch { return null; }
       }
-      for (const img of Array.from(document.querySelectorAll('img'))) {
-        const src = img.getAttribute('src');
+      // Both carriers: <img src> and the SVG <image xlink:href|href> Facebook
+      // uses for avatars. An <img>-only pass left 6 avatars pointing at fbcdn,
+      // whose signed tokens then expired.
+      const targets: Array<{ el: Element; attr: string }> = [];
+      document.querySelectorAll('img').forEach(el => targets.push({ el, attr: 'src' }));
+      document.querySelectorAll('image').forEach(el => {
+        targets.push({ el, attr: el.hasAttribute('xlink:href') ? 'xlink:href' : 'href' });
+      });
+
+      for (const { el, attr } of targets) {
+        const src = el.getAttribute(attr);
         if (!src || src.startsWith('data:')) { skip++; continue; }
         try {
           const r = await fetch(src, { credentials: 'include', cache: 'no-cache' });
@@ -105,8 +122,8 @@ test('snapshot-facebook-feed', async () => {
             for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
             uri = `data:${ct};base64,${btoa(bin)}`;
           }
-          img.setAttribute('src', uri);
-          img.removeAttribute('srcset');
+          el.setAttribute(attr, uri);
+          el.removeAttribute('srcset');
           ok++;
         } catch { skip++; }
       }
@@ -123,6 +140,18 @@ test('snapshot-facebook-feed', async () => {
     writeFileSync(FIXTURE_PATH, html, 'utf8');
     // eslint-disable-next-line no-console
     console.log(`[fb-snap] wrote ${FIXTURE_PATH} (${(html.length / 1024 / 1024).toFixed(1)} MB)`);
+
+    // Guard the rot: any media URL left pointing at fbcdn carries an expiring
+    // signed token and will 403 within days, silently turning the fixture into
+    // a blank-photo capture. Only the inert <link rel=preconnect> may remain.
+    const leftovers = (html.match(/(?:src|href|xlink:href)="https:\/\/[a-z0-9-]*\.?fbcdn\.net[^"]*"/gi) ?? [])
+      .filter(m => !/rel="?(pre|dns)/i.test(m));
+    if (leftovers.length) {
+      // eslint-disable-next-line no-console
+      console.warn(`[fb-snap] WARNING: ${leftovers.length} un-inlined fbcdn URL(s) remain — ` +
+        `these expire and the fixture will rot. Scroll the feed so they load, then re-run.`);
+      leftovers.slice(0, 5).forEach(u => console.warn(`  ${u.slice(0, 110)}`));
+    }
   } finally {
     await ctx.close();
   }

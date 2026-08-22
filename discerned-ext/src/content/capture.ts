@@ -88,6 +88,27 @@ export function stripTrackingParams(rawUrl: string): string {
 // Closed-mode shadow roots are inaccessible to extensions; hasOpenShadow
 // returns false for them and we accept that content is invisible.
 
+/**
+ * First direct child matching one of `tags` (lower-case names) — the
+ * replacement for `el.querySelector(':scope > tag')`.
+ *
+ * `:scope` is unusable under jsdom. nwsapi resolves it by interpolating the
+ * element's RAW id and class into the selector, so any CSS-special character
+ * corrupts it and querySelector THROWS. Goodreads's ad id
+ * `google_ads_iframe_4215/goodr.book.1_0__container__` became
+ * `div#google_ads_iframe_4215,,goodr.book,,,_0__container__ > svg`; Reddit's
+ * Tailwind `h-[40px]` became `div.h-,,,,px,,`. Real Chrome escapes both, so it
+ * only ever broke in Vitest — where it failed the goodreads-book and
+ * reddit-thread corpus tests outright. An audit found EVERY `:scope` call site
+ * throwing on five fixtures, so they all route through this instead.
+ */
+function firstDirectChild(el: Element, ...tags: string[]): Element | null {
+  for (const child of Array.from(el.children)) {
+    if (tags.includes(child.tagName.toLowerCase())) return child;
+  }
+  return null;
+}
+
 function hasOpenShadow(el: Element): el is Element & { shadowRoot: ShadowRoot } {
   return !!(el as Element & { shadowRoot: ShadowRoot | null }).shadowRoot;
 }
@@ -1573,7 +1594,7 @@ function looksLikeContainer(el: Element): boolean {
   // is not <article> — for a <main> or <div> with a sibling header/footer,
   // the structural sections are page chrome.
   if (el.tagName.toLowerCase() !== 'article' &&
-      el.querySelector(':scope > header, :scope > footer')) return true;
+      firstDirectChild(el, 'header', 'footer')) return true;
   const directSections = Array.from(el.children).filter(c => c.tagName.toLowerCase() === 'section');
   if (directSections.length >= 3) return true;
   return false;
@@ -2271,7 +2292,7 @@ function maybeExpandToFeed(el: Element): Element {
   // page chrome (full viewport width or contains nav/header).
   const parentRect = parent.getBoundingClientRect();
   if (parentRect.width > window.innerWidth * 0.95) return el;
-  if (parent.querySelector(':scope > nav, :scope > header, :scope > footer')) return el;
+  if (firstDirectChild(parent, 'nav', 'header', 'footer')) return el;
 
   log(LL.DEBUG, `Discerned: layout-finder expanded to feed parent — ${siblings.length} siblings, ${parentText} chars vs ${elText} alone`, 'url:', window.location.href);
   return parent;
@@ -2286,7 +2307,12 @@ function maybeExpandToFeed(el: Element): Element {
  * extracted body. Falls back to the full `textContent` when no prose tags are
  * present so prose-less pages still get *something*.
  */
-const PROSE_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, blockquote, dt, dd, pre, td, th, figcaption';
+// `.dx-body` lets a site tagger nominate a prose block that uses none of these
+// tags. Facebook's post text is pure <div> soup — its capture matched only the
+// <h4> byline, so bodyText was 46 chars ("Diana Hulce is with…") while bodyHtml
+// held the whole post, leaving search and the cast without the actual words.
+const PROSE_SELECTOR =
+  'p, h1, h2, h3, h4, h5, h6, li, blockquote, dt, dd, pre, td, th, figcaption, .dx-body';
 /**
  * Flatten the capture to plain text for the cast body. When `imageUrls` (the
  * cast's image set) is given, each URL is emitted as its own paragraph at the
@@ -4309,31 +4335,65 @@ function tagInstagram(root: Document | Element): Element | void {
  * there to the post container (the ancestor that is one of several
  * same-signature siblings, measured at share 0.43).
  *
- * KNOWN GAP — the author byline is NOT inside the captured card. Photos and
- * caption render correctly; the "<name> · <date>" header does not. THREE fixes
- * were tried against the live feed and all three made the clip WORSE (page
- * chrome: "Facebook" repeated, or the composer + stories rail), so each was
- * reverted:
+ * The byline used to be missing from the captured card. The cause was not the
+ * climb rule but its TEST: `h3 a, h4 a, h2 a, strong a[role="link"]` matches
+ * ZERO elements on a feed page — Facebook wraps the author in a plain
+ * `<b><span><a role="link">`, and every heading on the page is chrome
+ * ("Stories", "Birthdays"). So the climb could never acquire a byline and every
+ * post fell back to its header-less body block. `fbBylineAnchors` matches by
+ * SHAPE instead (the rule the permalink branch already used), which is what
+ * makes the two-condition climb below actually terminate on the card.
  *
- *   1. climb until the card contains the author element  → overshot
- *   2. same, plus a viewport-size ceiling                → overshot
- *   3. climb until the ancestor's byline count > 0       → overshot
- *
- * Why they all overshoot: Facebook's card boundary is not expressible as
- * "contains a byline". A SHARED post nests two bylines (sharer + original
- * author) and a TAGGED post ("X was tagged.") renders its header ABOVE the
- * card — so byline-presence keeps testing true past the card, all the way into
- * the feed wrapper. The measured chain plateaus at an identical box size for
- * ~10 levels, which gives the climb nothing to stop on.
- *
- * A fourth attempt should NOT be another climb rule. The remaining options are
- * to locate the card top-down (find the feed track, then take the child that
- * contains this story_message) or to accept the gap. Do not retry 1-3.
+ * Byline-presence ALONE still overshoots — a SHARED post nests two bylines and
+ * a TAGGED post renders its header above the card, so the test keeps passing
+ * upward into the feed wrapper. That is why the climb also requires the
+ * ancestor to still enclose exactly ONE post body. Both conditions are
+ * load-bearing; do not drop either.
  */
 const FB_MSG_SEL = '[data-ad-rendering-role="story_message"], [data-ad-comet-preview="message"]';
-const FB_BYLINE_SEL = 'h3 a, h4 a, h2 a, strong a[role="link"]';
+
+/** A facebook.com profile URL — `/name`, `/name.123`, or `/profile.php?id=N`. */
+function fbIsProfileHref(h: string): boolean {
+  return /^https?:\/\/(www\.)?facebook\.com\/(profile\.php\?id=\d+|[A-Za-z0-9.]+)(\?|$|\/$)/.test(h);
+}
+
+/**
+ * Byline anchors, matched BY SHAPE. Facebook wraps the feed's author link in a
+ * plain `<b><span><a role="link">` — no heading, no `<strong>` — so the old
+ * `h3 a, h4 a, h2 a, strong a[role="link"]` selector matched ZERO elements on a
+ * feed page (every `<h2>`/`<h3>` there is chrome: "Stories", "Birthdays"). That
+ * is why the climb never acquired a byline and every post lost its header.
+ * The permalink branch already matched by shape; this is that rule, shared.
+ */
+function fbBylineAnchors(scope: Element | Document): HTMLAnchorElement[] {
+  return Array.from(scope.querySelectorAll<HTMLAnchorElement>('a[role="link"][href]'))
+    .filter(a => {
+      const txt = (a.textContent ?? '').trim();
+      if (txt.length < 2 || txt.length > 60 || txt.includes('\n')) return false;
+      if (a.querySelector('img, svg')) return false;   // avatar link, not the name
+      return fbIsProfileHref(a.getAttribute('href') ?? '');
+    });
+}
+
+/**
+ * Facebook's aria-hidden font-measurement scaffolds: a container carrying a
+ * ruler of numbered attributes (data-0="0" … data-19="19") plus one throwaway
+ * text run, used to measure glyph widths. A feed page holds 88 of them, and all
+ * 88 surfaced in the clip as "Facebook" repeated above the post.
+ *
+ * `markExcluded`'s aria-hidden rule cannot catch these for two reasons: they are
+ * NOT zero-area in the saved fixture (99x20 — the live page collapses them with
+ * CSS the snapshot doesn't reproduce), and a tagger-returned root has every
+ * EXCL_MARKER inside it cleared. Only `dx-excl` CLASSES are re-promoted after
+ * that clearing, so the exclusion has to be stamped here as a class.
+ */
+function fbDropMeasurementScaffolds(scope: Element | Document): void {
+  scope.querySelectorAll('[aria-hidden="true"][data-0][data-1]')
+    .forEach(el => appendClass(el, 'dx-excl'));
+}
 
 function tagFacebook(root: Document | Element): Element | void {
+  fbDropMeasurementScaffolds(root);
   // ── PERMALINK (a single post: /photo/, /posts/, /permalink.php) ────────────
   // A permalink is a wholly different page shape from the feed, and a much
   // better capture target: ONE post, deterministic, no neighbouring cards.
@@ -4344,30 +4404,19 @@ function tagFacebook(root: Document | Element): Element | void {
   const permalink = /\/(photo|posts|permalink\.php|share\/p)\b/.test(window.location.pathname)
     || /\bfbid=/.test(window.location.search);
   if (permalink) {
-    // The byline is a PLAIN profile anchor — no h2/h3/strong wrapper:
-    //   <a href="https://www.facebook.com/eduardodias?__tn__=-UC*F"
-    //      role="link" tabindex="0">Eduardo Dias Brito</a>
-    // Match it by SHAPE (a role=link anchor to a profile URL carrying a short
-    // human name), not by heading tags, which do not exist on this page.
-    const isProfileHref = (h: string): boolean =>
-      /^https?:\/\/(www\.)?facebook\.com\/(profile\.php\?id=\d+|[A-Za-z0-9.]+)(\?|$|\/$)/.test(h);
     // Skip COMMENT authors: comments are role="article" here and their bylines
     // are the same anchor shape, appearing EARLIER in document order — taking
     // the first match picked the commenter ("Jane Archambau") over the post's
     // own author ("Eduardo Dias Brito"). The post byline is the topmost such
     // anchor that is NOT inside a comment.
-    const authorLink = Array.from(root.querySelectorAll('a[role="link"][href]'))
+    const authorLink = fbBylineAnchors(root)
       .filter(a => {
-        const txt = (a.textContent ?? '').trim();
-        if (txt.length < 2 || txt.length > 60 || txt.includes('\n')) return false;
-        if (a.querySelector('img, svg')) return false;      // avatar link, not the name
         // A COMMENT's byline sits in a small role="article" card (measured:
         // 352x79). The POST's own byline is also inside a role="article" on this
         // page, so presence alone cannot separate them — filtering on it dropped
         // every candidate. Use the card's SIZE: a comment card is short.
         const card = a.closest('[role="article"]');
-        if (card && card.getBoundingClientRect().height < 160) return false;
-        return isProfileHref(a.getAttribute('href') ?? '');
+        return !(card && card.getBoundingClientRect().height < 160);
       })
       // Highest on the page wins — the post header sits above the comment list.
       .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0] ?? null;
@@ -4431,6 +4480,10 @@ function tagFacebook(root: Document | Element): Element | void {
 
   const posts: Element[] = [];
   for (const body of bodies) {
+    // The post's own words. Facebook writes them as <div> soup with no prose
+    // tag, so without this marker `proseText` sees only the <h4> byline and
+    // bodyText comes out 46 chars long — see PROSE_SELECTOR.
+    appendClass(body, 'dx-body');
     // Climb to the post CARD: the first ancestor that has acquired a byline
     // while still enclosing only THIS post. Measured on the saved fixture
     // (tests/e2e/tools/fb-card-probe.spec.ts), the chain reads:
@@ -4454,8 +4507,8 @@ function tagFacebook(root: Document | Element): Element | void {
       const ownBodies = Array.from(node.querySelectorAll(FB_MSG_SEL))
         .filter(el => !Array.from(node!.querySelectorAll(FB_MSG_SEL))
           .some(o => o !== el && o.contains(el)));
-      if (ownBodies.length > 1) break;                       // reached the feed track
-      if (node.querySelectorAll(FB_BYLINE_SEL).length >= 1) { // byline acquired
+      if (ownBodies.length > 1) break;                    // reached the feed track
+      if (fbBylineAnchors(node).length >= 1) {            // byline acquired
         post = node;
         break;
       }
@@ -4469,22 +4522,35 @@ function tagFacebook(root: Document | Element): Element | void {
 
   for (const post of posts) {
     appendClass(post, 'dx-post');
-    const avatar = post.querySelector('img[src*="fbcdn"]');
-    if (avatar) {
-      const r = avatar.getBoundingClientRect();
-      // Only a small square image is the byline avatar; a post PHOTO is also an
-      // fbcdn img and must not get the round 44px pin.
+    // The Like/Comment/Share bar — one `[role="toolbar"]` per card, verified on
+    // the fixture. It is interactive chrome, and its reaction glyphs are a
+    // single sprite sheet shown through CSS `background-position`; with the page
+    // CSS gone the whole sheet renders, which surfaced in the clip as a long
+    // column of one emoji per line under the post.
+    post.querySelectorAll('[role="toolbar"]').forEach(t => appendClass(t, 'dx-excl'));
+    const candidate = post.querySelector('img[src*="fbcdn"]');
+    // Only a small square image is the byline avatar; a post PHOTO is also an
+    // fbcdn img and must not get the round 44px pin — nor be paired with the
+    // byline below, which would stretch the header row to the whole card.
+    let avatar: Element | null = null;
+    if (candidate) {
+      const r = candidate.getBoundingClientRect();
       if (r.width > 0 && r.width <= 64 && Math.abs(r.width - r.height) <= 8) {
+        avatar = candidate;
         appendClass(avatar, 'dx-avatar');
       }
     }
-    const authorLink = post.querySelector('h3 a, h4 a, strong a[role="link"], h2 a');
+    const authorLink = fbBylineAnchors(post)[0] ?? null;
     if (authorLink) {
       appendClass(authorLink, 'dx-author');
-      // The byline strip: the wrapper holding the author link (and the
-      // timestamp beside it), so it lays out as one muted row.
-      const header = authorLink.closest('h3, h4, h2')?.parentElement ?? null;
-      if (header && post.contains(header)) appendClass(header, 'dx-header');
+      // The byline strip: the wrapper holding the author link and the timestamp
+      // beside it, so it lays out as one muted row. There is no heading to
+      // climb to on the feed, so pair the anchor with the avatar instead —
+      // their common wrapper IS the header row.
+      const header = avatar && post.contains(avatar)
+        ? commonWrapper(avatar, authorLink, post)
+        : authorLink.parentElement;
+      if (header && post.contains(header) && header !== post) appendClass(header, 'dx-header');
     }
   }
 
@@ -4856,7 +4922,8 @@ function postCloneReddit(clone: Element): void {
   // Hoist subreddit avatar (.dx-avatar nested inside the soon-to-be-dropped
   // "Go to" link) to be a direct child of dx-byline. Runs BEFORE removeMarked
   // so the avatar img is still reachable inside its dx-excl'd <a> wrapper.
-  let subredditImg = credit.querySelector(':scope > img.dx-avatar');
+  let subredditImg: Element | null = Array.from(credit.children).find(
+    c => c.tagName.toLowerCase() === 'img' && c.classList.contains('dx-avatar')) ?? null;
   if (!subredditImg) subredditImg = credit.querySelector('img.dx-avatar');
   if (subredditImg && subredditImg.parentElement !== credit) {
     credit.insertBefore(subredditImg, credit.firstChild);
@@ -4897,7 +4964,8 @@ function postCloneReddit(clone: Element): void {
   col.appendChild(row1);
   col.appendChild(row2);
 
-  const avatarEl = credit.querySelector(':scope > img.dx-avatar');
+  const avatarEl = Array.from(credit.children).find(
+    c => c.tagName.toLowerCase() === 'img' && c.classList.contains('dx-avatar')) ?? null;
   if (avatarEl && avatarEl.nextSibling) {
     credit.insertBefore(col, avatarEl.nextSibling);
   } else {
@@ -5582,7 +5650,11 @@ function scrubStyle(value: string): string {
     // A CSS-side rule can't do this precisely: `[style*="padding-top:"]
     // [style*="%"]` matches the substrings independently, so bsky rows with
     // `flex: 1 1 0%; padding-bottom: 4px` lose real padding (see globals.css).
-    .replace(/padding-(top|bottom)\s*:\s*\d+(?:\.\d+)?%/gi, 'padding-$1: 0')
+    // Facebook's feed wraps its photo grid in `padding-top: calc(100%)`, so the
+    // percentage hides inside a calc() and the bare-% pattern misses it — that
+    // left a 684px empty band above the post's photos.
+    .replace(/padding-(top|bottom)\s*:\s*(?:\d+(?:\.\d+)?%|calc\([^)]*%[^)]*\))/gi,
+      'padding-$1: 0')
     // Height-clamp declarations that assume a live "Read more"/expander control
     // the static clip doesn't have. On the live page a collapsed description
     // (Amazon `max-height:280px`), truncated review snippet, or line-clamped
@@ -6133,6 +6205,14 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
   (root as Element).querySelectorAll<HTMLElement>('[style*="background-image"]').forEach(el => {
     const url = el.style.backgroundImage.match(/https?:\/\/[^"')\s]+/)?.[0];
     if (!url || !/\.(jpe?g|png|webp|gif)/i.test(url) || !isSafeImageSrc(url)) return;
+    // Skip CSS SPRITES. A sprite sheet is shown through a small window using a
+    // non-zero `background-position`; a video poster always fills its box at
+    // position 0. Without this test Facebook's reaction glyphs (one 20x20
+    // window onto a tall sheet, `background-position: 0px -441px`) each became
+    // a full-height <img>, rendering the WHOLE sheet as a column of one emoji
+    // per line under every post.
+    const pos = el.style.backgroundPosition;
+    if (pos && /-?\d/.test(pos) && !/^(0px\s+0px|0%\s+0%|0\s+0|left\s+top)$/.test(pos.trim())) return;
     const img = document.createElement('img');
     img.src = url;
     img.alt = 'Video';
@@ -6691,7 +6771,8 @@ const REVIEWS_SECTION_RE = new RegExp(
 function tagProseWrappers(root: Element): void {
   const PROSE_WRAP_MIN_CHARS = 200;
   root.querySelectorAll('div').forEach(div => {
-    if (!div.querySelector(':scope > svg, :scope > a > svg')) return;
+    if (!firstDirectChild(div, 'svg') && !Array.from(div.children).some(
+      c => c.tagName.toLowerCase() === 'a' && c.querySelector('svg'))) return;
     // dx-* containers carry their own layout rules (post/header/stats rows);
     // opting them out of the icon-row flex would undo the tagger's layout.
     if (div.className && /dx-/.test(String(div.className))) return;
@@ -7369,7 +7450,8 @@ function removeReviewsSection(root: Element): void {
   // Content that means we've climbed OUT of the reviews list into the entity's
   // own info: the page title, the product/entity hero figure.
   const pullsInEntityInfo = (el: Element): boolean =>
-    !!el.querySelector('h1') || !!el.querySelector(':scope > figure, :scope > * > figure');
+    !!el.querySelector('h1') || !!firstDirectChild(el, 'figure')
+    || Array.from(el.children).some(c => firstDirectChild(c, 'figure'));
 
   for (const seed of seeds) {
     if (!root.contains(seed)) continue;
