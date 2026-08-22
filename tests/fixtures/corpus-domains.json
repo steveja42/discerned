@@ -185,8 +185,7 @@
     {
       "name": "hackernews",
       "url": "https://news.ycombinator.com/item?id=38713847",
-      "note": "HN comment thread — returns empty/iframe-wall body headless; capture via MANUAL HEADED pass.",
-      "headed": true
+      "note": "HN comment thread — returns empty/iframe-wall body headless; capture via MANUAL HEADED pass."
     },
     {
       "name": "lobsters",
@@ -196,8 +195,7 @@
     {
       "name": "hackaday",
       "url": "https://hackaday.com/2026/07/08/linux-fu-the-local-phonebook/",
-      "note": "maker blog article",
-      "headed": true
+      "note": "maker blog article"
     },
     {
       "name": "quantamagazine",
@@ -266,8 +264,7 @@
     {
       "name": "usatoday",
       "url": "https://www.usatoday.com/story/tech/news/2026/07/24/openai-georgia-ai-data-center/91043217007/",
-      "note": "PHASE 4.3 (2026-07-27) — news article. Discovered via discover-article-urls tool.",
-      "headed": true
+      "note": "PHASE 4.3 (2026-07-27) — news article. Discovered via discover-article-urls tool."
     },
     {
       "name": "time",
@@ -313,8 +310,7 @@
     {
       "name": "apnews-tech",
       "url": "https://apnews.com/article/europe-wildfires-france-spain-bordeaux-5b9b063bdcf9b69867fa71ba31be8aa5",
-      "note": "PHASE 4.3 — wire news article (comment-widget-aware Tier 1; may need headed)",
-      "headed": true
+      "note": "PHASE 4.3 — wire news article (comment-widget-aware Tier 1; may need headed)"
     },
     {
       "name": "independent",
@@ -384,8 +380,7 @@
     {
       "name": "venturebeat",
       "url": "https://venturebeat.com/orchestration/writer-says-its-new-palmyra-x6-model-cuts-ai-agent-costs-by-52-as-token-spending-surges",
-      "note": "PHASE 4.3 — tech news article (direct; discovery listing was JS-walled). Replaced 2026-08-17: the old /ai/ URL 404s — VentureBeat moved articles to /orchestration/, /technology/, /security/ sections.",
-      "headed": true
+      "note": "PHASE 4.3 — tech news article (direct; discovery listing was JS-walled). Replaced 2026-08-17: the old /ai/ URL 404s — VentureBeat moved articles to /orchestration/, /technology/, /security/ sections."
     },
     {
       "name": "theregister",
@@ -426,14 +421,12 @@
     {
       "name": "ebay",
       "url": "https://www.ebay.com/itm/397652415204",
-      "note": "PHASE 4.3 — ENTITY: eBay listing (title, price, item specifics, seller). Discovered. May 404/end — refresh.",
-      "headed": true
+      "note": "PHASE 4.3 — ENTITY: eBay listing (title, price, item specifics, seller). Discovered. May 404/end — refresh."
     },
     {
       "name": "target",
       "url": "https://www.target.com/p/razer-ornata-v3-tenkeyless-espeon-umbreon-edition/-/A-95017977",
-      "note": "PHASE 4.3 — ENTITY: Target product page, heavy commerce chrome. Discovered.",
-      "headed": true
+      "note": "PHASE 4.3 — ENTITY: Target product page, heavy commerce chrome. Discovered."
     },
     {
       "name": "walmart",
@@ -598,8 +591,7 @@
     {
       "name": "japantimes",
       "url": "https://www.japantimes.co.jp/news/2026/07/29/japan/kumamoto-quake-explosion-mall/",
-      "note": "Japan news article (English)",
-      "headed": true
+      "note": "Japan news article (English)"
     },
     {
       "name": "asahi",
@@ -694,8 +686,7 @@
     {
       "name": "openlibrary",
       "url": "https://openlibrary.org/works/OL45804W/Fantastic_Mr_Fox",
-      "note": "book entity page",
-      "headed": true
+      "note": "book entity page"
     },
     {
       "name": "musicbrainz",
@@ -710,8 +701,7 @@
     {
       "name": "myanimelist",
       "url": "https://myanimelist.net/anime/1535/Death_Note",
-      "note": "anime entity page (table-heavy sidebar)",
-      "headed": true
+      "note": "anime entity page (table-heavy sidebar)"
     },
     {
       "name": "appstore",
@@ -828,8 +818,7 @@
     {
       "name": "github-issue",
       "url": "https://github.com/microsoft/TypeScript/issues/13297",
-      "note": "issue thread (comment timeline). Replaced 2026-08-17: facebook/react/issues/24502 now 404s (the sweep captured GitHub's 404 page and scored it ok).",
-      "headed": true
+      "note": "issue thread (comment timeline). Replaced 2026-08-17: facebook/react/issues/24502 now 404s (the sweep captured GitHub's 404 page and scored it ok)."
     },
     {
       "name": "github-pr",
@@ -1050,8 +1039,7 @@
     {
       "name": "postguam",
       "url": "https://www.postguam.com/news/national/ancient-dna-shows-ice-age-humans-targeted-female-mammoths/article_926a34f9-7e9d-522f-8c98-aeadfb90c27c.html",
-      "note": "PHASE 4.6 — BLUR-UP LAZY IMAGES: TownNews/BLOX local-news article. Guards the DUPLICATE-IMAGE regression (user report 2026-08-03, 'shows each of the first two images twice on clips and cast'): each photo is rendered as a PAIR — the real <img> (still lazy, src is a 4x3 base64 spacer, real URL only in srcset) plus an aria-hidden='true' low-res `tnt-blurred-image` placeholder holding the http URL. Live CSS layers them; sanitisation strips it and BOTH render. Neither existing dedup pass could catch it (they key on a shared URL stem or a shared >10-char alt, and this pair shares NEITHER), so markExcluded now drops img[aria-hidden='true'] — the page's own declaration that the image is decorative. Generic: tnt-blurred-image ships on hundreds of TownNews local-news sites. WATCH OUT: duplicated images do NOT lower the score — check the clip screenshot for each photo appearing twice.",
-      "headed": true
+      "note": "PHASE 4.6 — BLUR-UP LAZY IMAGES: TownNews/BLOX local-news article. Guards the DUPLICATE-IMAGE regression (user report 2026-08-03, 'shows each of the first two images twice on clips and cast'): each photo is rendered as a PAIR — the real <img> (still lazy, src is a 4x3 base64 spacer, real URL only in srcset) plus an aria-hidden='true' low-res `tnt-blurred-image` placeholder holding the http URL. Live CSS layers them; sanitisation strips it and BOTH render. Neither existing dedup pass could catch it (they key on a shared URL stem or a shared >10-char alt, and this pair shares NEITHER), so markExcluded now drops img[aria-hidden='true'] — the page's own declaration that the image is decorative. Generic: tnt-blurred-image ships on hundreds of TownNews local-news sites. WATCH OUT: duplicated images do NOT lower the score — check the clip screenshot for each photo appearing twice."
     },
     {
       "name": "instagram-reels",
