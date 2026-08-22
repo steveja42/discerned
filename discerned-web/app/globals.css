@@ -1213,9 +1213,33 @@ a { color: inherit; }
 .clip-body pre, .clip-body code { font-family: ui-monospace, monospace; font-size: 13px; background: var(--paper-2); border-radius: 3px; padding: 1px 4px; }
 .clip-body pre { padding: 12px 14px; overflow-x: auto; }
 .clip-body table { border-collapse: collapse; margin: 1em 0; max-width: 100%; }
+/* A wide data table (a GitHub benchmark table, MyAnimeList's entity sidebar,
+   Open Library's Edition Notes) has more columns than the clip column can fit.
+   With only `max-width: 100%` the columns are squeezed until each cell renders
+   one character per line. Let the table keep a readable minimum per cell and
+   scroll horizontally instead — same treatment `pre` already gets above.
+   `table-layout: auto` keeps a narrow 2-column table sized to its content. */
+.clip-body table { display: block; overflow-x: auto; table-layout: auto; }
 .clip-body th, .clip-body td { border: 1px solid var(--rule-soft); padding: 6px 10px; text-align: left; vertical-align: top; }
+.clip-body th, .clip-body td { min-width: 7em; }
+/* A 2-3 column key/value table (an infobox, a ticker list) fits the column
+   fine — don't force it wide. */
+.clip-body tr:not(:has(> :nth-child(4))) > th,
+.clip-body tr:not(:has(> :nth-child(4))) > td { min-width: 0; }
 .clip-body th { background: var(--paper-2); font-weight: 600; }
 .clip-body thead th { border-bottom: 2px solid var(--rule); }
+
+/* A narrow inline PIXEL width on a text block is a multi-column-layout leftover.
+   scrubStyle drops %-widths at capture but deliberately keeps px ones (avatars
+   and thumbnails size themselves that way), so a source cell sized `width:60px`
+   in a wide grid squeezes its prose to one character per line in the single
+   -column clip. Release the clamp only where the box actually holds text and
+   carries no media of its own — an avatar/thumbnail wrapper keeps its width. */
+.clip-body div[style*="width"]:not(:has(img)):not(:has(svg)):not(:has(video)):not(.dx-avatar):not(.dx-header):not(.dx-header *):not(.dx-reply-row):not(.dx-stats):not(.dx-author) {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
 
 /* Generic fallbacks for captured articles from arbitrary sites — these run on
    any .clip-body content. The X.com .tweet-* rules above take precedence on

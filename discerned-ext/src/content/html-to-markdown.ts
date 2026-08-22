@@ -101,6 +101,25 @@ function getService(): TurndownService {
   // would fight our own safe-links rule.
   td.use(strikethrough);
 
+  // Fenced code for a bare <pre>. Turndown's own fencedCodeBlock rule requires
+  // `pre > code` as the FIRST child; a <pre> holding plain text (WordPress /
+  // Hackaday shell listings) falls through to default text handling and is
+  // emitted UNFENCED — its leading-`#` comment lines then read as ATX headings
+  // and render as giant fake section titles in the cast.
+  td.addRule('fenced-bare-pre', {
+    filter: (node) =>
+      node.nodeName === 'PRE' &&
+      !(node.firstChild && node.firstChild.nodeName === 'CODE'),
+    replacement: (_content, node) => {
+      const code = (node.textContent ?? '').replace(/\n$/, '');
+      if (code.trim().length === 0) return '';
+      // Widen the fence past any backtick run inside the code, as turndown does.
+      const longest = (code.match(/`+/g) ?? []).reduce((n, m) => Math.max(n, m.length), 0);
+      const fence = '`'.repeat(Math.max(3, longest + 1));
+      return `\n\n${fence}\n${code}\n${fence}\n\n`;
+    },
+  });
+
   // Tables → GFM. Base turndown has NO <table> rule at all, so without this an
   // infobox (Wikipedia) or any data table flattens into a bare column of cell
   // text. The web renderer loads remarkGfm, so a `| … | … |` GFM table
