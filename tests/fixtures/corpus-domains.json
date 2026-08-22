@@ -1,5 +1,5 @@
 {
-  "_comment": "Phase 4.1 corpus-sweep target list (extended 2026-07-27 with 50 more sites — grep 'PHASE 4.3', weighted news/media + entity/structured per request; news URLs discovered live via tools/discover-article-urls.spec.ts against Profile 3, entity URLs are stable direct deep-links). Extended 2026-07-28 with 100 more seeds (grep 'PHASE 4.4' in tools/discover-article-urls.spec.ts) covering non-English scripts (CJK/RTL/Cyrillic), sports/finance/science verticals, Q&A + forum threads, doc-sites and structured entity pages; discovered live the same way. Each entry is a real ARTICLE / content URL the sweep captures, renders, scores (text-coverage, blank-ratio, aspect-distortion, chrome-hits), and screenshots (source/clip/cast). Deep article URLs (not homepages/section hubs) are used deliberately: (1) a single article is the realistic capture target — a homepage's lead-story teaser is a hero + no body, which the scorer mistakes for a broken clip; (2) CF/bot walls hit homepages/section indexes far harder than individual articles, so a deep-link also clears several sites a hub URL gets blocked on. These URLs were discovered live from each site's section page via tests/e2e/tools/discover-article-urls.mjs (run against the warm Cloudflare-cleared Chrome Profile 3) on 2026-07-21 — NOT hand-written, so they were real+loading when added. Article URLs rot: when a formerly-good site starts skipping with 'load failed', re-run the discovery tool to refresh its URL. Sweep runs against the same warm profile. A URL that won't load is a SKIP, not a scored finding; paywalls + IP-level 403s will still skip and that's expected. 'format' defaults to 'article'. Extended 2026-07-30 with PHASE 4.5 — 6 book/film/music review+catalogue entity pages (StoryGraph, LibraryThing, RateYourMusic, Spotify, Apple Music, YouTube Music) completing the rate-and-review site class alongside the existing goodreads-book/goodreads-author/letterboxd/rottentomatoes/metacritic/discogs/lastfm entries.",
+  "_comment": "Phase 4.1 corpus-sweep target list (extended 2026-07-27 with 50 more sites — grep 'PHASE 4.3', weighted news/media + entity/structured per request; news URLs discovered live via tools/discover-article-urls.spec.ts against Profile 3, entity URLs are stable direct deep-links). Extended 2026-07-28 with 100 more seeds (grep 'PHASE 4.4' in tools/discover-article-urls.spec.ts) covering non-English scripts (CJK/RTL/Cyrillic), sports/finance/science verticals, Q&A + forum threads, doc-sites and structured entity pages; discovered live the same way. Each entry is a real ARTICLE / content URL the sweep captures, renders, scores (text-coverage, blank-ratio, aspect-distortion, chrome-hits), and screenshots (source/clip/cast). Deep article URLs (not homepages/section hubs) are used deliberately: (1) a single article is the realistic capture target — a homepage's lead-story teaser is a hero + no body, which the scorer mistakes for a broken clip; (2) CF/bot walls hit homepages/section indexes far harder than individual articles, so a deep-link also clears several sites a hub URL gets blocked on. These URLs were discovered live from each site's section page via tests/e2e/tools/discover-article-urls.mjs (run against the warm Cloudflare-cleared Chrome Profile 3) on 2026-07-21 — NOT hand-written, so they were real+loading when added. Article URLs rot: when a formerly-good site starts skipping with 'load failed', re-run the discovery tool to refresh its URL. Sweep runs against the same warm profile. A URL that won't load is a SKIP, not a scored finding; paywalls + IP-level 403s will still skip and that's expected. 'format' defaults to 'article'. Extended 2026-07-30 with PHASE 4.5 — 6 book/film/music review+catalogue entity pages (StoryGraph, LibraryThing, RateYourMusic, Spotify, Apple Music, YouTube Music) completing the rate-and-review site class alongside the existing goodreads-book/goodreads-author/letterboxd/rottentomatoes/metacritic/discogs/lastfm entries. FIELD 'headed': true marks a domain that must run in the sweep's headed-first pass and NEVER take a headless hit. This is routing data, not a hint — a headless hit on such a site returns a hard interstitial ('ray id', 'you've been blocked'), which the detector classifies HARD, which sets challenged=false, which EXCLUDES it from the Pass-2 headed retry: the domain is then unreachable for the whole run no matter how it is paced. Worse for stateful sites (Medium blocks on a second load in quick succession and stays blocked for that profile until cleared by hand), where the wasted headless load locks out the headed pass that would have worked. Seeded from two evidence sources: domains the sweep actually captured via the manual headed pass (score.json note) and notes stating headless does not work. Prefer adding 'headed': true here over editing the sets in corpus-sweep.spec.ts, which read this field.",
   "domains": [
     {
       "name": "apnews",
@@ -9,7 +9,8 @@
     {
       "name": "reuters",
       "url": "https://www.reuters.com/technology/us-looks-speed-air-taxis-supersonic-planes-market-2026-07-21/",
-      "note": "wire news article - hard-blocks headless (skips); capture via MANUAL HEADED pass"
+      "note": "wire news article - hard-blocks headless (skips); capture via MANUAL HEADED pass",
+      "headed": true
     },
     {
       "name": "npr",
@@ -64,22 +65,26 @@
     {
       "name": "politico",
       "url": "https://www.politico.com/news/2026/07/21/nasa-nuclear-mars-mission-cost-01005610",
-      "note": "politics article — needed HEADED to clear CF Turnstile"
+      "note": "politics article — needed HEADED to clear CF Turnstile",
+      "headed": true
     },
     {
       "name": "axios",
       "url": "https://www.axios.com/2026/07/20/paramount-skydance-warner-merger-paused",
-      "note": "smart-brevity article — needed HEADED to clear CF"
+      "note": "smart-brevity article — needed HEADED to clear CF",
+      "headed": true
     },
     {
       "name": "bloomberg",
       "url": "https://www.bloomberg.com/news/articles/2026-07-21/intel-rallies-after-saying-it-ll-make-more-headcount-reductions",
-      "note": "hard paywall + bot wall — loads HEADED (MANUAL HEADED pass), body likely paywall-truncated; skips headless"
+      "note": "hard paywall + bot wall — loads HEADED (MANUAL HEADED pass), body likely paywall-truncated; skips headless",
+      "headed": true
     },
     {
       "name": "economist",
       "url": "https://www.economist.com/science-and-technology/2026/07/22/why-the-openai-escape-is-the-most-worrying-ai-mishap-yet",
-      "note": "science article — paywall + CF; clears HEADED (tools manual pass), body may be paywall-truncated"
+      "note": "science article — paywall + CF; clears HEADED (tools manual pass), body may be paywall-truncated",
+      "headed": true
     },
     {
       "name": "nature",
@@ -169,7 +174,8 @@
     {
       "name": "medium-generic",
       "url": "https://medium.com/@mariakourtesi/sowing-quality-one-seed-at-a-time-9eef31cbc9d7",
-      "note": "medium article — CF/Turnstile; clears via headed retry or manual pass. HEADED. Replaced 2026-08-22 (user-supplied) — old karpathy URL had gone hard-unclearable."
+      "note": "medium article — CF/Turnstile; clears via headed retry or manual pass. HEADED. Replaced 2026-08-22 (user-supplied) — old karpathy URL had gone hard-unclearable.",
+      "headed": true
     },
     {
       "name": "dev-to",
@@ -179,7 +185,8 @@
     {
       "name": "hackernews",
       "url": "https://news.ycombinator.com/item?id=38713847",
-      "note": "HN comment thread — returns empty/iframe-wall body headless; capture via MANUAL HEADED pass."
+      "note": "HN comment thread — returns empty/iframe-wall body headless; capture via MANUAL HEADED pass.",
+      "headed": true
     },
     {
       "name": "lobsters",
@@ -189,7 +196,8 @@
     {
       "name": "hackaday",
       "url": "https://hackaday.com/2026/07/08/linux-fu-the-local-phonebook/",
-      "note": "maker blog article"
+      "note": "maker blog article",
+      "headed": true
     },
     {
       "name": "quantamagazine",
@@ -219,17 +227,20 @@
     {
       "name": "imdb",
       "url": "https://www.imdb.com/title/tt0111161/",
-      "note": "structured entity page — IP-level 403 headless; MANUAL HEADED pass. Thin capture (JS entity page)."
+      "note": "structured entity page — IP-level 403 headless; MANUAL HEADED pass. Thin capture (JS entity page).",
+      "headed": true
     },
     {
       "name": "goodreads-book",
       "url": "https://www.goodreads.com/book/show/2767052-the-hunger-games",
-      "note": "book entity page (tagger) — 403/throttled headless; MANUAL HEADED pass."
+      "note": "book entity page (tagger) — 403/throttled headless; MANUAL HEADED pass.",
+      "headed": true
     },
     {
       "name": "reddit-thread",
       "url": "https://www.reddit.com/r/programming/comments/1v1mpxw/zig_proposes_introducing_an_actually_memory_safe/",
-      "note": "single reddit THREAD (post + comments — real content, not the subreddit feed listing); tagReddit target. CF-walled: loads HEADED, may skip headless"
+      "note": "single reddit THREAD (post + comments — real content, not the subreddit feed listing); tagReddit target. CF-walled: loads HEADED, may skip headless",
+      "headed": true
     },
     {
       "name": "stackoverflow-q",
@@ -249,12 +260,14 @@
     {
       "name": "nytimes",
       "url": "https://www.nytimes.com/2022/09/19/crosswords/mini-to-maestro-part-1.html",
-      "note": "article, paywall-lite — 403 headless; MANUAL HEADED pass. Refresh URL when it 404s. (NYT reportedly NOT truncated from the test profile — recheck.)"
+      "note": "article, paywall-lite — 403 headless; MANUAL HEADED pass. Refresh URL when it 404s. (NYT reportedly NOT truncated from the test profile — recheck.)",
+      "headed": true
     },
     {
       "name": "usatoday",
       "url": "https://www.usatoday.com/story/tech/news/2026/07/24/openai-georgia-ai-data-center/91043217007/",
-      "note": "PHASE 4.3 (2026-07-27) — news article. Discovered via discover-article-urls tool."
+      "note": "PHASE 4.3 (2026-07-27) — news article. Discovered via discover-article-urls tool.",
+      "headed": true
     },
     {
       "name": "time",
@@ -274,7 +287,8 @@
     {
       "name": "forbes",
       "url": "https://www.forbes.com/sites/dataiku/2026/07/10/the-ai-risks-ceos-didnt-budget-for/",
-      "note": "PHASE 4.3 — business/tech article; interstitial 'continue to site' page prone (headed retry)"
+      "note": "PHASE 4.3 — business/tech article; interstitial 'continue to site' page prone (headed retry)",
+      "headed": true
     },
     {
       "name": "fortune",
@@ -299,7 +313,8 @@
     {
       "name": "apnews-tech",
       "url": "https://apnews.com/article/europe-wildfires-france-spain-bordeaux-5b9b063bdcf9b69867fa71ba31be8aa5",
-      "note": "PHASE 4.3 — wire news article (comment-widget-aware Tier 1; may need headed)"
+      "note": "PHASE 4.3 — wire news article (comment-widget-aware Tier 1; may need headed)",
+      "headed": true
     },
     {
       "name": "independent",
@@ -369,7 +384,8 @@
     {
       "name": "venturebeat",
       "url": "https://venturebeat.com/orchestration/writer-says-its-new-palmyra-x6-model-cuts-ai-agent-costs-by-52-as-token-spending-surges",
-      "note": "PHASE 4.3 — tech news article (direct; discovery listing was JS-walled). Replaced 2026-08-17: the old /ai/ URL 404s — VentureBeat moved articles to /orchestration/, /technology/, /security/ sections."
+      "note": "PHASE 4.3 — tech news article (direct; discovery listing was JS-walled). Replaced 2026-08-17: the old /ai/ URL 404s — VentureBeat moved articles to /orchestration/, /technology/, /security/ sections.",
+      "headed": true
     },
     {
       "name": "theregister",
@@ -399,7 +415,8 @@
     {
       "name": "imdb-name",
       "url": "https://www.imdb.com/name/nm0000138/",
-      "note": "PHASE 4.3 — ENTITY: IMDB person page (Leonardo DiCaprio) — bio + filmography grid; 403 headless, MANUAL HEADED pass."
+      "note": "PHASE 4.3 — ENTITY: IMDB person page (Leonardo DiCaprio) — bio + filmography grid; 403 headless, MANUAL HEADED pass.",
+      "headed": true
     },
     {
       "name": "steam",
@@ -409,27 +426,32 @@
     {
       "name": "ebay",
       "url": "https://www.ebay.com/itm/397652415204",
-      "note": "PHASE 4.3 — ENTITY: eBay listing (title, price, item specifics, seller). Discovered. May 404/end — refresh."
+      "note": "PHASE 4.3 — ENTITY: eBay listing (title, price, item specifics, seller). Discovered. May 404/end — refresh.",
+      "headed": true
     },
     {
       "name": "target",
       "url": "https://www.target.com/p/razer-ornata-v3-tenkeyless-espeon-umbreon-edition/-/A-95017977",
-      "note": "PHASE 4.3 — ENTITY: Target product page, heavy commerce chrome. Discovered."
+      "note": "PHASE 4.3 — ENTITY: Target product page, heavy commerce chrome. Discovered.",
+      "headed": true
     },
     {
       "name": "walmart",
       "url": "https://www.walmart.com/ip/Mobil-1-High-Mileage-Full-Synthetic-Motor-Oil-5W-30-5-Quart/17018131?classType=VARIANT&athbdg=L1200&from=/search",
-      "note": "PHASE 4.3 — ENTITY: Walmart product page (Mobil 1 motor oil), heavy commerce chrome + PerimeterX 'Robot or human?' wall (needs headed + interactive). Direct."
+      "note": "PHASE 4.3 — ENTITY: Walmart product page (Mobil 1 motor oil), heavy commerce chrome + PerimeterX 'Robot or human?' wall (needs headed + interactive). Direct.",
+      "headed": true
     },
     {
       "name": "homedepot",
       "url": "https://www.homedepot.com/p/Anvil-10-oz-Ripping-Claw-Hammer-with-Hickory-Handle-91624/334097406",
-      "note": "PHASE 4.3 — ENTITY: Home Depot product page (Anvil claw hammer — spec tables + heavy commerce chrome). URL replaced 2026-08-17: the old Milwaukee SAWZALL deep link was being redirected to the HOMEPAGE for automated Chrome."
+      "note": "PHASE 4.3 — ENTITY: Home Depot product page (Anvil claw hammer — spec tables + heavy commerce chrome). URL replaced 2026-08-17: the old Milwaukee SAWZALL deep link was being redirected to the HOMEPAGE for automated Chrome.",
+      "headed": true
     },
     {
       "name": "etsy",
       "url": "https://www.etsy.com/listing/547491922/leather-walletwalletman-leather",
-      "note": "PHASE 4.3 — ENTITY: Etsy marketplace listing, heavy chrome + bot wall (may need headed). Direct — refresh if ended (listings rot fast; discover a live one via discover-article-urls DISCOVER_ONLY=etsy). Prev 1466763216 expired → 404."
+      "note": "PHASE 4.3 — ENTITY: Etsy marketplace listing, heavy chrome + bot wall (may need headed). Direct — refresh if ended (listings rot fast; discover a live one via discover-article-urls DISCOVER_ONLY=etsy). Prev 1466763216 expired → 404.",
+      "headed": true
     },
     {
       "name": "newegg",
@@ -439,12 +461,14 @@
     {
       "name": "goodreads-author",
       "url": "https://www.goodreads.com/author/show/3389.Stephen_King",
-      "note": "PHASE 4.3 — ENTITY: Goodreads AUTHOR page (bio + books grid) — 403/throttled headless, MANUAL HEADED pass."
+      "note": "PHASE 4.3 — ENTITY: Goodreads AUTHOR page (bio + books grid) — 403/throttled headless, MANUAL HEADED pass.",
+      "headed": true
     },
     {
       "name": "discogs",
       "url": "https://www.discogs.com/release/249504-Rick-Astley-Never-Gonna-Give-You-Up",
-      "note": "PHASE 4.3 — ENTITY: Discogs music release (tracklist, credits, versions). Direct. User confirmed this URL cleared for them 2026-08-22 in the warm profile — re-verify via the sweep."
+      "note": "PHASE 4.3 — ENTITY: Discogs music release (tracklist, credits, versions). Direct. User confirmed this URL cleared for them 2026-08-22 in the warm profile — re-verify via the sweep.",
+      "headed": true
     },
     {
       "name": "bandcamp",
@@ -464,22 +488,26 @@
     {
       "name": "yelp",
       "url": "https://www.yelp.com/biz/lalibela-ethiopian-restaurant-portland?osq=Ethiopian",
-      "note": "PHASE 4.3 — ENTITY: Yelp business profile (rating, hours, reviews). Yelp renders the listing as a LIGHTBOX OVERLAY on top of search results (like Zillow) — tagYelp scopes to it. Bot wall — needs headed."
+      "note": "PHASE 4.3 — ENTITY: Yelp business profile (rating, hours, reviews). Yelp renders the listing as a LIGHTBOX OVERLAY on top of search results (like Zillow) — tagYelp scopes to it. Bot wall — needs headed.",
+      "headed": true
     },
     {
       "name": "tripadvisor",
       "url": "https://www.tripadvisor.com/Attraction_Review-g60713-d104690-Reviews-Golden_Gate_Bridge-San_Francisco_California.html",
-      "note": "PHASE 4.3 — ENTITY: TripAdvisor attraction page (rating, reviews) — bot wall (may need headed). Direct."
+      "note": "PHASE 4.3 — ENTITY: TripAdvisor attraction page (rating, reviews) — bot wall (may need headed). Direct.",
+      "headed": true
     },
     {
       "name": "zillow",
       "url": "https://www.zillow.com/homedetails/2049-SE-157th-Ave-Portland-OR-97233/53862003_zpid/",
-      "note": "PHASE 4.3 — ENTITY: Zillow home listing (2049 SE 157th Ave, Portland — price, facts, photos). PerimeterX Press&Hold wall (needs headed + interactive). Refresh if delisted (listings rot fast → 404 behind the wall)."
+      "note": "PHASE 4.3 — ENTITY: Zillow home listing (2049 SE 157th Ave, Portland — price, facts, photos). PerimeterX Press&Hold wall (needs headed + interactive). Refresh if delisted (listings rot fast → 404 behind the wall).",
+      "headed": true
     },
     {
       "name": "producthunt",
       "url": "https://www.producthunt.com/products/chatgpt",
-      "note": "PHASE 4.3 — ENTITY: Product Hunt product page (SPA — reviews, launches). Direct."
+      "note": "PHASE 4.3 — ENTITY: Product Hunt product page (SPA — reviews, launches). Direct.",
+      "headed": true
     },
     {
       "name": "npmjs",
@@ -549,7 +577,8 @@
     {
       "name": "globeandmail",
       "url": "https://www.theglobeandmail.com/business/article-brookfield-commits-up-to-9-billion-for-ai-data-centre-in-south-korea/",
-      "note": "Canadian news article"
+      "note": "Canadian news article",
+      "headed": true
     },
     {
       "name": "abc-au",
@@ -569,7 +598,8 @@
     {
       "name": "japantimes",
       "url": "https://www.japantimes.co.jp/news/2026/07/29/japan/kumamoto-quake-explosion-mall/",
-      "note": "Japan news article (English)"
+      "note": "Japan news article (English)",
+      "headed": true
     },
     {
       "name": "asahi",
@@ -664,7 +694,8 @@
     {
       "name": "openlibrary",
       "url": "https://openlibrary.org/works/OL45804W/Fantastic_Mr_Fox",
-      "note": "book entity page"
+      "note": "book entity page",
+      "headed": true
     },
     {
       "name": "musicbrainz",
@@ -679,7 +710,8 @@
     {
       "name": "myanimelist",
       "url": "https://myanimelist.net/anime/1535/Death_Note",
-      "note": "anime entity page (table-heavy sidebar)"
+      "note": "anime entity page (table-heavy sidebar)",
+      "headed": true
     },
     {
       "name": "appstore",
@@ -729,12 +761,14 @@
     {
       "name": "sec-edgar",
       "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000320193&type=10-K",
-      "note": "regulatory filing index (legacy tables)"
+      "note": "regulatory filing index (legacy tables)",
+      "headed": true
     },
     {
       "name": "courtlistener",
       "url": "https://www.courtlistener.com/opinion/108713/roe-v-wade/",
-      "note": "legal opinion long-form"
+      "note": "legal opinion long-form",
+      "headed": true
     },
     {
       "name": "rust-book",
@@ -794,12 +828,14 @@
     {
       "name": "github-issue",
       "url": "https://github.com/microsoft/TypeScript/issues/13297",
-      "note": "issue thread (comment timeline). Replaced 2026-08-17: facebook/react/issues/24502 now 404s (the sweep captured GitHub's 404 page and scored it ok)."
+      "note": "issue thread (comment timeline). Replaced 2026-08-17: facebook/react/issues/24502 now 404s (the sweep captured GitHub's 404 page and scored it ok).",
+      "headed": true
     },
     {
       "name": "github-pr",
       "url": "https://github.com/microsoft/TypeScript/pull/45711",
-      "note": "PR thread (diff + comments)"
+      "note": "PR thread (diff + comments)",
+      "headed": true
     },
     {
       "name": "gitlab-repo",
@@ -879,47 +915,56 @@
     {
       "name": "britannica",
       "url": "https://www.britannica.com/biography/Alan-Turing",
-      "note": "encyclopedia entity page (headless-walled; needs headed pass)"
+      "note": "encyclopedia entity page (headless-walled; needs headed pass)",
+      "headed": true
     },
     {
       "name": "openai-blog",
       "url": "https://openai.com/index/pacing-model-development-cyber-capabilities/",
-      "note": "company announcement post, SPA (headless-walled; needs headed pass). Replaced 2026-08-22 (user-supplied) — old gpt-4o URL had gone hard-unclearable."
+      "note": "company announcement post, SPA (headless-walled; needs headed pass). Replaced 2026-08-22 (user-supplied) — old gpt-4o URL had gone hard-unclearable.",
+      "headed": true
     },
     {
       "name": "ndtv",
       "url": "https://www.ndtv.com/business-news/india-space-economy-china-investment-bellatrix-aerospace-isro-resignations-11939396",
-      "note": "India news article, ad-heavy (headless-walled; needs headed pass). Replaced 2026-08-22 — old URL had gone dead (404). New URL now captures cleanly (full article, hero image, all sections). The earlier repeated 'capture timeout' was the extension having been silently deregistered from Profile 3 by an unrelated probe's clearSwCacheForRawDir call, not a site or pipeline issue — see memory project_extension_silently_deregistered."
+      "note": "India news article, ad-heavy (headless-walled; needs headed pass). Replaced 2026-08-22 — old URL had gone dead (404). New URL now captures cleanly (full article, hero image, all sections). The earlier repeated 'capture timeout' was the extension having been silently deregistered from Profile 3 by an unrelated probe's clearSwCacheForRawDir call, not a site or pipeline issue — see memory project_extension_silently_deregistered.",
+      "headed": true
     },
     {
       "name": "investopedia",
       "url": "https://www.investopedia.com/terms/c/compoundinterest.asp",
-      "note": "finance reference article (headless-walled; needs headed pass)"
+      "note": "finance reference article (headless-walled; needs headed pass)",
+      "headed": true
     },
     {
       "name": "sciencemag",
       "url": "https://www.science.org/content/article/ai-chatbots-are-becoming-experts-changing-people-s-minds-what-s-their-secret",
-      "note": "science journalism article. Replaced 2026-08-22 (user-supplied) — old dna-etruscans URL was dead (404). science.org was hard Cloudflare-walling the warm profile as of 2026-08-22 (title stuck on 'Just a moment...' through a 60s headed wait) from repeated attempts in one session — do NOT loop-retry if it recurs, same cooldown risk as librarything/rateyourmusic."
+      "note": "science journalism article. Replaced 2026-08-22 (user-supplied) — old dna-etruscans URL was dead (404). science.org was hard Cloudflare-walling the warm profile as of 2026-08-22 (title stuck on 'Just a moment...' through a 60s headed wait) from repeated attempts in one session — do NOT loop-retry if it recurs, same cooldown risk as librarything/rateyourmusic.",
+      "headed": true
     },
     {
       "name": "pubmed",
       "url": "https://pubmed.ncbi.nlm.nih.gov/28985560/",
-      "note": "biomedical abstract entity page (headless-walled; needs headed pass)"
+      "note": "biomedical abstract entity page (headless-walled; needs headed pass)",
+      "headed": true
     },
     {
       "name": "mayoclinic",
       "url": "https://www.mayoclinic.org/diseases-conditions/migraine-headache/symptoms-causes/syc-20360201",
-      "note": "health reference article (headless-walled; needs headed pass)"
+      "note": "health reference article (headless-walled; needs headed pass)",
+      "headed": true
     },
     {
       "name": "boardgamegeek",
       "url": "https://boardgamegeek.com/boardgame/174430/gloomhaven",
-      "note": "board-game entity page, Angular SPA (headless-walled; needs headed pass)"
+      "note": "board-game entity page, Angular SPA (headless-walled; needs headed pass)",
+      "headed": true
     },
     {
       "name": "xda-forums",
       "url": "https://xdaforums.com/t/how-to-unlock-bootloader.4515295/",
-      "note": "XenForo forum thread (headless-walled; needs headed pass)"
+      "note": "XenForo forum thread (headless-walled; needs headed pass)",
+      "headed": true
     },
     {
       "name": "msnbc",
@@ -939,12 +984,14 @@
     {
       "name": "lemmy-thread",
       "url": "https://lemmy.world/post/49992871",
-      "note": "fediverse link-aggregator thread (Cloudflare: needs the headed pass). User confirmed this URL cleared for them 2026-08-22 in the warm profile — re-verify via the sweep."
+      "note": "fediverse link-aggregator thread (Cloudflare: needs the headed pass). User confirmed this URL cleared for them 2026-08-22 in the warm profile — re-verify via the sweep.",
+      "headed": true
     },
     {
       "name": "netflix-techblog",
       "url": "https://netflixtechblog.com/building-service-topology-at-scale-architecture-challenges-and-lessons-learned-f4b792f3f0d8",
-      "note": "Medium-hosted engineering blog (Cloudflare: needs the headed pass). Replaced 2026-08-22 (user-supplied) — old genpage URL had gone hard-unclearable."
+      "note": "Medium-hosted engineering blog (Cloudflare: needs the headed pass). Replaced 2026-08-22 (user-supplied) — old genpage URL had gone hard-unclearable.",
+      "headed": true
     },
     {
       "name": "storygraph",
@@ -954,12 +1001,14 @@
     {
       "name": "librarything",
       "url": "https://www.librarything.com/work/29306937/t/The-Only-One-Left",
-      "note": "PHASE 4.5 — ENTITY: LibraryThing WORK page (cover, author, description, tag cloud, member reviews + rating, members, classifications, statistics). Replaced 2026-08-22 (user-supplied) after the prior URL's Cloudflare cooldown (RATE-LIMITED 2026-08-17 note); re-verify via the sweep — pace this domain carefully, do NOT loop-retry if it walls again."
+      "note": "PHASE 4.5 — ENTITY: LibraryThing WORK page (cover, author, description, tag cloud, member reviews + rating, members, classifications, statistics). Replaced 2026-08-22 (user-supplied) after the prior URL's Cloudflare cooldown (RATE-LIMITED 2026-08-17 note); re-verify via the sweep — pace this domain carefully, do NOT loop-retry if it walls again.",
+      "headed": true
     },
     {
       "name": "rateyourmusic",
       "url": "https://rateyourmusic.com/song/the-beatles/a-day-in-the-life/",
-      "note": "PHASE 4.5 — ENTITY: RYM SONG page (title, artist, genre, release date, all-time rank, ratings, lyrics). Needs the HEADED retry (Cloudflare challenge headless, clears headed). User confirmed this URL cleared for them 2026-08-22 in the warm profile — the 2026-08-17 rate-limit cooldown appears to have expired; re-verify via the sweep, pace carefully."
+      "note": "PHASE 4.5 — ENTITY: RYM SONG page (title, artist, genre, release date, all-time rank, ratings, lyrics). Needs the HEADED retry (Cloudflare challenge headless, clears headed). User confirmed this URL cleared for them 2026-08-22 in the warm profile — the 2026-08-17 rate-limit cooldown appears to have expired; re-verify via the sweep, pace carefully.",
+      "headed": true
     },
     {
       "name": "spotify-album",
@@ -979,12 +1028,14 @@
     {
       "name": "librarything-catalog",
       "url": "https://www.librarything.com/catalog/Kardiaa",
-      "note": "PHASE 4.5 — ENTITY: LibraryThing member CATALOG (list/table of a user library). CAPTURE DEFECT (not a wall): the table lives in a CHILD IFRAME (catalog_bottom.php) while the top document holds only the masthead (134 chars, 0 tables), so the clip is the 20-YEARS badge + 3 nav links. Needs cross-frame capture; do not chase as a layout-finder mis-pick. RATE-LIMITED 2026-08-17: repeated sweep attempts put this domain into a Cloudflare cooldown — the \"verifying you are human\" checkbox will not clear even headed with a human clicking. Leave it alone for several hours; do NOT retry in a loop, which only extends the cooldown."
+      "note": "PHASE 4.5 — ENTITY: LibraryThing member CATALOG (list/table of a user library). CAPTURE DEFECT (not a wall): the table lives in a CHILD IFRAME (catalog_bottom.php) while the top document holds only the masthead (134 chars, 0 tables), so the clip is the 20-YEARS badge + 3 nav links. Needs cross-frame capture; do not chase as a layout-finder mis-pick. RATE-LIMITED 2026-08-17: repeated sweep attempts put this domain into a Cloudflare cooldown — the \"verifying you are human\" checkbox will not clear even headed with a human clicking. Leave it alone for several hours; do NOT retry in a loop, which only extends the cooldown.",
+      "headed": true
     },
     {
       "name": "librarything-author",
       "url": "https://www.librarything.com/a/16581172/Riley-Sager",
-      "note": "PHASE 4.7 — ENTITY: LibraryThing author page. Added 2026-08-22 (user-supplied, cleared the Cloudflare wall live) as a distinct entry from librarything-catalog — it's an author profile, not a member library table, so it doesn't exercise the catalog's cross-frame capture defect. Kept separate rather than repointing librarything-catalog so that defect stays covered once its own URL clears its rate-limit cooldown."
+      "note": "PHASE 4.7 — ENTITY: LibraryThing author page. Added 2026-08-22 (user-supplied, cleared the Cloudflare wall live) as a distinct entry from librarything-catalog — it's an author profile, not a member library table, so it doesn't exercise the catalog's cross-frame capture defect. Kept separate rather than repointing librarything-catalog so that defect stays covered once its own URL clears its rate-limit cooldown.",
+      "headed": true
     },
     {
       "name": "msn-slideshow",
@@ -999,37 +1050,44 @@
     {
       "name": "postguam",
       "url": "https://www.postguam.com/news/national/ancient-dna-shows-ice-age-humans-targeted-female-mammoths/article_926a34f9-7e9d-522f-8c98-aeadfb90c27c.html",
-      "note": "PHASE 4.6 — BLUR-UP LAZY IMAGES: TownNews/BLOX local-news article. Guards the DUPLICATE-IMAGE regression (user report 2026-08-03, 'shows each of the first two images twice on clips and cast'): each photo is rendered as a PAIR — the real <img> (still lazy, src is a 4x3 base64 spacer, real URL only in srcset) plus an aria-hidden='true' low-res `tnt-blurred-image` placeholder holding the http URL. Live CSS layers them; sanitisation strips it and BOTH render. Neither existing dedup pass could catch it (they key on a shared URL stem or a shared >10-char alt, and this pair shares NEITHER), so markExcluded now drops img[aria-hidden='true'] — the page's own declaration that the image is decorative. Generic: tnt-blurred-image ships on hundreds of TownNews local-news sites. WATCH OUT: duplicated images do NOT lower the score — check the clip screenshot for each photo appearing twice."
+      "note": "PHASE 4.6 — BLUR-UP LAZY IMAGES: TownNews/BLOX local-news article. Guards the DUPLICATE-IMAGE regression (user report 2026-08-03, 'shows each of the first two images twice on clips and cast'): each photo is rendered as a PAIR — the real <img> (still lazy, src is a 4x3 base64 spacer, real URL only in srcset) plus an aria-hidden='true' low-res `tnt-blurred-image` placeholder holding the http URL. Live CSS layers them; sanitisation strips it and BOTH render. Neither existing dedup pass could catch it (they key on a shared URL stem or a shared >10-char alt, and this pair shares NEITHER), so markExcluded now drops img[aria-hidden='true'] — the page's own declaration that the image is decorative. Generic: tnt-blurred-image ships on hundreds of TownNews local-news sites. WATCH OUT: duplicated images do NOT lower the score — check the clip screenshot for each photo appearing twice.",
+      "headed": true
     },
     {
       "name": "instagram-reels",
       "url": "https://www.instagram.com/reels/DbnxT2Duur8/",
-      "note": "PHASE 4.4 social feed - reel player; generic viewport-dominance narrowing (maybeNarrowToVisiblePost). LOGIN REQUIRED in the warm profile"
+      "note": "PHASE 4.4 social feed - reel player; generic viewport-dominance narrowing (maybeNarrowToVisiblePost). LOGIN REQUIRED in the warm profile",
+      "headed": true
     },
     {
       "name": "instagram-home",
       "url": "https://www.instagram.com/",
-      "note": "PHASE 4.4 social feed - home feed; tagInstagram scopes to the visible <article>. LOGIN REQUIRED"
+      "note": "PHASE 4.4 social feed - home feed; tagInstagram scopes to the visible <article>. LOGIN REQUIRED",
+      "headed": true
     },
     {
       "name": "facebook-home",
       "url": "https://www.facebook.com/",
-      "note": "PHASE 4.4 social feed - home feed; tagFacebook scopes via data-ad-rendering-role. LOGIN REQUIRED"
+      "note": "PHASE 4.4 social feed - home feed; tagFacebook scopes via data-ad-rendering-role. LOGIN REQUIRED",
+      "headed": true
     },
     {
       "name": "facebook-reels",
       "url": "https://www.facebook.com/reel/",
-      "note": "PHASE 4.4 social feed - reel player; generic narrowing. LOGIN REQUIRED. Known gap: player sits outside the narrowed post, so no video frame"
+      "note": "PHASE 4.4 social feed - reel player; generic narrowing. LOGIN REQUIRED. Known gap: player sits outside the narrowed post, so no video frame",
+      "headed": true
     },
     {
       "name": "tiktok-foryou",
       "url": "https://www.tiktok.com/foryou",
-      "note": "PHASE 4.4 social feed - For You one-at-a-time video feed; tagTikTok scopes to the visible item. NO login needed (loads headed; a headless hit gets 'Something went wrong')"
+      "note": "PHASE 4.4 social feed - For You one-at-a-time video feed; tagTikTok scopes to the visible item. NO login needed (loads headed; a headless hit gets 'Something went wrong')",
+      "headed": true
     },
     {
       "name": "tiktok-profile",
       "url": "https://www.tiktok.com/@nasa",
-      "note": "PHASE 4.4 social feed - profile grid; tagTikTok tags tiles but deliberately does NOT scope a grid. Logged-out shows an empty grid"
+      "note": "PHASE 4.4 social feed - profile grid; tagTikTok tags tiles but deliberately does NOT scope a grid. Logged-out shows an empty grid",
+      "headed": true
     }
   ]
 }

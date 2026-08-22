@@ -28,8 +28,10 @@
 //   0 disables it for offline/localhost corpora or a single domain).
 //
 // THREE-PASS flow:
-//  • Pass 0 — PerimeterX HEADED-FIRST (walmart/zillow/etsy/yelp/homedepot/
-//    goodreads-*, see PERIMETERX_SITES). These are run headed BEFORE any headless
+//  • Pass 0 — HEADED-FIRST: PerimeterX sites (PERIMETERX_SITES), logged-in social
+//    feeds (SOCIAL_FEED_SITES), and every domain marked `"headed": true` in
+//    corpus-domains.json (HEADED_ONLY_SITES — add new ones THERE, not here).
+//    These are run headed BEFORE any headless
 //    hit and are EXCLUDED from Pass 1. PerimeterX scores the fingerprint+session:
 //    a headless hit is the most suspicious signal and RAISES the risk score,
 //    escalating the wall to a hard block that persists for a cooldown — locking
@@ -55,7 +57,13 @@ import { sweepArtifacts, type SweepRecord } from './helpers/sweepArtifacts';
 import { computeScores, measureInPage, CHROME_SWEEP_PHRASES, type SweepMeasurements } from './helpers/sweepScorers';
 import { refreshSweepGallery } from './helpers/sweepGallery';
 
-interface DomainEntry { name: string; url: string; note?: string }
+interface DomainEntry { name: string; url: string; note?: string; headed?: boolean }
+
+// Read once, BEFORE the headed-routing sets below (which derive from it) and
+// before DOMAINS, which applies SWEEP_ONLY/SWEEP_LIMIT filtering to this list.
+const DOMAINS_RAW: DomainEntry[] = (JSON.parse(
+  readFileSync(resolve(__dirname, '..', 'fixtures', 'corpus-domains.json'), 'utf8'),
+) as { domains: DomainEntry[] }).domains;
 
 // Domains behind a PerimeterX (HUMAN) wall — "Robot or human?" / "Press & Hold".
 // These are run HEADED-FIRST (Pass 0), BEFORE any headless hit, and are EXCLUDED
@@ -83,26 +91,24 @@ const SOCIAL_FEED_SITES = new Set([
   'tiktok-foryou', 'tiktok-profile',
 ]);
 
-// Cloudflare sites whose corpus note already says HEADED. These used to run
-// headless first and then be UNREACHABLE: a headless hit gets a hard interstitial
-// ("ray id" / "you've been blocked"), which the detector classifies as HARD →
-// `challenged = false` → EXCLUDED from the Pass-2 headed retry. So they skipped on
-// every run at any pacing, and Pass 2 never fired for them.
+// Domains that must never take a headless hit, declared as `"headed": true` in
+// corpus-domains.json (see its _comment). Kept as DATA next to the URL rather
+// than as another hardcoded set here: the two sets above are behavioural (they
+// also change how Pass 0 and Pass 2 treat a domain), whereas this is pure
+// routing, and a list in the spec silently drifts as domains are added.
 //
-// Medium in particular is stateful: a second load in quick succession blocks the
-// browser/profile, and it then stays blocked across headed/headless and referrer
-// variations until cleared manually. So the headless attempt doesn't just fail —
-// it spends the one cheap load and locks out the headed pass that would have
-// worked. Never take it.
-const CLOUDFLARE_HEADED_SITES = new Set([
-  'medium-generic', 'reddit-thread',
-]);
+// Why it matters: a headless hit on one of these returns a hard interstitial,
+// which is classified HARD → `challenged = false` → EXCLUDED from the Pass-2
+// headed retry, leaving the domain unreachable for the whole run at any pacing.
+// On a stateful site it is worse still — Medium blocks on a second load in quick
+// succession and stays blocked for that profile until cleared by hand, so the
+// wasted headless load locks out the headed pass that would have worked.
+const HEADED_ONLY_SITES = new Set(
+  DOMAINS_RAW.filter(d => d.headed).map(d => d.name),
+);
 
 const DOMAINS: DomainEntry[] = (() => {
-  const raw = JSON.parse(
-    readFileSync(resolve(__dirname, '..', 'fixtures', 'corpus-domains.json'), 'utf8'),
-  ) as { domains: DomainEntry[] };
-  let list = raw.domains;
+  let list = DOMAINS_RAW;
   if (process.env.SWEEP_ONLY) {
     const only = new Set(process.env.SWEEP_ONLY.split(',').map(s => s.trim()));
     list = list.filter(d => only.has(d.name));
@@ -693,7 +699,7 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
   // Headed-first group = PerimeterX walls + logged-in social feeds + the
   // Cloudflare-headed sites (see above).
   const headedFirst = (n: string): boolean =>
-    PERIMETERX_SITES.has(n) || SOCIAL_FEED_SITES.has(n) || CLOUDFLARE_HEADED_SITES.has(n);
+    PERIMETERX_SITES.has(n) || SOCIAL_FEED_SITES.has(n) || HEADED_ONLY_SITES.has(n);
   const pxDomains = DOMAINS.filter(d => headedFirst(d.name));
   const headlessDomains = DOMAINS.filter(d => !headedFirst(d.name));
 
@@ -705,7 +711,7 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
   // which is discouraged — kept as an escape hatch).
   if (pxDomains.length && !process.env.SWEEP_NO_PX_FIRST) {
     // eslint-disable-next-line no-console
-    console.log(`\n── headed-first pass (${pxDomains.length}) — PerimeterX + logged-in social feeds: ${pxDomains.map(d => d.name).join(', ')} ──`);
+    console.log(`\n── headed-first pass (${pxDomains.length}) — PerimeterX + social feeds + headed-only: ${pxDomains.map(d => d.name).join(', ')} ──`);
     const { ctx: pxCtx } = await launchWithExtension({
       rawUserDataDir, profileDirectory, channel, preinstalledExtension: true, headed: true,
       clearSwCacheForRawDir: true,
