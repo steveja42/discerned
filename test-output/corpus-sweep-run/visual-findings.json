@@ -683,8 +683,8 @@
     },
     "facebook-home": {
       "verdict": "flaw",
-      "where": "clip",
-      "note": "Known pre-existing gap: no author, avatar, timestamp, or photo — the byline selector doesn't match this feed's markup."
+      "where": "clip+cast",
+      "note": "Byline, text, photos and counts all captured; timestamp renders as spaced-out characters and photos stack vertically instead of as a grid."
     },
     "boardgamegeek": {
       "verdict": "flaw",
@@ -754,7 +754,7 @@
     "facebook-reels": {
       "verdict": "flaw",
       "where": "clip",
-      "note": "Known gap: the player sits outside the narrowed post, so there's no video frame; engagement counts stack vertically and stray UI glyphs leak."
+      "note": "Video poster and caption now captured; oversized search/megaphone glyphs leak and engagement counts stack vertically."
     },
     "straitstimes": {
       "verdict": "flaw",
