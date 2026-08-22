@@ -86,6 +86,10 @@ const TARGETS: Record<string, string> = {
   // SLIDESHOWS — a slide deck, not a prose article — so there may be no single
   // block holding the body at all. Diagnose before assuming a finder mis-pick.
   'msn-slideshow': 'https://www.msn.com/en-us/entertainment/celebrities/paramount-s-star-trek-reboot-drops-kirk-for-new-era/ss-AA29f2aF?ocid=msedgntp&pc=U531&cvid=6a70743fd5b440abaf95817f01f76350&ei=15#image=1',
+  // Sweep regression (2026-08-21): the clip is a bare og:image <figure> with ~0
+  // chars of text, while the page renders a full album header + track list.
+  'spotify-album': 'https://open.spotify.com/album/4LH4d3cOWNNsVw41Gqt2kv',
+  'ytmusic-album': 'https://music.youtube.com/browse/MPREb_nHbCAGX6uUL',
 };
 
 test.describe.configure({ mode: 'serial' });

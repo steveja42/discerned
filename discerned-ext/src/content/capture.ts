@@ -7167,12 +7167,38 @@ function removeCrossSellRails(root: Element): void {
   const hasLongProse = (el: Element): boolean =>
     Array.from(el.querySelectorAll('p')).some(p => (p.textContent ?? '').trim().length >= 200);
 
+  // The page's own title. A rail lives BESIDE the entity's content, never
+  // around it, so an ancestor enclosing the <h1> is the content column and the
+  // climb must stop (Spotify: "More by <artist>" sits in the same <section> as
+  // the album h1 + track list, so the climb deleted the whole album).
+  const pageH1 = root.querySelector('h1');
+  const enclosesTitle = (el: Element): boolean =>
+    !!pageH1 && el !== pageH1 && el.contains(pageH1);
+
+  // Text length of the innermost ancestor that already looks like the rail
+  // module. Promoting past it should not pull in much MORE text — when it does,
+  // the extra is sibling content, not rail (YouTube Music renders the header and
+  // the track list in separate columns, so no h1 test can protect the tracks).
+  const railTextLen = (seed: Element): number => {
+    let cursor: Element | null = seed.parentElement;
+    for (let i = 0; i < 8 && cursor && cursor !== root; i++) {
+      const text = (cursor.textContent ?? '').replace(/\s+/g, ' ').trim();
+      const links = cursor.querySelectorAll('a').length;
+      const imgs = cursor.querySelectorAll('img').length;
+      if (text.length <= 12000 && links >= 2 && (imgs >= 2 || links >= 4)) return text.length;
+      cursor = cursor.parentElement;
+    }
+    return 0;
+  };
+  const RAIL_GROWTH_SLACK = 1.15;
+
   for (const seed of seeds) {
     if (!root.contains(seed)) continue;
     // Climb to the largest ancestor that still (a) has no long prose and (b) is
     // link/image dominant — that's the module card wrapping heading + carousel.
     let box: Element = seed;
     let cursor: Element | null = seed.parentElement;
+    const shelfLen = railTextLen(seed);
     // 8 hops, not 5: SPA catalogue pages (Apple Music, Spotify) wrap both the
     // heading and its carousel in several structural divs, so the module card
     // sits deeper than a server-rendered Amazon rail — at 5 the climb stopped
@@ -7181,7 +7207,10 @@ function removeCrossSellRails(root: Element): void {
     // re-checked per hop; the cap only stops a runaway climb.
     for (let i = 0; i < 8 && cursor && cursor !== root; i++) {
       if (hasLongProse(cursor)) break;
+      if (enclosesTitle(cursor)) break;
       const text = (cursor.textContent ?? '').replace(/\s+/g, ' ').trim();
+      // Outgrew the rail — the surplus is neighbouring content.
+      if (shelfLen > 0 && text.length > shelfLen * RAIL_GROWTH_SLACK) break;
       // A module card is heavy on links/images relative to its text. Require at
       // least a couple of links and either several images or many links, so a
       // lone heading wrapper (few links) doesn't get promoted past the real card.
