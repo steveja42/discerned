@@ -1655,6 +1655,32 @@ function looksLikeArticleCard(el: Element): boolean {
   return false;
 }
 
+/** Ratio below which a PROSE-FREE <article> is treated as a figure, not the story. */
+const ARTICLE_DWARF_RATIO = 0.25;
+
+/**
+ * True when `el` is a media FIGURE masquerading as the story: it carries no
+ * real paragraph of its own, yet sits in a <main> holding far more text.
+ *
+ * Japan Times wraps ONLY the hero photo + caption in <article>, putting the
+ * 47-paragraph body in <main class="article-page"> — taking the <article>
+ * yields a caption-only clip. The prose test is what keeps this narrow: a
+ * legitimately short <article> (a tweet card, a brief blog post) still has its
+ * own paragraphs, so it is never skipped on size alone.
+ */
+function isFigureNotStory(el: Element): boolean {
+  // Its own prose, excluding any nested <figcaption> (that IS the caption).
+  const paras = Array.from(el.querySelectorAll('p'))
+    .filter(pp => !pp.closest('figcaption'));
+  const longest = paras.reduce((n, pp) => Math.max(n, (pp.textContent ?? '').trim().length), 0);
+  if (longest >= ARTICLE_MIN_CHARS) return false; // has real prose — it's the story
+  const main = el.closest('main') ?? document.querySelector('main');
+  if (!main || main === el || !main.contains(el)) return false;
+  const mainText = (main.textContent ?? '').trim().length;
+  if (mainText < ARTICLE_MIN_CHARS) return false;
+  return (el.textContent ?? '').trim().length < mainText * ARTICLE_DWARF_RATIO;
+}
+
 function findArticleElement(smartDetection: boolean): Element | null {
   pageArticlesCache = null; // fresh per pass — the DOM can change between captures
   for (const sel of ARTICLE_SELECTORS) {
@@ -1685,6 +1711,16 @@ function findArticleElement(smartDetection: boolean): Element | null {
       catch { return true; }
     }) ?? null;
     if (!el || (el.textContent ?? '').trim().length < ARTICLE_MIN_CHARS) continue;
+    // A tiny <article> on a page whose <main> holds far more prose is a media
+    // FIGURE or teaser card, not the story (Japan Times wraps only the hero
+    // photo + caption in <article>, with the 47-paragraph body in
+    // <main class="article-page">). Taking it yields a caption-only clip, so
+    // fall through to the next selector — same shape as the comment-widget and
+    // article-card skips above, keyed on size rather than markup.
+    if (el.tagName.toLowerCase() === 'article' && isFigureNotStory(el)) {
+      log(LL.DEBUG, `Discerned: skipping <article> (${(el.textContent ?? '').trim().length} chars, no prose) — figure, not story`, 'url:', window.location.href);
+      continue;
+    }
     if (smartDetection && looksLikeContainer(el)) {
       log(LL.DEBUG, `Discerned: skipping <${el.tagName.toLowerCase()}> (looks like container) — falling to Readability`, 'url:', window.location.href);
       return null;
@@ -6642,6 +6678,41 @@ const REVIEWS_SECTION_RE = new RegExp(
  * generic, article/selection/full-page) gets it. Skips tweet-card subtrees —
  * their links are part of the reconstructed tweet.
  */
+/**
+ * Stamp `dx-prose-wrap` on a <div> that holds an inline SVG AND real prose.
+ *
+ * The web renderer flexes `div:has(> svg)` because such a div is nearly always
+ * an icon/action row. But an article body wrapper that merely contains one
+ * inline SVG (USA Today's ad-served layout) then flexes every paragraph into a
+ * one-character-wide column. Tag-based tests misfire here — Medium puts its
+ * clap COUNT in a <p> — so key on prose LENGTH instead, which is what actually
+ * separates "icon row with a label" from "the article".
+ */
+function tagProseWrappers(root: Element): void {
+  const PROSE_WRAP_MIN_CHARS = 200;
+  root.querySelectorAll('div').forEach(div => {
+    if (!div.querySelector(':scope > svg, :scope > a > svg')) return;
+    // dx-* containers carry their own layout rules (post/header/stats rows);
+    // opting them out of the icon-row flex would undo the tagger's layout.
+    if (div.className && /dx-/.test(String(div.className))) return;
+    if (div.closest('[class*="dx-"], [class*="tweet-"]')) return;
+    // Longest single prose block inside — a real body has at least one
+    // substantial paragraph; an icon row's label is a few characters.
+    let longest = 0;
+    div.querySelectorAll('p, li, blockquote, h1, h2, h3, h4').forEach(b => {
+      const n = (b.textContent ?? '').trim().length;
+      if (n > longest) longest = n;
+    });
+    // Fall back to the div's OWN text: a metadata block (Open Library's
+    // "Edition Notes"/"The Physical Object") carries plenty of text in bare
+    // text nodes and <div>s, with no <p> for the query above to find.
+    const ownText = (div.textContent ?? '').trim().length;
+    if (longest >= PROSE_WRAP_MIN_CHARS || ownText >= PROSE_WRAP_MIN_CHARS) {
+      appendClass(div, 'dx-prose-wrap');
+    }
+  });
+}
+
 function removeGenericChrome(root: Element): void {
   const inTweetCard = (el: Element): boolean => !!el.closest('[class*="tweet-card"]');
 
@@ -7425,6 +7496,7 @@ function sanitiseTreeInPlace(root: Element, stripStyles = false) {
   applyFlexSeparation(root);
   removeGenericChrome(root);
   stripZeroWidthChars(root);
+  tagProseWrappers(root);
 
   // VIDEO-PLAYER CONTROL CHROME. A player's control layer is a row of icon
   // buttons — play/pause, captions, cast, volume, settings, fullscreen, picture

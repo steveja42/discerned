@@ -98,6 +98,13 @@ const TARGETS: Record<string, string> = {
   ebay: 'https://www.ebay.com/itm/397652415204',
   target: 'https://www.target.com/p/razer-ornata-v3-tenkeyless-espeon-umbreon-edition/-/A-95017977',
   lastfm: 'https://www.last.fm/music/Radiohead',
+  // Narrow-column collapse (2026-08-22): body text renders one character per
+  // line in the clip while the cast, from the same bodyHtml, is perfect — so
+  // the defect is in how .clip-body styles the markup, not in capture.
+  usatoday: 'https://www.usatoday.com/story/tech/news/2026/07/24/openai-georgia-ai-data-center/91043217007/',
+  // Hero-only capture (2026-08-22): clip is the lead photo + caption, while the
+  // page renders ~20 paragraphs of visible, non-paywalled body text.
+  japantimes: 'https://www.japantimes.co.jp/news/2026/07/29/japan/kumamoto-quake-explosion-mall/',
 };
 
 test.describe.configure({ mode: 'serial' });

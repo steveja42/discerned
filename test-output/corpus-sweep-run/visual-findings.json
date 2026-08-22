@@ -232,9 +232,9 @@
       "note": "Clean."
     },
     "hackaday": {
-      "verdict": "critical",
+      "verdict": "clean",
       "where": "cast",
-      "note": "Clip is clean; the cast misreads shell-comment lines as markdown headers, producing fake giant section headings."
+      "note": "Clip and cast both clean; the shell listing renders as a code block."
     },
     "ghost-blog": {
       "verdict": "clean",
@@ -252,9 +252,9 @@
       "note": "Clean."
     },
     "usatoday": {
-      "verdict": "critical",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Clip's body text flex-collapses into a single-character-wide column; the cast (same underlying HTML) is fully readable."
+      "note": "Full article captured and readable — headline, byline, all body paragraphs and both images."
     },
     "time": {
       "verdict": "flaw",
@@ -522,9 +522,9 @@
       "note": "An inline related-article link flex-collapses into a one-token-per-line vertical strip."
     },
     "japantimes": {
-      "verdict": "critical",
+      "verdict": "flaw",
       "where": "clip",
-      "note": "Captures the hero image and caption only — no headline, byline, or body, though the source is not paywalled."
+      "note": "Full story, byline and photos now captured; a \"Sustainable Japan\"/In Focus recirculation rail rides along at the end."
     },
     "gutenberg": {
       "verdict": "clean",

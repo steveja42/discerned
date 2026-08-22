@@ -1305,9 +1305,15 @@ a { color: inherit; }
    an action button row, badge row, or icon group from a modern UI. Render
    it as inline-flex so the icons stay together as a group and adjacent
    groups flow on the same line until the column genuinely runs out of
-   space. */
-.clip-body div:has(> svg),
-.clip-body div:has(> a > svg) {
+   space.
+   An icon row holds icons and short counts, not prose. A div that wraps the
+   article BODY and merely happens to contain an inline SVG (USA Today's
+   ad-variant layout) would otherwise flex every paragraph into a
+   one-character column, so .dx-prose-wrap opts those out — stamped at capture
+   by tagProseWrappers, which keys on real prose length rather than on tag
+   names (Medium's clap counts live in a <p>, so a tag-based test misfires). */
+.clip-body div:has(> svg):not(:where(.dx-prose-wrap)),
+.clip-body div:has(> a > svg):not(:where(.dx-prose-wrap)) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
