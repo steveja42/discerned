@@ -9,6 +9,164 @@ clip with content-free heuristics, and writes 3 images/domain (source/clip/cast)
 to `test-output/corpus-sweep-run/`. A human visual review lives in
 `test-output/corpus-sweep-run/visual-findings.json` (the gallery sorts by it).
 
+## PHASE 4.7 (2026-08-22) — re-swept all skipped/blocked/dead domains
+
+Re-ran every domain that was skipped, error'd, or scored "ok" but was actually
+a bot-block/dead-URL page (per `visual-findings.json`'s `blocked` verdicts) —
+26 domains total, via `corpus-sweep-manual` (headed, warm Profile 3).
+
+**19 domains recovered** (now captured + visually verified clean/flaw, not
+just scored): reuters, bloomberg, reddit-thread, nytimes, forbes, venturebeat,
+tripadvisor, zillow, producthunt, globeandmail, sec-edgar, courtlistener,
+github-issue, mayoclinic, xda-forums, postguam, and (after the extension
+deregistration below was fixed) ndtv. Two prior corpus-JSON replacement URLs
+(venturebeat, github-issue) that had never actually been re-swept are now
+confirmed captured cleanly. `sciencemag`'s URL is fixed-pending (see below).
+
+**New defects found during visual verification** (composite score alone
+missed both — same lesson as Phase 4.6's 7 false passes):
+- **globeandmail — CRITICAL, new.** Headline/byline/dateline capture fine,
+  but the entire article BODY is missing; clip jumps straight into
+  "Tickers mentioned"/newsletter promos/SecureDrop chrome. Not previously
+  documented for this domain. Needs investigation.
+- **reuters — flex-collapse, same known pattern.** One paragraph renders
+  one character per line (the `dx-stats`/flex-collapse signature, see
+  memory `project_dx_stats_flex_collapse`). Adds to the existing list
+  (thehindu/wikivoyage/engadget/zdnet/zenodo/rottentomatoes).
+- **tripadvisor — cross-sell dominance.** Attraction page's own content is
+  swamped by a long "Recommended experiences nearby" rail of unrelated
+  tours, same class as the documented straitstimes commerce gap.
+- **producthunt** flagged 1 distorted image by the scorer — not yet
+  investigated further, capture otherwise reads fine.
+- **xda-forums** — thin capture (OP post only, no replies visible); unclear
+  if the thread genuinely has none or the tagger misses them.
+
+**Two domains had DEAD corpus URLs** (404):
+- `ndtv` — old URL 404'd. Found a live replacement
+  (`/business-news/india-space-economy-...`) via a throwaway DOM-scrape probe
+  against the real ndtv.com homepage (warm Profile 3). The new URL then hit a
+  hard 30s/60s `__DISCERNED_TEST_CAPTURE` timeout on 3 attempts — root cause
+  was NOT the site or the pipeline: the SAME throwaway discovery probe passed
+  `clearSwCacheForRawDir: true` (copied from the established
+  `corpus-sweep-manual.spec.ts` pattern) and was re-run several times while
+  debugging its own unrelated failures, which deletes `Extension State` /
+  `Extension Rules` dirs under Profile 3 — this silently deregistered
+  Discerned from the profile with zero trace (not even a disabled record in
+  `Secure Preferences`). 18 captures earlier in the SAME session had worked
+  fine; the probe broke it partway through. User caught it (dev mode was off,
+  extension missing), reinstalled from `dist-test`, and the exact same ndtv
+  URL captured cleanly on the next attempt — full article, hero image, all
+  sections. Fixed, verdict now `clean`. See memory
+  `project_extension_silently_deregistered` — **do not pass
+  `clearSwCacheForRawDir` from a throwaway probe**, especially not one being
+  re-run repeatedly against a live persistent profile.
+- `sciencemag` — old URL also 404'd. Could NOT find a replacement:
+  **science.org hard-walled the warm profile** on every entry point tried
+  (news hub, journal page, search, even the bare homepage), title stuck on
+  "Just a moment..." through a full 60s headed wait with a human clicking.
+  Four hits on the domain in a short window (partly from my own tooling
+  mistakes — see "mistakes made" below) likely pushed it into the same
+  Cloudflare cooldown documented for librarything/rateyourmusic in Phase 4.6.
+  **Do not retry in a loop.** Leave for several hours, then one single headed
+  attempt with a freshly-discovered article URL.
+
+**5 domains remain genuinely blocked** (tried at both 90s and 150s wait,
+still didn't clear passively): `medium-generic`, `discogs`, `openai-blog`,
+`lemmy-thread`, `netflix-techblog`. These are hard bot/CF walls that don't
+self-clear without real human interaction — user confirmed medium-generic
+specifically. Left as `blocked` verdicts; no code fix applies.
+
+**Rate-limited trio still cooling down**: `librarything`,
+`librarything-catalog`, `rateyourmusic` — single non-looping attempt (60s
+wait) 5 days after the Phase 4.6 cooldown started, still blocked. Needs
+longer than 5 days, or the repeated attempts across sessions keep resetting
+the clock. Leave alone.
+
+**Mistakes made this session:**
+- Ran a discovery probe against science.org **headless first** (no window
+  for a human to clear CF), then gave up and deleted it instead of just
+  switching to headed — wasted a hit on the domain for nothing.
+- Forgot to raise the Playwright per-test timeout above the 30s default when
+  writing a throwaway headed probe with a coded 60s wait — the process was
+  killed at 30s, cutting off the human's in-progress click.
+- Shell working directory silently drifted to `discerned-ext/` after an
+  earlier `cd`, causing `pnpm exec` to intermittently no-op (`playwright not
+  found`) on retries — always `cd /c/dev/discerned` (or verify `pwd`) before
+  a Bash-tool Playwright invocation in this monorepo, don't trust persisted
+  cwd across many tool calls in one turn.
+- Net effect of the above three: 4 real/attempted hits on science.org in
+  ~10 minutes, which is the same over-fast pattern that cooled down
+  postguam and librarything/rateyourmusic in Phase 4.6. Pace single-domain
+  probes against a known-fragile site deliberately, don't just retry blind.
+- The SAME throwaway science.org probe also carried `clearSwCacheForRawDir:
+  true`, copied uncritically from `corpus-sweep-manual.spec.ts`'s launch
+  call without noticing it deletes `Extension State`/`Extension Rules`, not
+  just an SW cache. Re-running it several times against the live persistent
+  Profile 3 silently deregistered the hand-installed Discerned extension
+  with zero trace — not a Cloudflare/site issue, not a different session.
+  18 prior captures in this same session had worked fine; this broke it
+  mid-run. Cost: a real "is this my fault" back-and-forth with the user
+  before the mechanism was found by checking `Secure Preferences` directly
+  and correlating capture timestamps against when the probe ran. See memory
+  `project_extension_silently_deregistered`. Lesson: never copy
+  `clearSwCacheForRawDir` into a new probe without reading what it deletes,
+  and never re-run ANY launchWithExtension call repeatedly against a live
+  persistent profile while debugging something unrelated (PATH glitches,
+  timeout tuning) — each run is a fresh chance to corrupt shared state.
+
+### Follow-up (same day) — 8 of the remaining 9 blocked domains recovered
+
+After the extension-deregistration fix above, two things also changed before
+the final push: (1) `launchExtension.ts` now strips `--no-sandbox` from
+Playwright's own default arg list on the real-Chrome path too (it was
+already never added explicitly, but Playwright injects it regardless,
+triggering an "unsupported flag" banner the user saw) — see the
+`ignoreDefaultArgs` block; (2) `clearServiceWorkerCache` now carries a loud
+doc-comment warning about the `Extension State`/`Extension Rules` deletion
+risk, without removing the option itself (6 established call sites rely on
+it clearing genuinely-stale SW caches after a rebuild).
+
+User then supplied fresh/working URLs for 9 of the 10 domains and confirmed
+several had already cleared manually in the warm profile. A single,
+non-repeated `corpus-sweep-manual` pass (90s wait, 10 domains) captured
+**8 of 10** cleanly: medium-generic, discogs, openai-blog, lemmy-thread,
+netflix-techblog, librarything, rateyourmusic — plus a NEW
+`librarything-author` entry (kept separate from `librarything-catalog`
+because the user's replacement URL was an author page, not a member catalog,
+and `librarything-catalog`'s whole reason to exist is testing a documented
+cross-frame capture defect that a different page shape wouldn't exercise;
+that original URL was kept and re-verified the SAME defect still reproduces,
+unrelated to the wall). **librarything + rateyourmusic's 2026-08-17
+rate-limit cooldown has fully cleared** — both captured excellent, rich
+entity pages (member reviews/ratings/lists/credits) on the first attempt.
+
+Two didn't clear on that 10-domain automated pass: `sciencemag` and the new
+`librarything-author`. Both were RE-TRIED individually, isolated from any
+other same-domain hit, and both cleared cleanly first try —
+`librarything-author` in particular had been the THIRD rapid
+`librarything.com` request in ~90s in the batched run (after `librarything`
++ `librarything-catalog`), so the isolated retry points at request CADENCE
+being the actual trigger, not a per-URL/per-path block. Both are now
+`clean` with rich, complete captures (sciencemag: full article;
+librarything-author: full author entity page — bio, works, tags, reviews,
+lists, awards).
+
+**All 10 of the originally-blocked/dead domains from this session are now
+resolved.** Updated: `tests/fixtures/corpus-domains.json` (9 URLs
+replaced/annotated + 1 new entry), `test-output/corpus-sweep-run/visual-findings.json`
+(29 new/updated verdicts total across all passes this session),
+`tests/e2e/helpers/launchExtension.ts` (sandbox-flag fix + deregistration
+warning), gallery rebuilt.
+
+**Lesson for future sweep runs against Cloudflare-protected domains:**
+batching multiple URLs on the SAME domain back-to-back in one
+`corpus-sweep-manual` run can trip a rate/cadence-based challenge even when
+each individual URL would clear fine on its own — if a domain-batched run
+shows one entry blocked after its siblings on the same domain cleared,
+retry that one in ISOLATION (its own `SWEEP_MANUAL_ONLY` run, not bundled
+with anything else on the same domain) before concluding the URL itself is
+walled.
+
 ## PHASE 4.6 (2026-08-17) — full re-run + harness false-pass fixes + visual re-review COMPLETE
 
 Triggered by a pre-ship regression check ("are we sure Rotten Tomatoes is still

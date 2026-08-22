@@ -31,6 +31,20 @@ const SW_CACHE_SUBDIRS = [
 // defaults to 'Default' (throwaway/named-under-PROFILES_ROOT profiles); pass the
 // real sub-profile ('Profile 3') for a rawUserDataDir. Cookies / Local Storage /
 // Network are NOT under these subdirs, so cf_clearance + logins survive.
+//
+// DANGER — this deletes `Extension State` / `Extension Rules`, which is where
+// Chrome persists a hand-installed (preinstalledExtension) extension's
+// registration, not just its SW cache. Deleting it is safe as a ONE-SHOT
+// clear-before-launch (Chrome rebuilds it from the extension on disk on the
+// next launch) but NOT safe to call while another Chrome process still holds
+// the profile lock / has these dirs open — that race silently deregistered
+// Discerned from a persistent test profile with zero trace (2026-08-22, see
+// memory project_extension_silently_deregistered). Never invoke this (via
+// `clearSwCacheForRawDir`) from a throwaway probe that gets re-run several
+// times in quick succession against the SAME persistent profile without a
+// confirmed-closed prior Chrome process (`tasklist` shows no chrome.exe) in
+// between — prefer the established call sites (corpus-sweep*, the tools/
+// probes) which each launch once per process.
 function clearServiceWorkerCache(userDataDir: string, profileFolder = 'Default'): void {
   for (const sub of SW_CACHE_SUBDIRS) {
     try {
@@ -236,10 +250,17 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
       //  - --enable-automation: the "controlled by test software" banner + internal
       //    automation flags Cloudflare reads. --exclude-switches doesn't work on a
       //    real channel, so ignoreDefaultArgs is how it's suppressed on branded Chrome.
+      //  - --no-sandbox: Playwright's own default arg list includes this even when
+      //    we never add it ourselves (see the explicit opt-out for it above, at
+      //    `...(opts.channel ? [] : ['--no-sandbox'])`). On a real installed Chrome
+      //    it triggers the yellow "You are using an unsupported command-line flag"
+      //    banner and can destabilize the browser process — strip it here too so a
+      //    real-channel launch never carries it regardless of source.
       ignoreDefaultArgs: [
         '--disable-extensions',
         '--disable-component-extensions-with-background-pages',
         '--enable-automation',
+        '--no-sandbox',
       ],
       args,
       viewport: { width: 1280, height: 720 },

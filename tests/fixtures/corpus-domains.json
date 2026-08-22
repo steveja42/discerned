@@ -168,8 +168,8 @@
     },
     {
       "name": "medium-generic",
-      "url": "https://medium.com/@karpathy/software-2-0-a64152b37c35",
-      "note": "medium article — CF/Turnstile; clears via headed retry or manual pass. HEADED."
+      "url": "https://medium.com/@mariakourtesi/sowing-quality-one-seed-at-a-time-9eef31cbc9d7",
+      "note": "medium article — CF/Turnstile; clears via headed retry or manual pass. HEADED. Replaced 2026-08-22 (user-supplied) — old karpathy URL had gone hard-unclearable."
     },
     {
       "name": "dev-to",
@@ -444,7 +444,7 @@
     {
       "name": "discogs",
       "url": "https://www.discogs.com/release/249504-Rick-Astley-Never-Gonna-Give-You-Up",
-      "note": "PHASE 4.3 — ENTITY: Discogs music release (tracklist, credits, versions). Direct."
+      "note": "PHASE 4.3 — ENTITY: Discogs music release (tracklist, credits, versions). Direct. User confirmed this URL cleared for them 2026-08-22 in the warm profile — re-verify via the sweep."
     },
     {
       "name": "bandcamp",
@@ -883,13 +883,13 @@
     },
     {
       "name": "openai-blog",
-      "url": "https://openai.com/index/introducing-gpt-4o/",
-      "note": "company announcement post, SPA (headless-walled; needs headed pass)"
+      "url": "https://openai.com/index/pacing-model-development-cyber-capabilities/",
+      "note": "company announcement post, SPA (headless-walled; needs headed pass). Replaced 2026-08-22 (user-supplied) — old gpt-4o URL had gone hard-unclearable."
     },
     {
       "name": "ndtv",
-      "url": "https://www.ndtv.com/science/nasa-james-webb-space-telescope-captures-new-image-of-supernova-remnant-7208412",
-      "note": "India news article, ad-heavy (headless-walled; needs headed pass)"
+      "url": "https://www.ndtv.com/business-news/india-space-economy-china-investment-bellatrix-aerospace-isro-resignations-11939396",
+      "note": "India news article, ad-heavy (headless-walled; needs headed pass). Replaced 2026-08-22 — old URL had gone dead (404). New URL now captures cleanly (full article, hero image, all sections). The earlier repeated 'capture timeout' was the extension having been silently deregistered from Profile 3 by an unrelated probe's clearSwCacheForRawDir call, not a site or pipeline issue — see memory project_extension_silently_deregistered."
     },
     {
       "name": "investopedia",
@@ -898,8 +898,8 @@
     },
     {
       "name": "sciencemag",
-      "url": "https://www.science.org/content/article/dna-reveals-surprising-origins-mysterious-etruscans",
-      "note": "science journalism article (headless-walled; needs headed pass)"
+      "url": "https://www.science.org/content/article/ai-chatbots-are-becoming-experts-changing-people-s-minds-what-s-their-secret",
+      "note": "science journalism article. Replaced 2026-08-22 (user-supplied) — old dna-etruscans URL was dead (404). science.org was hard Cloudflare-walling the warm profile as of 2026-08-22 (title stuck on 'Just a moment...' through a 60s headed wait) from repeated attempts in one session — do NOT loop-retry if it recurs, same cooldown risk as librarything/rateyourmusic."
     },
     {
       "name": "pubmed",
@@ -939,12 +939,12 @@
     {
       "name": "lemmy-thread",
       "url": "https://lemmy.world/post/49992871",
-      "note": "fediverse link-aggregator thread (Cloudflare: needs the headed pass)"
+      "note": "fediverse link-aggregator thread (Cloudflare: needs the headed pass). User confirmed this URL cleared for them 2026-08-22 in the warm profile — re-verify via the sweep."
     },
     {
       "name": "netflix-techblog",
-      "url": "https://netflixtechblog.com/genpage-towards-end-to-end-generative-homepage-construction-at-netflix-77146fba8a08",
-      "note": "Medium-hosted engineering blog (Cloudflare: needs the headed pass)"
+      "url": "https://netflixtechblog.com/building-service-topology-at-scale-architecture-challenges-and-lessons-learned-f4b792f3f0d8",
+      "note": "Medium-hosted engineering blog (Cloudflare: needs the headed pass). Replaced 2026-08-22 (user-supplied) — old genpage URL had gone hard-unclearable."
     },
     {
       "name": "storygraph",
@@ -953,13 +953,13 @@
     },
     {
       "name": "librarything",
-      "url": "https://www.librarything.com/work/24789629/319692205",
-      "note": "PHASE 4.5 — ENTITY: LibraryThing WORK page (cover, author, description, tag cloud, member reviews + rating, members, classifications, statistics). Loads HEADLESS. An earlier /work/<id>/t/<slug> URL 403d; this /work/<id>/<id> form does not — the wall was URL-specific, NOT domain-wide. RATE-LIMITED 2026-08-17: repeated sweep attempts put this domain into a Cloudflare cooldown — the \"verifying you are human\" checkbox will not clear even headed with a human clicking. Leave it alone for several hours; do NOT retry in a loop, which only extends the cooldown."
+      "url": "https://www.librarything.com/work/29306937/t/The-Only-One-Left",
+      "note": "PHASE 4.5 — ENTITY: LibraryThing WORK page (cover, author, description, tag cloud, member reviews + rating, members, classifications, statistics). Replaced 2026-08-22 (user-supplied) after the prior URL's Cloudflare cooldown (RATE-LIMITED 2026-08-17 note); re-verify via the sweep — pace this domain carefully, do NOT loop-retry if it walls again."
     },
     {
       "name": "rateyourmusic",
       "url": "https://rateyourmusic.com/song/the-beatles/a-day-in-the-life/",
-      "note": "PHASE 4.5 — ENTITY: RYM SONG page (title, artist, genre, release date, all-time rank, ratings, lyrics). Needs the HEADED retry (Cloudflare challenge headless, clears headed). An earlier /release/album/... URL hard-403d; the /song/... form works. RATE-LIMITED 2026-08-17: repeated sweep attempts put this domain into a Cloudflare cooldown — the \"verifying you are human\" checkbox will not clear even headed with a human clicking. Leave it alone for several hours; do NOT retry in a loop, which only extends the cooldown."
+      "note": "PHASE 4.5 — ENTITY: RYM SONG page (title, artist, genre, release date, all-time rank, ratings, lyrics). Needs the HEADED retry (Cloudflare challenge headless, clears headed). User confirmed this URL cleared for them 2026-08-22 in the warm profile — the 2026-08-17 rate-limit cooldown appears to have expired; re-verify via the sweep, pace carefully."
     },
     {
       "name": "spotify-album",
@@ -980,6 +980,11 @@
       "name": "librarything-catalog",
       "url": "https://www.librarything.com/catalog/Kardiaa",
       "note": "PHASE 4.5 — ENTITY: LibraryThing member CATALOG (list/table of a user library). CAPTURE DEFECT (not a wall): the table lives in a CHILD IFRAME (catalog_bottom.php) while the top document holds only the masthead (134 chars, 0 tables), so the clip is the 20-YEARS badge + 3 nav links. Needs cross-frame capture; do not chase as a layout-finder mis-pick. RATE-LIMITED 2026-08-17: repeated sweep attempts put this domain into a Cloudflare cooldown — the \"verifying you are human\" checkbox will not clear even headed with a human clicking. Leave it alone for several hours; do NOT retry in a loop, which only extends the cooldown."
+    },
+    {
+      "name": "librarything-author",
+      "url": "https://www.librarything.com/a/16581172/Riley-Sager",
+      "note": "PHASE 4.7 — ENTITY: LibraryThing author page. Added 2026-08-22 (user-supplied, cleared the Cloudflare wall live) as a distinct entry from librarything-catalog — it's an author profile, not a member library table, so it doesn't exercise the catalog's cross-frame capture defect. Kept separate rather than repointing librarything-catalog so that defect stays covered once its own URL clears its rate-limit cooldown."
     },
     {
       "name": "msn-slideshow",

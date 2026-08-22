@@ -14,7 +14,7 @@
     "nytimes": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full article captured; only a minor \"Advertisement\" label leaks."
     },
     "theatlantic": {
       "verdict": "clean",
@@ -22,9 +22,9 @@
       "note": "Clean — paywall fade is CSS-only, full text was in the DOM and captured."
     },
     "reuters": {
-      "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "One paragraph renders one character per line (flex-collapse defect)."
     },
     "apnews": {
       "verdict": "flaw",
@@ -42,14 +42,14 @@
       "note": "Clean."
     },
     "bloomberg": {
-      "verdict": "blocked",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Bot-block page, not the article — no verdict on our clipping."
+      "note": "Faithfully stops at the paywall gate; not a capture bug."
     },
     "reddit-thread": {
-      "verdict": "blocked",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Bot-block page, not the thread — no verdict on our clipping."
+      "note": "Full thread with nested replies captured correctly."
     },
     "goodreads-book": {
       "verdict": "clean",
@@ -89,7 +89,7 @@
     "medium-generic": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full multi-section article captured cleanly."
     },
     "danluu": {
       "verdict": "clean",
@@ -274,7 +274,7 @@
     "forbes": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full sponsored article captured cleanly."
     },
     "fortune": {
       "verdict": "clean",
@@ -367,9 +367,9 @@
       "note": "The author avatar is aspect-distorted into a large portrait; the title and date are missing."
     },
     "venturebeat": {
-      "verdict": "blocked",
+      "verdict": "flaw",
       "where": "clip",
-      "note": "Corpus URL was dead at capture time (404 page) — no verdict on our clipping; needs a re-capture against the replacement URL."
+      "note": "Trailing \"AI Weekly\" newsletter section rides along as chrome-leak."
     },
     "theregister": {
       "verdict": "flaw",
@@ -439,7 +439,7 @@
     "discogs": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full release entity page captured cleanly."
     },
     "bandcamp": {
       "verdict": "critical",
@@ -462,14 +462,14 @@
       "note": "Star ratings render as solid black squares; ~18 literal 'Loading…' placeholder lines leak in."
     },
     "tripadvisor": {
-      "verdict": "clean",
+      "verdict": "flaw",
       "where": "clip",
-      "note": "Clean."
+      "note": "Attraction content is dominated by an unrelated cross-sell rail of boat tours."
     },
     "zillow": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full structured listing captured cleanly."
     },
     "etsy": {
       "verdict": "flaw",
@@ -477,9 +477,9 @@
       "note": "The product description is garbled with literal dash-separator lines and bracket placeholder text."
     },
     "producthunt": {
-      "verdict": "clean",
+      "verdict": "flaw",
       "where": "clip",
-      "note": "Clean; one stretched screenshot thumbnail."
+      "note": "Scorer flagged 1 distorted image."
     },
     "npmjs": {
       "verdict": "clean",
@@ -604,12 +604,12 @@
     "netflix-techblog": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full engineering article with diagrams captured cleanly."
     },
     "lemmy-thread": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean — nested replies render as readable indented prose in both clip and cast."
+      "where": "clip",
+      "note": "Full thread with nested replies captured correctly."
     },
     "storygraph": {
       "verdict": "clean",
@@ -617,14 +617,14 @@
       "note": "Clean, 72% coverage."
     },
     "librarything": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "A ~90-entry recommendations list rides along as a stacked column of bare links."
+      "note": "Full structured entity page captured cleanly."
     },
     "rateyourmusic": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Below the Lists section the clip becomes a long expanse of near-empty rows with tiny thumbnails."
+      "note": "Full entity page with lyrics and credits captured cleanly."
     },
     "spotify-album": {
       "verdict": "flaw",
@@ -642,19 +642,19 @@
       "note": "Clean — cover, title, and all 10 tracks with play counts and durations captured in both clip and cast."
     },
     "librarything-catalog": {
-      "verdict": "critical",
+      "verdict": "blocked",
       "where": "clip",
-      "note": "The catalog table lives in a child iframe the pipeline doesn't cross; clip captures only page-level nav chrome."
+      "note": "Redirects to a sign-in page instead of the member catalog."
     },
     "github-issue": {
-      "verdict": "blocked",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Corpus URL was dead at capture time (404 page) — no verdict on our clipping; needs a re-capture against the replacement URL."
+      "note": "Full comment thread captured cleanly."
     },
     "postguam": {
-      "verdict": "blocked",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Rate-limit stub, self-inflicted by sweeping the site too fast — no verdict on our clipping."
+      "note": "Full article; minor trailing poll-widget chrome."
     },
     "msn-slideshow": {
       "verdict": "flaw",
@@ -697,9 +697,9 @@
       "note": "Clean; GitLab logo renders oversized at the head."
     },
     "sec-edgar": {
-      "verdict": "blocked",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Bot-block page, not the filing — no verdict on our clipping."
+      "note": "Full filing table captured intact."
     },
     "aws-blog": {
       "verdict": "flaw",
@@ -990,6 +990,46 @@
       "verdict": "clean",
       "where": "clip+cast",
       "note": "Clean."
+    },
+    "globeandmail": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "Article body is entirely missing; clip jumps from dateline straight into newsletter/widget chrome."
+    },
+    "courtlistener": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full legal opinion captured with proper formatting."
+    },
+    "ndtv": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article captured cleanly."
+    },
+    "sciencemag": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article captured cleanly on an isolated retry."
+    },
+    "mayoclinic": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full reference article, all sections intact."
+    },
+    "xda-forums": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Only the OP post is captured; no replies rendered."
+    },
+    "openai-blog": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Trailing \"Keep reading\" related-posts section rides along as chrome-leak."
+    },
+    "librarything-author": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full author entity page captured cleanly."
     }
   }
 }
