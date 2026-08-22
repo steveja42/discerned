@@ -698,8 +698,14 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
   // NEVER hit headless; everyone else runs headless (Pass 1). See PERIMETERX_SITES.
   // Headed-first group = PerimeterX walls + logged-in social feeds + the
   // Cloudflare-headed sites (see above).
+  // SWEEP_NO_PX_FIRST sends the headed-first group through Pass 1 INSTEAD, which
+  // is what its "then they'd only be reachable headless" comment promises. The
+  // split used to be computed unconditionally, so the flag dropped those domains
+  // from BOTH passes and they vanished from the run with no line in the report —
+  // easy to miss with 13 of them, glaring once the headed group grew to 58.
   const headedFirst = (n: string): boolean =>
-    PERIMETERX_SITES.has(n) || SOCIAL_FEED_SITES.has(n) || HEADED_ONLY_SITES.has(n);
+    !process.env.SWEEP_NO_PX_FIRST
+    && (PERIMETERX_SITES.has(n) || SOCIAL_FEED_SITES.has(n) || HEADED_ONLY_SITES.has(n));
   const pxDomains = DOMAINS.filter(d => headedFirst(d.name));
   const headlessDomains = DOMAINS.filter(d => !headedFirst(d.name));
 
