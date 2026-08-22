@@ -23,7 +23,9 @@
 // Options: SWEEP_LIMIT=10 (first N domains), SWEEP_ONLY=theverge,cnn (subset),
 //   SWEEP_SKIP=imdb,nytimes (exclude a subset), PROFILE_DIR=Profile 3 (default),
 //   SWEEP_NO_HEADED_RETRY=1 (skip the CF headed pass), SWEEP_NO_PX_FIRST=1
-//   (skip the PerimeterX headed-first pass — NOT recommended, see below).
+//   (skip the PerimeterX headed-first pass — NOT recommended, see below),
+//   SWEEP_GAP=<seconds> (pause between domains, default 20 — see GAP_SECS;
+//   0 disables it for offline/localhost corpora or a single domain).
 //
 // THREE-PASS flow:
 //  • Pass 0 — PerimeterX HEADED-FIRST (walmart/zillow/etsy/yelp/homedepot/
@@ -79,6 +81,21 @@ const SOCIAL_FEED_SITES = new Set([
   // TikTok needs no login, but a HEADLESS hit gets "Something went wrong" — so
   // it belongs in the headed pass for the bot-detection reason, not a session one.
   'tiktok-foryou', 'tiktok-profile',
+]);
+
+// Cloudflare sites whose corpus note already says HEADED. These used to run
+// headless first and then be UNREACHABLE: a headless hit gets a hard interstitial
+// ("ray id" / "you've been blocked"), which the detector classifies as HARD →
+// `challenged = false` → EXCLUDED from the Pass-2 headed retry. So they skipped on
+// every run at any pacing, and Pass 2 never fired for them.
+//
+// Medium in particular is stateful: a second load in quick succession blocks the
+// browser/profile, and it then stays blocked across headed/headless and referrer
+// variations until cleared manually. So the headless attempt doesn't just fail —
+// it spends the one cheap load and locks out the headed pass that would have
+// worked. Never take it.
+const CLOUDFLARE_HEADED_SITES = new Set([
+  'medium-generic', 'reddit-thread',
 ]);
 
 const DOMAINS: DomainEntry[] = (() => {
@@ -593,6 +610,26 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
  */
 const DOMAIN_TIMEOUT_MS = Number(process.env.SWEEP_DOMAIN_TIMEOUT_MS ?? 240_000);
 
+// Seconds to wait between domains. Hitting unrelated domains back-to-back at
+// machine speed is ITSELF the bot signal — no single request looks wrong, the
+// cadence does. An unpaced 5-domain run (the last three inside 28s, following an
+// earlier sweep ~30 min before) got medium a Cloudflare "ray id" page and reddit
+// a "blocked by network security" page, while the same URLs had captured cleanly
+// hours earlier. Both are HARD signatures, so the Pass-2 headed retry is
+// deliberately powerless against them — pacing is the only defence, which is why
+// this defaults ON rather than being opt-in. `finder-diag-probe` learned the
+// same lesson first (DIAG_GAP); the sweep had no equivalent until now.
+// SWEEP_GAP=0 disables it (offline/localhost corpora, or a single domain).
+const GAP_SECS = Number(process.env.SWEEP_GAP ?? 20);
+
+/** Pace before each domain except the first of a pass. */
+async function paceBeforeDomain(first: boolean, name: string): Promise<void> {
+  if (first || GAP_SECS <= 0) return;
+  // eslint-disable-next-line no-console
+  console.log(`   … pausing ${GAP_SECS}s before ${name} (avoid rate-limit)`);
+  await new Promise(r => setTimeout(r, GAP_SECS * 1_000));
+}
+
 async function captureDomainDeadlined(
   ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = false,
 ): Promise<SweepDriverRecord> {
@@ -637,7 +674,11 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
   // correctly hold the window open). Budget a possible headed retry for EVERY
   // domain at the per-domain deadline, so the whole-test timeout can never be
   // tighter than the per-domain timeouts it contains.
-  const perDomain = 75_000 + DOMAIN_TIMEOUT_MS;
+  //
+  // SWEEP_GAP adds a fixed pause before every domain but the first, and a domain
+  // can be visited in TWO passes (headless, then the headed retry), so budget the
+  // gap twice per domain. Omitting this would re-create the mid-run kill above.
+  const perDomain = 75_000 + DOMAIN_TIMEOUT_MS + GAP_SECS * 2_000;
   test.setTimeout(Math.max(DOMAINS.length * perDomain, 300_000) + 120_000);
 
   const rawUserDataDir = process.env.RAW_USER_DATA_DIR ??
@@ -649,9 +690,12 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
 
   // Split the corpus: PerimeterX-walled sites run HEADED-FIRST (Pass 0) and are
   // NEVER hit headless; everyone else runs headless (Pass 1). See PERIMETERX_SITES.
-  // Headed-first group = PerimeterX walls + logged-in social feeds (see above).
-  const pxDomains = DOMAINS.filter(d => PERIMETERX_SITES.has(d.name) || SOCIAL_FEED_SITES.has(d.name));
-  const headlessDomains = DOMAINS.filter(d => !PERIMETERX_SITES.has(d.name) && !SOCIAL_FEED_SITES.has(d.name));
+  // Headed-first group = PerimeterX walls + logged-in social feeds + the
+  // Cloudflare-headed sites (see above).
+  const headedFirst = (n: string): boolean =>
+    PERIMETERX_SITES.has(n) || SOCIAL_FEED_SITES.has(n) || CLOUDFLARE_HEADED_SITES.has(n);
+  const pxDomains = DOMAINS.filter(d => headedFirst(d.name));
+  const headlessDomains = DOMAINS.filter(d => !headedFirst(d.name));
 
   // ── Pass 0: HEADED-FIRST for PerimeterX sites (before any headless hit) ──
   // A clean headed session's FIRST impression is the best chance to clear
@@ -667,7 +711,8 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
       clearSwCacheForRawDir: true,
     });
     try {
-      for (const d of pxDomains) {
+      for (const [i, d] of pxDomains.entries()) {
+        await paceBeforeDomain(i === 0, d.name);
         const rec = await captureDomainDeadlined(pxCtx, d, true);
         mergeRecord(acc, rec);
         // eslint-disable-next-line no-console
@@ -700,7 +745,8 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
       // eslint-disable-next-line no-console
       console.log(`   ⌫ purged ${purged} stored clip(s) from a previous run`);
     }
-    for (const d of headlessDomains) {
+    for (const [i, d] of headlessDomains.entries()) {
+      await paceBeforeDomain(i === 0, d.name);
       const rec = await captureDomainDeadlined(ctx, d);
       mergeRecord(acc, rec);
       // eslint-disable-next-line no-console
@@ -729,7 +775,8 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
       clearSwCacheForRawDir: true,
     });
     try {
-      for (const d of cfDomains) {
+      for (const [i, d] of cfDomains.entries()) {
+        await paceBeforeDomain(i === 0, d.name);
         // `true` = this context IS headed. It was omitted before, so the gate-wait
         // loop (gated on ctxIsHeaded) NEVER RAN in the headed-retry pass — the one
         // pass whose whole purpose is clearing walls in a real window. A CF wall
