@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Discerned",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A web clipper with a Signal Rating. Keep what's worth reading, skip the rest, and publish your ratings when you choose.",
   "permissions": [
     "contextMenus",
