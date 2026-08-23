@@ -158,8 +158,9 @@ async function sendBridgeData(knownCount = 0): Promise<boolean> {
 }
 
 // Listen for messages pushed from the background worker.
-chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
-  if (!isContextValid()) return;
+// sendResponse is required, or chrome.tabs.sendMessage callers (PUSH_PENDING_SIGN) see a delivered message as a failed send.
+chrome.runtime.onMessage.addListener((message: BackgroundMessage, _sender, sendResponse) => {
+  if (!isContextValid()) return false;
   if (message.type === 'PUSH_NEW_CLIP') {
     post({ type: 'DISCERNED_BRIDGE_NEW_CLIP', clip: message.clip });
   }
@@ -169,7 +170,8 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
     sendBridgeData(0).catch((err: unknown) => {
       log(LL.ERROR, 'web-bridge: resync failed', err, 'url:', window.location.href);
     });
-    return;
+    sendResponse({ ok: true });
+    return false;
   }
   if (message.type === 'NAVIGATE_TO_CLIP') {
     // Tell the web page to focus this clip without any URL or React tree change.
@@ -192,6 +194,8 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage) => {
     // identity has changed since the extension connected.
     post({ type: 'DISCERNED_BRIDGE_PENDING_SIGN', id: message.id, event: message.event, expectedPubkey: message.expectedPubkey });
   }
+  sendResponse({ ok: true });
+  return false;
 });
 
 // Push a fresh HELLO to the page whenever the extension's auth state changes,

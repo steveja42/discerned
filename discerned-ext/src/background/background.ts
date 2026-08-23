@@ -523,6 +523,9 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
         currentAuthState = { type: 'guest' };
         if (!guestPrivateKey) guestPrivateKey = generateSecretKey();
         await chrome.storage.local.remove([STORAGE_KEYS.AUTH_STATE, STORAGE_KEYS.NIP07_LAST_SEEN]);
+        // See handleDisconnectAuth: don't let a stale approval stamp skip the
+        // focus-steal when the wallet reappears (possibly same pubkey).
+        await clearSignApproved();
         log(LL.NORMAL, '[auth] NIP-07 signer gone — downgraded to guest, was:', prev ? npubEncode(prev).slice(0, 12) : '(no pubkey)');
       } else if (message.hasNIP07 && currentAuthState.type === 'guest') {
         currentAuthState = { type: 'pro', hasNIP07: true, pubkey: message.pubkey };
@@ -770,6 +773,9 @@ async function handleDisconnectAuth(): Promise<BackgroundResponse> {
     STORAGE_KEYS.NIP46_CLIENT_KEY,
     STORAGE_KEYS.NSEC_ENCRYPTED,
   ]);
+  // Reconnecting can mean the wallet's own approval was reset on its side,
+  // so re-arm the focus-steal for the next cast rather than trust the stamp.
+  await clearSignApproved();
   return { success: true };
 }
 
