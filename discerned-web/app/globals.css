@@ -195,9 +195,12 @@ a { color: inherit; }
 }
 /* Azure to match the browser-tab favicon, which is drawn in this same #1d4ed8.
    MiniBeacon renders in currentColor, so the colour lives here rather than in the
-   component. --accent-ink (not --accent) is the exact value baked into app/icon.svg. */
+   component. --accent-ink (not --accent) is the exact value baked into app/icon.svg.
+   18.26x26 matches the beacon-on-cliff's 20.4:29.05 tight-bbox aspect ratio — this box
+   is what actually sizes the mark (the child svg stretches to 100%/100%), so it must
+   track the SVG's own aspect or the mark renders squashed. */
 .brand-mark {
-  width: 22px; height: 26px;
+  width: 18.26px; height: 26px;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--accent-ink);
   align-self: center;

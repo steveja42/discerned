@@ -2180,13 +2180,14 @@ ${themeVarsBlock(this.effectiveTheme)}
   // (see shared/theme.ts), so a blue mark would clash. Inheriting the h2's ink is what
   // MiniBeacon does on the web too.
   //
-  // viewBox is the mark's TIGHT bbox (4 3 24 30) rather than MiniBeacon's raw
-  // 0 0 32 36, which carries ~4 units of empty margin per side — with the raw box the
-  // mark renders ~17% smaller than the CSS height suggests and looks undersized next
-  // to the wordmark.
+  // viewBox is the mark's TIGHT bbox (5.8 1.95 20.4 29.05) in the beacon-on-cliff's own
+  // 0..32 coordinate system, rather than the raw 0 0 32 32 box, which carries slack on
+  // every side — with the raw box the mark renders visibly smaller than the CSS height
+  // suggests and looks undersized next to the wordmark.
   static readonly BRAND_MARK =
-    `<svg class="brand-mark" viewBox="4 3 24 30" fill="none" aria-hidden="true">` +
-    `<g stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.5">` +
+    `<svg class="brand-mark" viewBox="5.8 1.95 20.4 29.05" fill="none" aria-hidden="true">` +
+    `<g transform="translate(2.4 -0.6) scale(0.85)">` +
+    `<g stroke="currentColor" stroke-width="1.18" stroke-linecap="round" opacity="0.5">` +
     `<line x1="16" y1="9" x2="16" y2="3"/><line x1="11.5" y1="10" x2="7.5" y2="6"/>` +
     `<line x1="20.5" y1="10" x2="24.5" y2="6"/><line x1="9" y1="13" x2="4" y2="12"/>` +
     `<line x1="23" y1="13" x2="28" y2="12"/></g>` +
@@ -2194,10 +2195,10 @@ ${themeVarsBlock(this.effectiveTheme)}
     `<path d="M 15.5 7 L 16.5 7 L 16 4 Z" fill="currentColor"/>` +
     `<circle cx="16" cy="14" r="2.4" fill="currentColor"/>` +
     `<rect x="13.2" y="15.5" width="5.6" height="2.4" rx="0.5" fill="currentColor"/>` +
-    `<path d="M 14.2 18 L 17.8 18 L 19.4 33 L 12.6 33 Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/>` +
-    `<line x1="13.4" y1="22.5" x2="18.6" y2="22.5" stroke="currentColor" stroke-width="0.9" opacity="0.7"/>` +
-    `<line x1="13" y1="27" x2="19" y2="27" stroke="currentColor" stroke-width="0.9" opacity="0.7"/>` +
-    `<line x1="11" y1="33" x2="21" y2="33" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+    `<path d="M 14.2 18 L 17.8 18 L 19.4 31.3 L 12.6 31.3 Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none"/>` +
+    `<line x1="13.4" y1="22.5" x2="18.6" y2="22.5" stroke="currentColor" stroke-width="1.06" opacity="0.7"/>` +
+    `<line x1="13" y1="27" x2="19" y2="27" stroke="currentColor" stroke-width="1.06" opacity="0.7"/></g>` +
+    `<path d="M 8 26 L 24 26 L 24 29 L 19 31 L 11 30 L 8 28.4 Z" fill="currentColor"/></svg>`;
 
   // ── Styles ─────────────────────────────────────────────────────────────────
 
@@ -2264,9 +2265,10 @@ ${themeVarsBlock(this.effectiveTheme)}
       .panel-header h2 { color: var(--p-ink); font-size: 15px; font-weight: 700; flex: 1;
                          font-family: var(--p-mono); text-transform: uppercase; letter-spacing: 0.06em;
                          display: flex; align-items: center; gap: 7px; }
-      /* Beacon brand mark; inherits the h2's ink via currentColor. The 24x30 tight
-         bbox viewBox means these px values are the mark's real rendered size. */
-      .panel-header h2 .brand-mark { width: 13px; height: 16px; flex: none; display: block; }
+      /* Beacon-on-cliff brand mark; inherits the h2's ink via currentColor. The
+         20.4x29.05 tight bbox viewBox means these px values are the mark's real
+         rendered size. */
+      .panel-header h2 .brand-mark { width: 11.23px; height: 16px; flex: none; display: block; }
       .header-actions { display: flex; gap: 4px; }
 
       .icon-btn {
