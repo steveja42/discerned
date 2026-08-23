@@ -593,7 +593,7 @@ ${themeVarsBlock(this.effectiveTheme)}
           <p class="panel-desc">
             Once you're done, come back here and connect the identity you just made —
             whichever way nstart set you up: a signing extension, a <code>bunker://</code>
-            link, or your <code>nsec</code>.
+            link, or your <code>nsec</code>. If you just installed a signing extension, this browser tab will need to be reloaded before connecting. 
           </p>
           <button class="btn btn-secondary" id="btn-connect-after-nstart" type="button">I've created my account — connect it</button>
           <p class="identity-status" id="create-status"></p>
