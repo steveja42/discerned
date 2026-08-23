@@ -127,14 +127,9 @@
     "!**/node_modules/**"
   ],
   "runtimeArgs": [
-    "--load-extension=${workspaceFolder}\\dist",
-    "--no-first-run",
-    "--remote-debugging-port=9333",
-    "--disable-background-networking",
-    "--disable-background-timer-throttling",
-    "--disable-backgrounding-occluded-windows",
-    "--disable-hang-monitor",
-    "--disable-features=BackForwardCache,CalculateNativeWinOcclusion"
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run",
+        "--remote-debugging-port=9333",
   ]
 },
     {
