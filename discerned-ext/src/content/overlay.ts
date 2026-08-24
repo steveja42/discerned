@@ -2282,18 +2282,18 @@ ${themeVarsBlock(this.effectiveTheme)}
       .panel-body {
         flex: 1 1 auto;
         overflow-y: auto;
-        padding: 12px 16px;
-        display: flex; flex-direction: column; gap: 10px;
+        padding: 8px 16px 12px;
+        display: flex; flex-direction: column; gap: 8px;
       }
 
       /* --p-ink-4, not --p-rule: light mode's --p-rule is rgba(26,23,20,.16),
          too faint to separate the publish/CTA section from the scrolling form. */
       .panel-footer {
         flex: 0 0 auto;
-        padding: 14px 16px;
+        padding: 10px 16px;
         border-top: 2px solid var(--p-ink-4);
         background: transparent;
-        display: flex; flex-direction: column; gap: 10px;
+        display: flex; flex-direction: column; gap: 8px;
       }
 
       /* Format chips. Sized so all four fit one row in the 380px panel (348px
@@ -2471,7 +2471,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       .slider-track {
         position: relative; display: grid; grid-template-columns: repeat(3, 1fr);
         background: var(--p-surface-2); border: 1px solid var(--p-ink-4);
-        overflow: hidden; height: 38px; width: 100%;
+        overflow: hidden; height: 34px; width: 100%;
       }
       .slider-pill {
         position: absolute; top: 2px; bottom: 2px; left: 2px;
