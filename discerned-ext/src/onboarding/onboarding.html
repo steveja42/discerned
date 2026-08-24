@@ -91,15 +91,6 @@
 
     h1 { font-size: 1.4rem; font-weight: 600; }
 
-    /* Benefit line above the pinning steps — frames the instructions as a means
-       to an end rather than the first thing the product says about itself. */
-    .lede {
-      color: var(--p-ink-2);
-      font-size: 1rem;
-      line-height: 1.5;
-      margin-bottom: -12px;
-    }
-
     .steps-list { display: flex; flex-direction: column; gap: 20px; }
 
     .step-item { display: flex; gap: 16px; align-items: flex-start; }
@@ -136,6 +127,7 @@
     }
     /* The footer hint sits directly under the button — no second divider. */
     .hint-plain { border-top: none; padding-top: 0; }
+    .hint-lg { font-size: 0.98rem; color: var(--p-ink-2); }
     .hint a { color: var(--p-accent-ink); text-decoration: underline; text-underline-offset: 2px; }
 
     .btn-done {
@@ -168,10 +160,9 @@
     </svg>
     <span>Discerned</span>
   </div>
-  <p class="tagline">Clip it, rate it, keep it. Build your own library of worthy content.</p>
+  <p class="tagline">Clip it, rate it, keep it. Discerned helps you build your own trusted library of high-quality information.</p>
 
   <div class="card">
-    <p class="lede">Discerned helps you build your own trusted library of high-quality information.</p>
     <h1>Pin Discerned to your toolbar</h1>
 
     <div class="steps-list">
@@ -209,10 +200,10 @@
       </div>
     </div>
 
-    <p class="hint">
-      Your clips stay on this device unless you choose to publish them. Publishing uses
+    <p class="hint hint-lg">
+      If you want your clips to go beyond this device you can share them with the world and publish to
       <a href="https://nstart.me" target="_blank" rel="noopener">Nostr</a> — an open social network
-      where you own your identity and your posts.
+      where you own your identity, posts and connections.
       <a href="https://nstart.me" target="_blank" rel="noopener">Find out more →</a>
     </p>
 
