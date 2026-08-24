@@ -54,8 +54,8 @@ pnpm build                 # alias for discerned-web build (used by Netlify)
 # === From within each sub-project ===
 # Extension
 cd discerned-ext
-pnpm dev                   # Vite watch mode
-pnpm build                 # production build → dist/
+pnpm dev                   # Vite watch mode, writes dist/ incrementally (loaded extension's target)
+pnpm build                 # production build → dist-pack/ (never touches dist/)
 pnpm build:test            # development-mode build → dist-test/ (retains test hooks)
 pnpm type-check
 pnpm lint
@@ -130,9 +130,10 @@ Production-code edits in `discerned-ext/src/content/content.ts` add a message li
 
 `__DISCERNED_TEST_CAST` runs the extension's REAL cast pipeline without signing or publishing: the content script does the real `deriveLongFormMarkdown` (turndown needs the content-script DOM the SW lacks), then the background's test-only `BUILD_CAST` handler runs the real `buildCastTemplates` (`buildShortNote` + `createLongFormEvent`) and returns the unsigned kind-1 + kind-30023 templates. Specs sign them with a throwaway key and render through `/discerns`. This drives production code — not a reimplementation — so the cast the visual specs screenshot is byte-for-byte what `handleCast` would publish. (Note: persistent test profiles cache the extension's MV3 service worker across a `pnpm build:test`, so a new background handler like `BUILD_CAST` can 404 with a stale SW — `launchWithExtension` now clears the SW/Code-Cache dirs for named profiles on launch to force a re-register.)
 
-### dist vs dist-test isolation
-- `dist/` — production build (`pnpm build`). Loaded by your Brave browser for daily use.
+### dist vs dist-test vs dist-pack isolation
+- `dist/` — dev build, written incrementally by `pnpm dev`. Loaded by your Brave browser for daily use.
 - `dist-test/` — test build (`pnpm build:test`). Loaded by Playwright. **E2E tests never touch your dev install.**
+- `dist-pack/` — production build (`pnpm build`, also what `pnpm pack:ext` zips). Never touches `dist/`, so a production build can't collide with or clobber the live dev output.
 
 ## Deployment
 

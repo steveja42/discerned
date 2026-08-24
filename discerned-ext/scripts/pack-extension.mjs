@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// Builds a clean production copy of the extension and zips it for public download.
+// Zips the production build (`pnpm build` → `dist-pack/`) for public download.
 //
 // The zip is what the web app's /get-extension page hands users so they can
-// "Load unpacked" in Chrome. We build into `dist-pack/` (NOT the dev `dist/`
-// that `pnpm dev` watches — see discerned-ext/CLAUDE.md) and zip that, so
-// packing never disturbs the loaded dev extension. `dist-pack/` is kept after
-// zipping so it can be loaded unpacked locally.
+// "Load unpacked" in Chrome. `pnpm build` writes to `dist-pack/`, NOT the dev
+// `dist/` that `pnpm dev` watches (see discerned-ext/CLAUDE.md) — both `pnpm
+// build` and `pnpm pack:ext` share that one output dir on purpose, so packing
+// never disturbs the loaded dev extension and there's only one production
+// build to reason about. `dist-pack/` is kept after zipping so it can also be
+// loaded unpacked locally.
 //
 // Zipping uses the OS-native tool (PowerShell Compress-Archive on Windows, `zip`
 // elsewhere) so no extra npm dependency is needed.
@@ -15,7 +17,7 @@
 // Run from discerned-ext/:  node scripts/pack-extension.mjs   (or `pnpm pack:ext`)
 
 import { execFileSync } from 'child_process';
-import { rmSync, mkdirSync, readFileSync } from 'fs';
+import { mkdirSync, rmSync, readFileSync } from 'fs';
 import { resolve, dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -28,14 +30,9 @@ const version = JSON.parse(readFileSync(join(extRoot, 'manifest.json'), 'utf8'))
 
 console.log(`pack-extension: building v${version} into ${buildDir} …`);
 
-// Fresh production build into an isolated dir so we never touch dev `dist/`.
-rmSync(buildDir, { recursive: true, force: true });
-// .cmd shims (tsc.cmd, vite.cmd) must be launched through a shell on Windows.
-const bin = (name) =>
-  join(extRoot, 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name);
+// pnpm.cmd must be launched through a shell on Windows.
 const runOpts = { cwd: extRoot, stdio: 'inherit', shell: process.platform === 'win32' };
-execFileSync(bin('tsc'), [], runOpts);
-execFileSync(bin('vite'), ['build', '--outDir', 'dist-pack', '--emptyOutDir'], runOpts);
+execFileSync(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['run', 'build'], runOpts);
 
 mkdirSync(dirname(outFile), { recursive: true });
 rmSync(outFile, { force: true });

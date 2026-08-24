@@ -18,10 +18,10 @@ Discerned is a Chrome Extension (Manifest V3) that acts as a value attribution l
 ## Commands
 
 ```bash
-pnpm dev          # Vite watch mode
-pnpm build        # tsc + Vite production build
+pnpm dev          # Vite watch mode, writes dist/ incrementally
+pnpm build        # tsc + Vite production build → dist-pack/
 pnpm build:test   # development-mode build → dist-test/ (for Playwright)
-pnpm pack:ext     # prod build → dist-pack/, zipped to the web app's public/ for download
+pnpm pack:ext     # runs `pnpm build`, zips dist-pack/ to the web app's public/ for download
 pnpm gen:icons    # regenerate all icon rasters (both projects) from the art/ SVG masters
 pnpm type-check   # tsc --noEmit (strict)
 pnpm lint         # ESLint on src/**/*.ts
@@ -29,22 +29,23 @@ pnpm lint         # ESLint on src/**/*.ts
 
 ## Dev environment — IMPORTANT for AI assistants
 
-**Assume `pnpm dev` is already running in `discerned-ext/` and `discerned-web/`.** The user keeps both watchers up; they hot-reload `dist/` and the Next.js app on every save. This has two consequences for any work in this repo:
+**Assume `pnpm dev` is already running in `discerned-ext/` and `discerned-web/`.** The user keeps both watchers up; `pnpm dev` (crxjs's dev mode) incrementally rewrites `dist/` on every save, and the loaded Chrome extension picks it up on reload. `pnpm build` and `pnpm pack:ext` both write to `dist-pack/` instead — **never `dist/`** — precisely so a production build can never collide with or clobber the live dev output. This has two consequences for any work in this repo:
 
-- **Never run `pnpm build`.** It writes production-minified chunks with different hashes into the same `dist/` that `pnpm dev` is watching, leaving the user's loaded Chrome extension with a mismatched `manifest.json` + content-script set. The overlay silently fails to launch until the user kills/restarts `pnpm dev`. To verify TypeScript compiles, use `pnpm type-check`. To pick up your source edits in the user's loaded extension, do nothing — `pnpm dev` writes `dist/` on save, the user reloads the extension + page.
-- **Playwright reads `dist-test/`, NOT `dist/`.** When you need to validate via a Playwright spec, run `pnpm build:test` first (it writes only to `dist-test/`, doesn't touch the dev `dist/`). The `tests/e2e/*` specs all load `dist-test/`.
+- **`pnpm build` is safe to run** — it no longer touches `dist/`. It's still rarely what you want mid-task, though: to verify TypeScript compiles, prefer the faster `pnpm type-check`. To pick up your source edits in the user's loaded extension, do nothing — `pnpm dev` writes `dist/` on save, the user reloads the extension + page.
+- **Playwright reads `dist-test/`, NOT `dist/` or `dist-pack/`.** When you need to validate via a Playwright spec, run `pnpm build:test` first (it writes only to `dist-test/`). The `tests/e2e/*` specs all load `dist-test/`.
 
-If you ever see an "extension is broken" symptom (overlay missing, bookmark-style 2-line clips when full content was expected), the user accidentally has stale `dist/` — the fix is to **restart `pnpm dev`**, NOT another `pnpm build`. Do not try to "fix" it with a production build.
+If you ever see an "extension is broken" symptom (overlay missing, bookmark-style 2-line clips when full content was expected), the user's loaded `dist/` has gone stale — the fix is to **restart `pnpm dev`**.
 
-## Packing the extension for download (`pnpm pack:ext`)
+## Production build (`pnpm build`) and packing for download (`pnpm pack:ext`)
 
-The web app's `/get-extension` page hands users a downloadable **unpacked** extension zip they side-load via `chrome://extensions` → Load unpacked. That zip is produced by `scripts/pack-extension.mjs` (run it as `pnpm pack:ext` from `discerned-ext/`).
+`pnpm build` runs `tsc`, then `vite build --outDir dist-pack --emptyOutDir` — a real production build (minified, `__DISCERNED_DEV_BUILD__` false) into `dist-pack/`, isolated from the dev `dist/` and test `dist-test/` (same rationale as `dist-test/`'s isolation — see Dev environment above). `dist-pack/` is gitignored and is **wiped at the START of each build** (`emptyOutDir` / `rmSync` for a clean rebuild) but **kept afterward on purpose** — it doubles as a ready-to-load-unpacked local production build (`chrome://extensions` → Load unpacked → select `dist-pack/`).
 
-What it does:
+`pnpm pack:ext` (`scripts/pack-extension.mjs`) builds on top of that: it shells out to `pnpm build` (so the zip and a locally-loadable `dist-pack/` always come from one build, never two), then zips the result for the web app's `/get-extension` page, which hands users a downloadable **unpacked** extension they side-load via `chrome://extensions` → Load unpacked.
 
-1. Runs `tsc`, then `vite build --outDir dist-pack --emptyOutDir` — a **production** build into a throwaway `dist-pack/` dir. It builds into `dist-pack/`, **not** the dev `dist/`, precisely so packing never disturbs the extension the user has loaded from `dist/` (same isolation rationale as `dist-test/` — see Dev environment above). `dist-pack/` is gitignored and deleted at the end of the run.
-2. Zips the build with `manifest.json` at the **zip root** (not nested in a subfolder) so users select the unzipped folder directly in Load unpacked. Zipping uses the OS-native tool — PowerShell `Compress-Archive` on Windows, `zip` elsewhere — so there's **no extra npm dependency**.
-3. Writes the result to `../discerned-web/public/discerned-extension.zip`.
+What `pack:ext` does after the build:
+
+1. Zips `dist-pack/` with `manifest.json` at the **zip root** (not nested in a subfolder) so users select the unzipped folder directly in Load unpacked. Zipping uses the OS-native tool — PowerShell `Compress-Archive` on Windows, `zip` elsewhere — so there's **no extra npm dependency**.
+2. Writes the result to `../discerned-web/public/discerned-extension.zip`.
 
 Because the web app is a **static export** deployed by Netlify (which only builds `discerned-web/`, never runs this script), the zip is **committed to git** so Netlify serves it. It does **not** auto-update: after shipping extension changes, re-run `pnpm pack:ext` and commit the refreshed zip. The manifest `version` is read only for the build log line — bump `manifest.json` yourself when cutting a new download.
 
