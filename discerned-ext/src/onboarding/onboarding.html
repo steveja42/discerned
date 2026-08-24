@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Welcome to Discerned</title>
   <style>
-    /* Pre-JS theme fallback (dark). initPageTheme() injects the active theme's
-       tokens into :root at load; these keep the page styled until it runs. */
+    /* Pre-JS theme fallback, keyed off the OS's own prefers-color-scheme so the
+       very first paint already matches system dark/light — initPageTheme() then
+       corrects it if the user has an explicit stored preference (STORAGE_KEYS.THEME)
+       that differs from the OS default. Mirrors THEME_TOKENS in shared/theme.ts;
+       keep both in sync. */
     :root {
       --p-panel-opaque: #09090b;
       --p-surface: #18181b;
@@ -20,6 +23,22 @@
       --p-accent: #f59e0b;
       --p-accent-ink: #fbbf24;
       --p-on-accent: #09090b;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --p-panel-opaque: #efe8da;
+        --p-surface: rgba(246, 241, 232, 0.94);
+        --p-surface-2: rgba(239, 232, 218, 0.94);
+        --p-ink: #1a1714;
+        --p-ink-2: #3a342c;
+        --p-ink-3: #6b6357;
+        --p-ink-4: #6f6658;
+        --p-rule: rgba(26, 23, 20, 0.16);
+        --p-rule-soft: rgba(26, 23, 20, 0.08);
+        --p-accent: oklch(0.62 0.12 65);
+        --p-accent-ink: oklch(0.42 0.10 65);
+        --p-on-accent: #fffaf0;
+      }
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -96,6 +115,16 @@
 
     .step-text { font-size: 0.9rem; color: var(--p-ink-2); line-height: 1.6; padding-top: 4px; }
 
+    /* Inline beacon icon inside step text — same tight bbox as .logo svg, sized to
+       the surrounding text's cap height and colored via currentColor so it matches
+       whatever ink color the paragraph uses. */
+    .step-icon {
+      width: 10.5px; height: 15px; flex: none;
+      display: inline-block; vertical-align: -2px;
+      margin: 0 1px;
+      color: #60a5fa;
+    }
+
     .step-text code {
       background: var(--p-surface-2); border: 1px solid var(--p-rule); border-radius: 4px;
       padding: 1px 6px; font-size: 0.85em; color: var(--p-accent-ink);
@@ -152,7 +181,23 @@
       </div>
       <div class="step-item">
         <div class="step-num">2</div>
-        <p class="step-text">Find <strong>Discerned</strong> in the list.</p>
+        <p class="step-text">Find the <strong>Discerned</strong> beacon <svg class="step-icon" viewBox="5.8 1.95 20.4 29.05" fill="none" aria-hidden="true">
+          <g transform="translate(2.4 -0.6) scale(0.85)">
+            <g stroke="currentColor" stroke-width="1.18" stroke-linecap="round" opacity="0.5">
+              <line x1="16" y1="9" x2="16" y2="3"/><line x1="11.5" y1="10" x2="7.5" y2="6"/>
+              <line x1="20.5" y1="10" x2="24.5" y2="6"/><line x1="9" y1="13" x2="4" y2="12"/>
+              <line x1="23" y1="13" x2="28" y2="12"/>
+            </g>
+            <circle cx="16" cy="14" r="5" fill="currentColor" opacity="0.12"/>
+            <path d="M 15.5 7 L 16.5 7 L 16 4 Z" fill="currentColor"/>
+            <circle cx="16" cy="14" r="2.4" fill="currentColor"/>
+            <rect x="13.2" y="15.5" width="5.6" height="2.4" rx="0.5" fill="currentColor"/>
+            <path d="M 14.2 18 L 17.8 18 L 19.4 31.3 L 12.6 31.3 Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none"/>
+            <line x1="13.4" y1="22.5" x2="18.6" y2="22.5" stroke="currentColor" stroke-width="1.06" opacity="0.7"/>
+            <line x1="13" y1="27" x2="19" y2="27" stroke="currentColor" stroke-width="1.06" opacity="0.7"/>
+          </g>
+          <path d="M 8 26 L 24 26 L 24 29 L 19 31 L 11 30 L 8 28.4 Z" fill="currentColor"/>
+        </svg> in the list.</p>
       </div>
       <div class="step-item">
         <div class="step-num">3</div>
@@ -165,8 +210,10 @@
     </div>
 
     <p class="hint">
-      Your clips stay on this device unless you choose to publish them. Publishing uses Nostr — an
-      open social network where you own your identity and your posts.
+      Your clips stay on this device unless you choose to publish them. Publishing uses
+      <a href="https://nstart.me" target="_blank" rel="noopener">Nostr</a> — an open social network
+      where you own your identity and your posts.
+      <a href="https://nstart.me" target="_blank" rel="noopener">Find out more →</a>
     </p>
 
     <button class="btn-done" id="btn-done">Got it — start using Discerned →</button>

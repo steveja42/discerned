@@ -437,7 +437,6 @@ ${themeVarsBlock(this.effectiveTheme)}
 
   private renderGate() {
     const signerDetected = this.authState.type === 'pro' && !this.authState.pubkey;
-    const icon = signerDetected ? '🔑' : '🔒';
     const title = signerDetected ? "You're one click from publishing" : 'Start local, publish when ready';
     // "Stays on this device" is literal — clips are NOT encrypted at rest (the
     // IndexedDB row's `encrypted` field holds plaintext JSON; NIP-44 is stubbed),
@@ -445,8 +444,8 @@ ${themeVarsBlock(this.effectiveTheme)}
     const desc = signerDetected
       ? `Your Nostr signing extension is ready. Sign in to publish your discerns under your own
          identity — they'll appear in any Nostr client, to the people who already follow you.`
-      : `Clip what's worth reading, rate it, and build a library of high-quality information. It
-         all stays on this device. Connect a Nostr identity to publish as you go — your ratings
+      : `Clip what's worth keeping, rate it, and build a library of high-quality information. It
+         all stays on this device. Or connect a <a href="https://nstart.me" target="_blank" rel="noopener noreferrer">Nostr</a> identity to publish as you go — your ratings
          stay yours, on an open network no company controls.`;
     const primaryLabel = signerDetected ? 'Sign in →' : 'Connect a Nostr identity →';
 
@@ -460,7 +459,6 @@ ${themeVarsBlock(this.effectiveTheme)}
           </div>
         </header>
         <div class="panel-body gate-body">
-          <div class="gate-icon">${icon}</div>
           <p class="gate-title">${title}</p>
           <p class="gate-desc">${desc}</p>
           <button class="btn btn-primary gate-btn" id="gate-connect">${primaryLabel}</button>
@@ -765,7 +763,7 @@ ${themeVarsBlock(this.effectiveTheme)}
         // Re-render so the detected state (✓ + Continue) is reflected.
         this.render();
       } else {
-        this.setIdentityStatus(status, 'No extension found. Install Alby or nos2x, visit any page, then try again.', 'error');
+        this.setIdentityStatus(status, 'No extension found. Install Alby or nos2x, then reload this tab (or visit any page) and try again.', 'error');
       }
     });
 
@@ -2687,9 +2685,9 @@ ${themeVarsBlock(this.effectiveTheme)}
         display: flex; flex-direction: column; align-items: center;
         text-align: center; padding: 28px 20px; gap: 14px;
       }
-      .gate-icon { font-size: 40px; }
       .gate-title { font-size: 15px; font-weight: 700; color: var(--p-ink); font-family: var(--p-mono); }
       .gate-desc  { font-size: 12px; color: var(--p-ink-2); line-height: 1.6; max-width: 320px; }
+      .gate-desc a { color: var(--p-accent-ink); text-decoration: none; }
       .gate-btn   { width: 100%; max-width: 280px; }
 
       /* Identity */
