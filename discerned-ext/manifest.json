@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Discerned",
   "version": "0.2.2",
-  "description": "A web clipper with a Signal Rating. Keep what's worthy, skip the rest, and publish your ratings when you choose.",
+  "description": "Web clipper with Signal Rating. Clip worthy content, optionally rate and tag it, and if you like, publish and share with the world.",
   "permissions": [
     "contextMenus",
     "storage",
