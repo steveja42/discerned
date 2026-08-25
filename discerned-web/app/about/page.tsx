@@ -7,6 +7,7 @@ import TopBar from '@/components/chrome/TopBar';
 import SignInModal from '@/components/auth/SignInModal';
 import { useNostrAuth } from '@/hooks/useNostrAuth';
 import { useBridgeAuth } from '@/hooks/useBridgeAuth';
+import { PITCH } from '@/lib/marketing-copy';
 
 export default function AboutPage() {
   const { auth, signInPubkey, setNip07Connected } = useNostrAuth();
@@ -26,15 +27,12 @@ export default function AboutPage() {
           <HeroBeacon />
         </div>
         <div className="hero-copy">
-          <div className="hero-eyebrow">A value-attribution layer for the web</div>
-          <h1 className="hero-title">Signal,<br /><em>not noise.</em></h1>
+          <div className="hero-eyebrow">{PITCH.eyebrow}</div>
+          <h1 className="hero-title">{PITCH.title}<br /><em>{PITCH.titleEm}</em></h1>
           <p className="hero-lede">
-            Discerned is a web clipper and global curation platform. Come to the site for curated signal- see what your friends and follows love and hate on the web.
-            <br></br> <br></br>Use the browser extension to Clip what matters,
-            rate its <strong>Signal</strong>, tag it with <strong>Qualifiers</strong>, file it under a <strong>Category</strong>,
-            and broadcast — or don&apos;t. Your clips are yours; the signal is shared.
+            {PITCH.lede()}
           </p>
-         
+
           <div className="hero-cta">
             <Link href="/get-extension" className="btn primary" style={{ textDecoration: 'none' }}>
               Get the extension
@@ -45,20 +43,18 @@ export default function AboutPage() {
 
       <section style={{ maxWidth: 720, margin: '0 auto', padding: '56px 32px 80px', fontFamily: 'var(--serif)', color: 'var(--ink-2)', fontSize: 17, lineHeight: 1.65 }}>
         <h2 style={{ fontFamily: 'var(--serif)', fontSize: 26, fontWeight: 500, color: 'var(--ink)', margin: '0 0 16px', letterSpacing: '-0.015em' }}>
-          Judgment over reaction.
+          Signal, filtered.
         </h2>
         <p style={{ margin: '0 0 16px' }}>
-          Most platforms reward the loudest voice. Discerned rewards the most honest one.
-          Every clip can carry a structured assessment — a <em>Signal</em> rating, <em>Qualifier</em> tags, and a <em>Category</em>.
-         
+          A <strong>Discern</strong> is a clip someone cast from the extension. It can carry a structured
+          assessment — a <strong>Signal</strong> rating, <strong>Qualifier</strong> tags, and a <strong>Category</strong> —
+          or just the clip itself.
         </p>
         <p style={{ margin: '0 0 16px' }}>
-          Your reading is yours. The app stores everything locally first. When you choose to
-          cast a clip, it&apos;s signed in your browser and broadcast to relays you trust.
+          Filter the feed down to what you actually want: a specific Signal level or Qualifiers,
+          a Category, or the people you follow. Narrow it to what&apos;s unread, or search Discerns.
+          No algorithm deciding what you see — you decide.
         </p>
-        <h3 style={{ fontFamily: 'var(--serif)', fontSize: 19, fontWeight: 500, color: 'var(--ink)', margin: '32px 0 10px' }}>
-          Sovereignty, not gamification.
-        </h3>
 
         <p style={{ margin: '32px 0 0', paddingTop: 24, borderTop: '1px solid var(--rule)', fontSize: 15 }}>
           Discerned is a small, independent project. If something is broken or missing,{' '}

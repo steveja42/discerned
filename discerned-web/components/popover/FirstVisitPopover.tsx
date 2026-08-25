@@ -5,6 +5,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { PITCH } from '@/lib/marketing-copy';
 
 interface FirstVisitPopoverProps {
   onDismiss: () => void;
@@ -29,12 +30,8 @@ export default function FirstVisitPopover({ onDismiss, onLearnMore }: FirstVisit
     <div ref={ref} className="brand-popover" role="dialog" aria-label="Welcome to Discerned">
       <div className="brand-popover-arrow" />
       <div className="brand-popover-eyebrow">Welcome</div>
-      <div className="brand-popover-title">Signal, <em>not noise.</em></div>
-      <p className="brand-popover-lede">
-        Discerned is a web clipper and global curation platform. Clip, and optionally rate the signal,
-        and broadcast on the open web — or don&apos;t.
-      </p>
-      <p> Come to the site to see curated signal- see what your friends and follows love and hate on the web</p>
+      <div className="brand-popover-title">{PITCH.title} <em>{PITCH.titleEm}</em></div>
+      <p className="brand-popover-lede">{PITCH.lede()}</p>
       <div className="brand-popover-actions">
         <button className="btn primary" onClick={onLearnMore}>Learn more →</button>
         <button className="btn ghost" onClick={onDismiss}>Got it</button>

@@ -182,7 +182,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         <div className="settings-section">
           <div className="settings-section-label">Relays</div>
           <p className="settings-hint">
-            Where your public discerns are published. Relays listed in your Nostr profile
+            Where your public Discerns are published. Relays listed in your Nostr profile
             (NIP-65) are added automatically when you sign in.
           </p>
 

@@ -29,12 +29,17 @@ function getSnapshot(): boolean {
 const getServerSnapshot = () => false;
 
 export function useFirstVisit() {
-  const showPopover = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const notDismissed = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+  // Dev convenience: ?popover=1 forces the popover open without touching the
+  // localStorage flag, so it doesn't clobber real dismissed state.
+  const forced = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('popover') === '1';
 
   const dismiss = useCallback(() => {
     try { localStorage.setItem(KEY, '1'); } catch {}
     emit();
   }, []);
 
-  return { showPopover, dismiss };
+  return { showPopover: forced || notDismissed, dismiss };
 }

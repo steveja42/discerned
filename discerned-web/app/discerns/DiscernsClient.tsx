@@ -47,7 +47,7 @@ export default function DiscernsClient() {
         brandHasPopover={showPopover}
         onBrandClick={handleBrandClick}
         extensionPresent={extensionPresent}
-        searchPlaceholder="Search casts, casters, sources…"
+        searchPlaceholder="Search Discerns…"
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}
       />
