@@ -6,7 +6,7 @@ import Link from 'next/link';
 export const PITCH = {
   eyebrow: 'A value-attribution layer for the web',
   title: 'Signal,',
-  titleEm: 'not noise.',
+  titleEm: 'not noise',
   lede: () => (
     <>
       Discerned is powered by a{' '}
