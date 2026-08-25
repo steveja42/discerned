@@ -16,9 +16,12 @@ function categoryHue(name: string): number {
 }
 import ClipRow from '@/components/feed/ClipRow';
 import DetailPanel from '@/components/feed/DetailPanel';
+import ViewControls, { type SortOrder, type ViewMode } from '@/components/feed/ViewControls';
 import LibraryEmpty from './LibraryEmpty';
 import BulkActionBar from './BulkActionBar';
 import ResizableLayout from '@/components/layout/ResizableLayout';
+import CollapsibleSection from '@/components/layout/CollapsibleSection';
+import { useSidebarSections } from '@/hooks/useSidebarSections';
 import { exportClipsJson } from '@/lib/export-utils';
 
 interface SidebarLocalProps {
@@ -34,112 +37,125 @@ interface SidebarLocalProps {
   allCategories: Record<string, { label: string; hue: number }>;
   onDeleteCategory: (key: string) => void;
   onSelectAllInCategory: (key: string) => void;
+  sortOrder: SortOrder;
+  setSortOrder: (o: SortOrder) => void;
+  viewMode: ViewMode;
+  setViewMode: (m: ViewMode) => void;
 }
 
-function SidebarLocal({ activeCat, setActiveCat, catCounts, totalCount, activeSignals, toggleSignal, activeQuals, toggleQual, qualOptions, allCategories, onDeleteCategory, onSelectAllInCategory }: SidebarLocalProps) {
+function SidebarLocal({ activeCat, setActiveCat, catCounts, totalCount, activeSignals, toggleSignal, activeQuals, toggleQual, qualOptions, allCategories, onDeleteCategory, onSelectAllInCategory, sortOrder, setSortOrder, viewMode, setViewMode }: SidebarLocalProps) {
+  const { open, toggle } = useSidebarSections();
+
   return (
     <aside className="sidebar">
-      <div className="side-section-label" style={{ fontSize: '1.25rem', fontFamily: 'var(--serif)', fontStyle: 'italic', fontWeight: 700, letterSpacing: 0, textTransform: 'none', color: 'var(--ink)', marginBottom: '0.3rem' }}>Clips</div>
-      <div>
-        <ul className="nav-list">
-          <li
-            className={`nav-item ${activeCat === null ? 'active' : ''}`}
-            onClick={() => setActiveCat(null)}
-          >
-            All clips <span className="nav-count">{totalCount}</span>
-          </li>
-        </ul>
+      <div className="sidebar-head">
+        <h1 className="feed-title"><em>Clips</em></h1>
       </div>
 
-      <div>
-        <div className="side-section-label">
-          Folders <span className="count">{Object.keys(allCategories).length}</span>
-        </div>
-        <ul className="nav-list folder-list">
-          {Object.entries(allCategories).map(([key, cat]) => {
-            const c = catCounts[key] ?? 0;
-            const active = activeCat === key;
-            return (
-              <li
-                key={key}
-                className={`nav-item folder ${active ? 'active' : ''}`}
-                onClick={() => setActiveCat(active ? null : key)}
-              >
-                <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke={`oklch(0.50 0.08 ${cat.hue})`} strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5">
-                  {active
-                    ? <><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2" /><path d="m3 9 2 9a2 2 0 0 0 2 1.5h12a2 2 0 0 0 2-1.5l1.5-7a1 1 0 0 0-1-1.2H5" /></>
-                    : <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />}
-                </svg>
-                <span style={{ flex: 1 }}>{cat.label}</span>
-                <span className="nav-count">{c}</span>
-                <button
-                  className="folder-select-all"
-                  onClick={(e) => { e.stopPropagation(); onSelectAllInCategory(key); }}
-                  title={`Select all in ${cat.label}`}
-                  aria-label={`Select all in ${cat.label}`}
-                >
-                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="12" height="12">
-                    <rect x="2" y="2" width="5" height="5" rx="1" />
-                    <rect x="9" y="2" width="5" height="5" rx="1" />
-                    <rect x="2" y="9" width="5" height="5" rx="1" />
-                    <path d="M9.5 11.5h5M12 9v5" />
-                  </svg>
-                </button>
-                <button
-                  className="folder-delete"
-                  onClick={(e) => { e.stopPropagation(); onDeleteCategory(key); }}
-                  title={`Delete ${cat.label} and its clips`}
-                  aria-label={`Delete ${cat.label}`}
-                >
-                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="12" height="12">
-                    <path d="M3 4h10M6 4V3h4v1M5 4l.5 9h5l.5-9" />
-                  </svg>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+      <div className="sidebar-scroll">
+        <ViewControls sortOrder={sortOrder} setSortOrder={setSortOrder} viewMode={viewMode} setViewMode={setViewMode} />
 
-      <div className="filters">
-        <div className="side-section-label">Filter</div>
-        <div className="axis-filter">
-          <div className="axis-filter-head">
-            <span>Signal</span>
-            <span className="axis-letter">S</span>
-          </div>
-          <div className="axis-range">
-            {SIGNAL_LEVELS.map((lvl) => (
-              <div
-                key={lvl}
-                className={`pip ${activeSignals.includes(lvl) ? 'active signal' : ''}`}
-                onClick={() => toggleSignal(lvl)}
-                title={lvl}
-              >
-                {lvl[0]}
-              </div>
-            ))}
-          </div>
+        <div>
+          <ul className="nav-list">
+            <li
+              className={`nav-item ${activeCat === null ? 'active' : ''}`}
+              onClick={() => setActiveCat(null)}
+            >
+              All clips <span className="nav-count">{totalCount}</span>
+            </li>
+          </ul>
         </div>
-        {qualOptions.length > 0 && (
+
+        <CollapsibleSection
+          title="Folders"
+          badge={<span className="count">{Object.keys(allCategories).length}</span>}
+          open={open.folders}
+          onToggle={() => toggle('folders')}
+        >
+          <ul className="nav-list folder-list">
+            {Object.entries(allCategories).map(([key, cat]) => {
+              const c = catCounts[key] ?? 0;
+              const active = activeCat === key;
+              return (
+                <li
+                  key={key}
+                  className={`nav-item folder ${active ? 'active' : ''}`}
+                  onClick={() => setActiveCat(active ? null : key)}
+                >
+                  <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke={`oklch(0.50 0.08 ${cat.hue})`} strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5">
+                    {active
+                      ? <><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2" /><path d="m3 9 2 9a2 2 0 0 0 2 1.5h12a2 2 0 0 0 2-1.5l1.5-7a1 1 0 0 0-1-1.2H5" /></>
+                      : <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />}
+                  </svg>
+                  <span style={{ flex: 1 }}>{cat.label}</span>
+                  <span className="nav-count">{c}</span>
+                  <button
+                    className="folder-select-all"
+                    onClick={(e) => { e.stopPropagation(); onSelectAllInCategory(key); }}
+                    title={`Select all in ${cat.label}`}
+                    aria-label={`Select all in ${cat.label}`}
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="12" height="12">
+                      <rect x="2" y="2" width="5" height="5" rx="1" />
+                      <rect x="9" y="2" width="5" height="5" rx="1" />
+                      <rect x="2" y="9" width="5" height="5" rx="1" />
+                      <path d="M9.5 11.5h5M12 9v5" />
+                    </svg>
+                  </button>
+                  <button
+                    className="folder-delete"
+                    onClick={(e) => { e.stopPropagation(); onDeleteCategory(key); }}
+                    title={`Delete ${cat.label} and its clips`}
+                    aria-label={`Delete ${cat.label}`}
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="12" height="12">
+                      <path d="M3 4h10M6 4V3h4v1M5 4l.5 9h5l.5-9" />
+                    </svg>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </CollapsibleSection>
+
+        <div className="filters">
+          <div className="side-section-label">Filter</div>
           <div className="axis-filter">
             <div className="axis-filter-head">
-              <span>Qualifiers</span>
-              <span className="axis-letter">Q</span>
+              <span>Signal</span>
             </div>
-            <div className="cat-filter">
-              {qualOptions.map((qual) => (
-                <button
-                  key={qual}
-                  className={`cat-chip ${activeQuals.includes(qual) ? 'active' : ''}`}
-                  onClick={() => toggleQual(qual)}
+            <div className="axis-range">
+              {SIGNAL_LEVELS.map((lvl) => (
+                <div
+                  key={lvl}
+                  className={`pip ${activeSignals.includes(lvl) ? 'active signal' : ''}`}
+                  onClick={() => toggleSignal(lvl)}
+                  title={lvl}
                 >
-                  {qual}
-                </button>
+                  {lvl[0]}
+                </div>
               ))}
             </div>
           </div>
-        )}
+          {qualOptions.length > 0 && (
+            <div className="axis-filter">
+              <div className="axis-filter-head">
+                <span>Qualifiers</span>
+              </div>
+              <div className="cat-filter">
+                {qualOptions.map((qual) => (
+                  <button
+                    key={qual}
+                    className={`cat-chip ${activeQuals.includes(qual) ? 'active' : ''}`}
+                    onClick={() => toggleQual(qual)}
+                  >
+                    {qual}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </aside>
   );
@@ -158,6 +174,8 @@ export default function Library({ initialClipId, searchQuery }: LibraryProps) {
   const [activeQuals, setActiveQuals] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(initialClipId ?? null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortOrder, setSortOrder] = useState<SortOrder>('recent');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
 
   // Reacts to the extension deep-linking at a specific clip (NAVIGATE_TO_CLIP over
   // the bridge). This is a genuine external-event handler: it must both move the
@@ -208,7 +226,15 @@ export default function Library({ initialClipId, searchQuery }: LibraryProps) {
     [clips, activeCat, activeSignals, activeQuals, q],
   );
 
-  const selected = filtered.find((c) => c.capture.id === selectedId) ?? filtered[0] ?? null;
+  const sorted = useMemo(() => {
+    const copy = [...filtered];
+    copy.sort((a, b) => sortOrder === 'recent'
+      ? b.capture.timestamp - a.capture.timestamp
+      : a.capture.timestamp - b.capture.timestamp);
+    return copy;
+  }, [filtered, sortOrder]);
+
+  const selected = sorted.find((c) => c.capture.id === selectedId) ?? sorted[0] ?? null;
 
   const catCounts = useMemo(() => {
     const m: Record<string, number> = {};
@@ -247,7 +273,7 @@ export default function Library({ initialClipId, searchQuery }: LibraryProps) {
 
     if (isShift && lastClickedId.current) {
       // Range select: select all clips between lastClickedId and id.
-      const ids = filtered.map((c) => c.capture.id);
+      const ids = sorted.map((c) => c.capture.id);
       const a = ids.indexOf(lastClickedId.current);
       const b = ids.indexOf(id);
       if (a !== -1 && b !== -1) {
@@ -333,11 +359,11 @@ export default function Library({ initialClipId, searchQuery }: LibraryProps) {
           <LibraryEmpty />
         ) : !bridgePresent ? (
           <div className="feed-empty">Waiting for extension…</div>
-        ) : filtered.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="feed-empty">{q ? `No clips match "${searchQuery}".` : 'No clips match these filters.'}</div>
         ) : (
           <div className="feed-list">
-            {filtered.map((clip, i) => (
+            {sorted.map((clip, i) => (
               <ClipRow
                 key={clip.capture.id ?? i}
                 clip={clip}
@@ -361,6 +387,31 @@ export default function Library({ initialClipId, searchQuery }: LibraryProps) {
     </main>
   );
 
+  const streamContent = (
+    <div className="detail-stream">
+      <div className="detail-stream-scroll">
+        {showEmpty ? (
+          <LibraryEmpty />
+        ) : !bridgePresent ? (
+          <div className="feed-empty">Waiting for extension…</div>
+        ) : sorted.length === 0 ? (
+          <div className="feed-empty">{q ? `No clips match "${searchQuery}".` : 'No clips match these filters.'}</div>
+        ) : (
+          sorted.map((clip, i) => (
+            <DetailPanel
+              key={clip.capture.id ?? i}
+              clip={clip}
+              onDelete={handleSingleDelete}
+              onUpdateNote={updateClipNote}
+              bodies={bodies}
+              onBodyFetched={setClipBody}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="app">
       <ResizableLayout
@@ -378,18 +429,25 @@ export default function Library({ initialClipId, searchQuery }: LibraryProps) {
             allCategories={allCategories}
             onDeleteCategory={handleDeleteCategory}
             onSelectAllInCategory={handleSelectAllInCategory}
+            sortOrder={sortOrder}
+            setSortOrder={setSortOrder}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
           />
         }
         feed={feedContent}
-        detail={
-          <DetailPanel
-            clip={selected}
-            onDelete={handleSingleDelete}
-            onUpdateNote={updateClipNote}
-            bodies={bodies}
-            onBodyFetched={setClipBody}
-          />
-        }
+        detail={viewMode === 'focus'
+          ? streamContent
+          : (
+            <DetailPanel
+              clip={selected}
+              onDelete={handleSingleDelete}
+              onUpdateNote={updateClipNote}
+              bodies={bodies}
+              onBodyFetched={setClipBody}
+            />
+          )}
+        showFeed={viewMode === 'list'}
         initialSidebarWidth={200}
       />
     </div>

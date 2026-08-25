@@ -9,7 +9,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 
 const STORAGE_KEY = 'discerned.sidebarSections';
 
-export type SectionId = 'view' | 'following' | 'publishers' | 'signal' | 'qualifiers' | 'category';
+export type SectionId = 'view' | 'following' | 'publishers' | 'signal' | 'qualifiers' | 'category' | 'folders';
 
 // The long sections start closed so the short ones stay reachable without scrolling
 // the 200px column.
@@ -20,6 +20,7 @@ const DEFAULTS: Record<SectionId, boolean> = {
   signal: true,
   qualifiers: false,
   category: false,
+  folders: true,
 };
 
 const SECTION_IDS = Object.keys(DEFAULTS) as SectionId[];

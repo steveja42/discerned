@@ -14,6 +14,7 @@ import { authorDisplayName, type AuthorProfile } from '@/lib/nostr/profiles';
 import ClipRow from './ClipRow';
 import DetailPanel from './DetailPanel';
 import FilterStrip from './FilterStrip';
+import ViewControls, { type SortOrder, type ViewMode } from './ViewControls';
 import ResizableLayout from '@/components/layout/ResizableLayout';
 import CollapsibleSection from '@/components/layout/CollapsibleSection';
 import { useSidebarSections } from '@/hooks/useSidebarSections';
@@ -48,10 +49,10 @@ interface SidebarProps {
   publishers: Publisher[];
   authors: Map<string, AuthorProfile>;
   isSignedIn: boolean;
-  sortOrder: 'recent' | 'oldest';
-  setSortOrder: (o: 'recent' | 'oldest') => void;
-  viewMode: 'list' | 'focus';
-  setViewMode: (m: 'list' | 'focus') => void;
+  sortOrder: SortOrder;
+  setSortOrder: (o: SortOrder) => void;
+  viewMode: ViewMode;
+  setViewMode: (m: ViewMode) => void;
 }
 
 // npub for a pubkey, used wherever the key is shown to the user (never hex).
@@ -89,175 +90,160 @@ function Sidebar({
     <aside className="sidebar">
       <div className="sidebar-head">
         <h1 className="feed-title"><em>Discerns</em></h1>
-        <div className="feed-controls">
-          <button
-            className="sort"
-            onClick={() => setSortOrder(sortOrder === 'recent' ? 'oldest' : 'recent')}
-          >
-            Sort: {sortOrder === 'recent' ? 'Recent' : 'Oldest'} <Icon name="chevdown" />
-          </button>
-          <div className="density">
-            <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')} title="List view">
-              <Icon name="list" />
-            </button>
-            <button className={viewMode === 'focus' ? 'active' : ''} onClick={() => setViewMode('focus')} title="Stream view (full detail, scrollable)">
-              <Icon name="stack" />
-            </button>
-          </div>
-        </div>
       </div>
 
-      <CollapsibleSection title="View" open={open.view} onToggle={() => toggle('view')}>
-        <ul className="nav-list">
-          <li
-            className={`nav-item ${activeCat === null && activeAuthors.length === 0 && !unreadOnly ? 'active' : ''}`}
-            onClick={clearFilters}
-          >
-            All discerned <span className="nav-count">{count}</span>
-          </li>
-          <li
-            className={`nav-item ${unreadOnly ? 'active' : ''}`}
-            onClick={() => setUnreadOnly(!unreadOnly)}
-          >
-            Unread <span className="nav-count">{unreadCount}</span>
-          </li>
-        </ul>
-      </CollapsibleSection>
+      <div className="sidebar-scroll">
+        <ViewControls sortOrder={sortOrder} setSortOrder={setSortOrder} viewMode={viewMode} setViewMode={setViewMode} />
 
-      <CollapsibleSection
-        title="Following"
-        badge={<span className="count">{follows.length}</span>}
-        open={open.following}
-        onToggle={() => toggle('following')}
-      >
-        {!isSignedIn ? (
-          <div className="follows-empty">Sign in to see who you follow.</div>
-        ) : follows.length === 0 ? (
-          <div className="follows-empty">No follows yet.</div>
-        ) : (
-          <div className="follows">
-            {follows.map((f) => (
-              <div
-                key={f.pubkey}
-                className={`follow ${activeAuthors.includes(f.pubkey) ? 'active' : ''}`}
-                onClick={() => toggleAuthor(f.pubkey)}
-                title={toNpub(f.pubkey)}
-                role="checkbox"
-                aria-checked={activeAuthors.includes(f.pubkey)}
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAuthor(f.pubkey); }
-                }}
-              >
-                {f.picture
-                  ? <img className="av av-img" src={f.picture} alt="" />
-                  : <span className="av">{avatarInitial(f.pubkey, f.name)}</span>}
-                <span className="name">{f.name || `${toNpub(f.pubkey).slice(0, 12)}…`}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        title="Publishers"
-        badge={<span className="count">{publishers.length}</span>}
-        open={open.publishers}
-        onToggle={() => toggle('publishers')}
-      >
-        {publishers.length === 0 ? (
-          <div className="follows-empty">No publishers yet.</div>
-        ) : (
-          <div className="follows">
-            {publishers.map((p) => {
-              const profile = authors.get(p.pubkey);
-              const label = authorDisplayName(p.pubkey, profile);
-              const selected = activeAuthors.includes(p.pubkey);
-              return (
-                <div
-                  key={p.pubkey}
-                  className={`follow ${selected ? 'active' : ''}`}
-                  onClick={() => toggleAuthor(p.pubkey)}
-                  title={toNpub(p.pubkey)}
-                  role="checkbox"
-                  aria-checked={selected}
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAuthor(p.pubkey); }
-                  }}
-                >
-                  <span className="av">{avatarInitial(p.pubkey, profile?.name)}</span>
-                  <span className="name">{label}</span>
-                  <span className="pub-count">{p.count}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CollapsibleSection>
-
-      <div className="filters">
         <div className="side-section-label">Filter</div>
 
-        <CollapsibleSection
-          title="Signal"
-          badge={<span className="axis-letter">S</span>}
-          open={open.signal}
-          onToggle={() => toggle('signal')}
-        >
-          <div className="axis-range">
-            {SIGNAL_LEVELS.map((lvl) => (
-              <div
-                key={lvl}
-                className={`pip ${activeSignals.includes(lvl) ? 'active signal' : ''}`}
-                onClick={() => toggleSignal(lvl)}
-                title={lvl}
-              >
-                {lvl[0]}
-              </div>
-            ))}
-          </div>
+        <CollapsibleSection title="View" open={open.view} onToggle={() => toggle('view')}>
+          <ul className="nav-list">
+            <li
+              className={`nav-item ${activeCat === null && activeAuthors.length === 0 && !unreadOnly ? 'active' : ''}`}
+              onClick={clearFilters}
+            >
+              All discerned <span className="nav-count">{count}</span>
+            </li>
+            <li
+              className={`nav-item ${unreadOnly ? 'active' : ''}`}
+              onClick={() => setUnreadOnly(!unreadOnly)}
+            >
+              Unread <span className="nav-count">{unreadCount}</span>
+            </li>
+          </ul>
         </CollapsibleSection>
 
-        {qualOptions.length > 0 && (
+        <CollapsibleSection
+          title="Following"
+          badge={<span className="count">{follows.length}</span>}
+          open={open.following}
+          onToggle={() => toggle('following')}
+        >
+          {!isSignedIn ? (
+            <div className="follows-empty">Sign in to see who you follow.</div>
+          ) : follows.length === 0 ? (
+            <div className="follows-empty">No follows yet.</div>
+          ) : (
+            <div className="follows">
+              {follows.map((f) => (
+                <div
+                  key={f.pubkey}
+                  className={`follow ${activeAuthors.includes(f.pubkey) ? 'active' : ''}`}
+                  onClick={() => toggleAuthor(f.pubkey)}
+                  title={toNpub(f.pubkey)}
+                  role="checkbox"
+                  aria-checked={activeAuthors.includes(f.pubkey)}
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAuthor(f.pubkey); }
+                  }}
+                >
+                  {f.picture
+                    ? <img className="av av-img" src={f.picture} alt="" />
+                    : <span className="av">{avatarInitial(f.pubkey, f.name)}</span>}
+                  <span className="name">{f.name || `${toNpub(f.pubkey).slice(0, 12)}…`}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          title="Publishers"
+          badge={<span className="count">{publishers.length}</span>}
+          open={open.publishers}
+          onToggle={() => toggle('publishers')}
+        >
+          {publishers.length === 0 ? (
+            <div className="follows-empty">No publishers yet.</div>
+          ) : (
+            <div className="follows">
+              {publishers.map((p) => {
+                const profile = authors.get(p.pubkey);
+                const label = authorDisplayName(p.pubkey, profile);
+                const selected = activeAuthors.includes(p.pubkey);
+                return (
+                  <div
+                    key={p.pubkey}
+                    className={`follow ${selected ? 'active' : ''}`}
+                    onClick={() => toggleAuthor(p.pubkey)}
+                    title={toNpub(p.pubkey)}
+                    role="checkbox"
+                    aria-checked={selected}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAuthor(p.pubkey); }
+                    }}
+                  >
+                    <span className="av">{avatarInitial(p.pubkey, profile?.name)}</span>
+                    <span className="name">{label}</span>
+                    <span className="pub-count">{p.count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CollapsibleSection>
+
+        <div className="filters">
           <CollapsibleSection
-            title="Qualifiers"
-            badge={<span className="axis-letter">Q</span>}
-            open={open.qualifiers}
-            onToggle={() => toggle('qualifiers')}
+            title="Signal"
+            open={open.signal}
+            onToggle={() => toggle('signal')}
+          >
+            <div className="axis-range">
+              {SIGNAL_LEVELS.map((lvl) => (
+                <div
+                  key={lvl}
+                  className={`pip ${activeSignals.includes(lvl) ? 'active signal' : ''}`}
+                  onClick={() => toggleSignal(lvl)}
+                  title={lvl}
+                >
+                  {lvl[0]}
+                </div>
+              ))}
+            </div>
+          </CollapsibleSection>
+
+          {qualOptions.length > 0 && (
+            <CollapsibleSection
+              title="Qualifiers"
+              open={open.qualifiers}
+              onToggle={() => toggle('qualifiers')}
+            >
+              <div className="cat-filter">
+                {qualOptions.map((qual) => (
+                  <button
+                    key={qual}
+                    className={`cat-chip ${activeQuals.includes(qual) ? 'active' : ''}`}
+                    onClick={() => toggleQual(qual)}
+                  >
+                    {qual}
+                  </button>
+                ))}
+              </div>
+            </CollapsibleSection>
+          )}
+
+          <CollapsibleSection
+            title="Category"
+            open={open.category}
+            onToggle={() => toggle('category')}
           >
             <div className="cat-filter">
-              {qualOptions.map((qual) => (
+              {Object.entries(CATEGORIES).map(([key, cat]) => (
                 <button
-                  key={qual}
-                  className={`cat-chip ${activeQuals.includes(qual) ? 'active' : ''}`}
-                  onClick={() => toggleQual(qual)}
+                  key={key}
+                  className={`cat-chip ${activeCat === key ? 'active' : ''}`}
+                  onClick={() => setActiveCat(activeCat === key ? null : key)}
                 >
-                  {qual}
+                  {cat.label}
                 </button>
               ))}
             </div>
           </CollapsibleSection>
-        )}
-
-        <CollapsibleSection
-          title="Category"
-          badge={<span className="axis-letter">C</span>}
-          open={open.category}
-          onToggle={() => toggle('category')}
-        >
-          <div className="cat-filter">
-            {Object.entries(CATEGORIES).map(([key, cat]) => (
-              <button
-                key={key}
-                className={`cat-chip ${activeCat === key ? 'active' : ''}`}
-                onClick={() => setActiveCat(activeCat === key ? null : key)}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-        </CollapsibleSection>
+        </div>
       </div>
     </aside>
   );
@@ -276,21 +262,6 @@ function StreamCard({ clip, author }: { clip: ClipData | null; author?: AuthorPr
       bodies={EMPTY_BODIES}
       onBodyFetched={() => {}}
     />
-  );
-}
-
-
-function Icon({ name }: { name: string }) {
-  const paths: Record<string, React.ReactNode> = {
-    chevdown: <polyline points="6 9 12 15 18 9" />,
-    list: <><rect x="3" y="4" width="8" height="16" rx="1.5" /><rect x="13" y="4" width="8" height="16" rx="1.5" /></>,
-    stack: <><rect x="4" y="3" width="16" height="6" rx="1.5" /><rect x="4" y="11" width="16" height="6" rx="1.5" /><rect x="4" y="19" width="16" height="2.5" rx="1.25" /></>,
-    github: <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.1-1.47-1.1-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.1-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.1.39-1.99 1.03-2.69-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.6 1.03 2.69 0 3.84-2.34 4.69-4.57 4.93.36.3.68.92.68 1.86v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2z" />,
-  };
-  return (
-    <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      {paths[name]}
-    </svg>
   );
 }
 
@@ -324,10 +295,10 @@ export default function CastFeed({ clips, searchQuery, follows = [], authors = E
   const [activeAuthors, setActiveAuthors] = useState<string[]>([]);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('recent');
   // 'list' shows sidebar + feed list + detail; 'focus' hides the feed list so the
   // detail/reading panel fills the remaining width.
-  const [viewMode, setViewMode] = useState<'list' | 'focus'>('list');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
 
   const q = searchQuery?.trim().toLowerCase() ?? '';
 

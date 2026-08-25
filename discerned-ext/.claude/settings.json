@@ -4,7 +4,8 @@
       "Bash(pnpm --filter=./discerned-web type-check)",
       "Bash(pnpm -r type-check)",
       "Bash(cd /c/dev/discerned/discerned-web && pnpm type-check)",
-      "Read(//c/dev/discerned/discerned-web/**)"
+      "Read(//c/dev/discerned/discerned-web/**)",
+      "Bash(cd /c/dev/discerned/discerned-web && pnpm type-check && pnpm lint 2>&1 | tail -30)"
     ]
   }
 }
