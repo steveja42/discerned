@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(pnpm --filter=./discerned-web type-check)",
-      "Bash(pnpm -r type-check)"
+      "Bash(pnpm -r type-check)",
+      "Bash(cd /c/dev/discerned/discerned-web && pnpm type-check)",
+      "Read(//c/dev/discerned/discerned-web/**)"
     ]
   }
 }
