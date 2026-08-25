@@ -33,14 +33,30 @@ any; and don't describe the publisher population ("readers everywhere", "thousan
 curators") until it exists.
 
 ```
-Discerned is a web clipper with Signal Rating. Clip worthy content and optionally rate and tag it, and if you like, publish and share with the world
+Discerned is a web clipper with Signal Rating. Clip worthy content and optionally rate and tag it.  No account needed. Publish to share with the world if you like.
 
-### ✂️ CLIP & RATE WHAT MATTERS
+### CLIP & RATE WHAT MATTERS
 • Save full pages, articles, text selections, or bookmarks in one click.
 • You can give it a Signal Rating — five levels, from "Toxic" through "Ordinary" to "Masterpiece" — and
  tag it by tone, utility, and longevity, or add your own qualifiers.
 • Sort into categories, with your own alongside the built-in ones.
 • Add notes to your clips.
+
+### CAPTURE THAT LOOKS LIKE WHAT YOU READ
+• Discerned reproduces the page's real structure rather than flattening it into plain text.
+• Sites that defeat ordinary clippers have dedicated handling, so the clip resembles the page you were actually looking at.
+• Ads and noise are removed.
+
+### SHARE YOUR CLIPS WITH THE WORLD
+• When you choose, publish your clips to Nostr, an open social network where you own your identity, posts, and social graph (connections).
+• They work across every Nostr app, and no company can take them away.
+• Your published clips are signed verifiably under your key.
+
+### SEE WHAT OTHERS LOVE OR HATE
+• Published clips and ratings land in a public feed at discerned.online, open to read whether or not you use the extension.
+• Browse what your friends, follows, and the rest of the world are rating across the web.
+• Filter by follows, Signal Rating, category, or qualifier to see what people rated highly or lowly and why — and follow those whose judgement you trust.
+• Every rating there was published by someone who chose to, signed with their own key, on an open protocol no company controls. The more people who publish, the more useful the record becomes.
 
 ### NO ACCOUNT NEEDED
 • Start clipping immediately — zero mandatory account creation.
@@ -49,21 +65,6 @@ Discerned is a web clipper with Signal Rating. Clip worthy content and optionall
 ### OWN YOUR DATA
 • Export your full library as JSON at any time.
 • Import clips from JSON or Evernote files.
-
-### 📡 SHARE YOUR CLIPS WITH THE WORLD
-• When you choose, publish your clips to Nostr, an open social network where you own your identity, posts, and social graph (connections) — they work across every Nostr app, and no company can take them away.
-• Your published clips are signed verifiably under your key.
-
-### SEE WHAT OTHERS LOVE OR HATE
-• Published clips and ratings land in a public feed at discerned.online, open to read whether or not you use the extension.
-• Browse what your friends, follows, and the rest of the world are rating across the web.
-• Filter by follows, Signal Rating, category, or qualifier to see what people rated highly or lowly and why — and follow those whose judgement you trust.
-• Every rating there was published by someone who chose to, signed with their own key, on an open protocol no company controls. The more who publish, the more useful the record becomes.
-
-### CAPTURE THAT LOOKS LIKE WHAT YOU READ
-• Discerned reproduces the page's real structure rather than flattening it into plain text.
-• Sites that defeat ordinary clippers have dedicated handling, so the clip resembles the page you were actually looking at.
-• Ads and noise are removed.
 
 ---
 Start discerning signal from noise.
@@ -202,7 +203,7 @@ Verified for the current build:
 - [x] Detailed description drafted (see the Store listing section above)
 - [ ] Privacy policy **deployed** and reachable at https://discerned.online/privacy
 - [ ] Screenshots (1280×800 or 640×400) — at least one, up to five
-- [ ] Small promo tile (440×280)
+- [x] Small promo tile (440×280) — `store-assets/promo-tile-440x280.png`
 - [ ] Version bumped in `manifest.json` if re-submitting
 
 ### Known consequence of removing `key`
