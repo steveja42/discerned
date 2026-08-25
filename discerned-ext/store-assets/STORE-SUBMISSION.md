@@ -33,40 +33,35 @@ any; and don't describe the publisher population ("readers everywhere", "thousan
 curators") until it exists.
 
 ```
-Discerned is a web clipper with Signal Rating. Clip worthy content and optionally rate and tag it.  No account needed. Publish to share with the world if you like.
-
-### CLIP & RATE WHAT MATTERS
+CLIP & RATE WHAT MATTERS
 • Save full pages, articles, text selections, or bookmarks in one click.
 • You can give it a Signal Rating — five levels, from "Toxic" through "Ordinary" to "Masterpiece" — and
  tag it by tone, utility, and longevity, or add your own qualifiers.
 • Sort into categories, with your own alongside the built-in ones.
 • Add notes to your clips.
 
-### CAPTURE THAT LOOKS LIKE WHAT YOU READ
+CAPTURE THAT LOOKS LIKE WHAT YOU READ
 • Discerned reproduces the page's real structure rather than flattening it into plain text.
 • Sites that defeat ordinary clippers have dedicated handling, so the clip resembles the page you were actually looking at.
 • Ads and noise are removed.
 
-### SHARE YOUR CLIPS WITH THE WORLD
+SHARE YOUR CLIPS WITH THE WORLD
 • When you choose, publish your clips to Nostr, an open social network where you own your identity, posts, and social graph (connections).
 • They work across every Nostr app, and no company can take them away.
 • Your published clips are signed verifiably under your key.
 
-### SEE WHAT OTHERS LOVE OR HATE
+SEE WHAT OTHERS LOVE OR HATE
 • Published clips and ratings land in a public feed at discerned.online, open to read whether or not you use the extension.
 • Browse what your friends, follows, and the rest of the world are rating across the web.
 • Filter by follows, Signal Rating, category, or qualifier to see what people rated highly or lowly and why — and follow those whose judgement you trust.
 • Every rating there was published by someone who chose to, signed with their own key, on an open protocol no company controls. The more people who publish, the more useful the record becomes.
 
-### NO ACCOUNT NEEDED
+NO ACCOUNT NEEDED — OWN YOUR DATA
 • Start clipping immediately — zero mandatory account creation.
 • Your clip library stays local-first, on your device.
-
-### OWN YOUR DATA
 • Export your full library as JSON at any time.
 • Import clips from JSON or Evernote files.
 
----
 Start discerning signal from noise.
 ```
 
@@ -92,7 +87,7 @@ optionally publish. There is no second, unrelated feature.
 Paste these into the corresponding fields. Each states the concrete mechanism, because
 "it's a general-purpose tool" is the phrasing that gets rejected.
 
-### `host_permissions: <all_urls>`
+`host_permissions: <all_urls>`
 
 ```
 Discerned is a user-initiated web clipper. Its single purpose is to let users capture, rate, and save content from whichever public webpage they are currently reading. Because a user may choose to clip content from any web domain, access cannot be limited to a static list of host URLs.
@@ -100,7 +95,7 @@ Discerned is a user-initiated web clipper. Its single purpose is to let users ca
 The extension is strictly passive: content scripts remain completely idle and do not read, process, or monitor page data until the user actively initiates a capture via the toolbar beacon or right-click context menu. Discerned does not run background tracking, does not monitor browsing history, and operates no backend server to receive page content.
 ```
 
-### `scripting`
+`scripting`
 
 ```
 Used exclusively for a single read-only feature: extracting embedded tweet content (author, text, images) rendered inside cross-origin platform.twitter.com iframes on news and article pages.
@@ -108,7 +103,7 @@ Used exclusively for a single read-only feature: extracting embedded tweet conte
 Because cross-origin iframe content cannot be accessed by the parent page's content script, chrome.scripting.executeScript runs a small, bundled, read-only extractor targeted strictly at those specific iframe targets. This script contains no remote code, executes only during a user-initiated capture event, and makes no network requests.
 ```
 
-### `webNavigation`
+`webNavigation`
 
 ```
 Paired directly with the scripting permission for embedded tweet extraction. The chrome.webNavigation.getAllFrames API is called solely during an active, user-initiated capture to enumerate frame IDs and identify matching platform.twitter.com tweet embeds for target extraction.
@@ -116,14 +111,14 @@ Paired directly with the scripting permission for embedded tweet extraction. The
 It is never used to track navigation history, monitor tab changes, or observe user browsing behavior.
 ```
 
-### `contextMenus`
+`contextMenus`
 
 ```
 Adds the right-click menu entries the user invokes to capture the current page or a
 selected passage. This is one of the two primary entry points to the extension.
 ```
 
-### `storage`
+`storage`
 
 ```
 Stores the user's own data locally on their device: their saved clips and evaluations,
@@ -131,14 +126,14 @@ their relay list, theme preference, and sign-in state. Nothing in storage is
 transmitted to us.
 ```
 
-### `activeTab`
+`activeTab`
 
 ```
 Grants access to the tab the user invoked the extension on, so the capture can read
 that page's content at the moment of the user's click.
 ```
 
-### `tabs`
+`tabs`
 
 ```
 Used solely to query open browser tabs for existing instances of the extension's onboarding page and internal web application (discerned.online). This allows the extension to focus an already-open tab rather than spawning redundant duplicate tabs during the identity connect flow.
@@ -151,7 +146,7 @@ already-open Discerned tab rather than spawning duplicates, which requires query
 one. Not used to record or report the user's browsing.
 ```
 
-### Remote code
+Remote code
 
 ```
 No. All JavaScript is bundled in the package. The extension loads no remote scripts,
@@ -206,7 +201,7 @@ Verified for the current build:
 - [x] Small promo tile (440×280) — `store-assets/promo-tile-440x280.png`
 - [ ] Version bumped in `manifest.json` if re-submitting
 
-### Known consequence of removing `key`
+Known consequence of removing `key`
 
 The extension ID is no longer pinned. An unpacked/side-loaded install now gets a random
 per-profile ID, so its IndexedDB (`discerned`) is a **separate store** from a Web Store
@@ -215,7 +210,7 @@ assigned, add it to `ALLOWED_ORIGINS` in
 `discerned-web/netlify/functions/feedback.mts` (currently listing the old pinned ID;
 nothing is broken today because the extension opens a tab rather than posting directly).
 
-### Note on the download zip
+Note on the download zip
 
 `pnpm pack:ext` builds the side-load zip via PowerShell `Compress-Archive`, which writes
 backslash path separators. Chrome on Windows handles this. That zip is the
