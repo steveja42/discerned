@@ -73,8 +73,7 @@ body.style-studio .search              { border-radius: 8px; }
 }
 .hero-art {
   min-height: 460px;
-  border-right: 1px solid var(--rule);
-  background: var(--paper-2);
+  padding-bottom: 24px;
 }
 .hero-copy {
   padding: 64px 56px;
@@ -115,6 +114,26 @@ body.style-studio .search              { border-radius: 8px; }
   .hero-art { min-height: 280px; border-right: 0; border-bottom: 1px solid var(--rule); }
   .hero-copy { padding: 40px 28px; }
   .hero-title { font-size: 48px; }
+}
+
+/* Hero beacon animation — traveling dashes read as a signal moving outward along each
+   ray, the lamp glow breathes to sell "transmitting" rather than a static light. */
+.hero-beacon-ray {
+  stroke-dasharray: 22 46;
+  animation: hero-beacon-travel 3.2s linear infinite;
+}
+@keyframes hero-beacon-travel {
+  to { stroke-dashoffset: -68; }
+}
+.hero-beacon-lamp {
+  animation: hero-beacon-glow 6s ease-in-out infinite;
+}
+@keyframes hero-beacon-glow {
+  0%, 100% { opacity: 0.16; }
+  12% { opacity: 0.34; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-beacon-ray, .hero-beacon-lamp { animation: none; }
 }
 
 /* ============ Subpage bar ============ */

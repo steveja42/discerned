@@ -41,7 +41,7 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section style={{ maxWidth: 720, margin: '0 auto', padding: '56px 32px 80px', fontFamily: 'var(--serif)', color: 'var(--ink-2)', fontSize: 17, lineHeight: 1.65 }}>
+      <section style={{ maxWidth: 720, margin: '0 auto', padding: '28px 32px 80px', fontFamily: 'var(--serif)', color: 'var(--ink-2)', fontSize: 17, lineHeight: 1.65 }}>
         <h2 style={{ fontFamily: 'var(--serif)', fontSize: 26, fontWeight: 500, color: 'var(--ink)', margin: '0 0 16px', letterSpacing: '-0.015em' }}>
           Signal, filtered
         </h2>
