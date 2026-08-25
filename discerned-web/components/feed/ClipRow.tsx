@@ -18,6 +18,9 @@ interface ClipRowProps {
   isSelectMode?: boolean;
   isSelected?: boolean;
   onSelect?: (id: string) => void;
+  // Right-click on the caster label. Absent on call sites with no follow
+  // concept (e.g. the private Library, which has no public authorPubkey).
+  onAuthorContextMenu?: (pubkey: string, x: number, y: number) => void;
 }
 
 function formatDate(ts: number): string {
@@ -64,6 +67,7 @@ function rowExcerpt(capture: ClipData['capture']): string | null {
 export default function ClipRow({
   clip, selected, onClick, author,
   isSelectMode = false, isSelected = false, onSelect,
+  onAuthorContextMenu,
 }: ClipRowProps) {
   const { capture, evaluation } = clip;
   const domain = domainOf(capture.url);
@@ -96,7 +100,18 @@ export default function ClipRow({
           {caster && (
             <>
               <span className="dot">·</span>
-              <span className="clip-author" title={caster}>{caster}</span>
+              <span
+                className="clip-author"
+                title={caster}
+                onContextMenu={(e) => {
+                  if (!onAuthorContextMenu || !capture.authorPubkey) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onAuthorContextMenu(capture.authorPubkey, e.clientX, e.clientY);
+                }}
+              >
+                {caster}
+              </span>
             </>
           )}
         </div>

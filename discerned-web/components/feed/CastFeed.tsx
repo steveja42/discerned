@@ -17,7 +17,9 @@ import FilterStrip from './FilterStrip';
 import ViewControls, { type SortOrder, type ViewMode } from './ViewControls';
 import ResizableLayout from '@/components/layout/ResizableLayout';
 import CollapsibleSection from '@/components/layout/CollapsibleSection';
+import AuthorContextMenu from '@/components/menu/AuthorContextMenu';
 import { useSidebarSections } from '@/hooks/useSidebarSections';
+import { useFollowMutation } from '@/hooks/useFollowMutation';
 
 // One publisher in the sidebar list: an author present in the loaded feed, with how
 // many of the loaded discerns they published.
@@ -53,6 +55,7 @@ interface SidebarProps {
   setSortOrder: (o: SortOrder) => void;
   viewMode: ViewMode;
   setViewMode: (m: ViewMode) => void;
+  onAuthorContextMenu: (pubkey: string, x: number, y: number) => void;
 }
 
 // npub for a pubkey, used wherever the key is shown to the user (never hex).
@@ -83,6 +86,7 @@ function Sidebar({
   setSortOrder,
   viewMode,
   setViewMode,
+  onAuthorContextMenu,
 }: SidebarProps) {
   const { open, toggle } = useSidebarSections();
 
@@ -131,6 +135,11 @@ function Sidebar({
                   key={f.pubkey}
                   className={`follow ${activeAuthors.includes(f.pubkey) ? 'active' : ''}`}
                   onClick={() => toggleAuthor(f.pubkey)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onAuthorContextMenu(f.pubkey, e.clientX, e.clientY);
+                  }}
                   title={toNpub(f.pubkey)}
                   role="checkbox"
                   aria-checked={activeAuthors.includes(f.pubkey)}
@@ -168,6 +177,11 @@ function Sidebar({
                     key={p.pubkey}
                     className={`follow ${selected ? 'active' : ''}`}
                     onClick={() => toggleAuthor(p.pubkey)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onAuthorContextMenu(p.pubkey, e.clientX, e.clientY);
+                    }}
                     title={toNpub(p.pubkey)}
                     role="checkbox"
                     aria-checked={selected}
@@ -252,7 +266,15 @@ function Sidebar({
 // One clip's full detail view inside the Stream (focus) view. Thin wrapper over
 // DetailPanel — delete/note-edit are no-ops here, same as the single detail pane,
 // since the public Discerns feed has no owned clips to mutate.
-function StreamCard({ clip, author }: { clip: ClipData | null; author?: AuthorProfile }) {
+function StreamCard({
+  clip,
+  author,
+  onAuthorContextMenu,
+}: {
+  clip: ClipData | null;
+  author?: AuthorProfile;
+  onAuthorContextMenu?: (pubkey: string, x: number, y: number) => void;
+}) {
   return (
     <DetailPanel
       clip={clip}
@@ -261,6 +283,7 @@ function StreamCard({ clip, author }: { clip: ClipData | null; author?: AuthorPr
       onUpdateNote={() => {}}
       bodies={EMPTY_BODIES}
       onBodyFetched={() => {}}
+      onAuthorContextMenu={onAuthorContextMenu}
     />
   );
 }
@@ -273,6 +296,11 @@ interface CastFeedProps {
   isSignedIn?: boolean;
   read?: Set<string>;
   markRead?: (id: string) => void;
+  // Whether the Discerned extension bridge is connected — Follow needs it to
+  // sign+publish the kind:3 mutation (the web app has no reliable signer on
+  // its own for most auth modes). Defaults false so call sites that don't
+  // pass it (Library's Stream reuse, tests) simply disable the menu action.
+  extensionPresent?: boolean;
 }
 
 const EMPTY_READ: Set<string> = new Set();
@@ -285,8 +313,11 @@ const EMPTY_AUTHORS: Map<string, AuthorProfile> = new Map();
 // rather than each allocating its own on every render.
 const EMPTY_BODIES: Map<string, ClipBody> = new Map();
 
-export default function CastFeed({ clips, searchQuery, follows = [], authors = EMPTY_AUTHORS, isSignedIn = false, read, markRead }: CastFeedProps) {
+export default function CastFeed({ clips, searchQuery, follows = [], authors = EMPTY_AUTHORS, isSignedIn = false, read, markRead, extensionPresent = false }: CastFeedProps) {
   const readSet = read ?? EMPTY_READ;
+  const { isFollowing, toggleFollow } = useFollowMutation(follows, extensionPresent);
+  const [authorMenu, setAuthorMenu] = useState<{ pubkey: string; x: number; y: number } | null>(null);
+  const openAuthorMenu = (pubkey: string, x: number, y: number) => setAuthorMenu({ pubkey, x, y });
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [activeSignals, setActiveSignals] = useState<string[]>([]);
   const [activeQuals, setActiveQuals] = useState<string[]>([]);
@@ -418,6 +449,7 @@ export default function CastFeed({ clips, searchQuery, follows = [], authors = E
                 selected={selected?.capture.id === clip.capture.id}
                 onClick={() => handleSelectClip(clip.capture.id)}
                 author={clip.capture.authorPubkey ? authors.get(clip.capture.authorPubkey) : undefined}
+                onAuthorContextMenu={openAuthorMenu}
               />
             ))
           )}
@@ -440,6 +472,7 @@ export default function CastFeed({ clips, searchQuery, follows = [], authors = E
               key={clip.capture.id}
               clip={clip}
               author={clip.capture.authorPubkey ? authors.get(clip.capture.authorPubkey) : undefined}
+              onAuthorContextMenu={openAuthorMenu}
             />
           ))
         )}
@@ -468,15 +501,35 @@ export default function CastFeed({ clips, searchQuery, follows = [], authors = E
             setSortOrder={setSortOrder}
             viewMode={viewMode}
             setViewMode={setViewMode}
+            onAuthorContextMenu={openAuthorMenu}
           />
         }
         feed={feedContent}
         detail={viewMode === 'focus'
           ? streamContent
-          : <StreamCard clip={selected} author={selected?.capture.authorPubkey ? authors.get(selected.capture.authorPubkey) : undefined} />}
+          : (
+            <StreamCard
+              clip={selected}
+              author={selected?.capture.authorPubkey ? authors.get(selected.capture.authorPubkey) : undefined}
+              onAuthorContextMenu={openAuthorMenu}
+            />
+          )}
         showFeed={viewMode === 'list'}
         initialSidebarWidth={200}
       />
+
+      {authorMenu && (
+        <AuthorContextMenu
+          x={authorMenu.x}
+          y={authorMenu.y}
+          isFollowing={isFollowing(authorMenu.pubkey)}
+          canFollow={extensionPresent}
+          disabledReason="Install the Discerned extension to follow publishers."
+          onFollow={() => toggleFollow(authorMenu.pubkey)}
+          onUnfollow={() => toggleFollow(authorMenu.pubkey)}
+          onClose={() => setAuthorMenu(null)}
+        />
+      )}
     </div>
   );
 }

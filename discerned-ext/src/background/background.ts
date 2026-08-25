@@ -15,6 +15,7 @@ import {
   createResourceNoteEvent,
   createLongFormEvent,
   buildDiscernedSnippet,
+  buildFollowListEvent,
   setClientVersion,
   type LongFormRef,
 } from '@/shared/nostr/events';
@@ -30,6 +31,7 @@ import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluat
 import { STORAGE_KEYS, relaysForMode } from '@/shared/types';
 import { getEffectiveRelays, getRelayRows, saveRelayPrefs, mergeDiscoveredRelays } from '@/shared/relays';
 import { fetchPreferredRelays, clearDiscoveryCache } from './relay-list-fetcher';
+import { fetchCurrentFollowList } from './follow-list-fetcher';
 import { LL, log, setLogRelayTabs } from '@/shared/logger';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
 import type { EventTemplate } from 'nostr-tools/core';
@@ -137,6 +139,22 @@ async function pushRelayListToWebApp(): Promise<void> {
   const rows = await getRelayRows();
   const tabs = await chrome.tabs.query({ url: DISCERNED_URL_PATTERNS });
   const message: BackgroundMessage = { type: 'PUSH_RELAY_LIST', rows };
+  for (const tab of tabs) {
+    if (tab.id === undefined) continue;
+    chrome.tabs.sendMessage(tab.id, message).catch(() => { /* non-fatal */ });
+  }
+}
+
+// Push a follow/unfollow mutation's outcome to any open discerned tab so the
+// UI can reconcile its optimistic state, mirroring pushRelayListToWebApp.
+async function pushFollowResultToWebApp(
+  pubkey: string,
+  following: boolean,
+  ok: boolean,
+  error?: string,
+): Promise<void> {
+  const tabs = await chrome.tabs.query({ url: DISCERNED_URL_PATTERNS });
+  const message: BackgroundMessage = { type: 'PUSH_FOLLOW_RESULT', pubkey, following, ok, error };
   for (const tab of tabs) {
     if (tab.id === undefined) continue;
     chrome.tabs.sendMessage(tab.id, message).catch(() => { /* non-fatal */ });
@@ -463,6 +481,18 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'CAST':
       return handleCast(message.data);
 
+    case 'FOLLOW_PUBKEY': {
+      const result = await handleFollowMutation({ add: message.pubkey });
+      await pushFollowResultToWebApp(message.pubkey, true, result.success, result.success ? undefined : result.error);
+      return result;
+    }
+
+    case 'UNFOLLOW_PUBKEY': {
+      const result = await handleFollowMutation({ remove: message.pubkey });
+      await pushFollowResultToWebApp(message.pubkey, false, result.success, result.success ? undefined : result.error);
+      return result;
+    }
+
     case 'BUILD_CAST':
       // Test-only: return the cast event templates without signing/publishing.
       // Tree-shaken from production builds (guard is a compile-time constant).
@@ -666,6 +696,7 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'PUSH_PENDING_SIGN':
     case 'PUSH_RELAY_MODE':
     case 'PUSH_RELAY_LIST':
+    case 'PUSH_FOLLOW_RESULT':
       // These are background→content messages; the background never receives them.
       // (PUSH_PENDING_SIGN is sent TO the web-bridge content script, not received here.)
       return { success: false, error: 'Not handled by background' };
@@ -1449,6 +1480,50 @@ async function handleCast(
   } catch (error) {
     log(LL.ERROR, 'Cast error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Cast failed' };
+  }
+}
+
+// Publish a NIP-02 kind:3 follow/unfollow. Fetches the CURRENT contact list
+// fresh (kind:3 is fully-replaceable — see buildFollowListEvent's note) before
+// mutating just the one `p` tag, then signs and publishes it the same way a
+// cast's note is signed and published. Guest is rejected: guestPrivateKey is
+// regenerated on every service-worker wake (not persisted), so a contact list
+// published under it would be orphaned the moment the worker cold-starts.
+async function handleFollowMutation(
+  mutation: { add: string } | { remove: string },
+): Promise<BackgroundResponse> {
+  try {
+    if (currentAuthState.type === 'guest') {
+      return { success: false, error: "Sign in with a real identity to follow — guest keys don't persist" };
+    }
+    const ownPubkey = resolveAuthorPubkey();
+    if (!ownPubkey) return { success: false, error: 'Not signed in' };
+
+    const current = await fetchCurrentFollowList(ownPubkey);
+    if (current === null) {
+      return { success: false, error: 'Could not fetch your current follow list — try again' };
+    }
+
+    const template = buildFollowListEvent(current.tags, current.content, mutation);
+
+    // Same NIP-07-via-web-app rule as handleCast: a user-initiated public write
+    // routes through the wallet's discerned.online approval, not a silent sign.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sign = (t: Parameters<typeof signEvent>[0]): Promise<any> =>
+      currentAuthState.type === 'pro' ? signEventViaWebApp(t) : signEvent(t);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const signed: any = await sign(template);
+
+    const publishResult = await publishWithMinimum(signed);
+    if (!publishResult.success) {
+      const health = getRelayHealth(publishResult.results);
+      throw new Error(`Failed to publish (${health.healthy}/${health.total} relays)`);
+    }
+
+    return { success: true, data: { eventId: signed.id } };
+  } catch (error) {
+    log(LL.ERROR, 'Follow mutation error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Follow update failed' };
   }
 }
 

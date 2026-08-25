@@ -520,6 +520,35 @@ export function createEncryptedClipEvent(
 }
 
 /**
+ * Build a NIP-02 kind-3 contact-list event that adds or removes exactly one
+ * `p` tag. `currentTags`/`currentContent` MUST be the user's existing kind-3
+ * event fetched fresh immediately before calling this (see
+ * background/follow-list-fetcher.ts) — kind:3 is fully-replaceable, same
+ * hazard as kind:0 above: publishing from a stale or reconstructed tag list
+ * would silently erase the rest of the user's contacts. `content` is passed
+ * through unchanged since legacy clients store a relay-list JSON blob there.
+ */
+export function buildFollowListEvent(
+  currentTags: string[][],
+  currentContent: string,
+  mutation: { add: string } | { remove: string }
+): EventTemplate {
+  let tags: string[][];
+  if ('add' in mutation) {
+    const already = currentTags.some((t) => t[0] === 'p' && t[1] === mutation.add);
+    tags = already ? currentTags : [...currentTags, ['p', mutation.add]];
+  } else {
+    tags = currentTags.filter((t) => !(t[0] === 'p' && t[1] === mutation.remove));
+  }
+  return {
+    kind: 3,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: currentContent,
+  };
+}
+
+/**
  * Finalize an event template with signature
  * (for guest mode or testing - real signing should use NIP-07/46)
  */

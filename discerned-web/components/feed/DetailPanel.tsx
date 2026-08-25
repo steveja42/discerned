@@ -19,6 +19,9 @@ interface DetailPanelProps {
   onUpdateNote: (id: string, note: string) => void;
   bodies: Map<string, ClipBody>;
   onBodyFetched: (id: string, body: ClipBody) => void;
+  // Right-click on the caster label. Absent on call sites with no follow
+  // concept (e.g. the private Library, which has no public authorPubkey).
+  onAuthorContextMenu?: (pubkey: string, x: number, y: number) => void;
 }
 
 function domainOf(url: string): string {
@@ -175,7 +178,7 @@ function renderTextWithBreaks(text: string, imageUrls?: Set<string>): React.Reac
   });
 }
 
-export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodies, onBodyFetched }: DetailPanelProps) {
+export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodies, onBodyFetched, onAuthorContextMenu }: DetailPanelProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Leaving fullscreen when the selected clip changes underneath it (e.g. List
@@ -279,7 +282,19 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
         <div className="detail-cat-inline">
           <span className="swatch-lg" style={{ background: `oklch(0.50 0.08 ${cat.hue})` }} />
           <span className="cat-name">{cat.label}</span>
-          {caster && <span className="cat-author" title={caster}>{caster}</span>}
+          {caster && (
+            <span
+              className="cat-author"
+              title={caster}
+              onContextMenu={(e) => {
+                if (!onAuthorContextMenu || !capture.authorPubkey) return;
+                e.preventDefault();
+                onAuthorContextMenu(capture.authorPubkey, e.clientX, e.clientY);
+              }}
+            >
+              {caster}
+            </span>
+          )}
         </div>
       </div>
 

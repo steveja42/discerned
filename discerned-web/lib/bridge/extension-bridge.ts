@@ -16,7 +16,8 @@ export type BridgeMessage =
   | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null }
   | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown>; expectedPubkey?: string }
   | { type: 'DISCERNED_BRIDGE_RELAYS'; mode: RelayMode }
-  | { type: 'DISCERNED_BRIDGE_RELAY_LIST'; rows: RelayRow[] };
+  | { type: 'DISCERNED_BRIDGE_RELAY_LIST'; rows: RelayRow[] }
+  | { type: 'DISCERNED_BRIDGE_FOLLOW_RESULT'; pubkey: string; following: boolean; ok: boolean; error?: string };
 
 export function listenForBridge(
   handler: (msg: BridgeMessage) => void,
@@ -152,4 +153,17 @@ export function sendRelayListToExtension(userRelays: string[], removedRelays: st
     { type: 'DISCERNED_SET_RELAY_LIST', userRelays, removedRelays },
     window.location.origin,
   );
+}
+
+// Ask the extension to publish a NIP-02 kind:3 follow/unfollow for `pubkey`.
+// The extension fetches the signed-in user's current contact list fresh,
+// mutates just this one entry, signs, and publishes it, then broadcasts the
+// outcome back as DISCERNED_BRIDGE_FOLLOW_RESULT. No-op when the extension
+// isn't installed — callers must check bridge presence before offering Follow.
+export function sendFollowPubkeyToExtension(pubkey: string): void {
+  window.postMessage({ type: 'DISCERNED_FOLLOW_PUBKEY', pubkey }, window.location.origin);
+}
+
+export function sendUnfollowPubkeyToExtension(pubkey: string): void {
+  window.postMessage({ type: 'DISCERNED_UNFOLLOW_PUBKEY', pubkey }, window.location.origin);
 }

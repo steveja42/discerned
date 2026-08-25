@@ -203,6 +203,12 @@ export type BackgroundMessage =
   | { type: 'UPDATE_RELAY_LIST'; userRelays: string[]; removedRelays: string[] }
   | { type: 'PUSH_RELAY_LIST'; rows: RelayRow[] }
   | { type: 'GET_NIP07_RELAYS' }
+  // NIP-02 kind:3 follow/unfollow. Handler fetches the CURRENT contact list
+  // fresh (kind:3 is fully-replaceable) before mutating just the one `p` tag —
+  // see follow-list-fetcher.ts. Rejected for guest auth (no stable identity).
+  | { type: 'FOLLOW_PUBKEY'; pubkey: string }
+  | { type: 'UNFOLLOW_PUBKEY'; pubkey: string }
+  | { type: 'PUSH_FOLLOW_RESULT'; pubkey: string; following: boolean; ok: boolean; error?: string }
   // Test-only (dev/test builds): build the cast event templates a cast WOULD
   // publish (kind-1 note + companion kind-30023), without signing or publishing.
   // Lets the e2e visual specs render the real published-cast output. The handler
@@ -280,7 +286,8 @@ export type WebBridgeOutbound =
   | { type: 'DISCERNED_BRIDGE_CLIP_BODY'; id: string; bodyHtml?: string; thumbnail?: string | null }
   | { type: 'DISCERNED_BRIDGE_PENDING_SIGN'; id: string; event: Record<string, unknown>; expectedPubkey?: string }
   | { type: 'DISCERNED_BRIDGE_RELAYS'; mode: RelayMode }
-  | { type: 'DISCERNED_BRIDGE_RELAY_LIST'; rows: RelayRow[] };
+  | { type: 'DISCERNED_BRIDGE_RELAY_LIST'; rows: RelayRow[] }
+  | { type: 'DISCERNED_BRIDGE_FOLLOW_RESULT'; pubkey: string; following: boolean; ok: boolean; error?: string };
 
 export type WebBridgeInbound =
   | { type: 'DISCERNED_WEB_READY'; clipCount: number }
@@ -293,7 +300,9 @@ export type WebBridgeInbound =
   | { type: 'DISCERNED_SIGNED'; id: string; signed: Record<string, unknown> }
   | { type: 'DISCERNED_SIGN_REJECTED'; id: string; error: string }
   | { type: 'DISCERNED_SET_RELAY_MODE'; mode: RelayMode }
-  | { type: 'DISCERNED_SET_RELAY_LIST'; userRelays: string[]; removedRelays: string[] };
+  | { type: 'DISCERNED_SET_RELAY_LIST'; userRelays: string[]; removedRelays: string[] }
+  | { type: 'DISCERNED_FOLLOW_PUBKEY'; pubkey: string }
+  | { type: 'DISCERNED_UNFOLLOW_PUBKEY'; pubkey: string };
 
 // Default relay list. Mirrored in discerned-web/lib/constants.ts — keep in sync.
 // relay.damus.io retired at the end of July 2026; relay.primal.net replaced it.

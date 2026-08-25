@@ -187,6 +187,15 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, _sender, sendR
   if (message.type === 'PUSH_RELAY_LIST') {
     post({ type: 'DISCERNED_BRIDGE_RELAY_LIST', rows: message.rows });
   }
+  if (message.type === 'PUSH_FOLLOW_RESULT') {
+    post({
+      type: 'DISCERNED_BRIDGE_FOLLOW_RESULT',
+      pubkey: message.pubkey,
+      following: message.following,
+      ok: message.ok,
+      error: message.error,
+    });
+  }
   if (message.type === 'PUSH_PENDING_SIGN') {
     // First-cast handoff from the background: surface a confirm UI in the
     // web app so the user provides a per-origin gesture for window.nostr.
@@ -339,6 +348,12 @@ window.addEventListener('message', (e: MessageEvent) => {
       userRelays: msg.userRelays,
       removedRelays: msg.removedRelays,
     }).catch(() => { /* non-fatal */ });
+  }
+  if (msg?.type === 'DISCERNED_FOLLOW_PUBKEY') {
+    chrome.runtime.sendMessage({ type: 'FOLLOW_PUBKEY', pubkey: msg.pubkey }).catch(() => { /* non-fatal */ });
+  }
+  if (msg?.type === 'DISCERNED_UNFOLLOW_PUBKEY') {
+    chrome.runtime.sendMessage({ type: 'UNFOLLOW_PUBKEY', pubkey: msg.pubkey }).catch(() => { /* non-fatal */ });
   }
   if (msg?.type === 'DISCERNED_SET_RELAY_MODE') {
     // The web app's own dev toggle was flipped — persist it (extension is the

@@ -67,6 +67,7 @@ export default function DiscernsClient() {
         isSignedIn={auth.status !== 'guest'}
         read={read}
         markRead={markRead}
+        extensionPresent={extensionPresent}
       />
 
       {signInOpen && (
