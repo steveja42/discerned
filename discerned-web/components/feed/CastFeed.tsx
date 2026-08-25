@@ -8,6 +8,7 @@ import { useState, useMemo } from 'react';
 import { npubEncode } from 'nostr-tools/nip19';
 import { CATEGORIES, SIGNAL_LEVELS, deriveQualifierOptions, matchesAuthors, matchesQualifiers, matchesSignal } from '@/lib/constants';
 import type { ClipData } from '@/lib/types';
+import type { ClipBody } from '@/lib/bridge/ClipStoreContext';
 import type { FollowProfile } from '@/lib/nostr/follows';
 import { authorDisplayName, type AuthorProfile } from '@/lib/nostr/profiles';
 import ClipRow from './ClipRow';
@@ -47,6 +48,10 @@ interface SidebarProps {
   publishers: Publisher[];
   authors: Map<string, AuthorProfile>;
   isSignedIn: boolean;
+  sortOrder: 'recent' | 'oldest';
+  setSortOrder: (o: 'recent' | 'oldest') => void;
+  viewMode: 'list' | 'focus';
+  setViewMode: (m: 'list' | 'focus') => void;
 }
 
 // npub for a pubkey, used wherever the key is shown to the user (never hex).
@@ -73,11 +78,35 @@ function Sidebar({
   publishers,
   authors,
   isSignedIn,
+  sortOrder,
+  setSortOrder,
+  viewMode,
+  setViewMode,
 }: SidebarProps) {
   const { open, toggle } = useSidebarSections();
 
   return (
     <aside className="sidebar">
+      <div className="sidebar-head">
+        <h1 className="feed-title"><em>Discerns</em></h1>
+        <div className="feed-controls">
+          <button
+            className="sort"
+            onClick={() => setSortOrder(sortOrder === 'recent' ? 'oldest' : 'recent')}
+          >
+            Sort: {sortOrder === 'recent' ? 'Recent' : 'Oldest'} <Icon name="chevdown" />
+          </button>
+          <div className="density">
+            <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')} title="List view">
+              <Icon name="list" />
+            </button>
+            <button className={viewMode === 'focus' ? 'active' : ''} onClick={() => setViewMode('focus')} title="Stream view (full detail, scrollable)">
+              <Icon name="stack" />
+            </button>
+          </div>
+        </div>
+      </div>
+
       <CollapsibleSection title="View" open={open.view} onToggle={() => toggle('view')}>
         <ul className="nav-list">
           <li
@@ -234,11 +263,28 @@ function Sidebar({
   );
 }
 
+// One clip's full detail view inside the Stream (focus) view. Thin wrapper over
+// DetailPanel — delete/note-edit are no-ops here, same as the single detail pane,
+// since the public Discerns feed has no owned clips to mutate.
+function StreamCard({ clip, author }: { clip: ClipData | null; author?: AuthorProfile }) {
+  return (
+    <DetailPanel
+      clip={clip}
+      author={author}
+      onDelete={() => {}}
+      onUpdateNote={() => {}}
+      bodies={EMPTY_BODIES}
+      onBodyFetched={() => {}}
+    />
+  );
+}
+
+
 function Icon({ name }: { name: string }) {
   const paths: Record<string, React.ReactNode> = {
     chevdown: <polyline points="6 9 12 15 18 9" />,
-    list: <><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></>,
-    grid: <><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></>,
+    list: <><rect x="3" y="4" width="8" height="16" rx="1.5" /><rect x="13" y="4" width="8" height="16" rx="1.5" /></>,
+    stack: <><rect x="4" y="3" width="16" height="6" rx="1.5" /><rect x="4" y="11" width="16" height="6" rx="1.5" /><rect x="4" y="19" width="16" height="2.5" rx="1.25" /></>,
     github: <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.1-1.47-1.1-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.1-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.1.39-1.99 1.03-2.69-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.6 1.03 2.69 0 3.84-2.34 4.69-4.57 4.93.36.3.68.92.68 1.86v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2z" />,
   };
   return (
@@ -249,7 +295,6 @@ function Icon({ name }: { name: string }) {
 }
 
 interface CastFeedProps {
-  status: 'connecting' | 'live' | 'error';
   clips: ClipData[];
   searchQuery?: string;
   follows?: FollowProfile[];
@@ -263,7 +308,13 @@ const EMPTY_READ: Set<string> = new Set();
 
 const EMPTY_AUTHORS: Map<string, AuthorProfile> = new Map();
 
-export default function CastFeed({ status, clips, searchQuery, follows = [], authors = EMPTY_AUTHORS, isSignedIn = false, read, markRead }: CastFeedProps) {
+// The public Discerns feed has no owned clips to fetch bodies for (bodyHtml/
+// markdown/bodyText already arrive with the clip from Nostr) — DetailPanel's
+// body-cache plumbing is unused here, so every instance shares one empty map
+// rather than each allocating its own on every render.
+const EMPTY_BODIES: Map<string, ClipBody> = new Map();
+
+export default function CastFeed({ clips, searchQuery, follows = [], authors = EMPTY_AUTHORS, isSignedIn = false, read, markRead }: CastFeedProps) {
   const readSet = read ?? EMPTY_READ;
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [activeSignals, setActiveSignals] = useState<string[]>([]);
@@ -273,6 +324,10 @@ export default function CastFeed({ status, clips, searchQuery, follows = [], aut
   const [activeAuthors, setActiveAuthors] = useState<string[]>([]);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
+  // 'list' shows sidebar + feed list + detail; 'focus' hides the feed list so the
+  // detail/reading panel fills the remaining width.
+  const [viewMode, setViewMode] = useState<'list' | 'focus'>('list');
 
   const q = searchQuery?.trim().toLowerCase() ?? '';
 
@@ -345,55 +400,47 @@ export default function CastFeed({ status, clips, searchQuery, follows = [], aut
     return true;
   }), [clips, activeCat, activeSignals, activeQuals, activeAuthors, unreadOnly, q, readSet]);
 
-  const selected = filtered.find((c) => c.capture.id === selectedId) ?? filtered[0] ?? null;
+  const sorted = useMemo(() => {
+    const copy = [...filtered];
+    copy.sort((a, b) => sortOrder === 'recent'
+      ? b.capture.timestamp - a.capture.timestamp
+      : a.capture.timestamp - b.capture.timestamp);
+    return copy;
+  }, [filtered, sortOrder]);
+
+  const selected = sorted.find((c) => c.capture.id === selectedId) ?? sorted[0] ?? null;
 
   const handleSelectClip = (id: string) => {
     setSelectedId(id);
     markRead?.(id);
   };
 
+  const filterStrip = (
+    <FilterStrip
+      activeSignals={activeSignals}
+      activeQuals={activeQuals}
+      activeCat={activeCat}
+      activeAuthors={activeAuthorPills}
+      onClearSignal={(sig) => setActiveSignals((prev) => prev.filter((x) => x !== sig))}
+      onClearQual={(qual) => setActiveQuals((prev) => prev.filter((x) => x !== qual))}
+      onClearCat={() => setActiveCat(null)}
+      onClearAuthor={toggleAuthor}
+      onClearAll={clearFilters}
+    />
+  );
+
   const feedContent = (
     <main className="feed-col">
-      <div className="feed-head">
-        <div>
-          <h1 className="feed-title"><em>Discerns</em></h1>
-          <div className="feed-meta">
-            {filtered.length} clips
-            <span className="sep">·</span>
-            live · Nostr
-            <span className="sep">·</span>
-            {status === 'connecting' ? 'connecting…' : status === 'live' ? 'live' : 'error'}
-          </div>
-        </div>
-        <div className="feed-controls">
-          <button className="sort">Sort: Recent <Icon name="chevdown" /></button>
-          <div className="density">
-            <button className="active"><Icon name="list" /></button>
-            <button><Icon name="grid" /></button>
-          </div>
-        </div>
-      </div>
-
-      <FilterStrip
-        activeSignals={activeSignals}
-        activeQuals={activeQuals}
-        activeCat={activeCat}
-        activeAuthors={activeAuthorPills}
-        onClearSignal={(sig) => setActiveSignals((prev) => prev.filter((x) => x !== sig))}
-        onClearQual={(qual) => setActiveQuals((prev) => prev.filter((x) => x !== qual))}
-        onClearCat={() => setActiveCat(null)}
-        onClearAuthor={toggleAuthor}
-        onClearAll={clearFilters}
-      />
+      {filterStrip}
 
       <div className="feed-scroll">
         <div className="feed-list">
-          {filtered.length === 0 ? (
+          {sorted.length === 0 ? (
             <div className="feed-empty">
               {q ? `No casts match "${searchQuery}".` : 'No clips match these filters.'}
             </div>
           ) : (
-            filtered.map((clip) => (
+            sorted.map((clip) => (
               <ClipRow
                 key={clip.capture.id}
                 clip={clip}
@@ -406,6 +453,27 @@ export default function CastFeed({ status, clips, searchQuery, follows = [], aut
         </div>
       </div>
     </main>
+  );
+
+  const streamContent = (
+    <div className="detail-stream">
+      {filterStrip}
+      <div className="detail-stream-scroll">
+        {sorted.length === 0 ? (
+          <div className="feed-empty">
+            {q ? `No casts match "${searchQuery}".` : 'No clips match these filters.'}
+          </div>
+        ) : (
+          sorted.map((clip) => (
+            <StreamCard
+              key={clip.capture.id}
+              clip={clip}
+              author={clip.capture.authorPubkey ? authors.get(clip.capture.authorPubkey) : undefined}
+            />
+          ))
+        )}
+      </div>
+    </div>
   );
 
   return (
@@ -425,10 +493,17 @@ export default function CastFeed({ status, clips, searchQuery, follows = [], aut
             publishers={publishers}
             authors={authors}
             isSignedIn={isSignedIn}
+            sortOrder={sortOrder}
+            setSortOrder={setSortOrder}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
           />
         }
         feed={feedContent}
-        detail={<DetailPanel clip={selected} author={selected?.capture.authorPubkey ? authors.get(selected.capture.authorPubkey) : undefined} onDelete={() => {}} onUpdateNote={() => {}} bodies={new Map()} onBodyFetched={() => {}} />}
+        detail={viewMode === 'focus'
+          ? streamContent
+          : <StreamCard clip={selected} author={selected?.capture.authorPubkey ? authors.get(selected.capture.authorPubkey) : undefined} />}
+        showFeed={viewMode === 'list'}
         initialSidebarWidth={200}
       />
     </div>

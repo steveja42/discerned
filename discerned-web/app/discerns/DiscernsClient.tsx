@@ -22,7 +22,7 @@ export default function DiscernsClient() {
   const router = useRouter();
   const { auth, signInPubkey, setNip07Connected } = useNostrAuth();
   const { showPopover, dismiss: dismissPopover } = useFirstVisit();
-  const { clips, status } = useCastFeed();
+  const { clips } = useCastFeed();
   const { extensionPresent } = useBridgeAuth();
   const follows = useFollowList(auth.pubkey);
   const authors = useAuthorProfiles(clips);
@@ -61,7 +61,6 @@ export default function DiscernsClient() {
 
       <CastFeed
         clips={clips}
-        status={status}
         searchQuery={searchQuery}
         follows={follows}
         authors={authors}

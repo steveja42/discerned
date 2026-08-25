@@ -176,6 +176,19 @@ function renderTextWithBreaks(text: string, imageUrls?: Set<string>): React.Reac
 }
 
 export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodies, onBodyFetched }: DetailPanelProps) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Leaving fullscreen when the selected clip changes underneath it (e.g. List
+  // view's single detail pane swaps clips while a card is expanded) avoids a
+  // stale fullscreen staying pinned to a clip that's no longer selected. Reset
+  // during render (React's documented pattern for state keyed to a prop)
+  // rather than in an effect, which would cause an extra commit.
+  const [renderedId, setRenderedId] = useState(clip?.capture.id ?? null);
+  if (renderedId !== (clip?.capture.id ?? null)) {
+    setRenderedId(clip?.capture.id ?? null);
+    if (isFullscreen) setIsFullscreen(false);
+  }
+
   // Request body from extension when clip changes and it's not cached yet.
   useEffect(() => {
     if (!clip) return;
@@ -214,7 +227,7 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
   const quals = evaluation.qualifiers ?? [];
 
   return (
-    <aside className="detail">
+    <aside className={`detail${isFullscreen ? ' detail--fullscreen' : ''}`}>
       <div className="detail-head">
         <div className="detail-source">
           <span className="fav" style={{ background: favColor(domain) }}>{favLetter(domain)}</span>
@@ -229,6 +242,18 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
             {capture.url}
           </a>
           <span className="detail-byline">{formatDate(capture.timestamp)}</span>
+          <button
+            className="detail-close"
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            title={isFullscreen ? 'Exit fullscreen' : 'Expand to fullscreen'}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Expand to fullscreen'}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              {isFullscreen
+                ? <><line x1="6" y1="6" x2="18" y2="18" /><line x1="6" y1="18" x2="18" y2="6" /></>
+                : <><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M16 3h3a2 2 0 0 1 2 2v3" /><path d="M8 21H5a2 2 0 0 1-2-2v-3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></>}
+            </svg>
+          </button>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           <h2 className="detail-title" style={{ flex: 1, margin: 0 }}>{capture.title}</h2>

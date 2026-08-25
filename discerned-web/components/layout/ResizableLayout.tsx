@@ -7,6 +7,7 @@ interface ResizableLayoutProps {
   feed: ReactNode;
   detail: ReactNode;
   showDetail?: boolean;
+  showFeed?: boolean;
   initialSidebarWidth?: number;
 }
 
@@ -34,6 +35,7 @@ export default function ResizableLayout({
   feed,
   detail,
   showDetail = true,
+  showFeed = true,
   initialSidebarWidth = 200,
 }: ResizableLayoutProps) {
   const [sidebarW, setSidebarW] = useState(initialSidebarWidth);
@@ -104,6 +106,9 @@ export default function ResizableLayout({
     gridStyle = {
       gridTemplateColumns: showDetail ? `1fr 4px ${rightCol}` : `1fr`,
     };
+  } else if (!showFeed) {
+    // Feed column hidden: sidebar | resizer | detail (fills remaining space)
+    gridStyle = { gridTemplateColumns: `${sidebarW}px 4px 1fr` };
   } else {
     // Single row, all columns
     const cols = showDetail
@@ -123,7 +128,7 @@ export default function ResizableLayout({
       {stacked ? (
         <div className="left-pane">
           {sidebar}
-          {feed}
+          {showFeed && feed}
         </div>
       ) : (
         <>
@@ -133,17 +138,19 @@ export default function ResizableLayout({
             onMouseDown={dragSidebar}
             title="Drag to resize"
           />
-          {feed}
+          {showFeed && feed}
         </>
       )}
 
       {showDetail && (
         <>
-          <div
-            className="col-resizer"
-            onMouseDown={dragDetail}
-            title="Drag to resize"
-          />
+          {(stacked || showFeed) && (
+            <div
+              className="col-resizer"
+              onMouseDown={dragDetail}
+              title="Drag to resize"
+            />
+          )}
           {detail}
         </>
       )}
