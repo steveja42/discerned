@@ -20,6 +20,13 @@ const stripVendorSourcemapRefs: Plugin = {
 
 export default defineConfig(({ mode }) => ({
   root: '.',
+  // Default '/' emits root-absolute asset URLs (/assets/...). For an MV3 extension
+  // page nested under src/onboarding/, Chrome's loader treats a root-absolute
+  // modulepreload href as a cross-world resource mismatch and refuses to use it,
+  // stalling the page load (script src is unaffected — crx patches that path
+  // separately). Empty base makes Vite/crx emit chrome-extension://<id>-relative
+  // URLs instead.
+  base: '',
   server: {
     port: 5173,
     hmr: {

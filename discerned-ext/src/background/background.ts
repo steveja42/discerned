@@ -270,6 +270,30 @@ const FEEDBACK_URL_PATTERNS = [
  * soft-navigates an already-open tab via NAVIGATE_TO_CLIP to preserve React state,
  * which doesn't fit this shape.
  */
+/**
+ * Open the onboarding page defensively against a cold-start MV3 race: right after
+ * install, chrome.tabs.create() can navigate to our own chrome-extension:// URL
+ * before the extension's resource-serving is fully wired up, leaving the tab
+ * spinning forever instead of failing fast. If the tab hasn't finished loading
+ * shortly after creation, reload it once — by then the extension is definitely
+ * ready. Not specific to unpacked installs; a Web Store install cold-starts the
+ * same service worker the same way.
+ */
+async function openOnboardingTab(): Promise<void> {
+  const tab = await chrome.tabs.create({ url: chrome.runtime.getURL('src/onboarding/onboarding.html') });
+  const tabId = tab.id;
+  if (tabId === undefined) return;
+
+  setTimeout(() => {
+    chrome.tabs.get(tabId).then((t) => {
+      if (t.status !== 'complete') {
+        log(LL.WARN, 'Discerned: onboarding tab still loading after 1500ms, reloading', 'tabId:', tabId);
+        chrome.tabs.reload(tabId).catch(() => { /* tab may have been closed */ });
+      }
+    }).catch(() => { /* tab may have been closed */ });
+  }, 1500);
+}
+
 async function openWebAppTab(path: string, query: string, patterns: string[]): Promise<void> {
   const base = await resolveBaseUrl();
   const url = `${base}${path}${query}`;
@@ -387,7 +411,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
     const s = await chrome.storage.local.get(STORAGE_KEYS.ONBOARDING_SHOWN);
     if (!s[STORAGE_KEYS.ONBOARDING_SHOWN]) {
-      chrome.tabs.create({ url: chrome.runtime.getURL('src/onboarding/onboarding.html') });
+      void openOnboardingTab();
       chrome.storage.local.set({ [STORAGE_KEYS.ONBOARDING_SHOWN]: true });
     }
   }
@@ -608,7 +632,7 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       return handleDisconnectAuth();
 
     case 'OPEN_ONBOARDING':
-      chrome.tabs.create({ url: chrome.runtime.getURL('src/onboarding/onboarding.html') });
+      void openOnboardingTab();
       return { success: true };
 
     case 'OPEN_LIBRARY':
