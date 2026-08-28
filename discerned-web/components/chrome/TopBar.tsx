@@ -18,7 +18,7 @@ import MiniBeacon from '@/components/brand/MiniBeacon';
 import StatusDot from '@/components/auth/StatusDot';
 import SettingsModal from '@/components/chrome/SettingsModal';
 import { getActiveRelays, onRelayModeChange } from '@/lib/constants';
-import { authorLabel } from '@/lib/nostr/profiles';
+import { authorDisplayName } from '@/lib/nostr/profiles';
 import { useOwnProfile } from '@/hooks/useOwnProfile';
 import type { AuthState } from '@/lib/types';
 
@@ -79,9 +79,10 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
   // default (SSR-safe and identical on first client render → no hydration drift).
   const [relayCount, setRelayCount] = useState(() => getActiveRelays().length);
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-  // Prefer a verified NIP-05 name over the bare npub in the account chip.
+  // Prefer a NIP-05 (or kind-0) name over the bare npub in the account chip — this is
+  // the user's own identity, not attribution on a cast, so an unverified name is fine.
   const ownProfile = useOwnProfile(auth.pubkey);
-  const identityLabel = auth.pubkey ? authorLabel(auth.pubkey, ownProfile ?? undefined) : '';
+  const identityLabel = auth.pubkey ? authorDisplayName(auth.pubkey, ownProfile ?? undefined) : '';
 
   useEffect(() => onRelayModeChange(() => setRelayCount(getActiveRelays().length)), []);
 
