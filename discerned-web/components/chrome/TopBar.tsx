@@ -6,7 +6,7 @@
 // and /feedback get working brand navigation for free.
 //
 // The search box only renders when a page passes onSearchChange. Static content routes
-// (/about, /feedback, /get-extension) have nothing to search, and an inert input that
+// (/about, /feedback) have nothing to search, and an inert input that
 // swallows Ctrl+K reads as broken.
 
 'use client';

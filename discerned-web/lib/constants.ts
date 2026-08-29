@@ -59,6 +59,10 @@ export function matchesAuthors(authorPubkey: string | undefined, selected: strin
   return authorPubkey !== undefined && selected.includes(authorPubkey);
 }
 
+// Chrome Web Store listing — the install path every "Get the extension" CTA points at.
+export const WEB_STORE_URL =
+  'https://chromewebstore.google.com/detail/discerned/gpfeknmodijdlehpnkfannklhplmfoma';
+
 // Mirrors DEFAULT_RELAYS in discerned-ext/src/shared/types.ts — keep in sync.
 // relay.damus.io retired at the end of July 2026; relay.primal.net replaced it.
 export const DEFAULT_RELAYS = [

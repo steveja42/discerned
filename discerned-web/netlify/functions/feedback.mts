@@ -34,7 +34,9 @@ const GITHUB_TIMEOUT_MS = 8_000;
 const ALLOWED_ORIGINS = new Set([
   'https://discerned.online',
   'http://localhost:3000',
-  // Pinned extension ID (manifest.json "key") — stable across rebuilds.
+  // Chrome Web Store extension ID (store-assigned).
+  'chrome-extension://gpfeknmodijdlehpnkfannklhplmfoma',
+  // Old pinned ID (manifest.json "key") — kept for side-loaded pre-store installs.
   'chrome-extension://egocpdhpffaddnhjimclgabdhpbjbhod',
 ]);
 

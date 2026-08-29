@@ -344,7 +344,7 @@ a { color: inherit; }
 }
 .search input::placeholder { color: var(--ink-4); }
 /* Holds the topbar's middle grid column on routes with nothing to search
-   (/about, /feedback, /get-extension) so the nav rail doesn't shift. */
+   (/about, /feedback) so the nav rail doesn't shift. */
 .search-spacer { min-width: 0; }
 .search kbd {
   font-family: var(--mono); font-size: 10px;
@@ -2700,7 +2700,7 @@ a { color: inherit; }
 .btn-note-cancel:hover { border-color: var(--ink-3); }
 
 /* ── Feedback + donate (/feedback) ──────────────────────────────────────────
-   The page chrome is inline-styled (matching /get-extension); these classes cover
+   The page chrome is inline-styled (matching /about); these classes cover
    the form controls, where hover/focus/disabled/checked states make inline styles
    untenable. Reused from elsewhere in this file: .settings-section,
    .settings-section-label, .settings-hint, .relay-error, .note-textarea, .btn. */

@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Zips the production build (`pnpm build` → `dist-pack/`) for public download.
 //
-// The zip is what the web app's /get-extension page hands users so they can
-// "Load unpacked" in Chrome. `pnpm build` writes to `dist-pack/`, NOT the dev
+// Public installs now come from the Chrome Web Store; this zip remains for
+// side-loading (testers, a pre-store build) via "Load unpacked" in Chrome. It is
+// still served from discerned-web/public/, just no longer linked from the site.
+// `pnpm build` writes to `dist-pack/`, NOT the dev
 // `dist/` that `pnpm dev` watches (see discerned-ext/CLAUDE.md) — both `pnpm
 // build` and `pnpm pack:ext` share that one output dir on purpose, so packing
 // never disturbs the loaded dev extension and there's only one production

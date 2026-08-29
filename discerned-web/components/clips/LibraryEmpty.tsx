@@ -2,6 +2,8 @@
 // Prompts the user to install the Discerned Chrome extension to populate their Library.
 
 import Link from 'next/link';
+import { WEB_STORE_URL } from '@/lib/constants';
+import { countEvent } from '@/lib/analytics';
 
 export default function LibraryEmpty() {
   return (
@@ -27,9 +29,16 @@ export default function LibraryEmpty() {
         Your clips appear here automatically when you open this page from the extension.
       </p>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <Link href="/get-extension" className="btn primary">
+        <a
+          href={WEB_STORE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn primary"
+          style={{ textDecoration: 'none' }}
+          onClick={() => countEvent('install-extension', 'Chrome Web Store install')}
+        >
           Get the Extension
-        </Link>
+        </a>
         <Link href="/about" className="btn ghost">
           Learn more about sovereignty →
         </Link>

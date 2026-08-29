@@ -42,7 +42,7 @@ Privacy-respecting traffic measurement via **GoatCounter** (cookieless, no PII, 
 - `lib/analytics.ts` — `GOATCOUNTER_ENDPOINT` / `GOATCOUNTER_SCRIPT` / `PROD_HOST` constants, the `window.goatcounter` type, `isAnalyticsHost()`, and the null-safe `countEvent(path, title)` / `countPageview(path)` helpers.
 - `components/analytics/GoatCounter.tsx` (`'use client'`, mounted last in `app/layout.tsx`) — loads the script via `next/script` and reports **SPA route changes** via a `usePathname()` effect (count.js only auto-counts the initial hard load; the effect skips its first run to avoid double-counting).
 - **Hostname gate**: everything is a **no-op unless `window.location.hostname === 'discerned.online'`** — localhost and Netlify deploy previews never pollute stats. (The gate is resolved in an effect so SSR/first-render return `null` → no hydration mismatch.)
-- **Extension-ZIP downloads**: both download links in `app/get-extension/page.tsx` fire `countEvent('download-extension', …)` on click (`sendBeacon`, non-blocking → the download still proceeds). One shared event path so the dashboard shows a single downloads count.
+- **Extension installs**: every "Get the extension" CTA (`app/about/page.tsx`, `components/clips/LibraryEmpty.tsx`) links to `WEB_STORE_URL` (`lib/constants.ts`) and fires `countEvent('install-extension', …)` on click (`sendBeacon`, non-blocking → the navigation still proceeds). One shared event path so the dashboard shows a single installs count. The old `/get-extension` side-load page was removed when the extension shipped to the Chrome Web Store.
 - **Feedback / donate events**: `feedback-submit` (fired on the *success* transition, not on click, so the stat counts successes), `donate-lightning-copy`, `donate-paypal-complete`.
 
 ## Feedback function
@@ -122,7 +122,6 @@ app/
   discerns/DiscernsClient.tsx ← client: feed + popover + modal
   about/page.tsx       ← HeroBeacon + philosophy copy
   clips/page.tsx
-  get-extension/page.tsx ← ZIP download + install steps
   feedback/page.tsx    ← feedback form + donate (Lightning / PayPal)
   not-found.tsx        ← 404
 components/

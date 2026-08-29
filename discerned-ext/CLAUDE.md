@@ -40,14 +40,16 @@ If you ever see an "extension is broken" symptom (overlay missing, bookmark-styl
 
 `pnpm build` runs `tsc`, then `vite build --outDir dist-pack --emptyOutDir` — a real production build (minified, `__DISCERNED_DEV_BUILD__` false) into `dist-pack/`, isolated from the dev `dist/` and test `dist-test/` (same rationale as `dist-test/`'s isolation — see Dev environment above). `dist-pack/` is gitignored and is **wiped at the START of each build** (`emptyOutDir` / `rmSync` for a clean rebuild) but **kept afterward on purpose** — it doubles as a ready-to-load-unpacked local production build (`chrome://extensions` → Load unpacked → select `dist-pack/`).
 
-`pnpm pack:ext` (`scripts/pack-extension.mjs`) builds on top of that: it shells out to `pnpm build` (so the zip and a locally-loadable `dist-pack/` always come from one build, never two), then zips the result for the web app's `/get-extension` page, which hands users a downloadable **unpacked** extension they side-load via `chrome://extensions` → Load unpacked.
+`pnpm pack:ext` (`scripts/pack-extension.mjs`) builds on top of that: it shells out to `pnpm build` (so the zip and a locally-loadable `dist-pack/` always come from one build, never two), then zips the result as a downloadable **unpacked** extension to side-load via `chrome://extensions` → Load unpacked.
+
+**Public installs now come from the [Chrome Web Store](https://chromewebstore.google.com/detail/discerned/gpfeknmodijdlehpnkfannklhplmfoma)** (store ID `gpfeknmodijdlehpnkfannklhplmfoma`). The web app's `/get-extension` side-load page was removed and every "Get the extension" CTA links to the store (`WEB_STORE_URL` in `discerned-web/lib/constants.ts`). The zip is kept for side-loading — testers, a pre-store build — but is no longer linked from the site.
 
 What `pack:ext` does after the build:
 
 1. Zips `dist-pack/` with `manifest.json` at the **zip root** (not nested in a subfolder) so users select the unzipped folder directly in Load unpacked. Zipping uses the OS-native tool — PowerShell `Compress-Archive` on Windows, `zip` elsewhere — so there's **no extra npm dependency**.
 2. Writes the result to `../discerned-web/public/discerned-extension.zip`.
 
-Because the web app is a **static export** deployed by Netlify (which only builds `discerned-web/`, never runs this script), the zip is **committed to git** so Netlify serves it. It does **not** auto-update: after shipping extension changes, re-run `pnpm pack:ext` and commit the refreshed zip. The manifest `version` is read only for the build log line — bump `manifest.json` yourself when cutting a new download.
+Because the web app is a **static export** deployed by Netlify (which only builds `discerned-web/`, never runs this script), the zip is **committed to git** so Netlify serves it at `/discerned-extension.zip` — reachable by direct URL even though nothing links to it. It does **not** auto-update: after shipping extension changes, re-run `pnpm pack:ext` and commit the refreshed zip. The manifest `version` is read only for the build log line — bump `manifest.json` yourself when cutting a new download.
 
 ## Icon assets (`pnpm gen:icons`)
 

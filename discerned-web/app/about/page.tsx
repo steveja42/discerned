@@ -8,6 +8,8 @@ import SignInModal from '@/components/auth/SignInModal';
 import { useNostrAuth } from '@/hooks/useNostrAuth';
 import { useBridgeAuth } from '@/hooks/useBridgeAuth';
 import { PITCH } from '@/lib/marketing-copy';
+import { WEB_STORE_URL } from '@/lib/constants';
+import { countEvent } from '@/lib/analytics';
 
 export default function AboutPage() {
   const { auth, signInPubkey, setNip07Connected } = useNostrAuth();
@@ -34,9 +36,16 @@ export default function AboutPage() {
           </p>
 
           <div className="hero-cta">
-            <Link href="/get-extension" className="btn primary" style={{ textDecoration: 'none' }}>
+            <a
+              href={WEB_STORE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn primary"
+              style={{ textDecoration: 'none' }}
+              onClick={() => countEvent('install-extension', 'Chrome Web Store install')}
+            >
               Get the extension
-            </Link>
+            </a>
           </div>
         </div>
       </section>

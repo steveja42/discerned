@@ -213,6 +213,6 @@ nothing is broken today because the extension opens a tab rather than posting di
 Note on the download zip
 
 `pnpm pack:ext` builds the side-load zip via PowerShell `Compress-Archive`, which writes
-backslash path separators. Chrome on Windows handles this. That zip is the
-`/get-extension` download, **not** the store upload — for the store, upload a zip of
-`dist-pack/` created with a tool that writes forward slashes if uploading from Windows.
+backslash path separators. Chrome on Windows handles this. That zip is the side-load
+build, **not** the store upload — for the store, upload a zip of `dist-pack/` created
+with a tool that writes forward slashes if uploading from Windows.
