@@ -35,6 +35,7 @@ import { test } from '@playwright/test';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { launchWithExtension } from '../helpers/launchExtension';
+import { activateExtensionOnPage } from '../helpers/activateExtension';
 
 /** A discovery seed, parsed out of discover-article-urls.spec.ts (single source
  *  of truth for hub URLs + link pickers — see the header note). */
@@ -105,6 +106,11 @@ const TARGETS: Record<string, string> = {
   // Hero-only capture (2026-08-22): clip is the lead photo + caption, while the
   // page renders ~20 paragraphs of visible, non-paywalled body text.
   japantimes: 'https://www.japantimes.co.jp/news/2026/07/29/japan/kumamoto-quake-explosion-mall/',
+  // Image-ONLY capture: the clip is a single <div><img> (223KB of base64, zero
+  // text nodes) and the image isn't even from this story, while the source page
+  // renders the full article — no paywall, no gate. Worse than hero-only: not
+  // one paragraph survives, so text coverage scores a flat 0.0%.
+  fortune: 'https://fortune.com/2026/07/27/greenhouse-ceo-daniel-chait-ai-doom-loop-job-seekers-spam-interview-applications-unemployment/',
 };
 
 test.describe.configure({ mode: 'serial' });
@@ -518,6 +524,15 @@ test('live-page diagnostics (finder / picker)', async () => {
         for (const b of diag.top) {
           out.push(`  ${String(b.score).padStart(8)} | ${(b.tag + '.' + b.cls).padEnd(46)} | ${String(b.textLen).padStart(6)} | ${String(b.visLen).padStart(6)} | ${String(b.area).padStart(9)} | ${String(b.linkRatio).padStart(4)} | ${String(b.p).padStart(3)} | ${String(b.img).padStart(3)}`);
         }
+
+        // Bind the content script FIRST. Production ships no broad host
+        // permission, so the test bridge has no listener until the activeTab
+        // gesture injects it — without this every target reports a bogus
+        // "capture timeout" that looks like a capture defect but is just an
+        // un-injected page (fortune, 2026-08-30).
+        await activateExtensionOnPage(page).catch((e) => {
+          out.push(`ACTIVATION FAILED: ${(e as Error).message.split('\n')[0]}`);
+        });
 
         // Actually run the extension capture so we see what bodyHtml survives.
         // The diag array rides back ON the result message (module-level in the
