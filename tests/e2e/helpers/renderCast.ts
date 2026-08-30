@@ -68,7 +68,15 @@ export async function renderCastAndScreenshot(
   const page = await context.newPage();
   try {
     await mockRelayWith(page, event);
-    await page.goto('http://localhost:3000/discerns', { waitUntil: 'networkidle' });
+    // NOT networkidle: the feed is served by a MOCKED relay socket
+    // (page.routeWebSocket) that stays open by design, so the network never goes
+    // idle and this goto hangs forever. castShotSafe only catches THROWS, so a
+    // hang here burned the whole 240s per-domain deadline (github-pr, whose clip
+    // and web-app render had both already succeeded). 'domcontentloaded' + the
+    // explicit row/clip-body waits below are the real readiness signal.
+    await page.goto('http://localhost:3000/discerns', {
+      waitUntil: 'domcontentloaded', timeout: 30_000,
+    });
 
     const rowText = opts.rowText ?? titleOf(event);
     const row = rowText
