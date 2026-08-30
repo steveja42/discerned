@@ -64,8 +64,18 @@ export async function castShotSafe(
   screenshotPath: string,
   opts: CastShotOptions = {},
 ): Promise<string | null> {
+  // A TIME cap as well as a throw guard: "never fails the sweep" was only ever
+  // true for throws, and an unbounded await inside (a networkidle goto against a
+  // mocked, deliberately-open relay socket) hung until the caller's per-domain
+  // deadline killed the whole domain. The cast is the LAST, additive artifact —
+  // giving up on it must cost the run nothing.
+  const CAST_BUDGET_MS = Number(process.env.SWEEP_CAST_TIMEOUT_MS ?? 90_000);
   try {
-    return await castShot(capturePage, capture, screenshotPath, opts);
+    return await Promise.race([
+      castShot(capturePage, capture, screenshotPath, opts),
+      new Promise<null>((_, rej) =>
+        setTimeout(() => rej(new Error(`castShot timeout (>${CAST_BUDGET_MS}ms)`)), CAST_BUDGET_MS)),
+    ]);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.log(`[castShot] cast render skipped: ${err instanceof Error ? err.message : String(err)}`);
