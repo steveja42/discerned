@@ -51,6 +51,7 @@ import { test, type BrowserContext, type Page } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
+import { activateExtensionOnPage } from './helpers/activateExtension';
 import { screenshotSourcePage, screenshotClipBody } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
 import { sweepArtifacts, type SweepRecord } from './helpers/sweepArtifacts';
@@ -118,6 +119,19 @@ const DOMAINS: DomainEntry[] = (() => {
     list = list.filter(d => !skip.has(d.name));
   }
   if (process.env.SWEEP_LIMIT) list = list.slice(0, Number(process.env.SWEEP_LIMIT));
+  // A filter that matches NOTHING otherwise produces a green run over zero
+  // domains, which reads as "the sweep passed" — a typo'd or renamed name
+  // (SWEEP_ONLY=bbc when the entry is bbc-news) silently tests nothing at all.
+  if (list.length === 0) {
+    const filters = [
+      process.env.SWEEP_ONLY && `SWEEP_ONLY=${process.env.SWEEP_ONLY}`,
+      process.env.SWEEP_SKIP && `SWEEP_SKIP=${process.env.SWEEP_SKIP}`,
+    ].filter(Boolean).join(' ');
+    throw new Error(
+      `corpus-sweep: no domains matched ${filters || 'the corpus filters'}. `
+      + `Check the name against tests/fixtures/corpus-domains.json.`,
+    );
+  }
   return list;
 })();
 
@@ -210,21 +224,72 @@ function persist(rec: SweepDriverRecord): void {
 }
 
 /**
+ * Navigate by CLICKING a link from a launching page, the way the user reaches a
+ * walled site from the sweep gallery — instead of a bare page.goto().
+ *
+ * MEASURED (the referrer theory was WRONG — a file:// gallery link sends NO
+ * Referer, exactly like goto). The real difference is Sec-Fetch-Site:
+ *     page.goto()          -> Sec-Fetch-Site: none
+ *     gallery link click   -> Sec-Fetch-Site: cross-site
+ * `none` means "typed in the address bar / came from nowhere", which on a deep
+ * article URL is a signal no ordinary reader produces; bot vendors read it.
+ *
+ * A data: URL is the launcher, so there's no local server to run and the origin
+ * is opaque (nothing of ours could leak in a Referer). Returns the page that
+ * ended up on `url`: the popup when target=_blank opened one, else the original.
+ */
+async function gotoViaClick(
+  ctx: BrowserContext, page: Page, url: string, timeoutMs = 40_000,
+): Promise<Page> {
+  const launcher = await ctx.newPage();
+  try {
+    await launcher.goto(`data:text/html,${encodeURIComponent(
+      `<a id="go" href="${url.replace(/"/g, '&quot;')}" target="_blank" rel="noopener">source</a>`,
+    )}`);
+    const [popup] = await Promise.all([
+      ctx.waitForEvent('page', { timeout: timeoutMs }).catch(() => null),
+      launcher.click('#go'),
+    ]);
+    const target = popup ?? page;
+    await target.waitForLoadState('domcontentloaded', { timeout: timeoutMs }).catch(() => undefined);
+    return target;
+  } finally {
+    await launcher.close().catch(() => undefined);
+  }
+}
+
+/**
  * Capture + render + score ONE domain in the given context. Returns a fully
  * populated SweepRecord (never throws — every failure mode becomes a status:'skip'
  * record). Writes the source/clip/cast images + score.json as it goes. The whole
  * body is failure-isolated so one bad domain can never abort the sweep (the sweep
  * is a single serial test; an un-caught throw would kill every later domain).
  */
-async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = false): Promise<SweepDriverRecord> {
+async function captureDomain(
+  ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = false, owned?: Set<Page>,
+): Promise<SweepDriverRecord> {
   const art = sweepArtifacts(d.name);
   const rec: SweepDriverRecord = { domain: d.name, url: d.url, ranAt: new Date().toISOString(), status: 'skip' };
   const url = process.env[`SWEEP_URL_${d.name.toUpperCase()}`] || d.url;
-  const page = await ctx.newPage();
+  let page = await ctx.newPage();
+  owned?.add(page);
+  // "wedged in capture/render/cast" spans ~8 steps, which is useless for
+  // diagnosis (github-pr captured FINE and still timed out). Record the current
+  // step so a timeout names it.
+  const phase = (name: string) => { PHASE.set(d.name, name); };
+  phase('load');
   try {
     // ── Load (load-vs-capture skip) ───────────────────────────────────────
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40_000 });
+      // SWEEP_CLICK_NAV=1 arrives via a link click (Sec-Fetch-Site: cross-site,
+      // real user-gesture lineage) instead of a bare goto (Sec-Fetch-Site: none),
+      // matching how the user reaches walled sites from the gallery.
+      if (process.env.SWEEP_CLICK_NAV) {
+        const landed = await gotoViaClick(ctx, page, url);
+        if (landed !== page) { owned?.add(landed); page = landed; }
+      } else {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40_000 });
+      }
       await page.waitForTimeout(3_500); // let SPA content paint
       // PerimeterX 'Press & Hold' gate handling — HEADED only (a headless attempt
       // can't clear it and only escalates the risk score). The AUTO-SOLVER tries
@@ -269,17 +334,42 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
           const t = (document.body?.innerText ?? '').trim();
           return t.length < 40 || re.test(t);
         }, GATE_RE.source).catch(() => false);
+        // SWEEP_UNATTENDED=1 — never wait for a human. A full-corpus run has ~59
+        // headed domains; the manual prompt costs ~3min of dead wait EACH on any
+        // the auto-solver can't clear, and nobody is watching to answer it. So we
+        // make the auto-solve attempts and then take an honest skip. The domain
+        // is still reported (as a gated skip), just not blocked on.
+        const unattended = !!process.env.SWEEP_UNATTENDED;
         const AUTO_ATTEMPTS = 3;          // ~3 press-and-hold tries (~30s) before asking the user
-        const TOTAL_POLLS = 90;           // then up to ~3min more for a manual clear
+        // Attended: wait for a manual clear. Unattended: stop once the auto
+        // attempts are spent (plus a few polls to observe a late clear).
+        // SWEEP_GATE_SECS caps the attended wait — the 90-poll (~3min) default is
+        // a long dead stare per domain when the user is actually sitting there
+        // and clears a gate in a few seconds. The loop exits as soon as the gate
+        // clears, so this is a ceiling, not a fixed cost.
+        const attendedPolls = process.env.SWEEP_GATE_SECS
+          ? Math.max(3, Math.ceil(Number(process.env.SWEEP_GATE_SECS) / 2))
+          : 90;
+        const TOTAL_POLLS = unattended ? 20 : attendedPolls;
         let streak = 0, attempt = 0, prompted = false;
         for (let i = 0; i < TOTAL_POLLS && streak < 3; i++) {
           if (await gateUp()) {
             streak = 0;
-            if (attempt < AUTO_ATTEMPTS) { await tryPressAndHold(page).catch(() => false); attempt++; }
-            else if (!prompted) {
+            // Prompt on the FIRST detected gate, not after the auto-attempts are
+            // spent. Each gated poll consumes one attempt before the old prompt
+            // branch was even reachable, so on a short budget (SWEEP_GATE_SECS=40
+            // → 20 polls) the window could close having NEVER asked the user —
+            // observed on librarything-catalog, whose wall was detected the whole
+            // time. The auto-solver still runs; the user is just told up front, so
+            // the entire remaining budget is theirs to click in.
+            if (!prompted) {
               prompted = true;
               // eslint-disable-next-line no-console
-              console.log(`   ⚠ ${d.name}: auto press-and-hold didn't clear the gate — please clear it in the window now…`);
+              console.log(`   ⚠ ${d.name}: gate detected — clear it in the window now (~${(TOTAL_POLLS - i) * 2}s)…`);
+            }
+            if (attempt < AUTO_ATTEMPTS) { await tryPressAndHold(page).catch(() => false); attempt++; }
+            else if (unattended) {
+              break; // auto-solve failed and no human to ask — skip honestly
             }
           } else streak++;
           await page.waitForTimeout(2_000);
@@ -464,6 +554,20 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
       return rec;
     }
 
+    phase('activate');
+    // ── Bind the content script (activeTab gesture) ───────────────────────
+    // Production ships no broad host permission, so content.ts is injected per
+    // tab on the toolbar/command gesture. Without this the test bridge has no
+    // listener and EVERY domain skips with "capture timeout".
+    try {
+      await activateExtensionOnPage(page);
+    } catch (actErr) {
+      rec.skipReason = `activation failed: ${(actErr as Error).message.split('\n')[0]}`;
+      persist(rec);
+      return rec;
+    }
+
+    phase('capture');
     // ── Capture via the dev test bridge ───────────────────────────────────
     let cap: Record<string, unknown>;
     try {
@@ -490,7 +594,9 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
     );
 
     // ── Render + score + cast ─────────────────────────────────────────────
+    phase('render:/clips');
     const libPage = await ctx.newPage();
+    owned?.add(libPage);
     try {
       await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
       const postClip = () => libPage.evaluate((capture) => {
@@ -549,6 +655,7 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
       });
       await libPage.waitForTimeout(300);
 
+      phase('screenshot:clip');
       await screenshotClipBody(libPage, clipBody, art.clip());
 
       // SWEEP_DUMP_HTML=1 saves the RENDERED clip markup next to the images.
@@ -560,6 +667,7 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
         if (html) writeFileSync(resolve(art.dir, `${d.name}--clip.html`), html, 'utf8');
       }
 
+      phase('score');
       // ── Score ───────────────────────────────────────────────────────────
       // Run measureInPage against the rendered clip body. Injected as a string
       // (its .toString()) + rebuilt in-page so the helper doesn't need bundling.
@@ -584,6 +692,7 @@ async function captureDomain(ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = 
       // Drop the row-disambiguation marker so the cast renders the real title.
       (cap as Record<string, unknown>).title =
         String((cap as { title?: unknown }).title ?? '').replace(/\s*​?dxsweep-\S+$/, '');
+      phase('cast');
       await castShotSafe(page, cap as { title?: string }, art.cast());
       return rec;
     } catch (renderErr) {
@@ -628,6 +737,9 @@ const DOMAIN_TIMEOUT_MS = Number(process.env.SWEEP_DOMAIN_TIMEOUT_MS ?? 240_000)
 // SWEEP_GAP=0 disables it (offline/localhost corpora, or a single domain).
 const GAP_SECS = Number(process.env.SWEEP_GAP ?? 20);
 
+/** Current in-progress step per domain, so a deadline can name where it stalled. */
+const PHASE = new Map<string, string>();
+
 /** Pace before each domain except the first of a pass. */
 async function paceBeforeDomain(first: boolean, name: string): Promise<void> {
   if (first || GAP_SECS <= 0) return;
@@ -639,21 +751,31 @@ async function paceBeforeDomain(first: boolean, name: string): Promise<void> {
 async function captureDomainDeadlined(
   ctx: BrowserContext, d: DomainEntry, ctxIsHeaded = false,
 ): Promise<SweepDriverRecord> {
+  // Promise.race abandons the loser but does NOT cancel it: on a timeout,
+  // captureDomain keeps running and its `finally` page-closes never fire, so the
+  // domain's tabs leak. Worse, the zombie still holds a /clips page and can post
+  // into the shared bridge — the stale-clip hazard the row-marker guards against.
+  // So track the pages it opens and close them ourselves when the deadline wins.
+  const owned = new Set<Page>();
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<SweepDriverRecord>((res) => {
     timer = setTimeout(() => {
       const rec: SweepDriverRecord = {
         domain: d.name, url: d.url, ranAt: new Date().toISOString(), status: 'skip',
-        skipReason: `domain timeout (>${Math.round(DOMAIN_TIMEOUT_MS / 1000)}s — wedged in capture/render/cast)`,
+        skipReason: `domain timeout (>${Math.round(DOMAIN_TIMEOUT_MS / 1000)}s — stalled in ${PHASE.get(d.name) ?? 'unknown'})`,
       };
       persist(rec);
       res(rec);
     }, DOMAIN_TIMEOUT_MS);
   });
   try {
-    return await Promise.race([captureDomain(ctx, d, ctxIsHeaded), timeout]);
+    return await Promise.race([captureDomain(ctx, d, ctxIsHeaded, owned), timeout]);
   } finally {
     if (timer) clearTimeout(timer);
+    // Closing the pages also unblocks the abandoned captureDomain: its pending
+    // awaits reject with "Target page/context closed", so it unwinds instead of
+    // running on beside the next domain.
+    for (const p of owned) await p.close().catch(() => undefined);
   }
 }
 
