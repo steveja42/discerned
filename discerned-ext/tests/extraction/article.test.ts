@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { captureContext, __setTestHostOverride } from '@/content/capture';
 import { loadFixture } from '../helpers/loadFixture';
 import { matchExpected, type ExpectedCapture } from '../helpers/matchExpected';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import fg from 'fast-glob';
 import { resolve, basename } from 'node:path';
 
@@ -17,6 +17,10 @@ interface FixtureCase {
 
 const fixtures: FixtureCase[] = fg
   .sync('*.html', { cwd: FIXTURE_ROOT })
+  // A sidecar is what makes an HTML file part of the capture corpus. The same
+  // directory also holds pages served to other e2e specs (the click-jacking
+  // page), which have no capture to assert — skip them instead of throwing.
+  .filter((file) => existsSync(resolve(FIXTURE_ROOT, `${basename(file, '.html')}.expected.json`)))
   .map((file) => {
     const name = basename(file);
     const sidecarPath = resolve(FIXTURE_ROOT, `${name.replace(/\.html$/, '')}.expected.json`);

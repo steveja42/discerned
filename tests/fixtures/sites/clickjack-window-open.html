@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Click-jacking window.open page</title>
+</head>
+<body>
+  <article>
+    <h1>Ad-funded article that opens a tab on any click</h1>
+    <p>
+      This fixture reproduces the pattern that motivated nip07-bridge.ts's
+      window.open override: a capture-phase click listener on the document that
+      calls window.open() for ANY click anywhere on the page — including clicks
+      inside the Discerned overlay's shadow DOM, which the page can't see into
+      but whose clicks still bubble up to window.
+    </p>
+    <p>
+      The listener is registered at page load, long before the extension is
+      activated, exactly as a real ad script would be. The guard works by
+      intercepting the window.open CALL, so it must be installed before the
+      user's first click inside the overlay.
+    </p>
+  </article>
+
+  <script>
+    // Record each popup attempt so the spec can assert on them without needing
+    // to intercept real tabs. Also mirrors what a real hijacker does: capture
+    // phase on document, so it fires before anything downstream.
+    window.__popupAttempts = [];
+    const realOpen = window.open;
+    document.addEventListener('click', () => {
+      const w = window.open('https://example.com/ad', '_blank');
+      // window.open returns null when the guard suppressed it.
+      window.__popupAttempts.push({ suppressed: w === null });
+    }, true);
+  </script>
+</body>
+</html>

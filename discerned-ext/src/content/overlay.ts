@@ -916,6 +916,37 @@ ${themeVarsBlock(this.effectiveTheme)}
 
   // ── Settings drawer (auth status, stats, export) ───────────────────────────
 
+  /**
+   * Wire the Settings → Images card. The permission is the source of truth, so
+   * the card is hidden outright once it's held. request() must be called
+   * SYNCHRONOUSLY inside the click handler — an await before it drops the user
+   * gesture and Chrome rejects the request.
+   */
+  private async initImagePermissionCard(): Promise<void> {
+    const card = this.shadow.getElementById('image-perm-card');
+    const btn = this.shadow.getElementById('grant-image-perm');
+    if (!card || !btn) return;
+
+    // chrome.permissions is NOT exposed to content scripts, and Chrome requires
+    // the prompt to be triggered by a gesture on an EXTENSION page — so this
+    // card cannot ask directly. It opens the permissions page, which asks.
+    // `contains` is likewise unavailable here, so the background reports it.
+    let granted = false;
+    try {
+      const res = await chrome.runtime.sendMessage({ type: 'GET_IMAGE_PERMISSION' });
+      granted = !!(res?.data as { granted?: boolean } | undefined)?.granted;
+    } catch {
+      return; // Background unreachable — leave the card hidden.
+    }
+    if (granted) return; // Nothing to offer.
+
+    card.hidden = false;
+    btn.addEventListener('click', () => {
+      void chrome.runtime.sendMessage({ type: 'OPEN_PERMISSIONS_PAGE' });
+    });
+  }
+
+
   private renderSettings() {
     const ev = this.escapeHtml.bind(this);
     const auth = this.authState;
@@ -1052,6 +1083,16 @@ ${themeVarsBlock(this.effectiveTheme)}
             <button class="usage-row usage-row-link" id="open-library-btn"><span class="usage-label"><span class="status-icon">${DiscernedOverlay.ICON_CLIP}</span>Local clips</span><span class="usage-value" id="clip-count">—</span></button>
             <div class="usage-row"><span class="usage-label"><span class="status-icon">${DiscernedOverlay.ICON_CAST}</span>Public casts</span><span class="usage-value" id="cast-count">—</span></div>
           </div>
+          <div class="settings-card" id="image-perm-card" hidden>
+            <div class="card-label">Images</div>
+            <div class="perm-desc">
+              Clips currently link to images on the original site, so they can break
+              if that page changes or disappears. Chrome only lets this be granted
+              from an extension page, so this opens Discerned's permissions page.
+            </div>
+            <button class="btn btn-secondary" id="grant-image-perm" type="button">Open permissions page &rarr;</button>
+            <div class="perm-result" id="image-perm-result"></div>
+          </div>
           <div class="settings-card">
             <div class="card-label">Appearance</div>
             <div class="format-row" id="theme-picker" role="group" aria-label="Theme">
@@ -1086,6 +1127,12 @@ ${themeVarsBlock(this.effectiveTheme)}
       this.render();
       if (!this.capture) void this.refreshCapture();
     });
+
+    // Optional <all_urls> grant — lets the background fetch image bytes so clips
+    // carry their own copy instead of hotlinking. Shown only when NOT already
+    // granted; the check is async, so the card renders hidden and is revealed
+    // here (same pattern as loadOwnProfile patching the name line).
+    void this.initImagePermissionCard();
 
     this.shadow.getElementById('settings-connect')?.addEventListener('click', () => {
       this.identityBackTarget = 'settings';
@@ -2756,6 +2803,8 @@ ${themeVarsBlock(this.effectiveTheme)}
       .settings-card.warning { background: var(--p-warn-bg); border-color: var(--p-warn-border); }
       .card-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
       .card-label { font-size: 11px; color: var(--p-ink-3); text-transform: uppercase; letter-spacing: 0.5px; font-family: var(--p-mono); }
+      .perm-desc { font-size: 12px; color: var(--p-ink-3); line-height: 1.5; margin: 6px 0 10px; }
+      .perm-result { font-size: 11px; color: var(--p-ink-3); line-height: 1.45; margin-top: 8px; }
       .card-title { font-size: 13px; font-weight: 600; color: var(--p-warn-ink); }
       .card-desc  { font-size: 12px; color: var(--p-ink-2); line-height: 1.5; }
       .card-value { font-size: 13px; color: var(--p-ink); }

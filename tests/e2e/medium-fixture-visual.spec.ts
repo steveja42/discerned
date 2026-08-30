@@ -9,6 +9,7 @@ import { test, expect } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
+import { activateExtensionOnTab } from './helpers/activateExtension';
 
 const FIXTURE_URL = 'http://127.0.0.1:4173/medium-article.html';
 
@@ -33,7 +34,9 @@ test('medium-fixture-visual: capture local Medium fixture + render in /clips', a
       }
     });
     await page.goto(FIXTURE_URL, { waitUntil: 'load', timeout: 30_000 });
-    await page.waitForTimeout(500);
+    // The content script is injected on the activation gesture (there is no
+    // static content_scripts entry), so trigger it before the test bridge.
+    await activateExtensionOnTab(ctx, FIXTURE_URL);
 
     const cap = (await page.evaluate(async () => {
       return new Promise((resolveCap, rejectCap) => {

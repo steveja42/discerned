@@ -7704,6 +7704,8 @@ async function inlineImage(src: string): Promise<string> {
   if (src.startsWith('data:')) return src;
   if (!/^https?:/i.test(src)) return src;
 
+  // Needs the optional <all_urls> grant (see background.ts canFetchCrossOrigin).
+  // Without it this returns the original URL and the clip hotlinks the image.
   try {
     const res = await Promise.race([
       chrome.runtime.sendMessage({ type: 'INLINE_IMAGE', src }),

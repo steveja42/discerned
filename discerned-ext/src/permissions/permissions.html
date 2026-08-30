@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Discerned Permissions</title>
+  <style>
+    /* Pre-JS theme fallback keyed off the OS, corrected by initPageTheme().
+       Mirrors THEME_TOKENS in shared/theme.ts — keep both in sync. */
+    :root {
+      --p-panel-opaque: #09090b; --p-surface: #18181b; --p-surface-2: #27272a;
+      --p-ink: #f4f4f5; --p-ink-2: #d4d4d8; --p-ink-3: #a1a1aa; --p-ink-4: #52525b;
+      --p-rule: #3f3f46; --p-rule-soft: #27272a;
+      --p-accent: #f59e0b; --p-accent-ink: #fbbf24; --p-on-accent: #09090b;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --p-panel-opaque: #efe8da; --p-surface: rgba(246,241,232,0.94); --p-surface-2: rgba(239,232,218,0.94);
+        --p-ink: #1a1714; --p-ink-2: #3a342c; --p-ink-3: #6b6357; --p-ink-4: #6f6658;
+        --p-rule: rgba(26,23,20,0.16); --p-rule-soft: rgba(26,23,20,0.08);
+        --p-accent: oklch(0.62 0.12 65); --p-accent-ink: oklch(0.42 0.10 65); --p-on-accent: #fffaf0;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--p-panel-opaque); color: var(--p-ink);
+      min-height: 100vh; padding: 48px 24px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .wrap { width: 100%; max-width: 560px; }
+    h1 { font-size: 1.3rem; font-weight: 600; margin-bottom: 6px; }
+    .sub { color: var(--p-ink-3); font-size: 0.9rem; margin-bottom: 32px; }
+    .card {
+      background: var(--p-surface); border: 1px solid var(--p-rule);
+      border-radius: 14px; padding: 24px;
+      display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; }
+    .card p { font-size: 0.88rem; color: var(--p-ink-3); line-height: 1.55; }
+    .btn {
+      margin-top: 4px; padding: 10px 16px; border-radius: 8px;
+      border: 1px solid var(--p-accent); background: transparent;
+      color: var(--p-accent-ink); font-size: 0.88rem; font-weight: 600;
+      cursor: pointer; transition: background 0.15s, opacity 0.15s;
+    }
+    .btn:hover:not(:disabled) { background: var(--p-surface-2); }
+    .btn:disabled { opacity: 0.55; cursor: default; }
+    .status { font-size: 0.84rem; color: var(--p-ink-3); line-height: 1.5; }
+    .status.ok { color: var(--p-accent-ink); }
+    .revoke-hint { font-size: 0.8rem; color: var(--p-ink-4); line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Discerned Permissions</h1>
+    <p class="sub">Browser access Discerned can ask for. Chrome only allows these to be granted from this page.</p>
+
+    <div class="card">
+      <h2>Save images with your clips</h2>
+      <p>
+        Discerned can store a copy of each image inside the clip, so it still looks
+        right if the original page changes or disappears. Without this, clips link
+        back to the pictures on the original site, which can break over time.
+      </p>
+      <button class="btn" id="btn-perm" type="button">Save images in my clips</button>
+      <p class="status" id="perm-status" hidden></p>
+      <p class="revoke-hint" id="revoke-hint" hidden>
+        To turn this off later, open <strong>chrome://extensions</strong> → Discerned →
+        Details → Site access.
+      </p>
+    </div>
+  </div>
+  <script type="module" src="./permissions.ts"></script>
+</body>
+</html>

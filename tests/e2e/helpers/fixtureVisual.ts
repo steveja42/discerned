@@ -15,6 +15,7 @@ import { expect, type BrowserContext } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './launchExtension';
+import { activateExtensionOnTab } from './activateExtension';
 import { assertClipBodyHealth, type ClipHealthOptions } from './clipBodyHealth';
 
 export interface FixtureVisualOptions {
@@ -105,6 +106,10 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
   // The capture pipeline only needs the DOM, not networked subresources.
   await page.goto(args.fixtureUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   await page.waitForTimeout(500);
+
+  // The content script is injected on demand (no broad host permission), so bind
+  // it before posting to the test bridge — nothing would be listening otherwise.
+  await activateExtensionOnTab(ctx, args.fixtureUrl);
 
   const cap = (await page.evaluate(async (hostOverride: string | null) => {
     return new Promise((resolveCap, rejectCap) => {

@@ -4,6 +4,7 @@
 
 import { test } from '@playwright/test';
 import { launchWithExtension } from './helpers/launchExtension';
+import { activateExtensionOnTab } from './helpers/activateExtension';
 import { loadSiteFixtures } from './helpers/loadFixtures';
 import { matchExpected } from './helpers/matchExpected';
 
@@ -35,9 +36,10 @@ test.describe('extension capture pipeline', () => {
         });
         await page.goto(fx.url, { waitUntil: 'load' });
 
-        // The content script registers its message listener at document_idle.
-        // Wait briefly to make sure it's bound before we postMessage.
-        await page.waitForTimeout(500);
+        // The content script is injected on the activation gesture (there is no
+        // static content_scripts entry), so trigger it and wait for the listener
+        // to bind before postMessage-ing the test bridge.
+        await activateExtensionOnTab(ctx, fx.url);
 
         const cap = await page.evaluate(async ({ format, hostOverride }) => {
           return new Promise((resolve, reject) => {

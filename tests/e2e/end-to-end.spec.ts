@@ -4,6 +4,7 @@
 
 import { test, expect } from '@playwright/test';
 import { launchWithExtension } from './helpers/launchExtension';
+import { activateExtensionOnTab } from './helpers/activateExtension';
 
 test.describe('end-to-end clip pipeline', () => {
   test.describe.configure({ mode: 'serial' });
@@ -15,7 +16,9 @@ test.describe('end-to-end clip pipeline', () => {
       const fixtureUrl = 'http://127.0.0.1:4173/blog-post.html';
       const page = await ctx.newPage();
       await page.goto(fixtureUrl, { waitUntil: 'load' });
-      await page.waitForTimeout(300);
+      // The content script is injected on the activation gesture (there is no
+      // static content_scripts entry), so trigger it before the test bridge.
+      await activateExtensionOnTab(ctx, fixtureUrl);
 
       const capture = await page.evaluate(() => {
         return new Promise((resolve, reject) => {

@@ -37,7 +37,7 @@ export default defineConfig({
   projects: [
     {
       name: 'extension',
-      testMatch: /(extension|end-to-end|relay-prefs-e2e)\.spec\.ts/,
+      testMatch: /(extension|end-to-end|relay-prefs-e2e|clickjack-guard)\.spec\.ts/,
       // Chromium with a loaded extension uses launchPersistentContext, not the
       // default browser fixture. The spec files handle launch themselves.
     },

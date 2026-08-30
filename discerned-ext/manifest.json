@@ -12,6 +12,9 @@
     "webNavigation"
   ],
   "host_permissions": [
+    "https://platform.twitter.com/*"
+  ],
+  "optional_host_permissions": [
     "<all_urls>"
   ],
   "background": {
@@ -20,20 +23,13 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["src/content/nip07-bridge.ts"],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
-    {
-      "matches": ["<all_urls>"],
-      "js": ["src/content/content.ts"],
-      "run_at": "document_idle",
-      "all_frames": false
-    },
-    {
-      "matches": ["https://discerned.online/*", "http://localhost:3000/*"],
-      "js": ["src/content/web-bridge.ts"],
+      "matches": [
+        "https://discerned.online/*",
+        "http://localhost:3000/*"
+      ],
+      "js": [
+        "src/content/web-bridge.ts"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     }
@@ -53,10 +49,22 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
-  "web_accessible_resources": [
-    {
-      "resources": ["src/onboarding/onboarding.html", "src/popup/popup.html"],
-      "matches": ["<all_urls>"]
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+U"
+      },
+      "description": "Open the Discerned overlay"
+    },
+    "discerned-activate": {
+      "suggested_key": {
+        "default": "Alt+Shift+Y"
+      },
+      "description": "Activate Discerned (custom command)"
     }
-  ]
+  },
+  "options_ui": {
+    "page": "src/permissions/permissions.html",
+    "open_in_tab": true
+  }
 }

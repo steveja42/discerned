@@ -309,5 +309,17 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
     } catch { /* best effort */ }
   });
 
+  // NOTE: activation is NOT hooked to navigation here.
+  //
+  // The content scripts are injected per tab under activeTab, via the extension's
+  // keyboard command (see helpers/activateExtension.ts) — the only gesture
+  // Playwright can produce that Chrome treats as trusted. Doing that on every
+  // framenavigated raced specs that walk one page through many fixtures: the
+  // activation for fixture N was still settling when the page moved to N+1.
+  //
+  // Specs call activateExtensionOnTab() explicitly instead, after their goto and
+  // before they postMessage the test bridge. runFixtureVisual does this for the
+  // ~21 specs that share it.
+
   return { ctx, userDataDir };
 }

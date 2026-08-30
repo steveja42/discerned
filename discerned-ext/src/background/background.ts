@@ -419,15 +419,126 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await restoreAuthState();
 });
 
+// ── Gesture-triggered content-script injection ──────────────────────────
+//
+// The content scripts are NOT in the manifest's content_scripts — the extension
+// holds no broad host permission, so they're injected per-tab under activeTab's
+// temporary grant, which only a real user gesture (toolbar click / context menu)
+// establishes.
+//
+// Order is load-bearing: nip07-bridge.ts (MAIN world) overrides window.open to
+// neutralise pages whose capture-phase click handlers open tabs on any click,
+// including clicks on the overlay. It must be live BEFORE content.ts renders the
+// overlay, so it's awaited first rather than raced alongside.
+//
+// Built filenames, not source paths — these two are rollup inputs pinned to fixed
+// names in vite.config.ts (crxjs only rewrites paths for scripts declared in the
+// manifest, and these deliberately aren't).
+// Dev serves crxjs's own per-content-script loaders (HMR-connected, imports
+// already rewritten to the extension origin, and the MAIN-world one correctly
+// avoids chrome.runtime, which does not exist in that world). Production and
+// test use the self-contained IIFEs built by scripts/build-injected.mjs. Both
+// are classic scripts, which is what executeScript requires.
+const INJECTED_BRIDGE_FILE = __DISCERNED_VITE_DEV__
+  ? 'src/content/nip07-bridge.ts-loader.js'
+  : 'injected-nip07-bridge.js';
+const INJECTED_CONTENT_FILE = __DISCERNED_VITE_DEV__
+  ? 'src/content/content.ts-loader.js'
+  : 'injected-content.js';
+
+async function injectDiscerned(tabId: number): Promise<void> {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: [INJECTED_BRIDGE_FILE],
+    world: 'MAIN',
+  });
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: [INJECTED_CONTENT_FILE],
+  });
+}
+
+// Briefly badge the toolbar icon so a failed activation isn't a silent no-op.
+async function flashActivationError(tabId: number): Promise<void> {
+  try {
+    await chrome.action.setBadgeText({ tabId, text: '!' });
+    await chrome.action.setBadgeBackgroundColor({ tabId, color: '#dc2626' });
+    setTimeout(() => { void chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {}); }, 3000);
+  } catch {
+    // Tab may be gone; nothing more we can do.
+  }
+}
+
+/**
+ * Activate the overlay on a tab: message an already-injected content script, and
+ * inject one first if it isn't there yet. Called from the two user gestures that
+ * grant activeTab (and, in dev/test builds, from the test bridge).
+ */
+async function activateDiscernedOnTab(tabId: number): Promise<void> {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: 'ACTIVATE_DISCERNED' });
+    return;
+  } catch (err) {
+    if (isBfcachePortError(err)) return;
+    // No receiver yet — fall through and inject.
+  }
+
+  try {
+    await injectDiscerned(tabId);
+    // executeScript resolves when the injected file has RUN, which is not the
+    // same as the content script being ready: both the dev loader and the
+    // production IIFE finish their synchronous body while the module that
+    // registers the onMessage listener is still resolving (dev imports it; the
+    // bundle evaluates it). Messaging immediately therefore lost the first
+    // click — the script loaded, nothing opened, and a second click worked.
+    // Retry briefly until the listener answers.
+    await sendWhenReady(tabId, { type: 'ACTIVATE_DISCERNED' });
+  } catch (err) {
+    if (isBfcachePortError(err)) return;
+    log(LL.WARN, 'Discerned: could not activate on this tab:', err);
+    void flashActivationError(tabId);
+  }
+}
+
+// Poll a freshly-injected tab until its content script answers, or give up.
+// ~2s total: generous for the dev loader's dynamic import, invisible otherwise.
+async function sendWhenReady(
+  tabId: number,
+  message: { type: string },
+  attempts = 20,
+  delayMs = 100,
+): Promise<void> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await chrome.tabs.sendMessage(tabId, message);
+      return;
+    } catch (err) {
+      if (isBfcachePortError(err)) return;
+      lastErr = err;
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr ?? new Error('content script never became ready');
+}
+
+// Test-only: expose the REAL injection + activation functions for Playwright,
+// which calls them via sw.evaluate(). A runtime message can't serve this — sent
+// from the service worker it posts to the worker itself, where nothing listens.
+// Tree-shaken from production builds.
+if (__DISCERNED_DEV_BUILD__) {
+  Object.assign(globalThis, {
+    __discernedTestInject: injectDiscerned,
+    __discernedTestActivate: activateDiscernedOnTab,
+  });
+}
+
 /**
  * Right-click context menu activates the overlay on the active tab.
  */
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'discerned-capture' && tab?.id) {
-    chrome.tabs.sendMessage(tab.id, { type: 'ACTIVATE_DISCERNED' }).catch(err => {
-      if (isBfcachePortError(err)) return;
-      log(LL.WARN, 'Discerned: could not reach content script (try refreshing the tab):', err);
-    });
+    void activateDiscernedOnTab(tab.id);
   }
 });
 
@@ -436,12 +547,16 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
  * On normal pages this opens the overlay; on restricted pages a per-tab popup is set
  * so onClicked never runs there.
  */
+// Keyboard shortcut path. Chrome treats a command as a trusted gesture, so this
+// also confers activeTab exactly like a toolbar click.
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (command !== 'discerned-activate') return;
+  if (tab?.id) void activateDiscernedOnTab(tab.id);
+});
+
 chrome.action.onClicked.addListener((tab) => {
   if (tab.id) {
-    chrome.tabs.sendMessage(tab.id, { type: 'ACTIVATE_DISCERNED' }).catch(err => {
-      if (isBfcachePortError(err)) return;
-      log(LL.WARN, 'Discerned: could not reach content script (try refreshing the tab):', err);
-    });
+    void activateDiscernedOnTab(tab.id);
   }
 });
 
@@ -528,6 +643,17 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
         return { success: true, data: { noteTemplate, longFormTemplate } };
       }
       return { success: false, error: 'BUILD_CAST is test-only' };
+
+    case 'GET_IMAGE_PERMISSION':
+      // The overlay runs in a content script, where chrome.permissions is not
+      // exposed — it asks here instead.
+      return { success: true, data: { granted: await canFetchCrossOrigin() } };
+
+    case 'OPEN_PERMISSIONS_PAGE':
+      // The permission prompt must be triggered from an extension page, so the
+      // overlay sends the user to the permissions page rather than asking inline.
+      await chrome.runtime.openOptionsPage();
+      return { success: true };
 
     case 'GET_AUTH_STATE':
       // For a stored key, report whether it's currently unlocked (the decrypted
@@ -1020,10 +1146,38 @@ function extractFromTweetEmbed(): unknown {
 
 // ── Image inlining (privileged fetch) ───────────────────────────────────────
 
+// Baking images into a clip as data URIs needs a cross-origin fetch to whatever
+// host the page's images live on — an unbounded set, so it's the optional
+// <all_urls> grant rather than a manifest host permission. activeTab does NOT
+// cover it (that grant is the tab's own origin, not third-party CDNs).
+//
+// Cached because a single capture inlines up to 16 images concurrently and would
+// otherwise re-query per image. Invalidated by the permission events below, so a
+// grant takes effect on the next capture without a reload.
+let hasBroadHostAccess: boolean | null = null;
+
+async function canFetchCrossOrigin(): Promise<boolean> {
+  if (hasBroadHostAccess !== null) return hasBroadHostAccess;
+  try {
+    hasBroadHostAccess = await chrome.permissions.contains({ origins: ['<all_urls>'] });
+  } catch {
+    hasBroadHostAccess = false;
+  }
+  return hasBroadHostAccess;
+}
+
+chrome.permissions.onAdded.addListener(() => { hasBroadHostAccess = null; });
+chrome.permissions.onRemoved.addListener(() => { hasBroadHostAccess = null; });
+
 async function handleInlineImage(src: string): Promise<BackgroundResponse> {
   try {
     if (!/^https?:/i.test(src)) {
       return { success: false, error: 'Unsupported scheme' };
+    }
+    // Without the grant the fetch would throw anyway — fail fast so a capture on
+    // an image-heavy page doesn't burn a round-trip + timeout per image.
+    if (!(await canFetchCrossOrigin())) {
+      return { success: false, error: 'No host permission for image inlining' };
     }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8000);
@@ -1058,6 +1212,9 @@ async function handleInlineImage(src: string): Promise<BackgroundResponse> {
 async function handleFetchVideoBlob(src: string): Promise<BackgroundResponse> {
   try {
     if (!/^https:/i.test(src)) return { success: false, error: 'Unsupported scheme' };
+    if (!(await canFetchCrossOrigin())) {
+      return { success: false, error: 'No host permission for video frame capture' };
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8000);
     let res: Response;

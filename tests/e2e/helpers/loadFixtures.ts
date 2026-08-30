@@ -1,7 +1,7 @@
 // Shared fixture loader for Playwright specs. Reads the same .expected.json
 // sidecars that the Vitest extension suite uses.
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 import type { ExpectedCapture } from './matchExpected';
 
@@ -36,6 +36,11 @@ export interface SiteFixture {
 export function loadSiteFixtures(): SiteFixture[] {
   return readdirSync(FIXTURE_ROOT)
     .filter((f) => f.endsWith('.html'))
+    // A sidecar is what makes an HTML file part of the CAPTURE corpus. The same
+    // directory also holds pages the fixture-server serves for other specs (the
+    // click-jacking page, say), which have nothing to assert a capture against —
+    // without this they'd throw ENOENT here and take the whole spec file down.
+    .filter((f) => existsSync(resolve(FIXTURE_ROOT, `${basename(f, '.html')}.expected.json`)))
     .map((file) => {
       const htmlName = basename(file);
       const sidecar = resolve(FIXTURE_ROOT, `${htmlName.replace(/\.html$/, '')}.expected.json`);

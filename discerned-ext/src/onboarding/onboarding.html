@@ -136,6 +136,22 @@
       background: var(--p-accent); color: var(--p-on-accent); transition: opacity 0.15s;
     }
     .btn-done:hover { opacity: 0.85; }
+
+    .perm-block {
+      border-top: 1px solid var(--p-rule-soft); padding-top: 24px;
+      display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
+    }
+    .perm-title { font-size: 1rem; font-weight: 600; color: var(--p-ink); }
+    .perm-text { font-size: 0.86rem; color: var(--p-ink-3); line-height: 1.55; }
+    .btn-perm {
+      padding: 10px 16px; border-radius: 8px;
+      border: 1px solid var(--p-accent); background: transparent;
+      color: var(--p-accent-ink); font-size: 0.86rem; font-weight: 600;
+      cursor: pointer; transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-perm:hover:not(:disabled) { background: var(--p-surface-2); }
+    .btn-perm:disabled { opacity: 0.55; cursor: default; }
+    .perm-status { font-size: 0.82rem; color: var(--p-ink-3); }
   </style>
 </head>
 <body>
@@ -198,6 +214,17 @@
         <div class="step-num">4</div>
         <p class="step-text">Browse to any page, then <strong>right-click</strong> or click the Discerned beacon to clip and rate the page content.</p>
       </div>
+    </div>
+
+    <div class="perm-block" id="perm-block">
+      <h2 class="perm-title">Save images with your clips</h2>
+      <p class="perm-text">
+        Discerned can store a copy of each image inside the clip, so it still looks
+        right if the original page changes or disappears. Without this, clips link
+        back to the pictures on the original site, which can break over time.
+      </p>
+      <button class="btn-perm" id="btn-perm" type="button">Save images in my clips</button>
+      <p class="perm-status" id="perm-status" hidden></p>
     </div>
 
     <p class="hint hint-lg">

@@ -213,7 +213,12 @@ export type BackgroundMessage =
   // publish (kind-1 note + companion kind-30023), without signing or publishing.
   // Lets the e2e visual specs render the real published-cast output. The handler
   // is gated on __DISCERNED_DEV_BUILD__ and tree-shaken from production.
-  | { type: 'BUILD_CAST'; data: { capture: Capture; evaluation: Evaluation } };
+  | { type: 'BUILD_CAST'; data: { capture: Capture; evaluation: Evaluation } }
+  // The overlay is a content script, where chrome.permissions is not exposed;
+  // it reads the optional <all_urls> grant through the background, and opens
+  // the permissions page to ask for it (the prompt requires an extension page).
+  | { type: 'GET_IMAGE_PERMISSION' }
+  | { type: 'OPEN_PERMISSIONS_PAGE' };
 
 export type BackgroundResponse =
   | { success: true; data?: unknown }

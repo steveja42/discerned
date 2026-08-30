@@ -115,6 +115,118 @@ Popup (src/popup/)
 
 Path alias: `@/*` → `src/*`
 
+## Permissions and on-demand injection
+
+**The extension ships no broad host permission.** `manifest.json` declares only
+`host_permissions: ["https://platform.twitter.com/*"]` (the fixed target for
+embedded-tweet extraction) plus `optional_host_permissions: ["<all_urls>"]`.
+This removes the install-time "read and change all your data on all websites"
+warning every installer used to see.
+
+**Content scripts are injected per tab, on the gesture.** `content.ts` and
+`nip07-bridge.ts` are NOT in `content_scripts` (only `web-bridge.ts` is, scoped
+to the app's own domains). `chrome.action.onClicked` and
+`chrome.contextMenus.onClicked` both call `activateDiscernedOnTab()` in
+`background.ts`, which messages an already-injected script and falls back to
+`injectDiscerned()` — both gestures confer `activeTab`, which grants the tab's
+own origin for the injection.
+
+Three things about this are load-bearing:
+
+- **Order.** `injectDiscerned` awaits `nip07-bridge.ts` (MAIN world) BEFORE
+  injecting `content.ts`. The bridge overrides `window.open` to neutralise pages
+  whose capture-phase click handlers open tabs on any click — including clicks in
+  the overlay. Racing the two leaves a window where the overlay is visible but
+  the guard isn't armed. Guarded by `tests/e2e/clickjack-guard.spec.ts`
+  (+ `tests/fixtures/sites/clickjack-window-open.html`), which fails if the order
+  is reversed. See memory `project_overlay_click_guard_pitfall` for the earlier
+  incident in the same area.
+- **Idempotency.** A page can receive either script more than once. Each guards
+  on a `window.__discerned*Loaded` marker — module scope won't do, since every
+  injection is a fresh module instance. Without it, listeners double-register and
+  each activation fires N times.
+- **Build shape.** `chrome.scripting.executeScript` runs files as CLASSIC
+  scripts, so a code-split ES entry throws "Cannot use import statement outside a
+  module" and silently never runs. crxjs also only emits scripts the manifest
+  declares. Both are handled by `scripts/build-injected.mjs`, a second Vite pass
+  that emits each as a self-contained IIFE at a fixed path
+  (`injected-content.js`, `injected-nip07-bridge.js`) — chained automatically
+  from a plugin in `vite.config.ts`, so `pnpm dev`/`build`/`build:test` all stay
+  complete. `background.ts` references those built filenames, not source paths.
+
+**Image inlining requires the optional grant.** `inlineImage()` in `capture.ts`
+round-trips to the background's privileged fetch, which is gated on
+`canFetchCrossOrigin()` (`chrome.permissions.contains`, cached and invalidated by
+the `permissions.onAdded/onRemoved` events). Without the grant the call fails fast
+and the clip keeps the original `<img src>`, so images hotlink and may rot later.
+
+A canvas-based fallback (draw the already-downloaded image, `toDataURL()`) was
+built and **deliberately removed**: it only works on CORS-permissive hosts, and
+CORS-hostile correlates with hotlink-protected — i.e. it missed exactly the images
+inlining exists to preserve. It also re-encoded (flattening animated GIFs), had no
+size cap, added up to 1.5 s per image before falling through, and would have
+doubled the test matrix (granted/declined x permissive/hostile) for a path no
+existing spec could actually verify. Don't reintroduce it without solving those.
+
+**The grant can be given later.** Declining at onboarding is not final — the
+overlay's Settings drawer shows an "Images" card (`initImagePermissionCard()` in
+`overlay.ts`) whenever the permission is absent, and hides it once granted.
+`chrome.permissions.request()` must be called SYNCHRONOUSLY inside the click
+handler in both places; an `await` before it drops the user gesture.
+
+### Running the e2e tests against the real permission model
+
+**There is no test-only manifest.** Specs run against the SAME manifest that
+ships: no `<all_urls>`, content scripts injected on the gesture. Nothing special
+is needed to run them:
+
+```bash
+pnpm --filter=./discerned-ext build:test      # writes dist-test/
+pnpm exec playwright test -c tests/e2e/playwright.config.ts --project=extension --workers=1
+```
+
+**How a spec gets past `activeTab`.** Playwright cannot click the toolbar icon —
+it is browser chrome, not page DOM — but Chrome treats an extension **keyboard
+command** as a trusted gesture and grants `activeTab` identically. So
+`manifest.json` declares a `discerned-activate` command (Alt+Shift+Y) and
+`tests/e2e/helpers/activateExtension.ts` presses it over CDP. The real
+`chrome.commands.onCommand` handler in `background.ts` then runs
+`activateDiscernedOnTab` — production code, production manifest, real grant.
+
+Two things cost hours to discover; do not "simplify" them away:
+- Use a **custom** command, not `_execute_action`. Chrome handles the latter
+  internally and it never reaches `chrome.commands.onCommand`.
+- Focus the target tab at the **browser** level first
+  (`chrome.windows.update({ focused: true })`). `page.bringToFront()` alone is
+  not enough: Chrome routes the command to whatever tab IT thinks is focused,
+  which is otherwise the install-time onboarding tab, and injection then fails
+  against a `chrome-extension://` URL.
+
+**Every spec must activate before driving the test bridge.** A spec that does
+`page.goto(...)` then posts `__DISCERNED_TEST_CAPTURE` will fail with "capture
+timeout" — there is no content script bound yet. `runFixtureVisual` does this for
+the ~21 specs sharing it; specs with their own inline driver each need:
+
+```ts
+import { activateExtensionOnTab } from './helpers/activateExtension';
+await page.goto(url, ...);
+await activateExtensionOnTab(ctx, url);   // <- before any postMessage
+```
+
+Already wired: `extension.spec.ts`, `end-to-end.spec.ts`,
+`medium-fixture-visual`, `breitbart-fixture-visual`, plus everything via
+`fixtureVisual.ts`. **Not yet audited: the corpus sweep and the live `*-visual`
+specs** — expect the same one-line fix if they report "capture timeout".
+
+`activateExtensionOnTab` polls a `__DISCERNED_TEST_PING` until the listener
+answers, so it is safe for specs that walk one page through many fixtures.
+
+**Known-failing baseline (pre-existing, not caused by this work):**
+`goodreads-book-fixture-visual` renders the clip's date as *today* but its
+baseline was committed 2026-07-20, so it has drifted ever since. Verified by
+stashing all changes and reproducing on clean `main`. Regenerate with a stubbed
+date if you want it green.
+
 ## Web-bridge protocol (`src/content/web-bridge.ts`)
 
 Runs exclusively on `discerned.online/*` and `localhost:3000/*`. Bridges the extension's IndexedDB and auth state to the companion web app via `window.postMessage`.

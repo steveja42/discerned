@@ -6,17 +6,6 @@
 
 export {}; // Makes this a module so declare global is valid
 
-// ── Overlay click-capture guard ───────────────────────────────────────────────
-// Some sites register capture-phase click listeners on document/window that call
-// window.open() before any bubble-phase stopPropagation() inside the shadow DOM
-// can fire. By overriding window.open here (document_start, MAIN world, before
-// any page script runs) we prevent tabs from opening while our overlay is active.
-const _origOpen = window.open.bind(window);
-window.open = (url?: string | URL, target?: string, features?: string): WindowProxy | null => {
-  if (document.querySelector('#discerned-overlay')) return null;
-  return _origOpen(url, target, features);
-};
-
 interface NostrProvider {
   getPublicKey(): Promise<string>;
   signEvent(event: object): Promise<object>;
@@ -28,8 +17,33 @@ interface NostrProvider {
 declare global {
   interface Window {
     nostr?: NostrProvider;
+    __discernedNip07BridgeLoaded?: boolean;
   }
 }
+
+// Injected on demand (chrome.scripting.executeScript, MAIN world), so one page can
+// receive this script more than once. Re-running would chain a second window.open
+// wrapper around the first and add a duplicate message listener, so the install
+// runs only on the first injection into a given page.
+if (!window.__discernedNip07BridgeLoaded) {
+  window.__discernedNip07BridgeLoaded = true;
+  installNip07Bridge();
+}
+
+function installNip07Bridge(): void {
+
+// ── Overlay click-capture guard ───────────────────────────────────────────────
+// Some sites register capture-phase click listeners on document/window that call
+// window.open() before any bubble-phase stopPropagation() inside the shadow DOM
+// can fire. Overriding window.open prevents tabs from opening while our overlay
+// is active. Installed on activation (not document_start) — it intercepts the
+// CALL, so it only has to be in place before the user's next click, and the
+// background awaits this injection before the overlay is rendered.
+const _origOpen = window.open.bind(window);
+window.open = (url?: string | URL, target?: string, features?: string): WindowProxy | null => {
+  if (document.querySelector('#discerned-overlay')) return null;
+  return _origOpen(url, target, features);
+};
 
 window.addEventListener('message', async (event: MessageEvent) => {
   if (event.source !== window) return;
@@ -94,3 +108,5 @@ window.addEventListener('message', async (event: MessageEvent) => {
     }
   }
 });
+
+}

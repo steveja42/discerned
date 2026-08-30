@@ -19,6 +19,18 @@ import { LL, log, relayLog } from '@/shared/logger';
 let currentOverlay: DiscernedOverlay | null = null;
 let cachedAuthState: AuthState = { type: 'guest' };
 
+// This script is injected on demand (chrome.scripting.executeScript), so one page
+// can receive it more than once — a retry, or a re-activation after the previous
+// activeTab grant lapsed. Each injection is a FRESH module instance (a module-scope
+// flag would always read false), so the marker lives on the isolated world's
+// window, which is shared across injections into the same page. Without it every
+// re-injection adds another onMessage listener and each activation fires N times.
+declare global {
+  interface Window { __discernedContentLoaded?: boolean }
+}
+const alreadyLoaded = window.__discernedContentLoaded === true;
+window.__discernedContentLoaded = true;
+
 function isContextValid(): boolean {
   try {
     return !!chrome.runtime?.id;
@@ -31,7 +43,7 @@ const VALID_FORMATS: ClipFormat[] = [
   'selection', 'article', 'full-page', 'bookmark',
 ];
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+if (!alreadyLoaded) chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!isContextValid()) return false;
   if (message.type === 'ACTIVATE_DISCERNED') {
     handleActivation();
@@ -69,7 +81,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
  * Does NOT read the pubkey here — pubkey acquisition happens via the web app
  * Sign In flow (discerned.online only). Runs once per content-script lifecycle.
  */
-detectAuthState().then(state => {
+if (!alreadyLoaded) detectAuthState().then(state => {
   cachedAuthState = state;
   if (state.type !== 'pro' || !isContextValid()) return;
   chrome.runtime.sendMessage({
@@ -136,8 +148,9 @@ async function handleActivation() {
   const initialFormat = await pickInitialFormat(selectionPresent);
 
   // Re-probe page for window.nostr on every activation. The MAIN-world bridge
-  // (nip07-bridge.ts) is injected at document_start on <all_urls>, so it's
-  // available here. The wallet may have appeared since the last activation,
+  // (nip07-bridge.ts) is injected just before this script by the background's
+  // injectDiscerned(), so it's available here. The wallet may have appeared
+  // since the last activation,
   // or the user may have just disconnected and we need to re-transition
   // guest→pro before the GET_AUTH_STATE read below.
   let detected: AuthState = { type: 'guest' };
@@ -357,21 +370,23 @@ ${themeVarsBlock(theme)}
   setTimeout(() => document.addEventListener('pointerdown', onOutside, true), 0);
 }
 
-chrome.runtime.sendMessage({ type: 'REGISTER_LOG_TAB' }).catch(() => {});
-log(LL.NORMAL, 'Discerned content script loaded', 'url:', window.location.href);
+if (!alreadyLoaded) {
+  chrome.runtime.sendMessage({ type: 'REGISTER_LOG_TAB' }).catch(() => {});
+  log(LL.NORMAL, 'Discerned content script loaded', 'url:', window.location.href);
 
-// When the browser restores this tab from the back/forward cache, the extension
-// port is stale. Re-register so the background can relay logs again.
-window.addEventListener('pageshow', (e) => {
-  if (e.persisted && isContextValid()) {
-    chrome.runtime.sendMessage({ type: 'REGISTER_LOG_TAB' }).catch(() => {});
-  }
-});
+  // When the browser restores this tab from the back/forward cache, the extension
+  // port is stale. Re-register so the background can relay logs again.
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted && isContextValid()) {
+      chrome.runtime.sendMessage({ type: 'REGISTER_LOG_TAB' }).catch(() => {});
+    }
+  });
+}
 
 // Dev-mode test bridge — Vite tree-shakes this when __DISCERNED_DEV_BUILD__
 // is false (production builds). Lets Playwright drive captureContext() and the
 // CLIP path without the overlay.
-if (__DISCERNED_DEV_BUILD__) {
+if (__DISCERNED_DEV_BUILD__ && !alreadyLoaded) {
   window.addEventListener('message', async (e) => {
     // Note: in an extension content script, `window` is the isolated world's
     // wrapper — distinct from the page's `window` that's the message source.
@@ -380,7 +395,12 @@ if (__DISCERNED_DEV_BUILD__) {
     const data = e.data as { type?: string; format?: ClipFormat; opts?: CaptureOptions; capture?: Capture; evaluation?: Evaluation; hostOverride?: string | null };
     if (!data || typeof data.type !== 'string') return;
 
-    if (data.type === '__DISCERNED_TEST_ANCHORS') {
+    if (data.type === '__DISCERNED_TEST_PING') {
+      // Readiness probe for the e2e harness: the content script is injected on a
+      // gesture now, so specs must know when this listener is actually bound
+      // before they postMessage a capture request.
+      window.postMessage({ type: '__DISCERNED_TEST_PING_RESULT' }, window.location.origin);
+    } else if (data.type === '__DISCERNED_TEST_ANCHORS') {
       // Canary (Phase 3.1): run the matching site-tagger's selector-anchor
       // manifest against the LIVE page and report per-selector match counts.
       // hostOverride lets fixture pages exercise a specific tagger's anchors;
