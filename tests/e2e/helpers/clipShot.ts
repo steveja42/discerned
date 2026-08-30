@@ -35,13 +35,25 @@ export async function screenshotSourcePage(
     await page.screenshot({ path, fullPage: true });
     return;
   }
+  // RESTORE the viewport afterwards. This resize is for the screenshot only, but
+  // callers keep using the page — the corpus sweep CAPTURES next, and the layout
+  // finder scores candidates by visible area / on-screen visibility. Left at
+  // 1280x8000, fortune captured a single <div><img> with ZERO text (222,914
+  // chars of base64) where the same page at a normal viewport yields 118,347
+  // chars and 5,846 chars of text. That scored as a real capture defect for
+  // weeks; it was this leaked viewport.
+  const before = page.viewportSize();
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.setViewportSize({ width: 1280, height: Math.min(maxHeight, 8000) });
   await page.waitForTimeout(300);
-  await page.screenshot({
-    path,
-    clip: { x: 0, y: 0, width: 1280, height: maxHeight },
-  });
+  try {
+    await page.screenshot({
+      path,
+      clip: { x: 0, y: 0, width: 1280, height: maxHeight },
+    });
+  } finally {
+    if (before) await page.setViewportSize(before).catch(() => undefined);
+  }
 }
 
 export async function screenshotClipBody(
