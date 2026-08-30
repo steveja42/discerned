@@ -26,10 +26,42 @@ import type { BrowserContext, Worker } from '@playwright/test';
 /** Must match the `commands` key in manifest.json. */
 const ACTIVATE_COMMAND_KEY = { key: 'Y', code: 'KeyY', vk: 89, modifiers: 9 }; // Alt+Shift+Y
 
+// Discerned's MV3 worker is emitted by crxjs under this fixed name, which is
+// what distinguishes it from every OTHER extension's worker in the context.
+const DISCERNED_SW_MARKER = 'service-worker-loader';
+
+/**
+ * Find DISCERNED's service worker — not merely the first one in the context.
+ *
+ * `ctx.serviceWorkers()[0]` is only correct when the profile holds exactly one
+ * extension, which is true of a throwaway profile and false of the warm
+ * branded-Chrome profile the live specs and the corpus sweep use: it carries
+ * Chrome's own component extensions (the built-in Gemini/"glic" integration
+ * among them) plus whatever the user has installed. Taking [0] there handed back
+ * a stranger's worker whose `chrome.commands` is undefined and whose
+ * `chrome.tabs.query` returns URL-less stubs, so the activation keystroke was
+ * dispatched against a tab lookup that could never match and every capture
+ * failed with a misleading "content script never bound".
+ *
+ * Registration is lazy, so a worker absent at first look may appear shortly
+ * after; poll briefly before giving up.
+ */
 async function getServiceWorker(ctx: BrowserContext): Promise<Worker> {
-  const [existing] = ctx.serviceWorkers();
-  if (existing) return existing;
-  return ctx.waitForEvent('serviceworker', { timeout: 15_000 });
+  const mine = () => ctx.serviceWorkers().find(w => w.url().includes(DISCERNED_SW_MARKER));
+  const found = mine();
+  if (found) return found;
+
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    await ctx.waitForEvent('serviceworker', { timeout: 2_000 }).catch(() => undefined);
+    const w = mine();
+    if (w) return w;
+  }
+  const seen = ctx.serviceWorkers().map(w => w.url()).join(', ') || '(none)';
+  throw new Error(
+    `getServiceWorker: Discerned's service worker (${DISCERNED_SW_MARKER}) not found. `
+    + `Is the extension installed + enabled in this profile? Workers seen: ${seen}`,
+  );
 }
 
 /**
@@ -39,8 +71,15 @@ async function getServiceWorker(ctx: BrowserContext): Promise<Worker> {
  */
 async function pressActivationShortcut(ctx: BrowserContext, url: string): Promise<void> {
   const sw = await getServiceWorker(ctx);
+  // Enumerate and prefix-match in JS rather than passing `url: target*` to
+  // chrome.tabs.query. That option takes a MATCH PATTERN, not a URL prefix: a
+  // real article URL carrying a query string ("?utm_source=x&y=1") is not a legal
+  // pattern, and Chrome answers an invalid pattern with an empty list — so the
+  // lookup silently found no tab and threw. Fixture URLs happen to be
+  // pattern-legal, which is why only live specs (the corpus sweep) hit this.
   const focused = await sw.evaluate(async (target: string) => {
-    const [tab] = await chrome.tabs.query({ url: `${target}*` });
+    const tabs = await chrome.tabs.query({});
+    const tab = tabs.find(t => t.url === target) ?? tabs.find(t => t.url?.startsWith(target));
     if (tab?.id === undefined) return false;
     await chrome.tabs.update(tab.id, { active: true });
     if (tab.windowId !== undefined) await chrome.windows.update(tab.windowId, { focused: true });
@@ -119,6 +158,27 @@ export async function activateExtensionOnTab(ctx: BrowserContext, url: string): 
     } catch { /* ignore */ }
   }
   throw new Error(`activateExtensionOnTab: content script never bound on ${url}`);
+}
+
+/**
+ * Activate on a page object rather than a URL string.
+ *
+ * activateExtensionOnTab matches the tab by the URL the SPEC asked for, which is
+ * fine for a fixture served from a fixed 127.0.0.1 path. Live sites redirect
+ * (canonicalised paths, country editions, consent interstitials, tracking-param
+ * rewrites), so by the time the page settles its URL no longer startsWith the
+ * requested one — the lookup finds no tab and throws even though the page is
+ * sitting right there. The corpus sweep hits that on a large fraction of domains.
+ *
+ * Keying off `page.url()` follows the redirect. Not throwing on failure is
+ * deliberate: the sweep classifies a failed capture as a scored skip with a
+ * reason, which is more useful than aborting the domain here.
+ */
+export async function activateExtensionOnPage(page: import('@playwright/test').Page): Promise<void> {
+  const ctx = page.context();
+  const current = page.url();
+  if (!/^https?:/i.test(current)) throw new Error(`activateExtensionOnPage: not an http(s) page (${current})`);
+  await activateExtensionOnTab(ctx, current);
 }
 
 /**

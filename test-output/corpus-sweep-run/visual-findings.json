@@ -1,1005 +1,1025 @@
 {
-  "_comment": "Human visual-review verdicts per domain (worst→best: critical/flaw/clean, plus 'blocked' for domains with no capture to review — hard 403 / bot wall), kept separate from auto-scored *--score.json so re-running the sweep never overwrites them. The gallery merges these and can sort by verdict. Notes describe the CURRENT state only (no fix history). Update after eyeballing a re-captured clip/cast.",
+  "_comment": "Visual-review verdicts per domain (worst→best: critical/flaw/clean, plus 'blocked' for domains with no capture to review — hard 403 / bot wall), kept separate from auto-scored *--score.json so re-running the sweep never overwrites them. The gallery merges these and can sort by verdict. Notes describe the CURRENT state only (no fix history). Update after eyeballing a re-captured clip/cast. PROVENANCE: `by` is 'ai' for a model-written verdict and 'human' for one a person confirmed; absent means UNKNOWN (bulk-entered before this field existed — treat as unverified). This file previously described itself as human-reviewed, which was not true: AI review has produced confident, specific notes that did not match the image (walmart's empty section headings and ytmusic-album's missing title were both filed as 'clean'). An existing verdict is NOT evidence a person looked.",
   "findings": {
     "youtube-watch": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean clip; cast collapses the views/date stats row to a bare number."
+      "note": "Poster, title, channel header, and description captured cleanly via tagYoutube."
     },
     "imdb": {
       "verdict": "flaw",
       "where": "clip",
-      "note": "Top Cast renders one headshot per row instead of a grid; a streaming-service ad block survives."
+      "note": "Video/photo carousel and Top Cast render one item per row instead of a grid, producing an extremely tall page."
     },
     "nytimes": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full article captured; only a minor \"Advertisement\" label leaks."
+      "note": "Full article with images and interactive puzzle grids; scorer's chrome flag is a false positive on real page content."
     },
     "theatlantic": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean — paywall fade is CSS-only, full text was in the DOM and captured."
+      "where": "clip",
+      "note": "Correctly captures the paywall boundary: headline, hero, teaser, then the subscribe wall."
     },
     "reuters": {
-      "verdict": "flaw",
+      "verdict": "blocked",
       "where": "clip",
-      "note": "One paragraph renders one character per line (flex-collapse defect)."
+      "note": "Page itself loads fully with real content, but capture times out (>30s) in the pipeline -- not a bot wall."
     },
     "apnews": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Headline and byline are missing; clip jumps straight into the photo gallery."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full photo gallery article with captions captured cleanly, comment widget correctly excluded."
     },
     "amazon-product": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full product page with frequently-bought-together and reviews correctly scoped."
     },
     "hackernews": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full threaded comment discussion captured cleanly via tagHackerNews."
     },
     "bloomberg": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Faithfully stops at the paywall gate; not a capture bug."
+      "note": "Correctly captures the paywall boundary: headline, hero, teaser, then the subscribe wall."
     },
     "reddit-thread": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full thread with nested replies captured correctly."
+      "note": "Thread with avatars and comments captured cleanly via tagReddit."
     },
     "goodreads-book": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Book page with ratings, friends-reading grid, and threaded reviews captured cleanly."
     },
     "cnn": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Headline and byline are missing; clip opens straight on the hero image."
+      "note": "Full article captured cleanly."
     },
     "aljazeera": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "A recirculation box, ad labels, and a notification-prompt strip leak into the body."
+      "note": "Full article with hero image and recommended-stories list captured cleanly."
     },
     "espn": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Clip stops before the tracker entries, the substance of the page."
+      "note": "Full article with hero image and byline captured cleanly."
     },
     "css-tricks": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Long tutorial with code blocks and pseudo-class tables captured cleanly."
     },
     "wikipedia-en": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full article with architecture diagram and all sections.",
+      "by": "ai"
     },
     "stackoverflow-q": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Question plus 25 answers with code and images captured cleanly via tagStackOverflow."
     },
     "medium-generic": {
-      "verdict": "clean",
+      "verdict": "flaw",
       "where": "clip",
-      "note": "Full multi-section article captured cleanly."
+      "note": "Full article captured but a site nav strip rides along at the top.",
+      "by": "ai"
     },
     "danluu": {
       "verdict": "clean",
-      "where": "both",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full essay captured cleanly."
     },
     "techcrunch": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Headline, byline, and hero photo are missing; body text starts cold."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Article with embedded podcast promo image captured cleanly."
     },
     "theverge": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Article with hero image captured cleanly."
     },
     "arstechnica": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "A video promo box leaks mid-article, plus a stray text fragment at the head."
+      "note": "Full article with hero image, inline photos, and byline captured cleanly."
     },
     "politico": {
       "verdict": "flaw",
       "where": "clip",
-      "note": "A newsletter promo box's heading flex-collapses to one word per line in the clip (cast is fine); the hero image is missing from both."
+      "note": "A newsletter promo widget renders one character per line, forming a long vertical column."
     },
     "axios": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "A recirculation block with empty placeholder cards leaks in after the article ends."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article captured cleanly; empty placeholder tiles in the recirc rail are harmless."
     },
     "economist": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean — the paywall gate and the recirculation module below it are both real page content, faithfully captured in source order."
+      "where": "clip",
+      "note": "Correctly captures the paywall boundary: headline, illustration, lede, then the login/trial wall."
     },
     "npr": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Four recirculation cards are interleaved between body paragraphs instead of appended at the end."
+      "note": "Full article with inline related-story cards captured cleanly."
     },
     "nbcnews": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Multiple hub-page story blocks captured cleanly."
     },
     "theguardian": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Long photo-essay article with captions captured cleanly."
     },
     "bbc-news": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full article with hero image captured cleanly."
     },
     "wired": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Ad labels and a promo block leak mid-article."
+      "note": "Correctly captures the paywall boundary: headline, hero, teaser, then the subscribe wall."
     },
     "vox": {
       "verdict": "clean",
       "where": "clip+cast",
-      "note": "Clean — faithfully reproduces the liveblog hub layout."
+      "note": "Liveblog reproduced faithfully with per-entry timestamps, bylines and images.",
+      "by": "ai"
     },
     "newyorker": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Minor chrome leaks: a top bar, ad labels, a newsletter block, and a video promo strip."
+      "note": "Full article with a proper multi-column cartoon grid at the footer, not collapsed."
     },
     "quantamagazine": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Article with image gallery and captions captured cleanly."
     },
     "nature": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean — paywall gate, references, and related-content modules below it are all real page content, faithfully captured."
+      "where": "clip",
+      "note": "Correctly captures the paywall boundary: headline, options, then the subscribe wall."
     },
     "sciencedaily": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full article with credited hero image captured cleanly."
     },
     "arxiv": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Abstract with submission history table captured cleanly."
     },
     "mdn": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Long reference doc with code blocks and tables intact captured cleanly."
     },
     "python-docs": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Docs page with REPL code example captured cleanly."
     },
     "reactdev": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full tutorial with code blocks and diagrams captured cleanly."
     },
     "github-blog": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "A Copilot-trial promo module leaks in mid-article."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article with video-embed thumbnail captured cleanly."
     },
     "stackoverflow-blog": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full blog post captured cleanly."
     },
     "smashingmagazine": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Long technical article with headings and diagrams captured cleanly."
     },
     "martinfowler": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full pattern-catalog index page captured cleanly."
     },
     "paulgraham": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full essay captured cleanly."
     },
     "overreacted": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "An SVG diagram's labels collapse into smashed run-together text."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Long-form blog post with headings and links captured cleanly."
     },
     "lobsters": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Threaded comment discussion captured cleanly."
     },
     "hackaday": {
       "verdict": "clean",
-      "where": "cast",
-      "note": "Clip and cast both clean; the shell listing renders as a code block."
+      "where": "clip",
+      "note": "Full technical post with code and diagrams captured cleanly."
     },
     "ghost-blog": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full tutorial post with images captured cleanly."
     },
     "dev-to": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "The reaction glyphs and author avatar repeat 2-3x from sticky engagement bars."
+      "note": "Full blog post with images and comments captured cleanly."
     },
     "substack-generic": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full essay with footnotes captured cleanly."
     },
     "usatoday": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full article captured and readable — headline, byline, all body paragraphs and both images."
+      "note": "Full article: headline, byline, date, body with subheads and images.",
+      "by": "ai"
     },
     "time": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "No headline, byline, or hero; a recirculation box and ad labels also leak in."
+      "note": "Full article with recirc list captured cleanly."
     },
     "newsweek": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Headline is missing; a recirculation widget flex-collapses to one letter per line in the clip (cast is fine)."
+      "note": "Full article with byline, hero, and images captured cleanly."
     },
     "businessinsider": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "A failed-image watermark box and a broken related-stories grid leak into the clip (cast renders the latter as plain links)."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article captured cleanly; empty recirc placeholder tiles are harmless."
     },
     "forbes": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full sponsored article captured cleanly."
+      "note": "Full article captured cleanly."
     },
     "fortune": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Headline text itself is missing; otherwise clean."
+      "where": "clip",
+      "note": "Full article: hero image, all body prose, subheads and links.",
+      "by": "ai"
     },
     "cnbc": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Minor chrome leaks (share label, account-creation promo, preferred-source link); timestamps run together."
+      "note": "Full article with key points, images, and video thumbnail captured cleanly."
     },
     "foxnews": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Video hero collapses to a plain black box; otherwise clean."
+      "where": "clip",
+      "note": "Full article with a real 64-comment thread captured cleanly, not collapsed."
     },
     "cbsnews": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full article with audio player captured cleanly."
     },
     "apnews-tech": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Same as apnews — headline and byline missing, clip starts on the photo gallery."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full photo gallery article with captions captured cleanly, comment widget correctly excluded."
     },
     "independent": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean; cast leaks a few stray UI strings."
+      "note": "Full article captured cleanly."
     },
     "spiegel": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Paywalled — clip faithfully matches the gated source; a preferred-source badge and footer nav leak in as minor chrome."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Correctly captures the paywall boundary: headline, hero, teaser, then the SPIEGEL+ wall."
     },
     "aljazeera-tech": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "A recirculation box, ad labels, and a notification-prompt strip leak into the body."
+      "note": "Full article with hero image and recommended-stories list captured cleanly."
     },
     "timesofindia": {
       "verdict": "flaw",
       "where": "clip",
-      "note": "Heavy chrome leak: preferred-source badge, share/text-size controls, app-download promo, and an empty placeholder box."
+      "note": "An oversized blank placeholder box renders before the author bio."
     },
     "scmp": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean — capture matches the source's actual visible article length."
+      "where": "clip",
+      "note": "Full article with hero image captured cleanly."
     },
     "engadget": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Per-product spec blocks flex-collapse into one-word-per-line columns."
+      "note": "Full article list with images captured cleanly."
     },
     "gizmodo": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Headline and byline are missing; a stray audio-player time readout leaks in."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article with embedded video thumbnail captured cleanly."
     },
     "zdnet": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "A promo block and related-articles rail leak in; part of the page flex-collapses into a narrow column."
+      "note": "Full comparison article with images captured cleanly."
     },
     "pcmag": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Headline and hero image are missing; roughly half the article is absent."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article with a proper video poster frame and editor's-picks cards captured cleanly."
     },
     "macrumors": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full article with hero image captured cleanly."
     },
     "9to5mac": {
       "verdict": "flaw",
       "where": "clip",
-      "note": "Clip-only: the byline and a video-embed placeholder flex-collapse into narrow columns (cast is clean)."
+      "note": "Comments widget renders one character per line, same collapse pattern as openlibrary."
     },
     "kotaku": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "A 6-item recirculation module leaks into the bottom of both clip and cast."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Article plus recirculation cards with images captured cleanly."
     },
     "signalvnoise": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "The author avatar is aspect-distorted into a large portrait; the title and date are missing."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full blog post captured cleanly."
     },
     "venturebeat": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Trailing \"AI Weekly\" newsletter section rides along as chrome-leak."
+      "note": "Full article captured cleanly."
     },
     "theregister": {
-      "verdict": "flaw",
-      "where": "cast",
-      "note": "Clip is clean; the cast leaks literal '###' markdown prefixes into a sidebar list."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article captured cleanly."
     },
     "rottentomatoes": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean — the review-column collapse and stretched headshots from an earlier pass are fixed."
+      "note": "Reviews, cast, and related-news sections captured cleanly."
     },
     "metacritic": {
       "verdict": "flaw",
       "where": "clip",
-      "note": "Top Cast renders one large headshot per row down the page instead of a grid."
+      "note": "Top Cast renders one headshot per row instead of a grid, same pattern as imdb."
     },
     "tmdb": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "The circular user-score widget degrades to a stack of reaction emoji with the number lost."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Top Billed Cast renders as a correctly labeled name+role list; overview, trailers, and reviews captured cleanly."
     },
     "letterboxd": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean — capture succeeded despite a Cloudflare interstitial on the source screenshot."
+      "where": "clip",
+      "note": "Film credits page with full cast/crew list and festival timeline captured cleanly."
     },
     "imdb-name": {
-      "verdict": "blocked",
-      "where": "clip",
-      "note": "IMDb serves a 403 wall to this profile (13 chars of page text), so the headshot-only clip reflects the block, not a capture defect."
-    },
-    "steam": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "A long thumbnail-stack gallery and heavy commerce chrome sit ahead of the actual description."
-    },
-    "homedepot": {
-      "verdict": "flaw",
-      "where": "clip",
-      "note": "Breadcrumb renders one item per line; three empty 'Loading Recommendations' headings survive."
-    },
-    "ebay": {
-      "verdict": "critical",
-      "where": "clip",
-      "note": "Clip is blank — 0% text, 85% blank space — while the source renders a full product page."
-    },
-    "target": {
-      "verdict": "critical",
-      "where": "clip+cast",
-      "note": "The entire product-identity block (title, price, rating, hero image) is missing; marketing panels and cross-sell content lead instead."
-    },
-    "walmart": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full bio with a proper poster-grid filmography captured cleanly, unlike imdb/metacritic entity pages."
+    },
+    "steam": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Game store page with screenshot gallery and purchase options captured cleanly."
+    },
+    "homedepot": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "Known bot-gate homepage-redirect stub (tagline only); product URL 403s to root."
+    },
+    "ebay": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Related-items section renders one product card per row instead of a grid, same pattern as imdb/metacritic."
+    },
+    "target": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full product page with gallery and compare-similar grid captured cleanly."
+    },
+    "walmart": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Seven section headings (Specs, Product details, Warranty, ...) render empty and a cross-sell carousel rides along.",
+      "by": "ai"
     },
     "newegg": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full vendor spec page with tables captured cleanly."
     },
     "goodreads-author": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "A promo banner leaks in at the top and a repeated 'Want to Read' list adds noise."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Author bio, bookshelves, and book listings captured cleanly."
     },
     "discogs": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full release entity page captured cleanly."
+      "note": "Complete release page: cover, credits, tracklist, reviews.",
+      "by": "ai"
     },
     "bandcamp": {
-      "verdict": "critical",
-      "where": "clip+cast",
-      "note": "Layout finder picked the wrong block — clip and cast contain only the recommendation rail, not the album."
-    },
-    "genius": {
-      "verdict": "flaw",
-      "where": "cast",
-      "note": "Clip is clean; the cast leaks an unrelated recommended-video promo module."
-    },
-    "allrecipes": {
-      "verdict": "flaw",
-      "where": "clip",
-      "note": "A retailer promo block survives mid-recipe; several step images render as broken-image placeholders."
-    },
-    "yelp": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Star ratings render as solid black squares; ~18 literal 'Loading…' placeholder lines leak in."
-    },
-    "tripadvisor": {
-      "verdict": "flaw",
-      "where": "clip",
-      "note": "Attraction content is dominated by an unrelated cross-sell rail of boat tours."
-    },
-    "zillow": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full structured listing captured cleanly."
+      "note": "Full album page with tracklist and comments captured cleanly."
+    },
+    "genius": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full lyrics page with Q&A and comments captured cleanly."
+    },
+    "allrecipes": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full recipe with hero, ingredients, step photos, and nutrition facts captured cleanly."
+    },
+    "yelp": {
+      "verdict": "critical",
+      "where": "clip",
+      "note": "A block of solid black squares renders where a photo/review widget should be."
+    },
+    "tripadvisor": {
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Attraction page correctly scoped to reviews/recommendations, page chrome dropped."
+    },
+    "zillow": {
+      "verdict": "blocked",
+      "where": "clip",
+      "note": "PerimeterX press-and-hold wall not cleared this run; unattended mode has no manual-clear fallback."
     },
     "etsy": {
       "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "The product description is garbled with literal dash-separator lines and bracket placeholder text."
+      "where": "clip",
+      "note": "Thumbnail gallery renders as a tall vertical stack instead of a strip; bullet separators render as broken dash lines."
     },
     "producthunt": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Scorer flagged 1 distorted image."
+      "note": "Full product page (header, launches, forum threads, reviews) captured cleanly."
     },
     "npmjs": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Package readme with code block captured cleanly."
     },
     "pypi": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Code/install command blocks lose their whitespace, making copied commands unusable."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full package page with code block, badges, and maintainers grid captured cleanly."
     },
     "github-repo": {
-      "verdict": "flaw",
-      "where": "cast",
-      "note": "Clip is clean; the cast squashes an embedded code sample's line breaks into one line."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full README with badges and code sample captured cleanly."
     },
     "wikipedia-person": {
       "verdict": "clean",
       "where": "clip+cast",
-      "note": "Clean."
+      "note": "Full biography with infobox, portrait, signature and inline images.",
+      "by": "ai"
     },
     "haaretz": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Paywalled — intro is faithfully captured, but the paywall CTA is skipped and the clip runs straight into the comment thread instead."
+      "note": "Full article plus comment thread captured cleanly, no dx-stats collapse."
     },
     "folha": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean — paywalled; clip faithfully captures exactly what's in the DOM before the gate."
+      "note": "Portuguese-language article captured cleanly."
     },
     "rfc-editor": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full RFC document captured cleanly."
     },
     "thehindu": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "An inline related-article link flex-collapses into a one-token-per-line vertical strip."
+      "note": "Full article with hero photo, credit, and body prose captured cleanly."
     },
     "japantimes": {
       "verdict": "flaw",
       "where": "clip",
-      "note": "Full story, byline and photos now captured; a \"Sustainable Japan\"/In Focus recirculation rail rides along at the end."
+      "note": "A repeated icon block near the footer renders as a vertical column of single characters."
     },
     "gutenberg": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full book text captured cleanly."
     },
     "asahi": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean — paywalled; clip faithfully matches the visible preview."
+      "where": "clip",
+      "note": "Japanese-language article correctly captures the paywall boundary."
     },
     "chicagotribune": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean — paywalled; clip faithfully matches the visible preview."
+      "where": "clip",
+      "note": "Photo-gallery article with correct counter captured cleanly."
     },
     "yahoofinance": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "An AI-question carousel and footer promo links leak in as chrome."
+      "note": "Full article captured cleanly."
     },
     "appstore": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "App listing with description and screenshots captured cleanly."
     },
     "lesswrong": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Long album-review post with lyrics correctly formatted, captured cleanly."
     },
     "postgresql-docs": {
-      "verdict": "flaw",
-      "where": "clip",
-      "note": "A version-list nav and prev/next bars survive top and bottom."
-    },
-    "slashdot": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean — comment thread is correctly excluded from the article capture."
+      "note": "Full documentation page with tables and code blocks; scorer's chrome flag is a false positive on real page content."
+    },
+    "slashdot": {
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "Only the intro paragraphs captured; the comment thread (the site's main content) is missing."
     },
     "superuser": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Q&A with code blocks and screenshot captured cleanly."
     },
     "github-pr": {
-      "verdict": "critical",
-      "where": "cast",
-      "note": "Clip is clean; the cast breaks a benchmark table into an unreadable wall of numbers."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full PR thread: description, code blocks, comments and benchmark tables.",
+      "by": "ai"
     },
     "weather-gov": {
       "verdict": "clean",
       "where": "clip+cast",
-      "note": "Clean."
+      "note": "Current conditions, seven-day forecast and the detailed text forecast.",
+      "by": "ai"
     },
     "aljazeera-ar": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Ad labels and stray control glyphs leak between liveblog entries."
+      "note": "Arabic edition captures cleanly with correct RTL layout."
     },
     "seattletimes": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Headline and byline are missing; the cast also shows unrendered markdown asterisks."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Local event guide with images and listings captured cleanly."
     },
     "cbc": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full article with hero image and captions captured cleanly."
     },
     "msnbc": {
       "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Headline and subheading are missing; body starts directly on the byline."
+      "where": "clip",
+      "note": "\"More Articles\" rail thumbnails render as a tall stack of squished cards instead of a normal list."
     },
     "netflix-techblog": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full engineering article with diagrams captured cleanly."
+      "note": "Full article with headings, diagrams and code blocks.",
+      "by": "ai"
     },
     "lemmy-thread": {
-      "verdict": "clean",
+      "verdict": "flaw",
       "where": "clip",
-      "note": "Full thread with nested replies captured correctly."
+      "note": "Comment thread captured but the clip starts mid-thread, missing the post title and body.",
+      "by": "ai"
     },
     "storygraph": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean, 72% coverage."
+      "note": "Book page with community-review stats captured cleanly."
     },
     "librarything": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full structured entity page captured cleanly."
+      "note": "Full work page: cover, tags, member reviews, editions, awards.",
+      "by": "ai"
     },
     "rateyourmusic": {
-      "verdict": "clean",
+      "verdict": "flaw",
       "where": "clip",
-      "note": "Full entity page with lyrics and credits captured cleanly."
+      "note": "Rating/stats block under the title collapses to one character per line.",
+      "by": "ai"
     },
     "spotify-album": {
-      "verdict": "flaw",
-      "where": "cast",
-      "note": "Clip is clean (cover, title, artist, all 10 tracks); the cast drops track titles, showing '1 · 1', '2 · 2' instead of song names."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full tracklist captured cleanly."
     },
     "applemusic-album": {
       "verdict": "flaw",
       "where": "clip",
-      "note": "A black-rectangle glitch overlaps the title; the track list renders as a jumbled stack instead of rows. Cast is clean."
+      "note": "Stray black square glyph renders next to the album title; track listing otherwise clean."
     },
     "ytmusic-album": {
-      "verdict": "clean",
+      "verdict": "flaw",
       "where": "clip",
-      "note": "Clean — cover, title, and all 10 tracks with play counts and durations captured in both clip and cast."
+      "note": "No album title or artist, and each track splits across five lines instead of one row.",
+      "by": "ai"
     },
     "librarything-catalog": {
-      "verdict": "blocked",
+      "verdict": "flaw",
       "where": "clip",
-      "note": "Redirects to a sign-in page instead of the member catalog."
+      "note": "Captures the logged-out shell (badge plus sign-in links) because the catalog needs a session.",
+      "by": "ai"
     },
     "github-issue": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full comment thread captured cleanly."
+      "note": "Long threaded issue discussion captured cleanly."
     },
     "postguam": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full article; minor trailing poll-widget chrome."
+      "note": "Full article captured cleanly."
     },
     "msn-slideshow": {
-      "verdict": "flaw",
+      "verdict": "blocked",
       "where": "clip",
-      "note": "Text content captured correctly; slideshow images did not come through."
+      "note": "Empty body even on the headed CF retry; bot-detection stub, not a capture defect."
     },
     "wikivoyage": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "The climate table flex-collapses into a one-character-per-line vertical column."
+      "note": "Full travel guide with maps and images captured cleanly."
     },
     "noahpinion": {
       "verdict": "flaw",
       "where": "clip",
-      "note": "A Substack subscribe/share chrome bar rides at the top."
+      "note": "Substack subscription footer and recirc block render as dense, garbled text near the bottom."
     },
     "smh": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Minor chrome leaks: ad labels, a preferred-source link, and a partner-content heading."
+      "note": "Full article with byline image captured cleanly."
     },
     "w3c-spec": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full spec text with numbered sections, definitions and the role list.",
+      "by": "ai"
     },
     "facebook-home": {
       "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Byline, text, photos and counts all captured; timestamp renders as spaced-out characters and photos stack vertically instead of as a grid."
+      "where": "clip",
+      "note": "Composer/stories/ads render as a long thumbnail stack instead of scoping to the topmost post."
     },
     "boardgamegeek": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Box art and description are clean, but the entity header (title, rating, player count, credits) is entirely missing."
+      "note": "Full game page: hero art and complete description.",
+      "by": "ai"
     },
     "gitlab-repo": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean; GitLab logo renders oversized at the head."
+      "note": "README captured cleanly."
     },
     "sec-edgar": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full filing table captured intact."
+      "note": "Full filings table (dates, forms, links) now captured instead of the bot-block stub."
     },
     "aws-blog": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "A large Amazon Polly TTS banner and a preferred-source link survive."
+      "note": "Full blog post with graphics and audio-narration widget captured cleanly."
     },
     "abc-au": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full article with hero image captured cleanly."
     },
     "meduza": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full article captured cleanly."
     },
     "newscientist": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "A newsletter-signup block and ad/subscriber labels leak into the body."
+      "note": "Full article with inline images captured cleanly."
     },
     "simonwillison": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "A sidebar list and a sponsor promo block are captured as if they were content; the actual post body is missing."
+      "note": "Blog post with recent-articles list captured cleanly."
     },
     "playstore": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "The app header renders at the bottom instead of the top, and Material icon ligature names leak as literal text."
+      "note": "App listing with What's New, data-safety, and related-apps sections captured cleanly."
     },
     "instagram-home": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "The narrowed post is an ad, not organic content; engagement counts stack vertically instead of in a row."
+      "note": "Feed post with photos, caption, and like count captured cleanly."
     },
     "pubmed": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full abstract page captured cleanly."
     },
     "musicbrainz": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Long discography table captured cleanly, not garbled."
     },
     "zenodo": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "A citation table's year column is too narrow and wraps; an adjacent link column also collapses."
+      "note": "Full metadata page with citation table captured cleanly."
     },
     "facebook-reels": {
       "verdict": "flaw",
       "where": "clip",
-      "note": "Video poster and caption now captured; oversized search/megaphone glyphs leak and engagement counts stack vertically."
+      "note": "Reel captures only a thumbnail and caption with raw icon glyphs, no proper action-row layout."
     },
     "straitstimes": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "A recirculation rail, newsletter block, and shopping-product rail all leak in mid-article."
+      "note": "Article plus recirc cards with images captured cleanly."
     },
     "thenation": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "An audio-player control strip survives at the foot."
+      "note": "Full cartoon feature with author bio and audio player captured cleanly."
     },
     "crates-io": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Full crate page with code example and links captured cleanly."
     },
     "lefigaro": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "A preferred-source badge, share-controls list, audio-narration line, and podcast promo card leak in."
+      "note": "French-language article with podcast widget captured cleanly."
     },
     "tildes": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Clean."
+      "note": "Threaded forum discussion with nested replies correctly indented, captured cleanly."
     },
     "instagram-reels": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Engagement counts stack vertically instead of one horizontal row."
+      "note": "Reel with bio caption and engagement stats captured cleanly."
     },
     "anthropic-news": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full post with chart and case-study card grid captured cleanly."
     },
     "aws-docs": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full docs page with quick reference and tag tables captured cleanly."
     },
     "bbc-sport": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Long fixture list captured cleanly as text."
     },
     "biorxiv": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Review-count badges render as solid color bars instead of small numbered badges in the clip; cast is cleaner."
+      "note": "Full preprint abstract and metadata captured cleanly."
     },
     "bleacherreport": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "A recirculation carousel leaks in at the bottom, larger than the article itself."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article plus trending rail with thumbnails captured cleanly."
     },
     "britannica": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Two embedded video players fail to inline, leaving large empty placeholder boxes in the clip; cast drops them cleanly."
+      "note": "Full encyclopedia article captured cleanly."
     },
     "chosun": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Heavy chrome leak: related-article cards, subscription banners, a video thumbnail, and a horoscope widget."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Korean-language article captured cleanly."
     },
     "cloudflare-blog": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Every embedded chart renders as a broken-image placeholder in the clip; cast drops them cleanly."
+      "note": "Full technical post with headings and embedded chart captured cleanly."
     },
     "coindesk": {
-      "verdict": "clean",
-      "where": "clip+cast",
-      "note": "A sidebar-style module leaks in but doesn't disrupt readability."
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "A stray black rectangle glyph renders after a \"View Full Report\" link; article body otherwise clean."
     },
     "deepmind-blog": {
       "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Embedded videos collapse to placeholder boxes with repeated captions."
+      "where": "clip",
+      "note": "Video captions render, but the videos themselves show as blank gray boxes with no poster frame."
     },
     "discourse-meta": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full forum landing post with linked topics captured cleanly."
     },
     "dockerhub": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full README with badges and tag tables captured cleanly."
     },
     "go-docs": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Long documentation page with code blocks intact captured cleanly."
     },
     "huffpost": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Headline is missing; a large donation-drive module leaks in as if it were article content."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article with membership-tier bullet list captured cleanly."
     },
     "huggingface": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full model card with license and README captured cleanly."
     },
     "investopedia": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "An ad banner leaks in at the top of the clip."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article captured cleanly."
     },
     "jvns": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Long blog post with headings and code captured cleanly."
     },
     "kaggle": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Heavy chrome leak: repeated broken-widget text and cross-sell rails."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full dataset page with tables and related-notebooks grid captured cleanly."
     },
     "kubernetes-docs": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Long docs page with tables and status sections intact captured cleanly."
     },
     "lastfm": {
-      "verdict": "critical",
-      "where": "clip+cast",
-      "note": "Hero text overlaps illegibly on the background image, and the Top Tracks/Albums sections are entirely missing."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full artist page with bio and photo grid captured cleanly."
     },
     "longreads": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Headline and byline are missing; a recirculation block also leaks in."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Interview article with book cover and related-questionnaire cards captured cleanly."
     },
     "mathoverflow": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Question with answers and comments captured cleanly."
     },
     "motherjones": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "A video-promo widget module leaks into the middle of the article body."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full article with hero and inline images captured cleanly."
     },
     "myanimelist": {
-      "verdict": "critical",
-      "where": "cast",
-      "note": "Clip is a reasonably good entity capture; the cast mangles the layout into a garbled table of unreadable fragments."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full entry with synopsis and info panel captured cleanly."
     },
     "nownownow-brave": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Technical blog post with screenshots captured cleanly."
     },
     "nypost": {
       "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "A video-player widget leaks its on-screen control text into the body."
+      "where": "clip",
+      "note": "Embedded video renders as a solid black box with baked-in headline text and no real poster frame."
     },
     "offguardian": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Long article captured cleanly."
     },
     "openlibrary": {
       "verdict": "critical",
       "where": "clip",
-      "note": "The Edition Notes table flex-collapses into a scrambled one-character-per-line strip in the clip; cast is clean."
+      "note": "Edition-notes table collapses to one character per line, producing garbled vertical text."
     },
     "openstreetmap": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean — faithfully captures the tags table, matching the non-article source."
+      "where": "clip",
+      "note": "Relation editor page with long member list captured cleanly."
     },
     "plato-stanford": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full encyclopedia article with TOC captured cleanly."
     },
     "propublica": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean; a trivial byline punctuation artifact from multi-author link separators."
+      "where": "clip",
+      "note": "Spanish-language investigative article captured cleanly."
     },
     "reason": {
-      "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "verdict": "flaw",
+      "where": "clip",
+      "note": "An unrelated recirc image renders next to a solid black rectangle, a broken ad/widget card."
     },
     "rust-book": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Long book chapter with code blocks and diagram captured cleanly."
     },
     "scientificamerican": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean."
+      "where": "clip",
+      "note": "Full article with equations and images captured cleanly."
     },
     "stripe-docs": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "The tabbed code-sample widget carries over as a filename label only — the code itself is lost."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Long technical doc with code blocks and step sections captured cleanly."
     },
     "thedailybeast": {
       "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "Main headline is missing; body starts directly on prose."
+      "where": "clip",
+      "note": "Overlapping photo captions and paragraphs render stacked on top of each other partway down, unreadable."
     },
     "theintercept": {
       "verdict": "clean",
-      "where": "clip+cast",
-      "note": "Clean — an email-gate overlay is CSS-only, full text was captured."
+      "where": "clip",
+      "note": "Article with recirc cards captured cleanly."
     },
     "tiktok-foryou": {
-      "verdict": "flaw",
-      "where": "cast",
-      "note": "Clip is clean; the cast strips the engagement icons down to bare unlabeled numbers."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Video post with photos, caption, and engagement stats captured cleanly."
     },
     "tiktok-profile": {
       "verdict": "flaw",
-      "where": "cast",
-      "note": "Clip mirrors the source's own logged-out error state; the cast additionally leaks a large suggested-accounts list."
+      "where": "clip",
+      "note": "Profile header captures fine, but the video grid shows TikTok's own \"Something went wrong\" error -- faithful capture of a real site-side failure, not a pipeline defect."
     },
     "wikidata": {
-      "verdict": "flaw",
-      "where": "clip+cast",
-      "note": "The property labels (instance of, sex or gender, etc.) are missing — values render as an unlabeled flat list."
+      "verdict": "clean",
+      "where": "clip",
+      "note": "Full entity page with tables and images captured cleanly."
     },
     "wiktionary": {
       "verdict": "clean",
       "where": "clip+cast",
-      "note": "Clean."
+      "note": "Etymology, pronunciation, all senses, synonyms and translations.",
+      "by": "ai"
     },
     "globeandmail": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Paywalled — the body is not in the DOM, so the clip faithfully captures the dateline then the surrounding widget chrome."
+      "note": "Article captured.",
+      "by": "ai"
     },
     "courtlistener": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full legal opinion captured with proper formatting."
+      "note": "Full legal opinion text captured cleanly."
     },
     "ndtv": {
       "verdict": "clean",
@@ -1009,27 +1029,30 @@
     "sciencemag": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full article captured cleanly on an isolated retry."
+      "note": "Article captured.",
+      "by": "ai"
     },
     "mayoclinic": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full reference article, all sections intact."
+      "note": "Full health article captured cleanly."
     },
     "xda-forums": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Only the OP post is captured; no replies rendered."
+      "note": "Full forum thread captured cleanly."
     },
     "openai-blog": {
-      "verdict": "flaw",
+      "verdict": "clean",
       "where": "clip",
-      "note": "Trailing \"Keep reading\" related-posts section rides along as chrome-leak."
+      "note": "Article captured.",
+      "by": "ai"
     },
     "librarything-author": {
       "verdict": "clean",
       "where": "clip",
-      "note": "Full author entity page captured cleanly."
+      "note": "Full author page: bio, works, tags, reviews, awards.",
+      "by": "ai"
     }
   }
 }

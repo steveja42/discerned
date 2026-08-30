@@ -21,6 +21,7 @@ import { test, type Page, type Frame } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
+import { activateExtensionOnPage } from './helpers/activateExtension';
 import { screenshotSourcePage, screenshotClipBody } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
 import { sweepArtifacts, type SweepRecord } from './helpers/sweepArtifacts';
@@ -138,6 +139,12 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
       const rec: SweepRecord = { domain: d.name, url: d.url, ranAt: new Date().toISOString(), status: 'skip' };
       const url = process.env[`SWEEP_URL_${d.name.toUpperCase()}`] || d.url;
       const page = await ctx.newPage();
+      // Escape hatch: if you can't clear the gate, just CLOSE THE TAB — the wait
+      // loop sees `page.isClosed()` and moves on to the next site instead of
+      // burning the full WAIT_MS. The `finally` below already tolerates a
+      // closed page (close() is best-effort).
+      let userClosed = false;
+      page.once('close', () => { userClosed = true; });
       try {
         // eslint-disable-next-line no-console
         console.log(`\n▶ ${d.name}  —  ${url}\n   → clear the block in the window now…`);
@@ -155,7 +162,13 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
         const deadline = Date.now() + WAIT_MS;
         const STABLE_CLEARS = 3; // ×2s = 6s of continuous gate-free state
         let clearStreak = 0;
+        // The user may close the tab at ANY point in an iteration (mid-evaluate,
+        // mid-press-and-hold, mid-timeout), so every await in the loop body is
+        // wrapped: a "Target page … has been closed" rejection just ends the
+        // loop, which then falls through to the "tab closed" skip below.
+        try {
         while (Date.now() < deadline) {
+          if (userClosed || page.isClosed()) break;
           const blocked = await page.evaluate(
             ({ sigs, strong }: { sigs: string[]; strong: string[] }) => {
               let t = (document.body?.innerText ?? '').replace(/\s+/g, ' ').trim();
@@ -188,6 +201,16 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
           if (clearStreak >= STABLE_CLEARS) break;
           await page.waitForTimeout(2_000);
         }
+        } catch (loopErr) {
+          if (!/has been closed/i.test(String((loopErr as Error).message))) throw loopErr;
+        }
+        if (userClosed || page.isClosed()) {
+          rec.skipReason = 'tab closed by user before the gate cleared';
+          writeFileSync(art.score(), JSON.stringify(rec, null, 2));
+          // eslint-disable-next-line no-console
+          console.log('   ⏭ tab closed — skipped to next site');
+          continue;
+        }
         const blocked = clearStreak < STABLE_CLEARS;
         if (blocked) {
           rec.skipReason = 'still blocked after manual wait';
@@ -215,6 +238,17 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
           while (Date.now() < deadline && len() < 600) { await new Promise(r => setTimeout(r, 400)); }
         }).catch(() => undefined);
         await screenshotSourcePage(page, art.source());
+
+        // Bind the content script first — production injects it per tab on the
+        // activeTab gesture, so without this the bridge has no listener and the
+        // capture below times out. See helpers/activateExtension.ts.
+        try {
+          await activateExtensionOnPage(page);
+        } catch (actErr) {
+          rec.skipReason = `activation failed: ${String((actErr as Error).message).split(/[\r\n]/)[0]}`;
+          writeFileSync(art.score(), JSON.stringify(rec, null, 2));
+          continue;
+        }
 
         // Capture via the dev test bridge.
         let cap: Record<string, unknown>;
