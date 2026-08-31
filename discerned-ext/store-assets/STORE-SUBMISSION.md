@@ -98,24 +98,29 @@ optionally publish. There is no second, unrelated feature.
 Paste these into the corresponding fields. Each states the concrete mechanism, because
 "it's a general-purpose tool" is the phrasing that gets rejected.
 
-`host_permissions: https://platform.twitter.com/*`
+**Sections below are ordered to match the dashboard form**, which lists the API
+permissions alphabetically and then a single **Host permission** field last.
 
-The only host permission granted at install. Keep this distinct from the optional
-`<all_urls>` below — conflating them invites the "why do you need every site?" rejection
-the split exists to avoid.
+**The form has ONE host-permission field, not two.** It does not split
+`host_permissions` from `optional_host_permissions` — both manifest entries are
+justified in the same box, so the text below covers them together. Chrome itself still
+treats them differently (the optional one stays out of the install warning until
+requested); only the *form* merges them. Lead with the required, narrowly-scoped one:
+it is the higher-risk item in a combined field, and scoping it explicitly answers the
+"why every site?" question before the broad entry arrives.
+
+`activeTab`
 
 ```
-Required to extract the content of embedded tweets (author, text, images) that news and article pages render inside cross-origin platform.twitter.com iframes. This is a fixed, single-origin target, read only during a user-initiated capture.
+Grants access to the tab the user invoked the extension on, so the capture can read
+that page's content at the moment of the user's click.
 ```
 
-`optional_host_permissions: <all_urls>`
+`contextMenus`
 
 ```
-Optional and not requested at install time. Discerned is a user-initiated web clipper: its single purpose is to let users capture, rate, and save content from whichever public webpage they are currently reading. Because a user may choose to clip from any domain, this access cannot be limited to a static list of host URLs.
-
-The permission is requested only when the user opts in, and is used to save a clip's own copy of the media on the page being captured: fetching the page's images, and a poster frame for its videos, so the clip still renders if the source site later removes or blocks them. Those fetches go directly to the servers already hosting that media — the same ones the browser contacted to display the page. Declining is fully supported — the extension keeps working and clips simply reference the original URLs instead.
-
-Routine capture does not rely on this permission. Content scripts are injected per tab under activeTab on the user's own gesture (toolbar beacon or right-click context menu), and remain absent until then, so no page data is read, processed, or monitored without the user initiating it. Discerned does not run background tracking, does not monitor browsing history, and operates no backend server to receive page content.
+Adds the right-click menu entries the user invokes to capture the current page or a
+selected passage. This is one of the two primary entry points to the extension.
 ```
 
 `scripting`
@@ -126,34 +131,12 @@ Used exclusively for a single read-only feature: extracting embedded tweet conte
 Because cross-origin iframe content cannot be accessed by the parent page's content script, chrome.scripting.executeScript runs a small, bundled, read-only extractor targeted strictly at those specific iframe targets. This script contains no remote code, executes only during a user-initiated capture event, and makes no network requests.
 ```
 
-`webNavigation`
-
-```
-Paired directly with the scripting permission for embedded tweet extraction. The chrome.webNavigation.getAllFrames API is called solely during an active, user-initiated capture to enumerate frame IDs and identify matching platform.twitter.com tweet embeds for target extraction.
-
-It is never used to track navigation history, monitor tab changes, or observe user browsing behavior.
-```
-
-`contextMenus`
-
-```
-Adds the right-click menu entries the user invokes to capture the current page or a
-selected passage. This is one of the two primary entry points to the extension.
-```
-
 `storage`
 
 ```
 Stores the user's own data locally on their device: their saved clips and evaluations,
 their relay list, theme preference, and sign-in state. Nothing in storage is
 transmitted to us.
-```
-
-`activeTab`
-
-```
-Grants access to the tab the user invoked the extension on, so the capture can read
-that page's content at the moment of the user's click.
 ```
 
 `tabs`
@@ -164,6 +147,25 @@ Used solely to open, focus, and communicate with the extension's own pages: the 
 Every query is filtered to those specific extension and discerned.online URLs. The extension queries for an already-open instance so it can focus that tab instead of spawning a redundant duplicate, and so it can send a newly saved clip to an open library tab to keep it up to date.
 
 This permission is never used to monitor, record, or transmit user tab history or general browsing activity. The extension does not enumerate, read, or report the URLs of the user's other tabs.
+```
+
+`webNavigation`
+
+```
+Paired directly with the scripting permission for embedded tweet extraction. The chrome.webNavigation.getAllFrames API is called solely during an active, user-initiated capture to enumerate frame IDs and identify matching platform.twitter.com tweet embeds for target extraction.
+
+It is never used to track navigation history, monitor tab changes, or observe user browsing behavior.
+```
+
+Host permission — covers BOTH `host_permissions: https://platform.twitter.com/*` and
+`optional_host_permissions: <all_urls>`
+
+```
+REQUIRED — https://platform.twitter.com/*: Extracts the content of embedded tweets (author, text, images) that article pages render inside cross-origin platform.twitter.com iframes. A fixed, single-origin target, read only during a user-initiated capture, used for no other purpose.
+
+OPTIONAL — <all_urls>: Not requested at install. Discerned is a web clipper, so the user may clip from any domain; that cannot be reduced to a static host list. It is requested only where the user opts in — the "Save images with your clips" step during onboarding, or the extension's Permissions page — and used solely to save a clip's own copy of the page's images and video poster frames, so the clip still renders if the source site later removes them. Those fetches go directly to the servers already hosting that media. Declining is fully supported — clips simply reference the original URLs instead.
+
+Neither permission is used for routine capture. Content scripts are injected per tab under activeTab on the user's own gesture (toolbar icon, context menu, or keyboard shortcut) and are absent until then. No background tracking, no browsing-history monitoring, and no backend server receives page content.
 ```
 
 Remote code
