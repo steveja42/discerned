@@ -110,6 +110,15 @@ export class DiscernedOverlay {
   // Removes the Settings → Images card's re-check listeners. The grant happens on
   // another tab, so the card refreshes on return; re-set on each settings render.
   private imagePermCleanup: (() => void) | null = null;
+  // Last known image-permission state, so the watcher can spot the ungranted→granted
+  // edge and re-capture. Starts null: the first reading only records the baseline.
+  private imagePermGranted: boolean | null = null;
+  // Tears down that watcher's listeners. Lives for the overlay's whole lifetime,
+  // unlike imagePermCleanup, which is scoped to the Settings card's own render.
+  private imagePermWatchCleanup: (() => void) | null = null;
+  // Set when the permission is granted while a pre-grant (hotlinked) capture is
+  // held. Cleared by consumeStaleImageCapture() once the re-capture is under way.
+  private captureStaleForImages = false;
 
   constructor() {
     this.host = document.createElement('div');
@@ -163,6 +172,8 @@ export class DiscernedOverlay {
       this.themeSystemUnsub = null;
     }
     this.imagePermCleanup?.();
+    this.imagePermWatchCleanup?.();
+    this.imagePermGranted = null;
     hideArticleHighlight();
     this.removePreview();
   }
@@ -263,6 +274,66 @@ export class DiscernedOverlay {
     if (this.view === 'main') {
       await this.refreshCapture();
     }
+
+    this.watchImagePermission();
+  }
+
+  /**
+   * Re-run a capture that was taken before the image grant. Safe to call on every
+   * return to main: it is a no-op unless the watcher actually saw the grant land.
+   */
+  private consumeStaleImageCapture(): boolean {
+    if (!this.captureStaleForImages) return false;
+    this.captureStaleForImages = false;
+    void this.refreshCapture();
+    return true;
+  }
+
+  /**
+   * Re-capture when the image permission is granted while the overlay is open.
+   * The capture ran on open, i.e. BEFORE the grant, so its images are still
+   * hotlinked — without this the very next Clip silently ignores the permission
+   * the user just gave, and only reopening the overlay picks it up.
+   *
+   * Bound for the overlay's whole lifetime rather than inside the Settings card:
+   * the grant can also be made from chrome://extensions, and leaving the drawer
+   * tears the card's own listeners down. The grant happens on another tab, so
+   * visibilitychange covers the tab switch back and focus covers same-tab returns.
+   */
+  private watchImagePermission(): void {
+    const check = async (): Promise<void> => {
+      if (document.hidden) return;
+      let granted: boolean;
+      try {
+        const res = await chrome.runtime.sendMessage({ type: 'GET_IMAGE_PERMISSION' });
+        granted = !!(res?.data as { granted?: boolean } | undefined)?.granted;
+      } catch {
+        return; // Background unreachable — keep the last known state.
+      }
+      const wasKnown = this.imagePermGranted !== null;
+      const justGranted = granted && this.imagePermGranted === false;
+      this.imagePermGranted = granted;
+      // Only re-capture on a real ungranted→granted edge, and never on the first
+      // reading (that one just records the baseline).
+      if (!wasKnown || !justGranted) return;
+      // The grant is almost always given from the Settings drawer, so the view is
+      // 'settings' right now and re-capturing would be invisible. Mark it instead
+      // and let the return to main run it — the capture is only ever consumed there.
+      this.captureStaleForImages = true;
+      if (this.view === 'main') this.consumeStaleImageCapture();
+    };
+
+    this.imagePermWatchCleanup?.();
+    const onReturn = () => { void check(); };
+    window.addEventListener('focus', onReturn);
+    document.addEventListener('visibilitychange', onReturn);
+    this.imagePermWatchCleanup = () => {
+      window.removeEventListener('focus', onReturn);
+      document.removeEventListener('visibilitychange', onReturn);
+      this.imagePermWatchCleanup = null;
+    };
+
+    void check(); // Establish the baseline.
   }
 
   hide() {
@@ -549,7 +620,9 @@ ${themeVarsBlock(this.effectiveTheme)}
       this.generatedNpub = null;
       this.view = this.identityBackTarget;
       this.render();
-      if (this.view === 'main' && !this.capture) void this.refreshCapture();
+      if (this.view === 'main' && !this.consumeStaleImageCapture() && !this.capture) {
+        void this.refreshCapture();
+      }
     });
     this.shadow.getElementById('choice-signin')?.addEventListener('click', () => {
       void chrome.runtime.sendMessage({ type: 'OPEN_HOME', autoSignin: true });
@@ -949,9 +1022,11 @@ ${themeVarsBlock(this.effectiveTheme)}
       } catch {
         return; // Background unreachable — leave the current copy rather than lie.
       }
+      // Both strings name clips specifically: the grant never affects what you
+      // publish (see CLAUDE.md → inlining is for clips only).
       desc.textContent = granted
-        ? 'Images are being stored inside your clips, so they stay readable even if the original page changes or disappears.'
-        : 'Clips currently link to images on the original site, so they can break if that page changes or disappears. To allow storing images inside the clips, visit Discerned’s permissions page.';
+        ? 'Images are being stored inside your clips, so they stay readable even if the original page changes or disappears. Anything you publish still links to images where they already live.'
+        : 'Clips currently link to images on the original site, so they can break if that page changes or disappears. To allow storing images inside the clips, visit Discerned’s permissions page. This affects your private clips only.';
       btn.hidden = granted;
     };
 
@@ -1078,6 +1153,17 @@ ${themeVarsBlock(this.effectiveTheme)}
       `;
     }
 
+    // Relays only matter for casting, which needs an identity — a guest has
+    // nothing to publish to, so the list is noise (and "Manage relays" would send
+    // them to the web app to edit a set they can't use).
+    const relayCard = this.isConnected() ? `
+          <div class="settings-card">
+            <div class="card-label">Relays</div>
+            <div class="relay-readout" id="relay-readout">Loading…</div>
+            <button class="link-btn" id="settings-manage-relays">Manage relays</button>
+          </div>
+    ` : '';
+
     // Dev-only relay toggle. Hidden unless Settings was opened with Alt held
     // (see the #open-settings handler). Dev/test builds keep it always-on so the e2e
     // specs that flip the relay mode don't have to synthesise a modifier click.
@@ -1116,7 +1202,7 @@ ${themeVarsBlock(this.effectiveTheme)}
             <div class="card-label">Images</div>
             <div class="perm-desc" id="image-perm-desc">
               Clips currently link to images on the original site, so they can break
-              if that page changes or disappears. To allow storing images inside the clips, visit Discerned's permissions page.
+              if that page changes or disappears. To allow storing images inside the clips, visit Discerned's permissions page. This affects your private clips only.
             </div>
             <button class="btn btn-secondary" id="grant-image-perm" type="button">Open permissions page &rarr;</button>
             <div class="perm-result" id="image-perm-result"></div>
@@ -1129,11 +1215,7 @@ ${themeVarsBlock(this.effectiveTheme)}
               <button class="chip${this.themePref === 'light' ? ' active' : ''}" data-theme="light" type="button">☀️ Light</button>
             </div>
           </div>
-          <div class="settings-card">
-            <div class="card-label">Relays</div>
-            <div class="relay-readout" id="relay-readout">Loading…</div>
-            <button class="link-btn" id="settings-manage-relays">Manage relays</button>
-          </div>
+          ${relayCard}
           ${relayDevCard}
           <div class="settings-card">
             <button class="link-btn" id="settings-feedback">Send feedback or report a bug</button>
@@ -1148,12 +1230,14 @@ ${themeVarsBlock(this.effectiveTheme)}
     this.shadow.getElementById('close')?.addEventListener('click', () => {
       this.view = 'main';
       this.render();
-      if (!this.capture) void this.refreshCapture();
+      // consumeStale… first: a capture taken before the image grant is stale even
+      // though it exists, so the !this.capture guard alone would keep it.
+      if (!this.consumeStaleImageCapture() && !this.capture) void this.refreshCapture();
     });
     this.shadow.getElementById('settings-back')?.addEventListener('click', () => {
       this.view = 'main';
       this.render();
-      if (!this.capture) void this.refreshCapture();
+      if (!this.consumeStaleImageCapture() && !this.capture) void this.refreshCapture();
     });
 
     // Optional <all_urls> grant — lets the background fetch image bytes so clips
