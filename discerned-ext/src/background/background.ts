@@ -646,13 +646,15 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
 
     case 'GET_IMAGE_PERMISSION':
       // The overlay runs in a content script, where chrome.permissions is not
-      // exposed — it asks here instead.
-      return { success: true, data: { granted: await canFetchCrossOrigin() } };
+      // exposed — it asks here instead. Deliberately bypasses the capture-path
+      // cache: onAdded can be missed while this worker is asleep, and a stale
+      // `false` leaves the Settings card offering a grant the user already gave.
+      return { success: true, data: { granted: await refreshCrossOriginAccess() } };
 
     case 'OPEN_PERMISSIONS_PAGE':
       // The permission prompt must be triggered from an extension page, so the
       // overlay sends the user to the permissions page rather than asking inline.
-      await chrome.runtime.openOptionsPage();
+      await openPermissionsPage();
       return { success: true };
 
     case 'GET_AUTH_STATE':
@@ -1160,14 +1162,43 @@ async function canFetchCrossOrigin(): Promise<boolean> {
   if (hasBroadHostAccess !== null) return hasBroadHostAccess;
   try {
     hasBroadHostAccess = await chrome.permissions.contains({ origins: ['<all_urls>'] });
-  } catch {
+  } catch (err) {
+    log(LL.WARN, 'permissions.contains threw', err);
     hasBroadHostAccess = false;
   }
+  log(LL.DEBUG, 'canFetchCrossOrigin ->', hasBroadHostAccess);
   return hasBroadHostAccess;
 }
 
 chrome.permissions.onAdded.addListener(() => { hasBroadHostAccess = null; });
 chrome.permissions.onRemoved.addListener(() => { hasBroadHostAccess = null; });
+
+// Re-query and refresh the cache. The events above are not guaranteed: the grant
+// happens on the permissions page, and if this worker is asleep at that moment
+// Chrome does not wake it to deliver onAdded — the cache then stays stale for the
+// life of the next worker that reads it. UI that asks "is it granted?" uses this.
+async function refreshCrossOriginAccess(): Promise<boolean> {
+  hasBroadHostAccess = null;
+  return canFetchCrossOrigin();
+}
+
+// `chrome.runtime.openOptionsPage()` REUSES an existing options tab instead of
+// creating one, so a second click merely focuses a tab the user may have left in
+// another window — indistinguishable from a dead button. Find and reload it so
+// the page re-runs its `permissions.contains` check, else open a fresh tab.
+async function openPermissionsPage(): Promise<void> {
+  const url = chrome.runtime.getURL('src/permissions/permissions.html');
+  const [existing] = await chrome.tabs.query({ url });
+  if (existing?.id !== undefined) {
+    await chrome.tabs.reload(existing.id);
+    await chrome.tabs.update(existing.id, { active: true });
+    if (existing.windowId !== undefined) {
+      await chrome.windows.update(existing.windowId, { focused: true });
+    }
+    return;
+  }
+  await chrome.tabs.create({ url });
+}
 
 async function handleInlineImage(src: string): Promise<BackgroundResponse> {
   try {

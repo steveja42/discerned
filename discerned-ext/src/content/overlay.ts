@@ -920,15 +920,15 @@ ${themeVarsBlock(this.effectiveTheme)}
   // ── Settings drawer (auth status, stats, export) ───────────────────────────
 
   /**
-   * Wire the Settings → Images card. The permission is the source of truth, so
-   * the card is hidden outright once it's held. request() must be called
-   * SYNCHRONOUSLY inside the click handler — an await before it drops the user
-   * gesture and Chrome rejects the request.
+   * Wire the Settings → Images card. The card is always shown — it reports which
+   * of the two image behaviours is in effect. Only the grant button is conditional,
+   * since there is nothing to ask for once the permission is held.
    */
   private async initImagePermissionCard(): Promise<void> {
     const card = this.shadow.getElementById('image-perm-card');
     const btn = this.shadow.getElementById('grant-image-perm');
-    if (!card || !btn) return;
+    const desc = this.shadow.getElementById('image-perm-desc');
+    if (!card || !btn || !desc) return;
 
     // chrome.permissions is NOT exposed to content scripts, and Chrome requires
     // the prompt to be triggered by a gesture on an EXTENSION page — so this
@@ -939,11 +939,15 @@ ${themeVarsBlock(this.effectiveTheme)}
       const res = await chrome.runtime.sendMessage({ type: 'GET_IMAGE_PERMISSION' });
       granted = !!(res?.data as { granted?: boolean } | undefined)?.granted;
     } catch {
-      return; // Background unreachable — leave the card hidden.
+      return; // Background unreachable — leave the card's default copy in place.
     }
-    if (granted) return; // Nothing to offer.
 
-    card.hidden = false;
+    if (granted) {
+      desc.textContent = 'Images are being stored inside your clips, so they stay readable even if the original page changes or disappears.';
+      btn.hidden = true;
+      return;
+    }
+
     btn.addEventListener('click', () => {
       void chrome.runtime.sendMessage({ type: 'OPEN_PERMISSIONS_PAGE' });
     });
@@ -1086,9 +1090,9 @@ ${themeVarsBlock(this.effectiveTheme)}
             <button class="usage-row usage-row-link" id="open-library-btn"><span class="usage-label"><span class="status-icon">${DiscernedOverlay.ICON_CLIP}</span>Local clips</span><span class="usage-value" id="clip-count">—</span></button>
             <div class="usage-row"><span class="usage-label"><span class="status-icon">${DiscernedOverlay.ICON_CAST}</span>Public casts</span><span class="usage-value" id="cast-count">—</span></div>
           </div>
-          <div class="settings-card" id="image-perm-card" hidden>
+          <div class="settings-card" id="image-perm-card">
             <div class="card-label">Images</div>
-            <div class="perm-desc">
+            <div class="perm-desc" id="image-perm-desc">
               Clips currently link to images on the original site, so they can break
               if that page changes or disappears. To allow storing images inside the clips, visit Discerned's permissions page.
             </div>
@@ -1131,9 +1135,9 @@ ${themeVarsBlock(this.effectiveTheme)}
     });
 
     // Optional <all_urls> grant — lets the background fetch image bytes so clips
-    // carry their own copy instead of hotlinking. Shown only when NOT already
-    // granted; the check is async, so the card renders hidden and is revealed
-    // here (same pattern as loadOwnProfile patching the name line).
+    // carry their own copy instead of hotlinking. The card always shows; the check
+    // is async, so it renders in the ungranted state and is patched to the granted
+    // one here (same pattern as loadOwnProfile patching the name line).
     void this.initImagePermissionCard();
 
     this.shadow.getElementById('settings-connect')?.addEventListener('click', () => {
@@ -2706,6 +2710,10 @@ ${themeVarsBlock(this.effectiveTheme)}
       .link-btn:hover { color: var(--p-accent); }
 
       /* Buttons */
+      /* The UA's [hidden] rule is a bare attribute selector, so any class rule
+         setting display outranks it — .btn's display:flex made el.hidden a no-op.
+         Restore the intent for every element in this shadow root. */
+      [hidden] { display: none !important; }
       .btn {
         padding: 14px; border: none;
         font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s;
