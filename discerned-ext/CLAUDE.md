@@ -221,11 +221,16 @@ specs** — expect the same one-line fix if they report "capture timeout".
 `activateExtensionOnTab` polls a `__DISCERNED_TEST_PING` until the listener
 answers, so it is safe for specs that walk one page through many fixtures.
 
-**Known-failing baseline (pre-existing, not caused by this work):**
-`goodreads-book-fixture-visual` renders the clip's date as *today* but its
-baseline was committed 2026-07-20, so it has drifted ever since. Verified by
-stashing all changes and reproducing on clean `main`. Regenerate with a stubbed
-date if you want it green.
+**Fixture baselines pin the capture date.** `runFixtureVisual` overwrites
+`capture.timestamp` with a fixed instant (`FIXED_CAPTURE_TS`) before pushing the
+clip through the bridge. `baseFields()` stamps `Date.now()` and the web app
+renders it ("August 30, 2026"), so any baseline that includes the app's own
+chrome — i.e. every `pageClipScreenshot: true` spec — otherwise rots the day
+after it is committed. `goodreads-book-fixture-visual` is the only such spec
+today, and it had been failing continuously since its baseline was taken on
+2026-07-20 for exactly this reason. Only the RENDERED date changes; nothing in
+the capture pipeline is affected, and the other baselines are untouched because
+they screenshot `.clip-body`, which never contained the date.
 
 ## Web-bridge protocol (`src/content/web-bridge.ts`)
 

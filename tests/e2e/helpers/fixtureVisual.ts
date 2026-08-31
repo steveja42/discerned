@@ -18,6 +18,11 @@ import { launchWithExtension } from './launchExtension';
 import { activateExtensionOnTab } from './activateExtension';
 import { assertClipBodyHealth, type ClipHealthOptions } from './clipBodyHealth';
 
+// 2026-01-15T12:00:00Z — an arbitrary fixed instant. Fixture baselines must
+// not depend on the day they were generated (see the note at the injection
+// site below).
+const FIXED_CAPTURE_TS = Date.UTC(2026, 0, 15, 12, 0, 0);
+
 export interface FixtureVisualOptions {
   /** Slug used for the fixture file (e.g. "wikipedia") AND the baseline name. */
   site: string;
@@ -159,6 +164,16 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
 
   const libPage = await ctx.newPage();
   await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
+  // Pin the capture date. `baseFields()` stamps Date.now() and the web app
+  // renders it ("August 30, 2026"), so any baseline that includes the app's
+  // chrome — every `pageClipScreenshot: true` spec — silently rots one day
+  // after it is committed. Goodreads drifted this way from 2026-07-20 onward
+  // and had been failing ever since for no other reason. Fixtures are
+  // deterministic offline snapshots, so a fixed timestamp is the honest value;
+  // only the RENDERED date changes, nothing in the capture pipeline.
+  // Applied here rather than inside the callback because page.evaluate runs in
+  // the browser, where a Node-side constant is not in scope.
+  const pinnedCap = { ...cap, timestamp: FIXED_CAPTURE_TS };
   await libPage.evaluate((capture) => {
     const clip = {
       capture,
@@ -173,7 +188,7 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
       { type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] },
       window.location.origin,
     );
-  }, cap);
+  }, pinnedCap);
 
   const row = libPage.locator('article.clip').first();
   await row.waitFor({ state: 'visible', timeout: 10_000 });
