@@ -49,6 +49,9 @@
     .status { font-size: 0.84rem; color: var(--p-ink-3); line-height: 1.5; }
     .status.ok { color: var(--p-accent-ink); }
     .revoke-hint { font-size: 0.8rem; color: var(--p-ink-4); line-height: 1.5; }
+    /* Footnote aside — same tier as .revoke-hint so the asterisked caveat reads
+       as secondary to the card's main explanation. */
+    .perm-note { font-size: 0.8rem; color: var(--p-ink-4); line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -59,13 +62,13 @@
     <div class="card">
       <h2>Save images with your clips</h2>
       <p>
-        Discerned can store a copy of each image inside the clip, so it still looks
+        Discerned can store a copy of each image inside the clip*, so it still looks
         right if the original page changes or disappears. Without this, clips link
         back to the pictures on the original site, which can break over time.
       </p>
-      <p>
-        This affects your private clips only. Anything you publish always links to
-        images where they already live — stored copies are far too large to publish.
+      <p class="perm-note">
+        * Your private clips only. Anything you publish always links to images where
+        they already live — stored copies are far too large to publish.
       </p>
       <button class="btn" id="btn-perm" type="button">Save images in my clips</button>
       <p class="status" id="perm-status" hidden></p>

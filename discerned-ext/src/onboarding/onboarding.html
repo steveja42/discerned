@@ -145,6 +145,9 @@
     }
     .perm-title { font-size: 1rem; font-weight: 600; color: var(--p-ink); }
     .perm-text { font-size: 0.86rem; color: var(--p-ink-3); line-height: 1.55; }
+    /* Footnote aside — dimmer + smaller than .perm-text so the asterisked caveat
+       reads as secondary to the main explanation, not as a second paragraph. */
+    .perm-note { font-size: 0.8rem; color: var(--p-ink-4); line-height: 1.5; }
 
     /* Title row with a leading glyph — the block header shape shared by the
        Nostr and (image-permission) sections. */
@@ -260,13 +263,13 @@
         <h2 class="perm-title">Save images with your clips</h2>
       </div>
       <p class="perm-text">
-        Discerned can store a copy of each image inside the clip, so it still looks
+        Discerned can store a copy of each image inside the clip*, so it still looks
         right if the original page changes or disappears. Without this, clips link
         back to the pictures on the original site, which can break over time.
       </p>
-      <p class="perm-text">
-        This affects your private clips only. Anything you publish always links to
-        images where they already live — stored copies are far too large to publish.
+      <p class="perm-note">
+        * Your private clips only. Anything you publish always links to images where
+        they already live — stored copies are far too large to publish.
       </p>
       <button class="btn-perm" id="btn-perm" type="button">Save images in my clips</button>
       <p class="perm-status" id="perm-status" hidden></p>

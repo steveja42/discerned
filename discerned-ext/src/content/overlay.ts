@@ -1022,11 +1022,11 @@ ${themeVarsBlock(this.effectiveTheme)}
       } catch {
         return; // Background unreachable — leave the current copy rather than lie.
       }
-      // Both strings name clips specifically: the grant never affects what you
-      // publish (see CLAUDE.md → inlining is for clips only).
+      // Both strings carry the asterisk; the #image-perm-note footnote is static
+      // because the caveat holds either way (see CLAUDE.md → clips only).
       desc.textContent = granted
-        ? 'Images are being stored inside your clips, so they stay readable even if the original page changes or disappears. Anything you publish still links to images where they already live.'
-        : 'Clips currently link to images on the original site, so they can break if that page changes or disappears. To allow storing images inside the clips, visit Discerned’s permissions page. This affects your private clips only.';
+        ? 'Images are being stored inside your clips*, so they stay readable even if the original page changes or disappears.'
+        : 'Clips currently link to images on the original site*, so they can break if that page changes or disappears. To allow storing images inside the clips, visit Discerned’s permissions page.';
       btn.hidden = granted;
     };
 
@@ -1201,8 +1201,11 @@ ${themeVarsBlock(this.effectiveTheme)}
           <div class="settings-card" id="image-perm-card">
             <div class="card-label">Images</div>
             <div class="perm-desc" id="image-perm-desc">
-              Clips currently link to images on the original site, so they can break
-              if that page changes or disappears. To allow storing images inside the clips, visit Discerned's permissions page. This affects your private clips only.
+              Clips currently link to images on the original site*, so they can break
+              if that page changes or disappears. To allow storing images inside the clips, visit Discerned's permissions page.
+            </div>
+            <div class="perm-note" id="image-perm-note">
+              * Your private clips only. Anything you publish always links to images where they already live.
             </div>
             <button class="btn btn-secondary" id="grant-image-perm" type="button">Open permissions page &rarr;</button>
             <div class="perm-result" id="image-perm-result"></div>
@@ -2919,7 +2922,10 @@ ${themeVarsBlock(this.effectiveTheme)}
       .settings-card.warning { background: var(--p-warn-bg); border-color: var(--p-warn-border); }
       .card-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
       .card-label { font-size: 11px; color: var(--p-ink-3); text-transform: uppercase; letter-spacing: 0.5px; font-family: var(--p-mono); }
-      .perm-desc { font-size: 12px; color: var(--p-ink-3); line-height: 1.5; margin: 6px 0 10px; }
+      .perm-desc { font-size: 12px; color: var(--p-ink-3); line-height: 1.5; margin: 6px 0 8px; }
+      /* Footnote aside — dimmer + smaller than .perm-desc so the asterisked caveat
+         reads as secondary to the main explanation. */
+      .perm-note { font-size: 11px; color: var(--p-ink-4); line-height: 1.45; margin: 0 0 10px; }
       .perm-result { font-size: 11px; color: var(--p-ink-3); line-height: 1.45; margin-top: 8px; }
       .card-title { font-size: 13px; font-weight: 600; color: var(--p-warn-ink); }
       .card-desc  { font-size: 12px; color: var(--p-ink-2); line-height: 1.5; }
