@@ -25,6 +25,7 @@ import { test, expect } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
+import { activateExtensionOnPage } from './helpers/activateExtension';
 import { TAGGER_CANARY_TARGETS, type TaggerAnchorReport } from './helpers/taggerCanaryTargets';
 
 test.describe.configure({ mode: 'serial' });
@@ -55,8 +56,13 @@ test('tagger-canary: every tagger anchor still matches the live DOM', async () =
           // Give the SPA time to paint the content the tagger anchors depend on.
           await page.waitForSelector(target.renderWait, { timeout: 30_000 });
           await page.waitForTimeout(2_000);
+          // The anchor bridge lives in content.ts, which ships with no broad host
+          // permission — it is injected per tab on the activation gesture. Without
+          // this the postMessage below has no listener and every target dies with
+          // "anchor check timeout".
+          await activateExtensionOnPage(page);
         } catch (navErr) {
-          const msg = `SKIP  ${label.padEnd(14)} — page did not load/render (${(navErr as Error).message.split('\n')[0]})`;
+          const msg = `SKIP  ${label.padEnd(14)} — page did not load/render/activate (${(navErr as Error).message.split('\n')[0]})`;
           skips.push(msg);
           summary.push(msg);
           continue;

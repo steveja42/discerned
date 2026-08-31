@@ -64,10 +64,11 @@ jobs:
       - name: Run tagger canary
         env:
           CANARY: '1'
-        # The canary does not need the web app or fixture server — override the
-        # config's webServer isn't possible per-project, so we let them start but
-        # the canary never touches them. A page-load skip on a walled site is not
-        # a failure; only a dead selector fails the job.
+        # CANARY=1 also switches the config's `webServer` list to empty — the
+        # canary drives live sites only, and booting the Next dev + fixture
+        # servers here failed the job during setup before any selector ran.
+        # A page-load skip on a walled site is not a failure; only a dead
+        # selector fails the job.
         run: pnpm exec playwright test -c tests/e2e/playwright.config.ts --project=tagger-canary
 
       # Put the report in the run summary so a failure email is actionable

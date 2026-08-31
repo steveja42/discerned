@@ -4,6 +4,13 @@ import { resolve } from 'node:path';
 const FIXTURE_PORT = 4173;
 const WEB_PORT = 3000;
 
+// The tagger canary drives LIVE public sites through its own browser context and
+// touches neither the web app nor the fixture server. Playwright still starts
+// every `webServer` entry before any project runs, so on CI (where
+// reuseExistingServer is false) a cold Next dev boot or fixture-server timeout
+// failed the whole job during setup — before a single selector was checked.
+const NEEDS_SERVERS = !process.env.CANARY;
+
 export default defineConfig({
   testDir: '.',
   fullyParallel: false,
@@ -15,25 +22,27 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  webServer: [
-    {
-      command: `pnpm --filter=./discerned-web dev --port ${WEB_PORT}`,
-      cwd: resolve(__dirname, '..', '..'),
-      url: `http://localhost:${WEB_PORT}`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    },
-    {
-      command: `tsx ${resolve(__dirname, 'fixture-server.ts')}`,
-      cwd: resolve(__dirname, '..', '..'),
-      url: `http://127.0.0.1:${FIXTURE_PORT}/_health`,
-      reuseExistingServer: !process.env.CI,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    },
-  ],
+  webServer: NEEDS_SERVERS
+    ? [
+        {
+          command: `pnpm --filter=./discerned-web dev --port ${WEB_PORT}`,
+          cwd: resolve(__dirname, '..', '..'),
+          url: `http://localhost:${WEB_PORT}`,
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+          stdout: 'pipe',
+          stderr: 'pipe',
+        },
+        {
+          command: `tsx ${resolve(__dirname, 'fixture-server.ts')}`,
+          cwd: resolve(__dirname, '..', '..'),
+          url: `http://127.0.0.1:${FIXTURE_PORT}/_health`,
+          reuseExistingServer: !process.env.CI,
+          stdout: 'pipe',
+          stderr: 'pipe',
+        },
+      ]
+    : [],
   projects: [
     {
       name: 'extension',
