@@ -27,8 +27,13 @@ const CONSOLE_METHOD: Record<AppLogLevel, ConsoleMethod> = {
 /**
  * Minimum numeric level that will be emitted. Raise to suppress verbose output.
  * LL.TRACE=0, DEBUG=1, NORMAL=2, WARN=3, ERROR=4
+ *
+ * Derived from NODE_ENV, not hand-set, so a production build cannot ship the
+ * verbose DEBUG floor — same guarantee the extension's REMOTE_LOGGING gets from
+ * __DISCERNED_DEV_BUILD__. Next inlines process.env.NODE_ENV at build time.
  */
-let activeLogLevel: AppLogLevel = LL.DEBUG;
+let activeLogLevel: AppLogLevel =
+  process.env.NODE_ENV === 'production' ? LL.WARN : LL.DEBUG;
 
 export function setLogLevel(level: AppLogLevel): void {
   activeLogLevel = level;
