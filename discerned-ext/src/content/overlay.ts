@@ -774,15 +774,18 @@ ${themeVarsBlock(this.effectiveTheme)}
       void this.refreshCapture();
     });
 
-    // NIP-07 detected but no pubkey — kick off web-app sign-in. Dismiss the
-    // overlay so the user can complete sign-in in the discerned tab; the
-    // storage listener will refresh the cached auth state for next activation.
+    // NIP-07 detected but no pubkey — kick off web-app sign-in. Stay on this
+    // panel: sign-in happens in the discerned tab and can fail there (locked
+    // wallet, no key set up), so switching to main would leave "not connected"
+    // with nothing explaining why. The storage listener refreshes auth state.
     this.shadow.getElementById('btn-signin-nip07')?.addEventListener('click', () => {
       void chrome.runtime.sendMessage({ type: 'OPEN_HOME', autoSignin: true });
       void chrome.runtime.sendMessage({ type: 'DISMISS_OVERLAY_NUDGE' });
-      this.view = 'main';
-      this.render();
-      void this.refreshCapture();
+      this.setIdentityStatus(
+        this.shadow.getElementById('nip07-status'),
+        'Finish signing in on the Discerned tab. If nothing happens there, your signing extension may be locked or have no key set up.',
+        'spin',
+      );
     });
 
     this.shadow.getElementById('btn-connect-nip46')?.addEventListener('click', async () => {

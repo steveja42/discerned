@@ -327,6 +327,23 @@ a { color: inherit; }
 .author-ctx-menu-item:hover:not(:disabled) { background: var(--paper-3); }
 .author-ctx-menu-item:disabled { color: var(--ink-3); cursor: not-allowed; }
 
+/* Shown when the extension's ?signin=1 auto-sign-in failed (wallet locked or
+   with no key set up) — otherwise the tab just sits there looking unconnected. */
+.signin-error-banner {
+  display: flex; align-items: center; gap: 12px;
+  max-width: 900px;
+  margin: 12px auto 0;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid oklch(0.50 0.14 25);
+  border-radius: 8px;
+  background: var(--paper-2);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.signin-error-banner span { flex: 1; }
+.signin-error-banner .btn { flex: none; }
+
 .search {
   display: flex; align-items: center; gap: 10px;
   background: var(--paper-2);
@@ -1266,6 +1283,43 @@ a { color: inherit; }
 .clip-body .tweet-photo-grid-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 .clip-body .tweet-photo-grid-3 .tweet-photo:nth-child(1) { grid-row: 1 / span 2; }
 .clip-body .tweet-photo-grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+/* Facebook photo posts: a variable-count album (often 5+) of mostly PORTRAIT
+   photos, unlike X's fixed 1-4 landscape layouts.
+   Three separate things each caused the same black-letterbox artefact, so all
+   three fixes are needed together:
+     1. the X grid's `aspect-ratio: 16/9` squeezed portraits into a wide box;
+     2. a grid stretches cells to the row height, so `object-fit: contain`
+        padded the shorter ones — hence `align-items: start`;
+     3. the generic `.clip-body img` rule above sets
+        `max-height: 420px !important; object-fit: contain !important`, which
+        outranks any non-!important rule here and letterboxed every photo
+        taller than 420px (these are 443x590). That is why the bars survived
+        the first two fixes, and why `max-height`/`object-fit` are forced. */
+.clip-body .tweet-photo-grid--album {
+  aspect-ratio: auto; grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr; align-items: stretch;
+}
+/* Uniform square tiles, cropped to fill — the layout Facebook itself uses for
+   an album. Letting each cell keep its own height instead left large white
+   gaps, because the bar-cropping upstream makes some photos much shorter than
+   their uncropped neighbours. */
+.clip-body .tweet-photo-grid--album .tweet-photo { aspect-ratio: 1 / 1; overflow: hidden; }
+.clip-body .tweet-photo-grid--album .tweet-photo img {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  display: block !important;
+  margin: 0 !important;
+}
+/* A lone photo is the subject, not a tile — show it whole. */
+.clip-body .tweet-photo-grid--album .tweet-photo:only-child {
+  aspect-ratio: auto; grid-column: 1 / -1;
+}
+.clip-body .tweet-photo-grid--album .tweet-photo:only-child img {
+  height: auto !important; max-height: 620px !important; object-fit: contain !important;
+}
 /* Cast-only photo gallery (rendered from imeta URLs; no tweet-card wrapper). */
 .clip-body .cast-photos { display: grid; gap: 4px; margin: 12px 0; border-radius: 12px; overflow: hidden; }
 .clip-body .cast-photos:has(img:nth-child(2)) { grid-template-columns: 1fr 1fr; }

@@ -20,7 +20,7 @@ import { useReadCasts } from '@/hooks/useReadCasts';
 
 export default function DiscernsClient() {
   const router = useRouter();
-  const { auth, signInPubkey, setNip07Connected } = useNostrAuth();
+  const { auth, signInPubkey, setNip07Connected, autoSigninError, clearAutoSigninError } = useNostrAuth();
   const { showPopover, dismiss: dismissPopover } = useFirstVisit();
   const { clips } = useCastFeed();
   const { extensionPresent } = useBridgeAuth();
@@ -57,6 +57,14 @@ export default function DiscernsClient() {
           onDismiss={dismissPopover}
           onLearnMore={handleLearnMore}
         />
+      )}
+
+      {autoSigninError && auth.status !== 'connected' && (
+        <div className="signin-error-banner" role="alert">
+          <span>{autoSigninError}</span>
+          <button className="btn" onClick={() => { clearAutoSigninError(); setSignInOpen(true); }}>Try again</button>
+          <button className="btn" onClick={clearAutoSigninError} aria-label="Dismiss">✕</button>
+        </div>
       )}
 
       <CastFeed

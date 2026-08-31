@@ -22,6 +22,10 @@ import { LL, log } from '@/lib/logger';
 interface NostrAuthValue {
   auth: AuthState;
   nip07Available: boolean;
+  // Set when the ?signin=1 auto-sign-in failed or timed out. Pages surface it so
+  // a wallet with no keys configured doesn't just silently do nothing.
+  autoSigninError: string | null;
+  clearAutoSigninError: () => void;
   signInNip07: () => Promise<void>;
   setNip07Connected: (pubkey: string) => void;
   signInPubkey: (pubkey: string) => void;
@@ -29,11 +33,16 @@ interface NostrAuthValue {
   setBridgeAuth: (pubkey: string | null) => void;
 }
 
+// A wallet with no keys set up (nos2x) or a locked one (Alby) never resolves
+// getPublicKey() — matches SignInModal's manual-path timeout.
+const NIP07_TIMEOUT_MS = 20_000;
+
 const NostrAuthContext = createContext<NostrAuthValue | null>(null);
 
 export function NostrAuthProvider({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<AuthState>({ status: 'guest', pubkey: null });
   const [nip07Available, setNip07Available] = useState(false);
+  const [autoSigninError, setAutoSigninError] = useState<string | null>(null);
 
   // MUST start as 'guest' above and restore from localStorage HERE, after the
   // first render — do not "optimise" this into a useState initialiser.
@@ -88,14 +97,31 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
       if (autoSigninRequested) {
         log(LL.DEBUG, '[useNostrAuth] ?signin=1 detected — auto-calling signInNip07', elapsed());
         signedIn = true;
+        // A wallet with no keys configured never resolves getPublicKey(), so a
+        // bare .catch() would leave the page silently stuck on "not connected".
+        // Time out and report, mirroring SignInModal's manual path.
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (settled || cancelled) return;
+          settled = true;
+          log(LL.WARN, '[useNostrAuth] auto-signin timed out', elapsed());
+          setAutoSigninError('No response from your signing extension. Make sure it is unlocked and has a key set up, then sign in again.');
+        }, NIP07_TIMEOUT_MS);
         nip07GetPubkey().then((pubkey) => {
-          if (cancelled) return;
+          if (cancelled || settled) return;
+          settled = true;
+          clearTimeout(timer);
           log(LL.NORMAL, '[auth] nip07 auto-signin pubkey:', npubEncode(pubkey).slice(0, 12));
           storePubkey(pubkey);
           setAuth({ status: 'connected', pubkey, source: 'nip07' });
           sendPubkeyToExtension(pubkey);
         }).catch((err: unknown) => {
-          log(LL.WARN, '[useNostrAuth] auto-signin failed:', err instanceof Error ? err.message : String(err));
+          if (cancelled || settled) return;
+          settled = true;
+          clearTimeout(timer);
+          const msg = err instanceof Error ? err.message : String(err);
+          log(LL.WARN, '[useNostrAuth] auto-signin failed:', msg);
+          setAutoSigninError(`Your signing extension could not sign you in: ${msg}. Check that it is unlocked and has a key set up.`);
         });
       }
     };
@@ -220,8 +246,10 @@ export function NostrAuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const clearAutoSigninError = useCallback(() => setAutoSigninError(null), []);
+
   return (
-    <NostrAuthContext.Provider value={{ auth, nip07Available, signInNip07, setNip07Connected, signInPubkey, signOut, setBridgeAuth }}>
+    <NostrAuthContext.Provider value={{ auth, nip07Available, autoSigninError, clearAutoSigninError, signInNip07, setNip07Connected, signInPubkey, signOut, setBridgeAuth }}>
       {children}
     </NostrAuthContext.Provider>
   );
