@@ -16,6 +16,11 @@
   --signal: #d99814;
   --category: oklch(0.50 0.08 270);
   --neutral-faded: oklch(0.78 0.01 80 / 0.55);
+  /* Error/danger surface. Saturated enough to read as foreign against the warm
+     paper — a --paper-2 notice disappears into the page chrome. */
+  --danger: oklch(0.52 0.17 25);
+  --danger-ink: oklch(0.38 0.13 25);
+  --danger-soft: oklch(0.94 0.045 30);
   --shadow-page: 0 1px 0 rgba(26,23,20,0.04), 0 24px 48px -24px rgba(26,23,20,0.18);
   --shadow-pop: 0 1px 0 rgba(26,23,20,0.04), 0 18px 36px -12px rgba(26,23,20,0.22);
   --serif: 'Newsreader', 'Iowan Old Style', Georgia, serif;
@@ -32,6 +37,7 @@ body.style-studio {
   --accent: #2563eb; --accent-soft: rgba(37,99,235,0.08); --accent-ink: #1d4ed8;
   --signal: #d99814; --category: #7c3aed;
   --neutral-faded: #c0c0c0;
+  --danger: #dc2626; --danger-ink: #991b1b; --danger-soft: #fef2f2;
   --serif: 'Plus Jakarta Sans', system-ui, sans-serif;
   --sans:  'Plus Jakarta Sans', system-ui, sans-serif;
   --mono:  'JetBrains Mono', ui-monospace, monospace;
@@ -332,17 +338,85 @@ a { color: inherit; }
 .signin-error-banner {
   display: flex; align-items: center; gap: 12px;
   max-width: 900px;
-  margin: 12px auto 0;
-  padding: 10px 14px;
-  border: 1px solid var(--rule);
-  border-left: 3px solid oklch(0.50 0.14 25);
+  margin: 14px auto 0;
+  padding: 12px 14px;
+  border: 1px solid var(--danger);
+  border-left: 4px solid var(--danger);
   border-radius: 8px;
-  background: var(--paper-2);
-  font-size: 13px;
-  color: var(--ink-2);
+  background: var(--danger-soft);
+  box-shadow: var(--shadow-pop);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--danger-ink);
 }
-.signin-error-banner span { flex: 1; }
-.signin-error-banner .btn { flex: none; }
+.signin-error-banner .signin-error-icon {
+  flex: none;
+  display: grid; place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-weight: 700; font-size: 14px;
+  font-family: var(--sans);
+}
+.signin-error-banner .signin-error-text { flex: 1; }
+.signin-error-banner .signin-error-text strong {
+  display: block;
+  font-weight: 600;
+  color: var(--danger-ink);
+  margin-bottom: 2px;
+}
+.signin-error-retry {
+  flex: none;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  background: var(--danger);
+  color: #fff;
+  padding: 6px 12px;
+  font-family: var(--sans); font-size: 12.5px; font-weight: 600;
+  cursor: pointer;
+}
+.signin-error-retry:hover { background: var(--danger-ink); border-color: var(--danger-ink); }
+.signin-error-dismiss {
+  flex: none;
+  border: 0; background: none;
+  color: var(--danger-ink);
+  padding: 4px 6px;
+  font-size: 14px; line-height: 1;
+  cursor: pointer; opacity: 0.7;
+}
+.signin-error-dismiss:hover { opacity: 1; }
+
+/* In-modal / in-form error. Same danger palette as .signin-error-banner but
+   scaled for a dialog. A bare coloured <p> reads as ordinary body copy against
+   the warm paper, so errors get a tinted box and a badge instead.
+   NOT for field-level validation hints — see .relay-error. */
+.error-note {
+  display: flex; align-items: flex-start; gap: 9px;
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger);
+  border-left: 4px solid var(--danger);
+  border-radius: 7px;
+  background: var(--danger-soft);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--danger-ink);
+  text-align: left;
+}
+.error-note::before {
+  content: "!";
+  flex: none;
+  display: grid; place-items: center;
+  width: 18px; height: 18px;
+  margin-top: 0.5px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-weight: 700; font-size: 12px;
+}
+.error-note a { color: var(--danger-ink); text-decoration: underline; text-underline-offset: 2px; }
 
 .search {
   display: flex; align-items: center; gap: 10px;
@@ -2496,7 +2570,9 @@ a { color: inherit; }
 }
 .relay-add button:hover:not(:disabled) { background: var(--paper-3); border-color: var(--ink-4); }
 .relay-add button:disabled { opacity: 0.5; cursor: default; }
-.relay-error { font-size: 11.5px; color: var(--flag, #c2410c); margin: 8px 0 0; }
+/* Field-level validation hint under an input ("not a valid relay URL"). Stays a
+   plain coloured line — a boxed .error-note would overwhelm a single bad field. */
+.relay-error { font-size: 11.5px; color: var(--danger-ink); margin: 8px 0 0; }
 
 /* Sovereignty footer strip */
 .sov-strip {

@@ -140,11 +140,7 @@ export default function SignInModal({ onClose, onSignedIn, onNip07SignedIn }: Si
               <span className="arrow">{nip07Busy ? '…' : '→'}</span>
             </button>
 
-            {error && (
-              <p style={{ color: 'oklch(0.50 0.14 25)', fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.02em', margin: '4px 0 12px' }}>
-                {error}
-              </p>
-            )}
+            {error && <p className="error-note" role="alert">{error}</p>}
 
             <button className="signin-method" onClick={() => { setError(''); setStep('menu'); }}>
               <span className="glyph-mini" style={{ background: 'var(--paper-3)', color: 'var(--ink)' }}>⇄</span>
@@ -184,11 +180,7 @@ export default function SignInModal({ onClose, onSignedIn, onNip07SignedIn }: Si
               <span className="arrow">{nip07Busy ? '…' : '→'}</span>
             </button>
 
-            {error && (
-              <p style={{ color: 'oklch(0.50 0.14 25)', fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.02em', margin: '4px 0 12px' }}>
-                {error}
-              </p>
-            )}
+            {error && <p className="error-note" role="alert">{error}</p>}
 
             <button className="signin-method" onClick={() => setStep('nsec')}>
               <span className="glyph-mini" style={{ background: 'var(--paper-3)', color: 'var(--ink)' }}>K</span>
@@ -230,7 +222,7 @@ export default function SignInModal({ onClose, onSignedIn, onNip07SignedIn }: Si
               style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--rule)', borderRadius: 7, background: 'var(--paper-2)', fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--ink)', outline: 'none', marginBottom: 12 }}
               autoComplete="off"
             />
-            {error && <p style={{ color: 'oklch(0.50 0.14 25)', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 12 }}>{error}</p>}
+            {error && <p className="error-note" role="alert">{error}</p>}
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn" onClick={() => setStep('menu')}>← Back</button>
               <button className="btn primary" onClick={handleNsecSubmit}>Continue</button>
@@ -245,7 +237,7 @@ export default function SignInModal({ onClose, onSignedIn, onNip07SignedIn }: Si
             <div style={{ background: 'var(--paper-3)', padding: '12px 14px', borderRadius: 8, fontFamily: 'var(--mono)', fontSize: 11, wordBreak: 'break-all', marginBottom: 16, color: 'var(--ink-2)', letterSpacing: '0.02em' }}>
               {generated.nsec}
             </div>
-            {error && <p style={{ color: 'oklch(0.50 0.14 25)', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 12 }}>{error}</p>}
+            {error && <p className="error-note" role="alert">{error}</p>}
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn" onClick={() => setStep('menu')}>← Back</button>
               <button className="btn primary" onClick={confirmGenerate}>I&apos;ve saved it →</button>

@@ -172,7 +172,7 @@ export function ImportDialog({ bridgePresent, existingCustomCategories, onClose,
         {status === 'error' && (
           <>
             <h2>Import failed</h2>
-            <p className="lede" style={{ color: 'oklch(0.45 0.18 25)' }}>{errorMessage}</p>
+            <p className="error-note" role="alert">{errorMessage}</p>
             <div className="modal-foot">
               <button className="btn primary" onClick={() => { setStatus('idle'); setErrorMessage(''); }}>Try again</button>
               <button className="btn ghost" onClick={onClose} style={{ marginLeft: 8 }}>Cancel</button>

@@ -286,12 +286,13 @@ export default function FeedbackForm() {
       </fieldset>
 
       {error && (
-        <p className="relay-error" role="alert" style={{ margin: 0 }}>
-          {error}{' '}
-          <a href={GITHUB_ISSUES_URL} target="_blank" rel="noopener noreferrer"
-             style={{ color: 'var(--accent-ink)', textDecoration: 'underline', textUnderlineOffset: 2 }}>
-            Open an issue on GitHub instead →
-          </a>
+        <p className="error-note" role="alert" style={{ margin: 0 }}>
+          <span>
+            {error}{' '}
+            <a href={GITHUB_ISSUES_URL} target="_blank" rel="noopener noreferrer">
+              Open an issue on GitHub instead →
+            </a>
+          </span>
         </p>
       )}
     </form>

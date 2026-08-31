@@ -107,6 +107,9 @@ export class DiscernedOverlay {
   private themePref: Theme = 'system';
   private effectiveTheme: ResolvedTheme = 'dark';
   private themeSystemUnsub: (() => void) | null = null;
+  // Removes the Settings → Images card's re-check listeners. The grant happens on
+  // another tab, so the card refreshes on return; re-set on each settings render.
+  private imagePermCleanup: (() => void) | null = null;
 
   constructor() {
     this.host = document.createElement('div');
@@ -159,6 +162,7 @@ export class DiscernedOverlay {
       this.themeSystemUnsub();
       this.themeSystemUnsub = null;
     }
+    this.imagePermCleanup?.();
     hideArticleHighlight();
     this.removePreview();
   }
@@ -395,6 +399,9 @@ ${themeVarsBlock(this.effectiveTheme)}
   // ── Render dispatcher ──────────────────────────────────────────────────────
 
   private render() {
+    // Every render replaces the shadow subtree, so any listener bound to the old
+    // one is dead weight. Settings re-registers its own during renderSettings().
+    this.imagePermCleanup?.();
     switch (this.view) {
       case 'gate':      this.renderGate();      break;
       case 'identity':  this.renderIdentity();  break;
@@ -934,23 +941,38 @@ ${themeVarsBlock(this.effectiveTheme)}
     // the prompt to be triggered by a gesture on an EXTENSION page — so this
     // card cannot ask directly. It opens the permissions page, which asks.
     // `contains` is likewise unavailable here, so the background reports it.
-    let granted = false;
-    try {
-      const res = await chrome.runtime.sendMessage({ type: 'GET_IMAGE_PERMISSION' });
-      granted = !!(res?.data as { granted?: boolean } | undefined)?.granted;
-    } catch {
-      return; // Background unreachable — leave the card's default copy in place.
-    }
+    const sync = async (): Promise<void> => {
+      let granted: boolean;
+      try {
+        const res = await chrome.runtime.sendMessage({ type: 'GET_IMAGE_PERMISSION' });
+        granted = !!(res?.data as { granted?: boolean } | undefined)?.granted;
+      } catch {
+        return; // Background unreachable — leave the current copy rather than lie.
+      }
+      desc.textContent = granted
+        ? 'Images are being stored inside your clips, so they stay readable even if the original page changes or disappears.'
+        : 'Clips currently link to images on the original site, so they can break if that page changes or disappears. To allow storing images inside the clips, visit Discerned’s permissions page.';
+      btn.hidden = granted;
+    };
 
-    if (granted) {
-      desc.textContent = 'Images are being stored inside your clips, so they stay readable even if the original page changes or disappears.';
-      btn.hidden = true;
-      return;
-    }
+    // The grant is given on a DIFFERENT tab, so an open drawer is stale the moment
+    // the user leaves. Re-check on return instead of making them reopen it. The
+    // page fires visibilitychange on tab switch; focus covers same-tab returns.
+    this.imagePermCleanup?.();
+    const onReturn = () => { if (!document.hidden) void sync(); };
+    window.addEventListener('focus', onReturn);
+    document.addEventListener('visibilitychange', onReturn);
+    this.imagePermCleanup = () => {
+      window.removeEventListener('focus', onReturn);
+      document.removeEventListener('visibilitychange', onReturn);
+      this.imagePermCleanup = null;
+    };
 
     btn.addEventListener('click', () => {
       void chrome.runtime.sendMessage({ type: 'OPEN_PERMISSIONS_PAGE' });
     });
+
+    await sync();
   }
 
 

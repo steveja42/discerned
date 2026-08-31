@@ -61,9 +61,15 @@ export default function DiscernsClient() {
 
       {autoSigninError && auth.status !== 'connected' && (
         <div className="signin-error-banner" role="alert">
-          <span>{autoSigninError}</span>
-          <button className="btn" onClick={() => { clearAutoSigninError(); setSignInOpen(true); }}>Try again</button>
-          <button className="btn" onClick={clearAutoSigninError} aria-label="Dismiss">✕</button>
+          <span className="signin-error-icon" aria-hidden="true">!</span>
+          <span className="signin-error-text">
+            <strong>Sign-in didn&apos;t complete</strong>
+            {autoSigninError}
+          </span>
+          <button className="signin-error-retry" onClick={() => { clearAutoSigninError(); setSignInOpen(true); }}>
+            Try again
+          </button>
+          <button className="signin-error-dismiss" onClick={clearAutoSigninError} aria-label="Dismiss">✕</button>
         </div>
       )}
 
