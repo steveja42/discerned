@@ -2135,10 +2135,15 @@ log(LL.NORMAL, 'Discerned background service worker loaded');
 
 // Broadcast to all tabs so their content scripts re-register as log relay targets.
 // This re-populates logRelayTabIds after the service worker is killed and restarted.
-chrome.tabs.query({}).then(tabs => {
-  for (const tab of tabs) {
-    if (tab.id !== undefined) {
-      chrome.tabs.sendMessage(tab.id, { type: 'SW_STARTED' }).catch(() => { /* no content script — ok */ });
+// Dev-only: REMOTE_LOGGING is off in production, so there is nothing to re-register
+// and this would be an unfiltered tab query serving a disabled feature. The guard is
+// a compile-time constant, so production tree-shakes it away.
+if (__DISCERNED_DEV_BUILD__) {
+  chrome.tabs.query({}).then(tabs => {
+    for (const tab of tabs) {
+      if (tab.id !== undefined) {
+        chrome.tabs.sendMessage(tab.id, { type: 'SW_STARTED' }).catch(() => { /* no content script — ok */ });
+      }
     }
-  }
-});
+  });
+}
