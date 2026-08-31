@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Discerned",
   "version": "0.2.3",
-  "description": "Web clipper with Signal Rating. Clip worthy content, optionally rate and tag it, and if you like, publish and share with the world.",
+  "description": "Web clipper for saving articles, quotes and pages. Rate and tag what you clip, and publish your picks to Nostr if you want.",
   "permissions": [
     "contextMenus",
     "storage",
