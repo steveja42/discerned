@@ -4,7 +4,7 @@
 //              overlay rendering, and forwards Clip/Cast payloads back to the background.
 // Access: DOM (document.body), chrome.runtime.onMessage/sendMessage, chrome.storage.local
 
-import { captureContext, isCapturablePage, hasSelection, __setTestHostOverride, checkTaggerAnchors } from './capture';
+import { captureContext, isCapturablePage, hasSelection, __setTestHostOverride, __setTestPathOverride, checkTaggerAnchors } from './capture';
 import type { CaptureOptions } from './capture';
 import { DiscernedOverlay } from './overlay';
 import { htmlToMarkdown } from './html-to-markdown';
@@ -392,7 +392,7 @@ if (__DISCERNED_DEV_BUILD__ && !alreadyLoaded) {
     // wrapper — distinct from the page's `window` that's the message source.
     // We can't compare e.source === window. Rely on origin only.
     if (e.origin !== window.location.origin) return;
-    const data = e.data as { type?: string; format?: ClipFormat; opts?: CaptureOptions; capture?: Capture; evaluation?: Evaluation; hostOverride?: string | null };
+    const data = e.data as { type?: string; format?: ClipFormat; opts?: CaptureOptions; capture?: Capture; evaluation?: Evaluation; hostOverride?: string | null; pathOverride?: string | null };
     if (!data || typeof data.type !== 'string') return;
 
     if (data.type === '__DISCERNED_TEST_PING') {
@@ -413,20 +413,25 @@ if (__DISCERNED_DEV_BUILD__ && !alreadyLoaded) {
       );
     } else if (data.type === '__DISCERNED_TEST_CAPTURE') {
       try {
-        // Optional: pretend the page is served from another host so site
-        // taggers fire against 127.0.0.1 fixtures. Test-only; tree-shaken.
+        // Optional: pretend the page is served from another host (and, for
+        // gates that branch on URL path shape like isFacebookPostUrl, another
+        // path) so site taggers / Tier-0 extractors fire against 127.0.0.1
+        // fixtures. Test-only; tree-shaken.
         __setTestHostOverride(typeof data.hostOverride === 'string' ? data.hostOverride : null);
+        __setTestPathOverride(typeof data.pathOverride === 'string' ? data.pathOverride : null);
         const cap = await captureContext(
           data.format ?? 'article',
           data.opts ?? { smartArticleDetection: false, stripInlineStyles: false },
         );
         __setTestHostOverride(null);
+        __setTestPathOverride(null);
         window.postMessage(
           { type: '__DISCERNED_TEST_CAPTURE_RESULT', capture: cap },
           window.location.origin,
         );
       } catch (err) {
         __setTestHostOverride(null);
+        __setTestPathOverride(null);
         window.postMessage(
           { type: '__DISCERNED_TEST_CAPTURE_RESULT', error: err instanceof Error ? err.message : String(err) },
           window.location.origin,

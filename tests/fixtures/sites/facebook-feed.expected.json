@@ -4,7 +4,12 @@
   "hostOverride": "www.facebook.com",
   "bodyText": {
     "minLength": 200,
-    "contains": ["Diana Hulce"]
+    "contains": [
+      "Laura Janke"
+    ]
   },
-  "bodyHtml": { "noScripts": true }
+  "bodyHtml": {
+    "noScripts": true
+  },
+  "_note": "jsdom has no layout, so getBoundingClientRect returns zeros: the Tier-0 builder's visible-post pick and its size-based photo/avatar filters cannot run, and capture falls back to the generic tagger path. This sidecar therefore asserts only that the right POST is reached; the built-card structure (avatar, byline, album grid, stats) is covered by facebook-feed-fixture-visual, which runs in a real browser."
 }

@@ -58,6 +58,16 @@ describe('video embed substitution', () => {
         expect(html, 'link card class').toContain('dx-video-link');
       });
 
+      it('resolves a Facebook plugins.video.php embed to its canonical URL', async () => {
+        const html = (await capture()).bodyHtml ?? '';
+        // No derivable thumbnail (unlike YouTube's predictable i.ytimg.com
+        // path), so this is a link card — but it must decode the href= query
+        // param back to the plain facebook.com watch URL, not leave the
+        // %-encoded plugin URL or drop the embed entirely.
+        expect(html, 'facebook canonical link').toContain('https://www.facebook.com/somepage/videos/1234567890/');
+        expect(html, 'facebook label').toContain('Facebook video');
+      });
+
       it('still strips unrecognised iframes and leaves no iframe behind', async () => {
         const html = (await capture()).bodyHtml ?? '';
         expect(html, 'no iframes survive sanitisation').not.toContain('<iframe');

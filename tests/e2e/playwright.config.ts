@@ -93,6 +93,46 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'snapshot-facebook-post',
+      testMatch: /tools\/snapshot-facebook-post\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'facebook-reel-fixture-visual',
+      testMatch: /facebook-reel-fixture-visual\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'facebook-photo-fixture-visual',
+      testMatch: /facebook-photo-fixture-visual\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'facebook-fullpage-fixture-visual',
+      testMatch: /facebook-fullpage-fixture-visual\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'facebook-group-fixture-visual',
+      testMatch: /facebook-group-fixture-visual\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'fb-dbg',
+      testMatch: /tools\/fb-dbg\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'facebook-share-fixture-visual',
+      testMatch: /facebook-share-fixture-visual\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'facebook-visual',
+      testMatch: /facebook-visual\.spec\.ts$/,
+      retries: 0,
+    },
+    {
       name: 'reel-tree-probe',
       testMatch: /tools\/reel-tree-probe\.spec\.ts$/,
       retries: 0,

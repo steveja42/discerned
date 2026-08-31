@@ -38,6 +38,20 @@ export interface FixtureVisualOptions {
    */
   hostOverride?: string;
   /**
+   * Companion to hostOverride for a gate that branches on URL PATH SHAPE, not
+   * just hostname (isFacebookPostUrl: reel vs photo vs feed live at different
+   * pathnames on the real site, which a 127.0.0.1/<name>.html fixture can
+   * never reproduce). Pass a pathname+query like "/reel/123" to pin the shape
+   * a specific fixture is meant to exercise.
+   */
+  pathOverride?: string;
+  /**
+   * ClipFormat to drive. Defaults to 'article'. Set 'full-page' to guard the
+   * OTHER sticky format (STORAGE_KEYS.LAST_FORMAT persists the user's last
+   * choice), which has its own extractor and so its own Tier-0 wiring.
+   */
+  format?: 'article' | 'full-page';
+  /**
    * Use page.screenshot({ clip }) for the baseline instead of the default
    * element-level toHaveScreenshot on .clip-body. Set this for very tall
    * clips (50+ images) where the element-level "two stable screenshots"
@@ -72,6 +86,8 @@ export async function runFixtureVisual(opts: FixtureVisualOptions): Promise<void
       out,
       expectMarker: opts.expectMarker,
       hostOverride: opts.hostOverride,
+      pathOverride: opts.pathOverride,
+      format: opts.format,
       pageClipScreenshot: opts.pageClipScreenshot,
       health: opts.health,
     });
@@ -88,6 +104,8 @@ interface DriveArgs {
   out: (name: string) => string;
   expectMarker?: string;
   hostOverride?: string;
+  pathOverride?: string;
+  format?: 'article' | 'full-page';
   pageClipScreenshot?: boolean;
   health?: ClipHealthOptions;
 }
@@ -111,7 +129,7 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
   // it before posting to the test bridge — nothing would be listening otherwise.
   await activateExtensionOnTab(ctx, args.fixtureUrl);
 
-  const cap = (await page.evaluate(async (hostOverride: string | null) => {
+  const cap = (await page.evaluate(async ({ hostOverride, pathOverride, format }: { hostOverride: string | null; pathOverride: string | null; format: string }) => {
     return new Promise((resolveCap, rejectCap) => {
       const timer = setTimeout(() => rejectCap(new Error('capture timeout')), 30_000);
       const onMessage = (e: MessageEvent) => {
@@ -123,11 +141,11 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
       };
       window.addEventListener('message', onMessage);
       window.postMessage(
-        { type: '__DISCERNED_TEST_CAPTURE', format: 'article', hostOverride },
+        { type: '__DISCERNED_TEST_CAPTURE', format, hostOverride, pathOverride },
         window.location.origin,
       );
     });
-  }, args.hostOverride ?? null)) as Record<string, unknown>;
+  }, { hostOverride: args.hostOverride ?? null, pathOverride: args.pathOverride ?? null, format: args.format ?? 'article' })) as Record<string, unknown>;
 
   writeFileSync(
     args.out(`${args.site}-fixture-capture.json`),

@@ -22,9 +22,12 @@ test('facebook-feed-fixture-visual', async () => {
     site: 'facebook-feed',
     hostOverride: 'www.facebook.com',
     viewportHeight: 1600,
-    // The clip must carry the post's own byline — the defect this spec exists
-    // for was a header-less card (the byline selector matched zero elements on
-    // a feed page, so the card climb never acquired an author).
-    expectMarker: '.dx-author',
+    // The clip must carry the post's own byline. The defect this spec was
+    // created for was a header-less card; it now also guards the follow-on
+    // defect, where a TAGGED post ("Diana Hulce is with Evelyn Bueno") showed
+    // the tagged person as the author and rendered two stacked bylines.
+    // The feed now routes through extractFacebookPost, so the byline is a
+    // built .tweet-name rather than the tagger's .dx-author marker.
+    expectMarker: '.tweet-name',
   });
 });

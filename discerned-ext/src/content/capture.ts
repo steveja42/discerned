@@ -1288,6 +1288,783 @@ async function extractTweet(
   };
 }
 
+// ── Facebook single-post URLs (reel / photo / posts / watch / share) ────────
+//
+// Modelled directly on extractTweet above: build a clean tweet-card-shaped
+// HTML string from chosen elements rather than tagging the live div soup and
+// shipping whatever else is in that subtree. Reuses the tweet-card CSS
+// (globals.css) and its helpers (buildPhotosHtml, buildVideoHtml, dxSrcAttr)
+// verbatim — no web-app change needed.
+//
+// This sidesteps the defect that made tagFacebook's permalink branch render as
+// a long thumbnail stack: when a SITE_TAGGERS entry returns a root, Tier 1.5
+// clears every EXCL_MARKER inside it (a tagger may legitimately pin a
+// fixed-position lightbox), so Facebook's hidden preloaded carousel/next-reel
+// <img>s all survive and get stamped with their natural size. Building from a
+// short list of chosen elements means that stack is simply never included,
+// regardless of what markExcluded would have done.
+
+/** True on any facebook.com page (honours the test host override). */
+function isFacebookHost(): boolean {
+  const host = testHostOverride ?? window.location.hostname;
+  return /(^|\.)facebook\.com$/i.test(host);
+}
+
+/**
+ * The one feed post the user is looking at, as a card element — or null when
+ * this isn't a feed (no story_message blocks) or nothing is on screen.
+ *
+ * Mirrors tagFacebook's feed branch: dedupe the nested marker pairs, climb to
+ * the card (first ancestor that has acquired a byline while still enclosing
+ * exactly ONE post body — both conditions load-bearing, see tagFacebook), then
+ * pick the card with the largest viewport intersection. Kept as its own
+ * function so the Tier-0 builder and the tagger can't drift apart on what
+ * "the post" means.
+ */
+function fbVisiblePostCard(): Element | null {
+  const raw = Array.from(document.querySelectorAll(FB_MSG_SEL));
+  const bodies = raw.filter(el => !raw.some(o => o !== el && o.contains(el)));
+  if (!bodies.length) return null;
+
+  const cards: Element[] = [];
+  for (const body of bodies) {
+    let card: Element | null = null;
+    let node: Element | null = body;
+    for (let i = 0; i < 14 && node && node.parentElement; i++) {
+      const parent: HTMLElement | null = node.parentElement;
+      if (!parent || parent === document.body) break;
+      node = parent;
+      const inner = Array.from(node.querySelectorAll(FB_MSG_SEL));
+      const own = inner.filter(el => !inner.some(o => o !== el && o.contains(el)));
+      if (own.length > 1) break;                       // reached the feed track
+      if (fbBylineAnchors(node).length >= 1) { card = node; break; }
+    }
+    if (!card) card = body.parentElement ?? body;
+    if (card !== document.body && !cards.includes(card)) cards.push(card);
+  }
+  if (!cards.length) return null;
+  // Prefer the post the user is looking at. But fall back to the topmost card
+  // when NOTHING is on screen: pickVisibleFeedPost requires a non-zero
+  // viewport intersection, and a page whose posts all sit below the fold
+  // (a short viewport, or a capture fired before scroll) would otherwise
+  // yield null and silently drop the whole builder path back to the tagger.
+  return pickVisibleFeedPost(cards)
+    ?? cards.slice().sort((a, b) =>
+      a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0]
+    ?? null;
+}
+
+/** A facebook.com single-post URL: reel, photo permalink, text post, Watch, or share link. */
+function isFacebookPostUrl(url: string): boolean {
+  const host = testHostOverride ?? (() => { try { return new URL(url).hostname; } catch { return ''; } })();
+  if (!/(^|\.)facebook\.com$/i.test(host)) return false;
+  let u: URL;
+  try { u = new URL(url); } catch { return false; }
+  // A fixture served from 127.0.0.1/<name>.html can never reproduce Facebook's
+  // real pathname shape, so a spec pins the shape directly via
+  // testPathOverride (see __setTestPathOverride) — mirroring how hostOverride
+  // substitutes for window.location.hostname elsewhere in this file.
+  const pathAndQuery = testPathOverride ?? `${u.pathname}${u.search}`;
+  return /\/(reel|photo|posts|watch|permalink\.php|share\/[rp])\b/.test(pathAndQuery)
+    || /\bfbid=/.test(pathAndQuery);
+}
+
+/**
+ * Resolve the best available poster for a Facebook video post, in the agreed
+ * order: live <video poster> attribute, then the largest fbcdn/scontent <img>
+ * inside the player subtree (Facebook often renders a real preview behind the
+ * player before playback starts), then the page's declared og:image. Returns
+ * null if none is usable — callers must accept a video-less/image-less card
+ * rather than inject a src known to be broken (see withThumbnailFallback's
+ * Guard 2, which exists for exactly this reason).
+ */
+
+/**
+ * Read the src of an <img> OR an SVG-mask avatar (<svg><image xlink:href>) —
+ * Facebook renders the small circular avatar both ways depending on page
+ * shape (measured: a photo permalink uses the SVG-mask shape with no <img>
+ * anywhere near it, while the feed uses a plain <img>). Only a small/square
+ * candidate counts as an avatar — a large image in the same subtree is the
+ * post's own photo, not a profile picture.
+ */
+function fbAvatarSrcOf(el: Element): string | null {
+  const r = el.getBoundingClientRect();
+  if (r.width <= 0 || r.width > 64 || Math.abs(r.width - r.height) > 8) return null;
+  const tag = el.tagName.toLowerCase();
+  const src = tag === 'img'
+    ? ((el as HTMLImageElement).getAttribute('src') ?? '')
+    : tag === 'image'
+      ? (el.getAttribute('xlink:href') ?? el.getAttribute('href') ?? '')
+      : '';
+  if (!src) return null;
+  // Accept ANY source shape, not just an fbcdn/scontent URL: a baked fixture
+  // serves the avatar as a data: URI, and requiring the live CDN host meant
+  // the avatar silently vanished everywhere except the live site. Facebook's
+  // own UI chrome (static.xx.fbcdn.net) is the one host to reject — that is
+  // where the nav/menu glyphs come from, and they are avatar-sized too.
+  if (/static\.[a-z0-9-]*\.?fbcdn\.net/i.test(src)) return null;
+  return src;
+}
+
+/**
+ * Find the author's avatar image near `authorLink`.
+ *
+ * Facebook wraps the name and the avatar in TWO SEPARATE anchors sharing the
+ * same profile href (measured on a photo permalink: the avatar anchor is
+ * `role="link"` with an SVG-mask <image> child and NO text, which is exactly
+ * why fbBylineAnchors's shape filter excludes it as authorLink — an anchor
+ * containing an img/svg is rejected as "avatar link, not the name"). So the
+ * avatar is a SIBLING of authorLink, not a descendant or ancestor of it. Find
+ * it by the shared href (query string dropped — Facebook appends different
+ * tracking params, `__tn__=...`, to each occurrence of the same profile link)
+ * first; fall back to a bounded ancestor climb for shapes (e.g. the feed) where
+ * the avatar nests inside a common wrapper instead.
+ */
+function fbFindAvatarSrc(authorLink: HTMLAnchorElement | null): string {
+  if (!authorLink) return '';
+  const hrefBase = (authorLink.getAttribute('href') ?? '').split('?')[0];
+  if (hrefBase) {
+    const siblingAnchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'))
+      .filter(a => a !== authorLink && (a.getAttribute('href') ?? '').split('?')[0] === hrefBase);
+    for (const a of siblingAnchors) {
+      for (const c of Array.from(a.querySelectorAll('img, image'))) {
+        const src = fbAvatarSrcOf(c);
+        if (src) return src;
+      }
+    }
+  }
+  let scope: Element | null = authorLink;
+  for (let i = 0; i < 6 && scope; i++) {
+    for (const c of Array.from(scope.querySelectorAll('img, image'))) {
+      const src = fbAvatarSrcOf(c);
+      if (src) return src;
+    }
+    scope = scope.parentElement;
+  }
+  return '';
+}
+
+function fbResolvePoster(video: HTMLVideoElement | null): string | null {
+  const fromAttr = video?.getAttribute('poster') ?? null;
+  if (fromAttr && isSafeImageSrc(fromAttr)) return fromAttr;
+
+  const scope = video?.closest('[role="main"], [role="dialog"]') ?? video?.parentElement ?? document;
+  const candidate = Array.from((scope as Element | Document).querySelectorAll<HTMLImageElement>('img[src*="fbcdn"], img[src*="scontent"]'))
+    .filter(img => isSafeImageSrc(img.src))
+    .sort((a, b) => {
+      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+      return (rb.width * rb.height) - (ra.width * ra.height);
+    })[0] ?? null;
+  if (candidate) return candidate.src;
+
+  const og = document.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content;
+  return og && isSafeImageSrc(og) ? og : null;
+}
+
+/**
+ * Return a DETACHED, cleaned copy of a Facebook caption block.
+ *
+ * Two things must come out or they ship as visible garbage in the clip:
+ *
+ *  - The "… See more" truncation control. Facebook renders a collapsed caption
+ *    as real prose plus a trailing expander; sanitisation keeps the expander's
+ *    text, so the clip reads "…with Colombia earthq… See more". The ellipsis
+ *    character is part of the truncated text node, so trimming the anchor alone
+ *    is not enough — the trailing "…" is stripped too.
+ *  - Facebook's anti-scraping obfuscation runs: a per-character
+ *    `<span style="display:flex">` scramble whose text is meaningless
+ *    ("redSotsnpo56f...") and which is deliberately interleaved with real
+ *    content. `isObfuscationBlock` rejects a whole candidate block, but a
+ *    caption can carry these INSIDE it, so they are removed here too.
+ *
+ * Returns a clone so the live page is never mutated (same rule as site
+ * taggers: read and mark, never restructure the user's actual DOM).
+ */
+function fbCleanCaption(msgEl: Element): Element {
+  const clone = msgEl.cloneNode(true) as Element;
+  clone.querySelectorAll('span[style*="display:flex"]').forEach(el => {
+    // A scramble run is many single-character spans; real prose is not.
+    const kids = Array.from(el.children);
+    const singles = kids.filter(k => (k.textContent ?? '').trim().length === 1).length;
+    if (kids.length >= 6 && singles >= kids.length * 0.7) el.remove();
+  });
+  clone.querySelectorAll('a, [role="button"]').forEach(el => {
+    if (/^\s*(see more|see translation|show more)\s*$/i.test(el.textContent ?? '')) el.remove();
+  });
+  // The site tagger runs on the live DOM before this builder does, so its
+  // markers ride along on the clone. `dx-avatar` on an inline emoji <img> is
+  // the damaging one — the clip CSS pins anything so marked to a round 44px
+  // pin, turning a flag emoji mid-sentence into a giant circle.
+  clone.querySelectorAll('[class]').forEach(el => {
+    const kept = (el.getAttribute('class') ?? '')
+      .split(/\s+/).filter(c => !c.startsWith('dx-')).join(' ');
+    if (kept) el.setAttribute('class', kept); else el.removeAttribute('class');
+  });
+  // Drop the truncation ellipsis the expander left behind. Facebook puts it in
+  // the last text node of the deepest prose element, so walk to the end rather
+  // than only checking the clone's own lastChild.
+  const trimTail = (node: Node): boolean => {
+    for (let i = node.childNodes.length - 1; i >= 0; i--) {
+      const child = node.childNodes[i];
+      if (child.nodeType === Node.TEXT_NODE) {
+        const t = child.textContent ?? '';
+        if (!t.trim()) continue;
+        let trimmed = t.replace(/\s*(?:\.\.\.|…)\s*$/, '');
+        if (trimmed !== t) {
+          // Facebook truncates mid-WORD before the expander ("…intense week
+          // with Colombia earthq… See more"), so dropping the ellipsis alone
+          // leaves a broken fragment. Drop that partial word too and close
+          // with a real ellipsis, so the clip reads as deliberately excerpted
+          // rather than corrupted. (The full text is unavailable on the feed:
+          // Facebook ships only the truncated copy until "See more" is
+          // clicked, and feed pages carry no og:description to fall back on.)
+          if (/\p{L}$/u.test(trimmed) && !/\s$/.test(t)) {
+            trimmed = trimmed.replace(/\s*\S+$/, '');
+          }
+          child.textContent = `${trimmed.replace(/[\s,;:]+$/, '')}…`;
+          return true;
+        }
+        return false;
+      }
+      if (child.nodeType === Node.ELEMENT_NODE && trimTail(child)) return true;
+    }
+    return false;
+  };
+  trimTail(clone);
+  return clone;
+}
+
+/**
+ * Crop uniform black letterbox bars off an inlined image.
+ *
+ * Facebook serves an album photo on a padded canvas (measured: a 443x590 JPEG
+ * whose rows 0-130 and 500-590 are pure black) and crops it in the page with an
+ * `overflow: hidden` wrapper sized to the visible region. Sanitisation strips
+ * that wrapper, so the bars — which are real pixels in the JPEG, not styling —
+ * became visible in the clip as thick black frames around every portrait shot.
+ *
+ * Detects bars only when they are genuinely uniform and dark, and bails unless
+ * a real content band remains, so an ordinary photo that merely opens on a dark
+ * sky is never cropped. Returns the original data URI unchanged on any failure.
+ */
+async function cropLetterbox(dataUri: string): Promise<string> {
+  if (!dataUri.startsWith('data:image/')) return dataUri;
+  try {
+    const bmp = await createImageBitmap(await (await fetch(dataUri)).blob());
+    const w = bmp.width, h = bmp.height;
+    if (w < 8 || h < 8) { bmp.close(); return dataUri; }
+    const canvas = new OffscreenCanvas(w, h);
+    const c2d = canvas.getContext('2d');
+    if (!c2d) { bmp.close(); return dataUri; }
+    c2d.drawImage(bmp, 0, 0);
+    const { data } = c2d.getImageData(0, 0, w, h);
+
+    const DARK = 24;          // per-channel ceiling for "black"
+    const rowIsDark = (y: number): boolean => {
+      for (let x = 0; x < w; x += Math.max(1, Math.floor(w / 24))) {
+        const i = (y * w + x) * 4;
+        if (data[i] > DARK || data[i + 1] > DARK || data[i + 2] > DARK) return false;
+      }
+      return true;
+    };
+    let top = 0; while (top < h && rowIsDark(top)) top++;
+    let bottom = h - 1; while (bottom > top && rowIsDark(bottom)) bottom--;
+    const keep = bottom - top + 1;
+    // Only act on a REAL letterbox. A couple of dark rows at an edge is
+    // ordinary photography (a night sky, a shadowed foreground) — cropping
+    // those shaves real content off every image, so require the bars to be
+    // a meaningful slice of the frame before touching it. Also bail if too
+    // little would survive, which would mean the detection ran away.
+    const trimmed = h - keep;
+    if (trimmed < h * 0.06 || keep < h * 0.25) { bmp.close(); return dataUri; }
+
+    const out = new OffscreenCanvas(w, keep);
+    const o2d = out.getContext('2d');
+    if (!o2d) { bmp.close(); return dataUri; }
+    o2d.drawImage(bmp, 0, top, w, keep, 0, 0, w, keep);
+    bmp.close();
+    const blob = await out.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let bin = ''; const chunk = 8192;
+    for (let i = 0; i < buf.length; i += chunk) bin += String.fromCharCode(...buf.subarray(i, i + chunk));
+    log(LL.DEBUG, `Discerned: cropped letterbox ${h}px -> ${keep}px`, 'url:', window.location.href);
+    return `data:image/jpeg;base64,${btoa(bin)}`;
+  } catch {
+    return dataUri;
+  }
+}
+
+/**
+ * Build a clean tweet-card-shaped Capture for a single Facebook post (reel,
+ * photo permalink, text post, Watch, or share link). Returns null when an
+ * essential field (author or media/caption) is missing, so the caller falls
+ * through to tagFacebook — the same contract extractTweet uses.
+ */
+async function extractFacebookPost(
+  base: Pick<Capture, 'id' | 'url' | 'title' | 'timestamp'>,
+  liveVideoFrames: Map<string, string>,
+  // The post to build from. `document` for a permalink (one post per page);
+  // the feed passes ONE post card so neighbouring posts can't bleed in.
+  root: Document | Element = document,
+): Promise<Capture | null> {
+  // Author: the topmost byline anchor that isn't inside a comment card — same
+  // shape rule and comment-exclusion tagFacebook's permalink branch already
+  // established (fbBylineAnchors, fbIsProfileHref).
+  //
+  // On a SHARED or TAGGED feed post there are several byline anchors ("Evelyn
+  // Bueno was tagged" above the card, "Diana Hulce is with Evelyn Bueno and 7
+  // others" inside it). The POSTER is the one that owns the story_message, so
+  // prefer the byline nearest the caption block; topmost-wins only decides
+  // between equals. Without this the clip showed the tagged person's name and
+  // the poster's name as two stacked bylines.
+  const msgAnchor = root.querySelector(FB_MSG_SEL);
+  const candidates = fbBylineAnchors(root).filter(a => {
+    const card = a.closest('[role="article"]');
+    return !(card && card.getBoundingClientRect().height < 160);
+  });
+  // A SHARED or TAGGED post carries several byline anchors: a "<name> was
+  // tagged" header ABOVE the card, and the real byline strip inside it
+  // ("Diana Hulce is with Evelyn Bueno and 7 others"). Taking the topmost
+  // picked the tagged person and rendered two stacked names.
+  //
+  // The byline STRIP is the reliable anchor: it is the element that holds the
+  // poster's link and the connective prose ("is with" / "shared a post"), and
+  // within it the POSTER is always the first link. Fall back to topmost only
+  // when no such strip exists (a plain, untagged post).
+  // Facebook marks the poster's own name block with an ad-tooling attribute it
+  // also applies to ordinary posts — `profile_name` — which beats every
+  // heuristic: on a tagged post ("Diana Hulce is with Evelyn Bueno") BOTH names
+  // are byline-shaped anchors on the SAME line, so neither document order nor
+  // geometry separates them, and topmost-wins picked the tagged person.
+  // SHARED POST. Facebook nests the ORIGINAL inside the sharer's card and
+  // labels it with a screen-reader span, "Shared post from <name>". That
+  // label is the reliable signal, because the sharer very often adds NO
+  // comment of their own: in that case the ONLY story_message on the card
+  // belongs to the shared post, so treating the outermost message as "the
+  // sharer's comment" built the whole card out of the shared content and
+  // dropped the sharer entirely — their name and avatar replaced by the
+  // original poster's, which is exactly the reported symptom.
+  //
+  // Structure (measured on a real share):
+  //   profile_name          → the SHARER ("Bonnie Bowyer")   <- outermost
+  //   "Shared post from X"  → the label
+  //   [nested card]
+  //     profile_name        → the ORIGINAL poster / its group
+  //     story_message       → the original's text
+  const sharedLabelEl = Array.from(root.querySelectorAll<HTMLElement>('span, div'))
+    .find(el => /^\s*Shared post from\s+\S/i.test(el.textContent ?? '')
+      && (el.textContent ?? '').trim().length < 120) ?? null;
+  // The shared card is the labelled block's next meaningful sibling subtree —
+  // in practice, the nearest following element that carries its own byline.
+  // The shared card is the label's NEXT SIBLING subtree (measured: textLen
+  // 1543, carrying the original's profile_name and its story_message).
+  // Resolving it from the following `profile_name` instead lands on a bare
+  // name wrapper — measured at textLen 17, i.e. "Learn Laugh Teach" and
+  // nothing else — so it contains neither the shared message nor the shared
+  // photos, and the quote card comes out empty while the original's text
+  // leaks into the sharer's own caption. Walk forward to the first sibling
+  // that actually holds the shared content, then fall back to the smallest
+  // common ancestor of label + original byline.
+  const sharedCard: Element | null = (() => {
+    if (!sharedLabelEl) return null;
+    const holdsShared = (el: Element) =>
+      !!el.querySelector('[data-ad-rendering-role="profile_name"]')
+      || !!el.querySelector(FB_MSG_SEL)
+      || !!el.querySelector('[data-ad-rendering-role="title"]');
+    for (let sib = sharedLabelEl.nextElementSibling; sib; sib = sib.nextElementSibling) {
+      if (holdsShared(sib)) return sib;
+    }
+    // Some shapes wrap the label rather than preceding the card as a sibling;
+    // climb until an ancestor encloses the original's byline too.
+    const originalPn = Array.from(root.querySelectorAll('[data-ad-rendering-role="profile_name"]'))
+      .find(pn => sharedLabelEl.compareDocumentPosition(pn) & Node.DOCUMENT_POSITION_FOLLOWING);
+    if (!originalPn) return null;
+    for (let n: Element | null = sharedLabelEl; n; n = n.parentElement) {
+      if (n.contains(originalPn)) return n === sharedLabelEl ? null : n;
+    }
+    return null;
+  })();
+
+  const allMsgs = Array.from(root.querySelectorAll(FB_MSG_SEL));
+  // A message inside the shared card belongs to the ORIGINAL, not the sharer.
+  const sharedMsg = sharedCard
+    ? (allMsgs.find(el => sharedCard.contains(el) || sharedCard === el) ?? null)
+    : null;
+  const outerMsgs = allMsgs
+    .filter(el => !allMsgs.some(o => o !== el && o.contains(el)))
+    .filter(el => el !== sharedMsg && !(sharedMsg && sharedMsg.contains(el)))
+    .filter(el => !(sharedCard && sharedCard.contains(el)))
+    // The sharer's own comment is written ABOVE the "Shared post from …"
+    // label. Facebook also renders the ORIGINAL's message a second time
+    // outside the shared card (measured: two story_messages with identical
+    // text, only one of them nested), so position — not mere containment —
+    // is what separates them. Without this the shared text was shown twice:
+    // once as the sharer's caption and again inside the quote card.
+    .filter(el => !sharedLabelEl
+      || (sharedLabelEl.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING) !== 0);
+  // May legitimately be null — a share with no added comment.
+  const sharerMsg = outerMsgs[0] ?? null;
+
+  // On a SHARED post the nested original has its own profile_name, so the
+  // lookup must skip anything inside the shared card — otherwise the card is
+  // titled with the ORIGINAL poster and the sharer disappears, even though it
+  // is the sharer's post that is in the feed.
+  const profileName = Array.from(root.querySelectorAll('[data-ad-rendering-role="profile_name"]'))
+    .find(pn => !(sharedCard && (sharedCard.contains(pn) || sharedCard === pn))) ?? null;
+  const inProfileName = profileName
+    ? candidates.filter(a => profileName.contains(a))
+    : [];
+  const authorLink = inProfileName[0]
+    ?? candidates.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0]
+    ?? null;
+  const primaryName = authorLink?.textContent?.trim() ?? '';
+
+  // GROUP POST. In a group the `profile_name` block holds the GROUP
+  // ("Mt. Rainier Hiking") and the member who actually posted
+  // ("Mangesh Shinde") sits in a separate sibling block, linked as
+  // /groups/<id>/user/<id>/. Showing only the profile_name would credit the
+  // group and lose the person; showing only the topmost byline would lose the
+  // group. Facebook renders both, so the byline does too:
+  // "Mt. Rainier Hiking · Mangesh Shinde".
+  const memberLink = candidates.find(a =>
+    /^(?:https?:\/\/(?:www\.)?facebook\.com)?\/groups\/\d+\/user\/\d+\//.test(a.getAttribute('href') ?? '')
+    && (a.textContent ?? '').trim() !== primaryName);
+  const memberName = memberLink?.textContent?.trim() ?? '';
+  const displayName = memberName && memberName !== primaryName
+    ? `${primaryName} · ${memberName}`
+    : primaryName;
+
+  // Avatar: the small square fbcdn/scontent image nearest the author link.
+  // Facebook renders it in TWO different shapes depending on page — a plain
+  // <img>, or (measured on the photo permalink) an inline <svg><image
+  // xlink:href> circle-masked avatar with no <img> anywhere near it. Climb a
+  // few levels from the author link (not the whole document — that would
+  // grab the post's own large photo, which is also an fbcdn/scontent image)
+  // and take the first small/square candidate found, closest wins.
+  const avatarSrc = fbFindAvatarSrc(authorLink);
+
+  // Date: prefer a real <time> element (Facebook uses one on some permalink
+  // shapes). Otherwise the post's own permalink anchor (reel/posts/photo/
+  // watch/share) whose visible text on these page shapes is a timestamp
+  // ("3h", "Yesterday at 4:02 PM") — but NOT a hashtag/search/owner-profile
+  // link, which can share the same /reel/ or /watch/ path prefix
+  // (`/reel/hashtag/?q=%23viral`, `/profile.php?...&sk=reels_tab`) and would
+  // otherwise win the date slot with caption/author text instead of a date.
+  const timeEl = root.querySelector('time[datetime]');
+  const dateText = timeEl?.textContent?.trim() ?? (() => {
+    const dateLink = Array.from(root.querySelectorAll<HTMLAnchorElement>('a[href]'))
+      .find(a => {
+        const href = a.getAttribute('href') ?? '';
+        if (/\/(hashtag|profile\.php)\b/.test(href)) return false;
+        // A COMMENT's own permalink also carries /posts/<id> (the post it's
+        // under) plus comment_id= — exclude it explicitly so a comment's
+        // timestamp is never mistaken for the post's own date.
+        if (/[?&]comment_id=/.test(href)) return false;
+        if (!/\/(reel|posts|photo|watch)\/\d/.test(href) && !/fbid=/.test(href)) return false;
+        const txt = (a.textContent ?? '').trim();
+        return txt.length > 0 && txt.length < 40 && !a.querySelector('img, svg');
+      });
+    return dateLink?.textContent?.trim() ?? '';
+  })();
+
+  // Video: the largest VISIBLE <video> in scope (a reel/Watch player), if any.
+  // The zero-area filter is load-bearing: a feed card can hold a collapsed
+  // 0x0 <video> placeholder with a blob: src, no poster, and no nearby
+  // thumbnail. Treating that as the post's medium replaced a perfectly good
+  // photo post with a bare "▶ Video" link card.
+  const video = Array.from(root.querySelectorAll<HTMLVideoElement>('video'))
+    .filter(v => {
+      const r = v.getBoundingClientRect();
+      return r.width >= 80 && r.height >= 80;
+    })
+    .sort((a, b) => {
+      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+      return (rb.width * rb.height) - (ra.width * ra.height);
+    })[0] ?? null;
+  const rawPoster = video ? fbResolvePoster(video) : null;
+  const uuid = video?.getAttribute('data-uuid') ?? '';
+  const framePoster = uuid ? liveVideoFrames.get(uuid) : undefined;
+
+  // Caption: the post's own message block. Reels/Watch carry NO story_message
+  // marker at all (measured: zero matches) — the caption there is a plain
+  // `dir="auto"` block near the player with no distinguishing attribute, so
+  // fall back to the longest such block, but ONLY on a video post: the same
+  // fallback on a photo/text permalink (also story_message-less) picked up
+  // Facebook's own anti-scraping obfuscation string instead — a per-character
+  // `<span style="display:flex">` scramble block that reads as garbage text
+  // and is reliably longer than any real caption, which is why it must be
+  // excluded rather than merely deprioritised. Skip anything inside the
+  // avatar/name row (short, no real prose) and any element that IS or
+  // CONTAINS the author link (the author name would otherwise win as
+  // "longest" on a reel with a short caption).
+  const isObfuscationBlock = (el: Element): boolean => !!el.querySelector('span[style*="display:flex"]');
+
+  // `msgAnchor` is a plain first-match and knows nothing about shares, so on a
+  // shared post it returns the ORIGINAL's message — which then rendered as the
+  // sharer's caption AND again inside the quote card, the same text twice.
+  // Once a share is identified, sharerMsg is authoritative: null there means
+  // the sharer genuinely added no comment.
+  const msgEl = sharedLabelEl
+    ? sharerMsg
+    : sharerMsg ?? msgAnchor ?? (video
+    ? Array.from(root.querySelectorAll<HTMLElement>('[dir="auto"]'))
+      .filter(el => !authorLink || (el !== authorLink && !el.contains(authorLink) && !authorLink.contains(el)))
+      .filter(el => !isObfuscationBlock(el))
+      .filter(el => (el.textContent ?? '').trim().length > 0)
+      .sort((a, b) => (b.textContent ?? '').trim().length - (a.textContent ?? '').trim().length)[0] ?? null
+    : null);
+  // Last-resort fallback: the page's declared og:description/description meta.
+  // Measured on a photo permalink: the caption ("The view from my office last
+  // evening.") is NOT in the visible DOM as prose at all — only in this meta
+  // tag — so neither story_message nor the dir="auto" fallback above can find
+  // it. Facebook's own boilerplate ("See posts, photos and more on Facebook.")
+  // and empty strings are excluded so an absent caption stays honestly absent
+  // rather than showing filler text.
+  const metaCaption = (msgEl || root instanceof Element ? '' : (
+    document.querySelector<HTMLMetaElement>('meta[property="og:description"]')?.content
+    ?? document.querySelector<HTMLMetaElement>('meta[name="description"]')?.content
+    ?? ''
+  )).trim();
+  const isFbBoilerplate = /^(see posts|join facebook|create an account)/i.test(metaCaption);
+  const escape = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const cleanedMsg = msgEl ? fbCleanCaption(msgEl) : null;
+  const sanitisedText = cleanedMsg
+    ? sanitizeHtmlString(cleanedMsg.innerHTML)
+    : (metaCaption && !isFbBoilerplate ? escape(metaCaption) : '');
+  const plainText = cleanedMsg?.textContent?.trim() ?? (metaCaption && !isFbBoilerplate ? metaCaption : '');
+
+  // Photos: content images (not the avatar, not hidden preloads) inside the
+  // post's own scope. Bounded to on-screen, reasonably large images so
+  // preloaded carousel/next-item thumbnails AND the avatar (~40-64px) never
+  // make it onto the card.
+  // On the feed `root` IS the post card, so it already bounds the photos; only
+  // a document-scoped (permalink) call needs to narrow to the post's own
+  // container, or a neighbouring post's images would be pulled in.
+  // `document.body` is a LAST resort, and a bad one: it takes in the whole
+  // page, so a permalink pulled the sidebar's promo images onto the card.
+  // A share makes this easy to hit, because msgEl is legitimately null when
+  // the sharer added no comment — so fall back through the other anchors
+  // (the byline, then the shared card) before ever widening to the body.
+  const POST_CONTAINER_SEL = '[role="article"], [role="dialog"], [role="main"]';
+  const scopeEl: Element = root instanceof Element
+    ? root
+    : (msgEl?.closest(POST_CONTAINER_SEL)
+      ?? authorLink?.closest(POST_CONTAINER_SEL)
+      ?? sharedCard?.closest(POST_CONTAINER_SEL)
+      ?? document.body);
+  // Match on SIZE and position, not on the src host: a post photo is served
+  // from fbcdn on a live page but is a data: URI in a baked fixture and a
+  // blob:/CDN-variant URL in other shapes, so an `img[src*="fbcdn"]` filter
+  // silently found nothing off the live site. Facebook's own UI chrome is
+  // served from static.xx.fbcdn.net, so that host IS excluded explicitly.
+  const photoImgs = Array.from(scopeEl.querySelectorAll<HTMLImageElement>('img'))
+    .filter(img => !/static\.[a-z0-9-]*\.?fbcdn\.net/i.test(img.getAttribute('src') ?? ''))
+    .filter(img => {
+      const r = img.getBoundingClientRect();
+      if (r.width < 120 || r.height < 120) return false;
+      // Reject the blur-up PLACEHOLDER. Facebook stacks a tiny (90x160)
+      // low-res copy under the real photo and CSS-scales it to full size, so
+      // the rendered box is identical for both and only the INTRINSIC size
+      // separates them. Keeping the placeholder is what produced a grid of
+      // upscaled thumbnails framed by black bars — the bars were the
+      // letterboxing of a 90x160 image blown up into a large cell, not
+      // anything baked into the photo.
+      const nw = img.naturalWidth, nh = img.naturalHeight;
+      if (nw > 0 && nh > 0 && (nw < 200 || nh < 200)) return false;
+      return true;
+    })
+    // De-dupe by src: Facebook renders the same photo several times (blur-up
+    // placeholder + full, and one copy per grid breakpoint).
+    .filter((img, i, arr) => arr.findIndex(o => o.currentSrc === img.currentSrc
+      && o.getAttribute('src') === img.getAttribute('src')) === i);
+
+  // Stats: reaction/comment/share COUNTS only — the toolbar's icon glyphs are a
+  // CSS sprite sheet that renders as a column of emoji once page CSS is gone
+  // (this is why tagFacebook drops the whole toolbar). Numbers are safe to lift.
+  //
+  // Reels/Watch render the Like/Comment/Share buttons as plain
+  // `[role="button"][aria-label="Like"|"Comment"|"Share"]` divs (measured: no
+  // `role="toolbar"` anywhere), and each count sits in a SEPARATE sibling
+  // subtree far from the button in document order — not a descendant. Climb a
+  // bounded number of levels from each action button to find its nearest
+  // numeric-text span, mirroring fbFindAvatarSrc's bounded-climb idiom.
+  const findStatCount = (button: Element): string | null => {
+    let scope: Element | null = button;
+    for (let i = 0; i < 4 && scope; i++) {
+      const span = Array.from(scope.querySelectorAll<HTMLElement>('span'))
+        .find(el => /^[\d,.]+[KMB]?$/i.test((el.textContent ?? '').trim()));
+      if (span) return span.textContent!.trim();
+      scope = scope.parentElement;
+    }
+    return null;
+  };
+  // Emit each count WITH its icon and an accessible label. Bare numbers
+  // ("70K 208 4.9K") are unreadable — nothing says which is which — and
+  // dropping empties would silently slide the comment count into the like
+  // slot, so each stat keeps its own identity and absent ones are omitted
+  // individually rather than by collapsing the row.
+  // `data-ad-rendering-role="like_button|comment_button|share_button"` is
+  // Facebook's own marker and is LANGUAGE-INDEPENDENT; the aria-label lookup
+  // is the fallback, and only works on an English UI. Prefer the role.
+  const FB_STATS: Array<{ label: string; role: string; icon: string }> = [
+    { label: 'Like', role: 'like_button', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>' },
+    { label: 'Comment', role: 'comment_button', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>' },
+    { label: 'Share', role: 'share_button', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>' },
+  ];
+  const statItemsHtml = FB_STATS.map(({ label, role, icon }) => {
+    // Skip any action bar belonging to the SHARED card: on a share the
+    // original's buttons can precede the sharer's in document order, so a
+    // plain querySelector would report the original post's engagement as if
+    // it were the sharer's.
+    const notShared = (el: Element | null) =>
+      el && !(sharedCard && (sharedCard.contains(el) || sharedCard === el)) ? el : null;
+    const btn = Array.from(root.querySelectorAll(`[data-ad-rendering-role="${role}"]`))
+        .find(el => notShared(el))
+      ?? Array.from(root.querySelectorAll(`[role="button"][aria-label="${label}"], [role="toolbar"] [aria-label="${label}"]`))
+        .find(el => notShared(el))
+      ?? null;
+    const count = btn ? findStatCount(btn) : null;
+    if (!count) return '';
+    const safeCount = count.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `<span class="tweet-stat" aria-label="${label}">${icon}<span class="tweet-stat-count">${safeCount}</span></span>`;
+  }).filter(Boolean);
+  const statsHtml = statItemsHtml.length
+    ? `<span class="tweet-stats">${statItemsHtml.join('')}</span>`
+    : '';
+
+  if (!displayName && !plainText && !video) {
+    log(LL.DEBUG, 'Discerned: Facebook post extractor found no name/text/video, falling through', 'url:', base.url);
+    return null;
+  }
+
+  const safeDisplayName = displayName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const safeDate = dateText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const [inlinedAvatar, inlinedPoster, ...rawInlinedPhotos] = await Promise.all([
+    avatarSrc && isSafeImageSrc(avatarSrc) ? inlineImage(avatarSrc) : Promise.resolve(''),
+    rawPoster && isSafeImageSrc(rawPoster) ? inlineImage(rawPoster) : Promise.resolve(framePoster ?? ''),
+    ...photoImgs.map(img => inlineImage(img.src)),
+  ]);
+  // Facebook album photos arrive letterboxed on a padded canvas and are cropped
+  // in-page by an overflow:hidden wrapper that sanitisation removes — crop the
+  // bars out of the pixels instead. No-op for images without them.
+  const inlinedPhotos = await Promise.all(rawInlinedPhotos.map(cropLetterbox));
+
+  const avatarHtml = inlinedAvatar
+    ? `<img class="tweet-avatar" src="${inlinedAvatar}" alt="${safeDisplayName}" width="48" height="48">`
+    : '';
+  const videoHtml = video && inlinedPoster
+    ? buildVideoHtml([{ poster: inlinedPoster, rawPoster: rawPoster ?? undefined, duration: null, aspectPct: null }], base.url)
+    : (video ? `<a class="dx-video-link" href="${base.url}">▶ Video</a>` : '');
+  // Facebook albums are variable-count and mostly PORTRAIT, so they get an
+  // `--album` grid variant rather than X's fixed 1-4 landscape layouts (whose
+  // 16:9 box letterboxed every portrait shot with black bars).
+  // Split the photos by owner. On a SHARE the pictures belong to the ORIGINAL
+  // post, so rendering them on the outer card put the shared image above the
+  // quote card as if the sharer had posted it. Anything at or after the
+  // "Shared post from …" label is the original's.
+  // CONTAINMENT only — never document position. "Anything after the label"
+  // also swept in the page's sidebar ads (measured: two unrelated promo
+  // images landed inside the quote card), because everything later in the
+  // document trivially follows the label.
+  const isSharedPhoto = (img: Element) =>
+    !!(sharedCard && (sharedCard.contains(img) || sharedCard === img));
+  const asAlbum = (html: string) =>
+    html.replace(/class="tweet-photo-grid tweet-photo-grid-\d"/, 'class="tweet-photo-grid tweet-photo-grid--album"');
+  const ownPhotoIdx = photoImgs.map((img, i) => ({ img, i })).filter(x => !isSharedPhoto(x.img));
+  const sharedPhotoIdx = photoImgs.map((img, i) => ({ img, i })).filter(x => isSharedPhoto(x.img));
+  const photosHtml = video
+    ? ''
+    : asAlbum(buildPhotosHtml(ownPhotoIdx.map(x => ({ src: inlinedPhotos[x.i], dxSrc: x.img.src }))));
+  const sharedPhotosHtml = video
+    ? ''
+    : asAlbum(buildPhotosHtml(sharedPhotoIdx.map(x => ({ src: inlinedPhotos[x.i], dxSrc: x.img.src }))));
+  const dateHtml = safeDate ? `<span class="tweet-date">${safeDate}</span>` : '';
+  const footerHtml = (dateHtml || statsHtml)
+    ? `<div class="tweet-footer">${dateHtml}${statsHtml}</div>`
+    : '';
+
+  // The shared original, as a bordered quote card.
+  //
+  // Keyed on `sharedCard` (the labelled block), NOT on a nested story_message:
+  // a share very often has no message of its own, and a shared LINK renders as
+  // a preview (title + description + image) with no story_message anywhere, so
+  // requiring one dropped the quote entirely on exactly the common cases.
+  let quotedHtml = '';
+  let quotedText = '';
+  if (sharedCard || sharedMsg) {
+    const quoteScope = sharedCard
+      ?? sharedMsg!.closest('[role="article"], [data-ad-comet-preview]')
+      ?? sharedMsg!.parentElement;
+    // Name: prefer the label ("Shared post from <name>") — it states the
+    // original author outright — then the shared card's own profile_name.
+    const labelName = (sharedLabelEl?.textContent ?? '')
+      .replace(/^\s*Shared post from\s+/i, '').trim();
+    const quoteNameEl = quoteScope?.querySelector('[data-ad-rendering-role="profile_name"]');
+    const quoteName = labelName || (quoteNameEl?.textContent ?? '').trim();
+    // Body: the shared post's own message, else the link-preview title +
+    // description Facebook renders for a shared link.
+    const previewTitle = (quoteScope?.querySelector('[data-ad-rendering-role="title"]')?.textContent ?? '').trim();
+    const previewDesc = (quoteScope?.querySelector('[data-ad-rendering-role="description"]')?.textContent ?? '').trim();
+    const quoteBody = sharedMsg
+      ? sanitizeHtmlString(fbCleanCaption(sharedMsg).innerHTML)
+      : [previewTitle, previewDesc].filter(Boolean)
+          .map(t => `<div>${t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`)
+          .join('');
+    const quotePlain = sharedMsg
+      ? (fbCleanCaption(sharedMsg).textContent ?? '').trim()
+      : [previewTitle, previewDesc].filter(Boolean).join('\n');
+    if (quoteName || quoteBody) {
+      const safeQuoteName = quoteName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      quotedHtml = `<div class="tweet-quote">
+    ${safeQuoteName ? `<div class="tweet-header"><div class="tweet-author"><span class="tweet-name">${safeQuoteName}</span></div></div>` : ''}
+    ${quoteBody ? `<div class="tweet-text">${quoteBody}</div>` : ''}
+    ${sharedPhotosHtml}
+  </div>`;
+      // A public cast can't carry the quote CARD, so keep a plain-text
+      // blockquote for bodyText — same treatment the tweet path gives a
+      // quote-tweet.
+      quotedText = [
+        quoteName ? `> ${quoteName}` : '',
+        ...quotePlain.split('\n').map(l => `> ${l}`),
+      ].filter(l => l.trim() !== '>').join('\n');
+      log(LL.DEBUG, `Discerned: Facebook shared post — quoting "${quoteName}"`, 'url:', base.url);
+    }
+  }
+
+  const bodyHtml = `<div class="tweet-card tweet-card--native">
+  <div class="tweet-header">
+    ${avatarHtml}
+    <div class="tweet-author">
+      <span class="tweet-name">${safeDisplayName}</span>
+    </div>
+  </div>
+  ${sanitisedText ? `<div class="tweet-text">${sanitisedText}</div>` : ''}
+  ${videoHtml}
+  ${photosHtml}
+  ${quotedHtml}
+  ${footerHtml}
+</div>`;
+
+  log(LL.DEBUG, `Discerned: Facebook post captured — name="${displayName}" video=${!!video} poster=${!!inlinedPoster} photos=${photoImgs.length} stats=${statItemsHtml.length}`, 'url:', base.url);
+
+  const rawImageUrls = [
+    ...(video && rawPoster ? [rawPoster] : []),
+    ...photoImgs.map(img => img.src),
+  ].filter(src => /^https?:/i.test(src));
+
+  return {
+    ...base,
+    title: base.title,
+    format: 'article',
+    bodyHtml,
+    bodyText: [displayName, plainText, quotedText].filter(Boolean).join('\n\n'),
+    thumbnail: null,
+    thumbnailUrl: rawImageUrls[0] ?? null,
+    imageUrls: rawImageUrls.length > 0 ? rawImageUrls : undefined,
+  };
+}
+
 // ── Embedded tweets on third-party pages ────────────────────────────────────
 //
 // Third-party pages (news sites, blogs) embed tweets in two shapes:
@@ -2414,6 +3191,30 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     log(LL.DEBUG, 'Discerned: Twitter extractor yielded nothing, falling through to generic', 'url:', base.url);
   }
 
+  // Tier 0: Facebook single-post URLs (reel/photo/posts/watch/share) — build a
+  // clean tweet-card-shaped card instead of tagging the live div soup. Falls
+  // through to tagFacebook (feed shape, or a permalink this couldn't resolve)
+  // when a required field is missing.
+  // The builder is layout-driven: it picks the visible post, sizes the avatar,
+  // and separates content photos from placeholders by measured geometry. Under
+  // jsdom every rect is 0x0, so those filters all collapse and it emits a card
+  // with almost nothing in it. Require real layout and otherwise leave the page
+  // to the tagger + generic pipeline, which need no measurements.
+  const hasLayout = window.innerWidth > 0 && window.innerHeight > 0
+    && document.body.getBoundingClientRect().height > 0;
+  if (isFacebookHost() && hasLayout) {
+    // A single-post URL builds from the whole document; the FEED first picks
+    // the one post card the user is looking at (the same card-climb + visible
+    // -post choice tagFacebook uses), then builds from just that card. Both
+    // return null on a missing essential field and fall through to the tagger.
+    const fbRoot = isFacebookPostUrl(window.location.href) ? document : fbVisiblePostCard();
+    if (fbRoot) {
+      const fbPost = await extractFacebookPost(base, liveVideoFrames, fbRoot);
+      if (fbPost) return fbPost;
+      log(LL.DEBUG, 'Discerned: Facebook post extractor yielded nothing, falling through to tagger', 'url:', base.url);
+    }
+  }
+
   const thumbnailUrl = getPageThumbnail();
   const inlinedThumbnail = thumbnailUrl ? await inlineImage(thumbnailUrl) : null;
 
@@ -2668,6 +3469,22 @@ async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
     const tweet = await extractTweet(baseFields(), 'full-page');
     if (tweet) return tweet;
     log(LL.DEBUG, 'Discerned: full-page Twitter extractor yielded nothing, falling through to generic', 'url:', window.location.href);
+  }
+
+  // Same for Facebook: a full-page capture of a post should be the post card,
+  // not the SPA shell. The format is STICKY (STORAGE_KEYS.LAST_FORMAT), so a
+  // user who once picked full-page keeps landing here — wiring the builder
+  // only into extractArticle left those captures on the old tagger path with
+  // every defect the builder exists to fix.
+  if (isFacebookHost()) {
+    const fbBase = baseFields();
+    const fbFrames = await captureVideoFrames(document.body);
+    const fbRoot = isFacebookPostUrl(window.location.href) ? document : fbVisiblePostCard();
+    if (fbRoot) {
+      const fbPost = await extractFacebookPost(fbBase, fbFrames, fbRoot);
+      if (fbPost) return { ...fbPost, format: 'full-page' };
+      log(LL.DEBUG, 'Discerned: full-page Facebook extractor yielded nothing, falling through to tagger', 'url:', window.location.href);
+    }
   }
 
   // Apply per-site live-DOM tagger so dx-* markers + dx-excl flags land on
@@ -4352,9 +5169,49 @@ function tagInstagram(root: Document | Element): Element | void {
  */
 const FB_MSG_SEL = '[data-ad-rendering-role="story_message"], [data-ad-comet-preview="message"]';
 
-/** A facebook.com profile URL — `/name`, `/name.123`, or `/profile.php?id=N`. */
+// Global nav-chrome destinations that share the exact "one path segment,
+// nothing else" shape a real username slug has — a bare `/reel/` (the Reels
+// tab) is indistinguishable from a profile vanity URL by shape alone. Only
+// the fixed, short set Facebook's top nav actually uses; a real username is
+// never one of these words.
+const FB_NAV_CHROME_SLUGS = new Set([
+  'reel', 'reels', 'watch', 'marketplace', 'groups', 'gaming', 'home.php',
+  'friends', 'notifications', 'messages', 'events', 'saved', 'pages', 'ads',
+]);
+
+/**
+ * A facebook.com link that identifies a POSTER — a person, page, or group.
+ *
+ * Four shapes, and all four are load-bearing. Missing any one of them makes
+ * `fbBylineAnchors` return zero for that page, which in turn makes the card
+ * climb fail to terminate, so the capture degrades to the bare message block:
+ * text only, no avatar, no images, no reactions.
+ *
+ *   /name, /name.123        a vanity profile (feed, permalink)
+ *   /profile.php?id=N       a numeric profile — reels use the SITE-RELATIVE
+ *                           form ("/profile.php?id=N&sk=reels_tab&…") while
+ *                           feed/permalink use the absolute one
+ *   /groups/<id>/user/<id>/ a member's byline inside a GROUP post, and
+ *   /groups/<id>/           the group itself — measured on a group post in the
+ *                           home feed, where EVERY byline anchor takes this
+ *                           shape and none matched the vanity/profile.php
+ *                           patterns
+ *   /pages/<Name>/<id>      a legacy page link ("— at Paradise, Washington")
+ *
+ * A relative href also matches Facebook's own global-nav "/reel/" tab link by
+ * shape, so nav-chrome slugs are excluded.
+ */
 function fbIsProfileHref(h: string): boolean {
-  return /^https?:\/\/(www\.)?facebook\.com\/(profile\.php\?id=\d+|[A-Za-z0-9.]+)(\?|$|\/$)/.test(h);
+  const path = h.replace(/^https?:\/\/(?:www\.)?facebook\.com/, '');
+  // Group member / group landing, and legacy /pages/<Name>/<id>.
+  if (/^\/groups\/\d+\/user\/\d+\/?(?:\?|$)/.test(path)) return true;
+  if (/^\/groups\/[^/?]+\/?(?:\?|$)/.test(path)) return true;
+  if (/^\/pages\/[^/?]+\/\d+\/?(?:\?|$)/.test(path)) return true;
+
+  const m = /^\/(profile\.php\?id=\d+|[A-Za-z0-9.]+)(?:\?|$|\/$)/.exec(path);
+  if (!m) return false;
+  const slug = m[1].split('?')[0].toLowerCase();
+  return !FB_NAV_CHROME_SLUGS.has(slug);
 }
 
 /**
@@ -4619,15 +5476,19 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     name: 'facebook',
     match: h => /(^|\.)facebook\.com$/i.test(h),
     tag: tagFacebook,
-    // Facebook serves two mutually-exclusive page shapes, so they must be ONE
-    // grouped anchor (same idiom as primal's `_primaryNote_, _noteThread_`):
+    // Facebook serves several mutually-exclusive page shapes, so they must be
+    // ONE grouped anchor (same idiom as primal's `_primaryNote_, _noteThread_`):
     //   • FEED      — posts carry the ad-rendering markers
     //   • PERMALINK — /photo/, /posts/: NO story_message anywhere; the post is a
     //                 role="dialog" lightbox
+    //   • REEL/WATCH — a bare <video> player, no story_message, often no
+    //                  role="dialog" either
     // Listing them separately made checkTaggerAnchors report "all dead" on every
     // permalink and skip the tagger entirely, falling back to the generic
-    // pipeline and capturing nothing.
-    anchors: ['[data-ad-rendering-role="story_message"], [data-ad-comet-preview="message"], [role="dialog"]'],
+    // pipeline and capturing nothing. (Reels/Watch mostly route through
+    // extractFacebookPost's Tier-0 gate before this tagger runs at all, but the
+    // anchor must still hold for the cases that fall through to it.)
+    anchors: ['[data-ad-rendering-role="story_message"], [data-ad-comet-preview="message"], [role="dialog"], video'],
   },
   {
     name: 'tiktok',
@@ -4828,6 +5689,16 @@ function applyTaggerToClone(cloneRoot: Element | DocumentFragment): void {
 let testHostOverride: string | null = null;
 export function __setTestHostOverride(host: string | null): void {
   if (__DISCERNED_DEV_BUILD__) testHostOverride = host;
+}
+
+// Companion to testHostOverride, for the rarer case where a tagger/Tier-0 gate
+// branches on URL PATH SHAPE, not just hostname (isFacebookPostUrl: reel vs
+// photo vs feed all live at different pathnames on the real site, which a
+// fixture served from 127.0.0.1/<name>.html can never reproduce). Tree-shaken
+// the same way as testHostOverride.
+let testPathOverride: string | null = null;
+export function __setTestPathOverride(path: string | null): void {
+  if (__DISCERNED_DEV_BUILD__) testPathOverride = path;
 }
 
 // Tier 0 (Twitter/X) gates on the real page URL, which fixture pages served
@@ -6099,6 +6970,25 @@ function matchVideoEmbed(src: string): VideoEmbedInfo | null {
   if (host === 'dailymotion.com' || host === 'geo.dailymotion.com') {
     const id = u.pathname.match(/\/video\/([A-Za-z0-9]+)/)?.[1];
     if (id) return { poster: null, href: `https://www.dailymotion.com/video/${id}`, label: 'Dailymotion video' };
+  }
+  // Facebook — third-party pages embed a reel/video/post via
+  // facebook.com/plugins/video.php?href=<encoded canonical URL> (or
+  // /plugins/post.php for a text/photo post). Facebook exposes no derivable
+  // thumbnail URL here (unlike YouTube's predictable i.ytimg.com path), so
+  // this yields a link card rather than a poster — still far better than the
+  // iframe silently vanishing, which is what happened before this provider
+  // existed (sanitiseTreeInPlace strips every iframe with nothing left behind).
+  if (host === 'facebook.com' && /^\/plugins\/(video|post)\.php$/.test(u.pathname)) {
+    const hrefParam = u.searchParams.get('href');
+    if (hrefParam) {
+      try {
+        const canonical = new URL(hrefParam);
+        if (/(^|\.)facebook\.com$/i.test(canonical.hostname)) {
+          const label = u.pathname.endsWith('video.php') ? 'Facebook video' : 'Facebook post';
+          return { poster: null, href: canonical.toString(), label };
+        }
+      } catch { /* malformed href param — fall through */ }
+    }
   }
   return null;
 }

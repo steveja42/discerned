@@ -43,6 +43,12 @@
     <iframe src="https://rumble.com/embed/v2abcde/" width="640" height="360"></iframe>
     <iframe src="https://player.twitch.tv/?video=1234567890" width="640" height="360"></iframe>
 
+    <p id="p4b">A Facebook video/reel embedded on a third-party page via the
+      plugins iframe — no derivable thumbnail either, so it degrades to a link
+      card pointing at the canonical facebook.com URL rather than vanishing.</p>
+    <iframe src="https://www.facebook.com/plugins/video.php?height=476&amp;href=https%3A%2F%2Fwww.facebook.com%2Fsomepage%2Fvideos%2F1234567890%2F&amp;width=560"
+            width="560" height="476"></iframe>
+
     <p id="p5">An unrecognised iframe (an ad slot, a newsletter widget) must
       still be dropped by the sanitiser exactly as it was before.</p>
     <iframe src="https://ads.example.com/slot?id=99" width="300" height="250"></iframe>

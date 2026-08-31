@@ -1,38 +1,35 @@
-// One-shot tool: save the logged-in Facebook home feed as a deterministic
-// fixture, so the post-card boundary can be worked out OFFLINE.
+// One-shot tool: save a single Facebook post permalink (reel, photo, text
+// post, Watch, or share link) as a deterministic fixture, so
+// extractFacebookPost can be iterated on OFFLINE.
 //
-// Why this exists: four attempts to make tagFacebook capture the author byline
-// were written against the LIVE feed and all four made the clip worse. The feed
-// serves a DIFFERENT post shape on every load — plain, shared (two nested
-// bylines), tagged ("X was tagged", header above the card) — so a rule that
-// looked right on one load broke on the next. A fixture freezes all three
-// shapes in one tree.
+// Same rationale as snapshot-facebook-feed.spec.ts (the live page is
+// non-deterministic across loads), but for a single post rather than the feed
+// track. Images are inlined as data URIs through the page's own session
+// (fbcdn rejects unauthenticated fetches), and scripts are stripped so the
+// fixture is inert.
 //
-// Images are inlined as data URIs through the page's own session (fbcdn rejects
-// unauthenticated fetches), and scripts are stripped so the fixture is inert.
-//
-// Inlining is NOT optional housekeeping: fbcdn URLs carry expiring signed tokens
-// (oh=/oe=), so any image left remote 403s within days and the fixture rots into
-// a blank-photo capture. Two shapes must both be caught — <img src> AND the SVG
-// <image xlink:href> Facebook uses for avatars, which an <img>-only pass misses.
-// Anything still lazy-loaded at snapshot time is skipped here, so scroll the
-// feed before this runs, then verify: the saved file should contain NO
-// "scontent" reference except the inert <link rel=preconnect>.
+// Inlining is NOT optional housekeeping: fbcdn URLs carry expiring signed
+// tokens (oh=/oe=), so any image left remote 403s within days and the fixture
+// rots into a blank-photo capture. Two shapes must both be caught — <img src>
+// AND the SVG <image xlink:href> Facebook uses for avatars.
 //
 // Run (Chrome fully closed, logged-in warm profile):
-//   FBSNAP=1 pnpm exec playwright test -c tests/e2e/playwright.config.ts \
-//     --project=snapshot-facebook-feed
+//   FBPOSTSNAP=1 FB_POST_URL=https://www.facebook.com/reel/4460125307635536 \
+//     FB_SLUG=facebook-reel pnpm exec playwright test \
+//     -c tests/e2e/playwright.config.ts --project=snapshot-facebook-post
 
 import { test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import { launchWithExtension } from '../helpers/launchExtension';
 
-const FEED_URL = process.env.FB_URL ?? 'https://www.facebook.com/';
-const FIXTURE_PATH = resolve(__dirname, '..', '..', 'fixtures', 'sites', 'facebook-feed.html');
+const POST_URL = process.env.FB_POST_URL;
+const SLUG = process.env.FB_SLUG ?? 'facebook-post';
+const FIXTURE_PATH = resolve(__dirname, '..', '..', 'fixtures', 'sites', `${SLUG}.html`);
 
-test('snapshot-facebook-feed', async () => {
-  test.skip(!process.env.FBSNAP, 'set FBSNAP=1 to run');
+test('snapshot-facebook-post', async () => {
+  test.skip(!process.env.FBPOSTSNAP, 'set FBPOSTSNAP=1 to run');
+  test.skip(!POST_URL, 'set FB_POST_URL to the permalink/reel/photo URL to snapshot');
   test.setTimeout(300_000);
 
   const { ctx } = await launchWithExtension({
@@ -42,10 +39,10 @@ test('snapshot-facebook-feed', async () => {
   });
   try {
     const page = await ctx.newPage();
-    await page.goto(FEED_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+    await page.goto(POST_URL!, { waitUntil: 'domcontentloaded', timeout: 90_000 });
     await page.waitForTimeout(9_000);
 
-    // Dismiss the "Remember Password" / cookie interstitials that cover the feed.
+    // Dismiss the "Remember Password" / cookie interstitials that cover the post.
     for (const label of ['Not Now', 'Not now', 'Decline optional cookies', 'Close']) {
       const btn = page.getByRole('button', { name: label, exact: false }).first();
       if (await btn.count().catch(() => 0)) {
@@ -54,27 +51,29 @@ test('snapshot-facebook-feed', async () => {
       }
     }
 
-    // Scroll to accumulate SEVERAL posts so the fixture covers multiple shapes
-    // (plain / shared / tagged) rather than whichever one happens to load first.
-    for (let i = 0; i < 6; i++) {
-      await page.mouse.wheel(0, 900);
-      await page.waitForTimeout(1_800);
+    // For a reel/Watch player, nudge playback briefly so the <video> element
+    // has decoded at least one frame (readyState >= 2) before we snapshot —
+    // that's what the live captureVideoFrames canvas path needs, and it's
+    // useful to freeze whatever poster/currentSrc state the player settles on.
+    const hasVideo = await page.evaluate(() => document.querySelector('video') !== null);
+    if (hasVideo) {
+      await page.waitForTimeout(3_000);
+      await page.evaluate(() => {
+        const v = document.querySelector('video');
+        if (v) { v.muted = true; void v.play().catch(() => undefined); }
+      });
+      await page.waitForTimeout(2_000);
     }
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForTimeout(2_000);
 
-    const shapes = await page.evaluate(() => {
-      const msgs = Array.from(document.querySelectorAll(
-        '[data-ad-rendering-role="story_message"], [data-ad-comet-preview="message"]'));
-      const bodyTxt = (document.body.innerText ?? '');
-      return {
-        storyMessages: msgs.length,
-        looksTagged: /was tagged|is with /i.test(bodyTxt),
-        looksShared: /shared a (post|link|memory)/i.test(bodyTxt),
-      };
-    });
+    const shape = await page.evaluate(() => ({
+      video: document.querySelectorAll('video').length,
+      msgs: document.querySelectorAll(
+        '[data-ad-rendering-role="story_message"], [data-ad-comet-preview="message"]').length,
+      dialogs: document.querySelectorAll('[role="dialog"]').length,
+      imgs: document.querySelectorAll('img').length,
+    }));
     // eslint-disable-next-line no-console
-    console.log(`[fb-snap] story messages: ${shapes.storyMessages} tagged=${shapes.looksTagged} shared=${shapes.looksShared}`);
+    console.log(`[fb-post-snap] shape: video=${shape.video} msgs=${shape.msgs} dialogs=${shape.dialogs} imgs=${shape.imgs}`);
 
     // Inline images as data URIs.
     //
@@ -166,16 +165,19 @@ test('snapshot-facebook-feed', async () => {
       return { applied, posterBaked };
     }, map);
     // eslint-disable-next-line no-console
-    console.log(`[fb-snap] fetched ${ok}/${urls.length} (skipped ${skip}), applied ${inlined.applied}, baked ${inlined.posterBaked} posters`);
+    console.log(`[fb-post-snap] fetched ${ok}/${urls.length} (skipped ${skip}), applied ${inlined.applied}, baked ${inlined.posterBaked} posters`);
 
-    // Strip scripts / external links so the fixture is inert and offline-safe.
+    // Strip scripts / external links / video <source> so the fixture is inert
+    // and offline-safe. Keep the <video poster> we just baked.
     const html = await page.evaluate(() => {
       document.querySelectorAll('script, link[rel="preload"], link[rel="prefetch"]').forEach(n => n.remove());
+      document.querySelectorAll('video source').forEach(n => n.remove());
+      document.querySelectorAll('video').forEach(v => v.removeAttribute('src'));
       return '<!doctype html>\n' + document.documentElement.outerHTML;
     });
     writeFileSync(FIXTURE_PATH, html, 'utf8');
     // eslint-disable-next-line no-console
-    console.log(`[fb-snap] wrote ${FIXTURE_PATH} (${(html.length / 1024 / 1024).toFixed(1)} MB)`);
+    console.log(`[fb-post-snap] wrote ${FIXTURE_PATH} (${(html.length / 1024 / 1024).toFixed(1)} MB)`);
 
     // Guard the rot: any media URL left pointing at fbcdn carries an expiring
     // signed token and will 403 within days, silently turning the fixture into
@@ -184,8 +186,8 @@ test('snapshot-facebook-feed', async () => {
       .filter(m => !/rel="?(pre|dns)/i.test(m));
     if (leftovers.length) {
       // eslint-disable-next-line no-console
-      console.warn(`[fb-snap] WARNING: ${leftovers.length} un-inlined fbcdn URL(s) remain — ` +
-        `these expire and the fixture will rot. Scroll the feed so they load, then re-run.`);
+      console.warn(`[fb-post-snap] WARNING: ${leftovers.length} un-inlined fbcdn URL(s) remain — ` +
+        `these expire and the fixture will rot.`);
       leftovers.slice(0, 5).forEach(u => console.warn(`  ${u.slice(0, 110)}`));
     }
   } finally {
