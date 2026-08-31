@@ -1090,8 +1090,7 @@ ${themeVarsBlock(this.effectiveTheme)}
             <div class="card-label">Images</div>
             <div class="perm-desc">
               Clips currently link to images on the original site, so they can break
-              if that page changes or disappears. Chrome only lets this be granted
-              from an extension page, so this opens Discerned's permissions page.
+              if that page changes or disappears. To allow storing images inside the clips, visit Discerned's permissions page.
             </div>
             <button class="btn btn-secondary" id="grant-image-perm" type="button">Open permissions page &rarr;</button>
             <div class="perm-result" id="image-perm-result"></div>

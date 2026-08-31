@@ -40,9 +40,9 @@ function showDeclined(): void {
   if (permStatus) {
     permStatus.hidden = false;
     permStatus.textContent =
-      'No problem — images are still saved on most sites. On the few that don\'t '
-      + 'allow it, clips will link to the original image instead. You can change '
-      + 'this later in the extension\'s settings.';
+      'No problem — your clips will link to images on the original site instead, '
+      + 'so they can break if that page changes or disappears. You can turn this '
+      + 'on later in the extension\'s settings.';
   }
 }
 
