@@ -168,11 +168,38 @@ size cap, added up to 1.5 s per image before falling through, and would have
 doubled the test matrix (granted/declined x permissive/hostile) for a path no
 existing spec could actually verify. Don't reintroduce it without solving those.
 
+**Inlining is for CLIPS ONLY — casts never carry inlined images.** The grant
+affects the private clip and nothing else. `inlineAllImages` overwrites `src` with
+base64 but preserves the real URL in `data-dx-src`, and `htmlToMarkdown`'s
+`image-real-url` rule publishes THAT, dropping any image whose only source is a
+`data:` URI — base64 art is far too large for a relay. So a cast links to images at
+their original address whether or not the permission is held, and a granted user
+who inspects a published kind-30023 will correctly find no embedded images. Don't
+"fix" this by publishing the base64. It also means image-rot protection does not
+extend to casts: only the clip is durable. Reflected in the permissions-page copy
+(`src/permissions/permissions.html`), which says so in plain language — that page
+is user-facing, so keep protocol jargon ("relay", "kind-30023") out of it.
+
 **The grant can be given later.** Declining at onboarding is not final — the
 overlay's Settings drawer shows an "Images" card (`initImagePermissionCard()` in
 `overlay.ts`) whenever the permission is absent, and hides it once granted.
 `chrome.permissions.request()` must be called SYNCHRONOUSLY inside the click
 handler in both places; an `await` before it drops the user gesture.
+
+**A mid-overlay grant must re-capture.** The capture runs when the overlay OPENS
+(`show()` → `refreshCapture()`), so a capture taken before the grant has already
+hotlinked its images; Clip then saves that stale object and silently ignores the
+permission the user just gave. `watchImagePermission()` polls on `focus` /
+`visibilitychange` (the grant happens on another tab) and, on a real
+ungranted→granted edge, sets `captureStaleForImages`. Two traps, both of which
+produced a fix that looked right and changed nothing:
+- **Don't gate the re-capture on `view === 'main'`.** The grant is given FROM the
+  Settings drawer, so the view is `'settings'` at that moment and the branch never
+  runs.
+- **Don't rely on the `if (!this.capture)` guard** on the return-to-main paths: a
+  pre-grant capture EXISTS, it is merely stale, so that guard keeps it.
+  `consumeStaleImageCapture()` is therefore called BEFORE that guard on all three
+  return paths.
 
 ### Running the e2e tests against the real permission model
 
