@@ -32,35 +32,46 @@ knowledge base". There is no curation, no ranking, and no reputation, so don't i
 any; and don't describe the publisher population ("readers everywhere", "thousands of
 curators") until it exists.
 
+**Do NOT paste the following two lines.** The Store prepends `manifest.json`'s
+`description` above whatever goes in this field, so it is reproduced here only to show
+how the listing reads end to end. Pasting it would duplicate the summary.
+
+> Web clipper for saving articles, quotes and pages. Rate and tag what you clip, and publish your picks to Nostr if you want.
+
+**Paste only the fenced block below.**
+
 ```
+Discern the signal from the noise on the web.
+Discerned is a local-first web clipper for saving and organizing web content — and a decentralized discovery tool for seeing what people you trust are rating across any website.
+
 CLIP & RATE WHAT MATTERS
 • Save full pages, articles, text selections, or bookmarks in one click.
-• You can give it a Signal Rating — five levels, from "Toxic" through "Ordinary" to "Masterpiece" — and
- tag it by tone, utility, and longevity, or add your own qualifiers.
-• Sort into categories, with your own alongside the built-in ones.
-• Add notes to your clips.
+• You can assign a Signal Rating — five levels, from "Toxic" through "Ordinary" to "Masterpiece".
+• Tag clips by tone, utility, and longevity, or add your own custom qualifiers.
+• Sort into custom categories alongside built-in ones.
+• Add personal notes to any clip.
 
-CAPTURE THAT LOOKS LIKE WHAT YOU READ
-• Discerned reproduces the page's real structure rather than flattening it into plain text.
-• Sites that defeat ordinary clippers have dedicated handling, so the clip resembles the page you were actually looking at.
-• Ads and noise are removed.
+SEE WHAT OTHERS ARE RATING ACROSS THE WEB
+• Break free from walled gardens: discover what curators and readers rate highly or lowly across multiple websites, not just a single platform controlled by one company.
+• Published clips and ratings feed directly into a public index at discerned.online, open to read by anyone.
+• Filter feeds by Signal Rating, category, or qualifiers to see genuine recommendations and skip the noise.
+• Follow people you know and trusted curators to grow your network and see what it's rating across the web.
 
-SHARE YOUR CLIPS WITH THE WORLD
-• When you choose, publish your clips to Nostr, an open social network where you own your identity, posts, and social graph (connections).
-• They work across every Nostr app, and no company can take them away.
-• Your published clips are signed verifiably under your key.
+CAPTURES THAT LOOK LIKE WHAT YOU READ
+• Preserves the page's real structure rather than flattening it into plain text.
+• Dedicated handling for complex sites that defeat ordinary clippers, keeping visual layout intact.
+• Strips out ads, clutter, and unwanted noise automatically.
 
-SEE WHAT OTHERS LOVE OR HATE
-• Published clips and ratings land in a public feed at discerned.online, open to read whether or not you use the extension.
-• Browse what your friends, follows, and the rest of the world are rating across the web.
-• Filter by follows, Signal Rating, category, or qualifier to see what people rated highly or lowly and why — and follow those whose judgement you trust.
-• Every rating there was published by someone who chose to, signed with their own key, on an open protocol no company controls. The more people who publish, the more useful the record becomes.
+PUBLISH TO AN OPEN PROTOCOL
+• Publish your clips whenever you choose to Nostr — an open social network where you own your identity, posts, and social graph.
+• Bring your existing key, or generate one locally in seconds — no email, password, or third-party auth required.
+• Every public rating is cryptographically signed under your own key and works seamlessly across compatible apps.
+• Freedom from lock-in: no single company owns your data, controls the feed, or can take your clips away.
 
 NO ACCOUNT NEEDED — OWN YOUR DATA
-• Start clipping immediately — zero mandatory account creation.
-• Your clip library stays local-first, on your device.
-• Export your full library as JSON at any time.
-• Import clips from JSON or Evernote files.
+• Start clipping immediately with zero mandatory account creation.
+• Your clip library remains local-first, stored on your device.
+• Export your entire library as JSON at any time, or import existing clips from JSON and Evernote files.
 
 Start discerning signal from noise.
 ```
@@ -87,12 +98,24 @@ optionally publish. There is no second, unrelated feature.
 Paste these into the corresponding fields. Each states the concrete mechanism, because
 "it's a general-purpose tool" is the phrasing that gets rejected.
 
-`host_permissions: <all_urls>`
+`host_permissions: https://platform.twitter.com/*`
+
+The only host permission granted at install. Keep this distinct from the optional
+`<all_urls>` below — conflating them invites the "why do you need every site?" rejection
+the split exists to avoid.
 
 ```
-Discerned is a user-initiated web clipper. Its single purpose is to let users capture, rate, and save content from whichever public webpage they are currently reading. Because a user may choose to clip content from any web domain, access cannot be limited to a static list of host URLs.
+Required to extract the content of embedded tweets (author, text, images) that news and article pages render inside cross-origin platform.twitter.com iframes. This is a fixed, single-origin target, read only during a user-initiated capture.
+```
 
-The extension is strictly passive: content scripts remain completely idle and do not read, process, or monitor page data until the user actively initiates a capture via the toolbar beacon or right-click context menu. Discerned does not run background tracking, does not monitor browsing history, and operates no backend server to receive page content.
+`optional_host_permissions: <all_urls>`
+
+```
+Optional and not requested at install time. Discerned is a user-initiated web clipper: its single purpose is to let users capture, rate, and save content from whichever public webpage they are currently reading. Because a user may choose to clip from any domain, this access cannot be limited to a static list of host URLs.
+
+The permission is requested only when the user opts in, and is used to save a clip's own copy of the media on the page being captured: fetching the page's images, and a poster frame for its videos, so the clip still renders if the source site later removes or blocks them. Those fetches go directly to the servers already hosting that media — the same ones the browser contacted to display the page. Declining is fully supported — the extension keeps working and clips simply reference the original URLs instead.
+
+Routine capture does not rely on this permission. Content scripts are injected per tab under activeTab on the user's own gesture (toolbar beacon or right-click context menu), and remain absent until then, so no page data is read, processed, or monitored without the user initiating it. Discerned does not run background tracking, does not monitor browsing history, and operates no backend server to receive page content.
 ```
 
 `scripting`
@@ -136,14 +159,11 @@ that page's content at the moment of the user's click.
 `tabs`
 
 ```
-Used solely to query open browser tabs for existing instances of the extension's onboarding page and internal web application (discerned.online). This allows the extension to focus an already-open tab rather than spawning redundant duplicate tabs during the identity connect flow.
+Used solely to open, focus, and communicate with the extension's own pages: the onboarding page shown after install, the permissions page where the user grants or reviews the optional image permission, and the extension's web application (discerned.online), which provides the user's clip library and the Nostr identity connect and signing flow.
 
-This permission is never used to monitor, record, or transmit user tab history or general browsing activity.
+Every query is filtered to those specific extension and discerned.online URLs. The extension queries for an already-open instance so it can focus that tab instead of spawning a redundant duplicate, and so it can send a newly saved clip to an open library tab to keep it up to date.
 
-Used to open and focus the extension's own pages — the onboarding page after install,
-and the Discerned web app tab used for the Nostr signing flow. The extension reuses an
-already-open Discerned tab rather than spawning duplicates, which requires querying for
-one. Not used to record or report the user's browsing.
+This permission is never used to monitor, record, or transmit user tab history or general browsing activity. The extension does not enumerate, read, or report the URLs of the user's other tabs.
 ```
 
 Remote code
