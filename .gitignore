@@ -43,7 +43,6 @@ pnpm-debug.log*
 # Workspace-local folders not part of the monorepo source
 /discernedx/
 /legacy/
-/marketing/
 /discerned-web - Copy/
 /discerned-ext_BACKUP/
 /discerned-web_BACKUP/

@@ -1,0 +1,26 @@
+[discerned]
+name = "Discerned"
+categories = [ "curation", "discovery", "tools" ]
+description = "Clip anything on the web, rate it, publish your picks to Nostr, and see what others found worthwhile"
+gallery = [
+  "https://discerned.online/press/screenshot1.png",
+  "https://discerned.online/press/screenshot2.png",
+  "https://discerned.online/press/screenshot3.png",
+  "https://discerned.online/press/screenshot4.png"
+]
+features = [
+  "Clip an article, a selected quote, or a whole page from any site",
+  "Rate what you clip on a 5-level signal scale with tags and categories",
+  "Rich captures keep the original layout: bylines, images, threads and code blocks",
+  "Publishes a kind-1 note plus a NIP-23 long-form (kind 30023) article for full captures",
+  "Private clips stay local in the browser; casting to relays is always opt-in",
+  "Sign in with NIP-07, NIP-46 bunker, or a local key",
+  "NIP-65 relay list discovery, with a relay set you can edit",
+  "See what others found worthwhile at discerned.online, or narrow it to people you follow",
+  "Install the extension from the Chrome Web Store"
+]
+npub = "npub12cw6ljs0hu8gz24ajsd5t43pf4h3m3rqdppa8ulvc769ep6gs8lq3mz0aa"
+platforms = [ "web" ]
+source = "https://github.com/steveja42/discerned"
+thumb = "https://discerned.online/icons/icon128.png"
+url = "https://discerned.online"

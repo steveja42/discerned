@@ -1,0 +1,95 @@
+# CLAUDE.md — Marketing
+
+Positioning, voice, and marketing materials for Discerned. **Read this before writing any
+user-facing copy**, in this folder or in the app — the terminology rules below are hard
+constraints, not preferences, and several of them contradict what the product used to be.
+
+**This folder is committed to a public GitHub repo.** Anything written here is visible to
+anyone. Draft copy, taglines, and store listings are fine; keep genuinely private material
+(revenue figures, unannounced plans, anything about a third party) out of it — `analytics/`
+especially.
+
+Nothing here is built or deployed. Netlify's `ignore` rule
+(`git diff --quiet … -- discerned-web` in `discerned-web/netlify.toml`) scopes deploys to
+`discerned-web/`, so commits under `marketing/` never trigger a build. Keep it that way: if
+a marketing asset needs to ship, it goes in `discerned-web/public/`, not here.
+
+## Layout
+
+| Folder | Holds |
+|---|---|
+| `store-listing/` | Chrome Web Store submission checklist, promo tiles, marquees |
+| | *(screenshots live in `discerned-web/public/press/` — served from discerned.online)* |
+| `directories/` | Third-party app-directory submissions (nostrapps.com, …), as submitted |
+| `press-kit/` | Logo exports, one-pager, boilerplate description |
+| `copy/` | Taglines, elevator pitches, feature blurbs |
+| `social/` | Launch posts, Nostr/X threads |
+| `analytics/` | Install numbers, notes on what landed |
+| `archive/` | **Superseded drafts. Historical only — do NOT quote from these.** See below. |
+
+## The archive is stale and contradicts the shipped product
+
+`archive/` holds four pre-launch documents kept for reference. Every one of them describes a
+product that no longer exists. They are the single biggest source of wrong copy, because they
+read like finished marketing.
+
+- **`marketing.md`**, **`copy-main.md`** — the "WorthCast" brand, a **two-axis** Interest +
+  Ethics model, and kind-9802 highlights.
+- **`Brower Extension Implementation.md`** — a developer spec with the same two-axis UI, plus
+  NIP-32 labelling and kind-10003 library indexes.
+- **`jungle.md`** — the original Goodreads-scraper concept, before the product became a
+  general web capture tool.
+
+What actually changed: the name is **Discerned**, evaluation is **Signal + Qualifiers +
+Category** (not Interest/Ethics), and nothing publishes kind 9802. Mine these for *tone* if
+you like — "signal vs. noise" survived and is still the core hook — but verify every product
+claim against the source before reusing a sentence.
+
+## Terminology — hard rules
+
+**"Discerns", never "discernments".** A published evaluation is a *discern*, the way a
+published post is a tweet. Standard call to action: "View more discerns at discerned.online".
+
+**Clip vs. Cast.** A **clip** is private, stored in the user's own browser. A **cast** is
+public, published to Nostr relays. Never blur these — the distinction is the product.
+
+**Casting is capture-time only.** There is no path from a stored clip to a cast. Copy must
+never imply clips are queued or waiting to be published. Write "**unless** you cast it", never
+"**until** you cast it" — the second promises a feature that does not exist.
+
+**Signal levels are the five shipped names**, in order: Toxic, Noise, Ordinary, Worthwhile,
+Masterpiece. Signal is optional — an unrated clip is valid, so don't describe rating as
+mandatory. The definitive list is `SIGNAL_LEVELS` in
+`discerned-ext/src/shared/types.ts` — check it rather than trusting this file.
+
+**Spell out acronyms** on first use. NIP-07, npub, and DOM are fine unglossed; anything less
+common gets written out.
+
+**Images: clips only.** Inlined images live in the private clip. A public cast links to images
+at their original address, always. Never claim casts preserve images against link rot.
+
+**Encryption is not shipped.** NIP-44 encryption is stubbed — clips are plaintext JSON in
+IndexedDB. The archive's "military-grade encryption" and "not even us can see it" lines are
+false today. Local-only and private are both true and both sufficient; say those instead.
+
+## Voice
+
+Plain and concrete. The product is a small independent tool, and copy that oversells it reads
+as untrustworthy to exactly the audience most likely to install it. Prefer a verifiable claim
+over a grand one.
+
+Avoid: "military-grade", "revolutionary", "the future of", stacked superlatives, and any
+capability that is stubbed or planned. If a claim can't be checked against shipped code,
+either cut it or mark it as planned in the copy itself.
+
+## Before shipping copy
+
+1. Check the terminology rules above.
+2. Verify product claims against source — `SIGNAL_LEVELS` and `QUALIFIER_GROUPS` in
+   `discerned-ext/src/shared/types.ts`, `INITIAL_CATEGORIES` in
+   `discerned-ext/src/background/background.ts`.
+3. If the copy also appears in the app, edit `discerned-web/lib/marketing-copy.tsx` — the
+   `PITCH` constant feeds both the first-visit popover and the About page hero. Copy that
+   lives in two places drifts.
+4. Store-listing copy is version-coupled. Bump it in the same commit as
+   `discerned-ext/manifest.json`, `discerned-ext/package.json`, `discerned-web/package.json`.
