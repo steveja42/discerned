@@ -18,6 +18,7 @@ import MiniBeacon from '@/components/brand/MiniBeacon';
 import StatusDot from '@/components/auth/StatusDot';
 import SettingsModal from '@/components/chrome/SettingsModal';
 import { getActiveRelays, onRelayModeChange } from '@/lib/constants';
+import { GITHUB_REPO_URL } from '@/lib/support';
 import { authorDisplayName } from '@/lib/nostr/profiles';
 import { useOwnProfile } from '@/hooks/useOwnProfile';
 import type { AuthState } from '@/lib/types';
@@ -172,7 +173,7 @@ export default function TopBar({ auth, onSignIn, brandHasPopover, onBrandClick, 
           <HeartIcon />
         </Link>
         <a
-          href="https://github.com/steveja42/discerned/tree/main/discerned-web"
+          href={GITHUB_REPO_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="icon-btn"
