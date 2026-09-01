@@ -1,11 +1,14 @@
 # Discerned
 
-A value attribution layer for the web. Capture content, evaluate it on three axes (Interest, Ethics, Category), and publish cryptographically-signed signals to the [Nostr](https://nostr.com/) network.
+A value attribution layer for the web. Capture content, evaluate it (a 5-level **Signal** rating, multi-select **Qualifier** tags, and a **Category**), and publish cryptographically-signed signals to the [Nostr](https://njump.me/) network.
+
+## Install
+
+**[Get the Discerned extension on the Chrome Web Store](https://chromewebstore.google.com/detail/discerned/gpfeknmodijdlehpnkfannklhplmfoma)** — then browse your public discerns at [discerned.online](https://discerned.online).
 
 ## Sub-projects
 
-- **[discerned-ext/](./discerned-ext/)** — Chrome extension (Manifest V3). Clip and save a web page, rate its <strong>Signal</strong>, tag it with <strong>Qualifiers</strong>, file it under a <strong>Category</strong>, and broadcast on the open web — or don&apos;t
-
+- **[discerned-ext/](./discerned-ext/)** — Chrome extension (Manifest V3), live on the [Chrome Web Store](https://chromewebstore.google.com/detail/discerned/gpfeknmodijdlehpnkfannklhplmfoma). Clip and save a web page, rate its **Signal**, tag it with **Qualifiers**, file it under a **Category**, and broadcast on the open web — or don't.
 - **[discerned-web/](./discerned-web/)** — Next.js companion web app deployed at [discerned.online](https://discerned.online). Public Discerns feed plus My Clips for locally stored clips delivered from the extension.
 - **[tests/](./tests/)** — Cross-project end-to-end test suite (Playwright) and shared HTML/clip fixtures.
 
@@ -24,4 +27,4 @@ Per-project commands run from inside the sub-project's folder. See the sub-proje
 
 ## Status
 
-MVP — Chrome extension and web app are functional. Android and iOS apps planned.
+The Chrome extension is published on the [Chrome Web Store](https://chromewebstore.google.com/detail/discerned/gpfeknmodijdlehpnkfannklhplmfoma) and the web app is live at [discerned.online](https://discerned.online). Bitcoin tipping, voting on discerns, and Android and iOS apps are planned.

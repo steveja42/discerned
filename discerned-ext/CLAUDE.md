@@ -278,11 +278,12 @@ Runs exclusively on `discerned.online/*` and `localhost:3000/*`. Bridges the ext
 
 ## Key Domain Concepts
 
-- **Quote Capture**: Selected text + 100-char context window, published as Nostr kind 9802
-- **Resource Capture**: Page title, URL, OG image, published as Nostr kind 1
-- **Clip (🔒)**: Private; stored in IndexedDB (kind 30078 planned)
+- **Quote Capture**: Selected text + 100-char context window (`extractContext`), cast as a kind-1 note carrying a `quote` + `context` tag
+- **Resource Capture**: Page title, URL, OG image, cast as a kind-1 note
+- **Cast event shape**: every cast publishes a **kind 1**; a capture with an article body also publishes a companion **kind 30023** (NIP-23 long-form) holding the markdown, which the kind-1 references by an `a` tag. Nothing publishes kind 9802 — `createEncryptedClipEvent` (kind 30078) exists in the factory but is never published either.
+- **Clip (🔒)**: Private; stored in IndexedDB as plaintext JSON (NIP-44 encryption still stubbed)
 - **Cast (📡)**: Public; published to Nostr relays
-- **Evaluation**: Signal (5 levels, Toxic→Masterpiece, optional — absent = unrated) · Qualifiers (multi-select tags, built-in + custom) · Category (7 built-in options + custom)
+- **Evaluation**: Signal (5 levels, Toxic→Masterpiece, optional — absent = unrated) · Qualifiers (multi-select tags, built-in + custom) · Category (8 built-in options — `INITIAL_CATEGORIES` in `background.ts` — plus custom)
 - **Auth modes**: NIP-07 (browser extension wallet), Local (no cast), NIP-46
 
 ## Opening web-app tabs (deep links)
@@ -641,13 +642,14 @@ When `false`, the bridge is a no-op; only the local `console` call fires in each
 - All user-supplied HTML must pass through `sanitizeHtml()` in `src/content/capture.ts`
 - Shadow DOM isolation is required for all injected UI
 
-## Current Status (MVP / Phase 1)
+## Current Status (Phase 1 — shipped)
 
-- NIP-44 encryption: stubbed, not fully implemented
-- NIP-46 login: implemented
+Published on the Chrome Web Store (store ID `gpfeknmodijdlehpnkfannklhplmfoma`). Known gaps:
+
+- NIP-44 encryption: stubbed — clips are plaintext JSON in IndexedDB
 - No retry logic for failed relay publishes
+- Casting is capture-time only — a stored clip cannot be cast later
 - Firefox support: not targeted yet
-- Tests: Vitest configured but coverage is minimal
 
 ## File Layout
 

@@ -2,7 +2,7 @@
 
 > **Value Attribution Layer for the Web**
 
-A Chrome Extension that allows users to capture, evaluate, and store clips locally as well as cryptographically sign content to the Nostr network. Built for frictionless onboarding of non-crypto users.
+A Chrome Extension that allows users to capture, evaluate, and store clips locally as well as cryptographically sign content to the [Nostr](https://njump.me/) network. Built for frictionless onboarding of non-crypto users.
 
 ---
 
@@ -19,7 +19,7 @@ Current social media amplifies engagement-driven signals (likes, shares) that of
 
 ## Features
 
-### Phase 1 (MVP) — Current
+### Phase 1 — Shipped
 - **Smart Capture**: Auto-detects selected-text quotes vs. full page resources
 - **Evaluation**: Signal (5 levels, Toxic→Masterpiece, optional), Qualifiers (multi-select tags, built-in + custom), Category (8 predefined + custom)
 - **Dual Actions**:
@@ -31,16 +31,16 @@ Current social media amplifies engagement-driven signals (likes, shares) that of
 - **Onboarding Flow**: First-run tab guides new users to pin the extension icon; identity setup happens inline in the capture overlay
 - **Connect Page**: Dedicated tab for identity setup (NIP-07 detection, NIP-46 bunker URL, nsec import)
 - **Shadow DOM UI**: Perfect style isolation on any website; site styles never leak in or out
+- **Export / Import**: Back up your clip library to a JSON file and restore it — the escape hatch for a device change or a fresh install (clips live only in local IndexedDB, and a store install cannot inherit a side-loaded one's data)
+- **Clip Library**: Browse, filter, and search your clips in the [companion web app](https://discerned.online), which reads them live from the extension over a bridge
 
 ### Phase 2 (Planned)
 - Relay health monitoring and auto-retry for failed publishes
-- Export/import of guest clip data
-- Local clip library (browse, filter, search)
 - NIP-44 private encrypted clips (currently stubbed)
+- Signing support for **tipping** (NIP-57 zap requests) and **voting on Discerns** — both act on someone else's cast, so the UI ships in the [web app](../discerned-web/README.md#planned); the extension supplies the identity half
 
 ### Phase 3 (Planned)
 - Firefox support (Manifest V3)
-- Companion web app: browse your network's value signals
 - Discovery feed: find high-signal content
 
 ---
@@ -67,7 +67,7 @@ Current social media amplifies engagement-driven signals (likes, shares) that of
 │  └─ IndexedDB clip storage                  │
 ├─────────────────────────────────────────────┤
 │  Extension Pages                             │
-│  ├─ popup.html — auth status & usage stats  │
+│  ├─ popup.html — stub for chrome:// pages   │
 │  └─ onboarding.html — first-run welcome     │
 ├─────────────────────────────────────────────┤
 │  Storage                                     │
@@ -92,33 +92,37 @@ Current social media amplifies engagement-driven signals (likes, shares) that of
 
 ---
 
-## Quick Start
+## Install
+
+**[Get Discerned on the Chrome Web Store](https://chromewebstore.google.com/detail/discerned/gpfeknmodijdlehpnkfannklhplmfoma)** — the install path for everyone who isn't building it.
+
+## Quick Start (development)
 
 ### Prerequisites
 ```
-node >= 18
+node >= 22
 pnpm >= 8
 ```
 
-### Installation
+### Setup
 ```bash
-git clone https://github.com/your-username/discerned-ext.git
-cd discerned-ext
+git clone https://github.com/steveja42/discerned.git
+cd discerned/discerned-ext
 pnpm install
-pnpm dev        # watch mode
-pnpm build      # production build → dist/
+pnpm dev        # watch mode → dist/
+pnpm build      # production build → dist-pack/
 ```
 
 ### Load in Chrome
 1. Open `chrome://extensions/`
 2. Enable **Developer mode** (top right toggle)
 3. Click **Load unpacked**
-4. Select the `dist/` folder
+4. Select `dist/` (dev build) or `dist-pack/` (production build)
 
 ### Usage
 1. Navigate to any webpage
 2. Right-click and select **Discerned: Capture & Evaluate**, or click the extension icon
-3. Evaluate the content on three axes
+3. Rate the Signal, tag it with Qualifiers, pick a Category
 4. Choose an action:
    - **CLIP** → saved privately to IndexedDB
    - **CAST** → signed and published to Nostr relays
@@ -149,12 +153,12 @@ pnpm lint         # ESLint on src/**/*.ts
 | [src/content/web-bridge.ts](src/content/web-bridge.ts) | Extension ↔ web app bridge messaging |
 | [src/onboarding/onboarding.ts](src/onboarding/onboarding.ts) | First-run welcome page |
 | [src/onboarding/onboarding.html](src/onboarding/onboarding.html) | Onboarding page markup |
-| [src/popup/popup.ts](src/popup/popup.ts) | Auth status, usage stats, disconnect |
+| [src/popup/popup.ts](src/popup/popup.ts) | Stub shown only on `chrome://` pages where content scripts can't run |
 | [src/popup/popup.html](src/popup/popup.html) | Popup markup |
 | [src/shared/types.ts](src/shared/types.ts) | All interfaces, message types, storage keys |
 | [src/shared/logger.ts](src/shared/logger.ts) | Centralised log bridge (all contexts → page console) |
 | [src/shared/nostr/auth.ts](src/shared/nostr/auth.ts) | Auth state helpers |
-| [src/shared/nostr/events.ts](src/shared/nostr/events.ts) | Nostr event construction (kind 1, 9802) |
+| [src/shared/nostr/events.ts](src/shared/nostr/events.ts) | Nostr event construction (kinds 1, 30023, 30078) |
 | [src/shared/nostr/encryption.ts](src/shared/nostr/encryption.ts) | NIP-44 wrapper (partial) |
 | [src/shared/nostr/nip46-manager.ts](src/shared/nostr/nip46-manager.ts) | BunkerSigner lifecycle (reconnects after SW kill) |
 
@@ -180,12 +184,16 @@ Service workers are killed after ~30 s of inactivity, which closes the WebSocket
 ## Security
 
 ### Content Sanitisation
-All captured HTML is sanitised to prevent XSS:
+All captured HTML passes through a tag/attribute whitelist to prevent XSS:
 ```
-Allowed tags:  b, i, a, p, br, strong, em
-Allowed attrs: href only
-Forbidden:     scripts, styles, event handlers, all other tags
+Allowed tags:  text + structure (p, headings, lists, blockquote, code, pre,
+               table, figure, div, span, a, img) and SVG icon glyphs
+Allowed attrs: per-tag whitelist (href, src, alt, dimensions, …)
+Classes:       only dx-* / tweet-* layout markers survive; the source page's
+               own class names are stripped
+Forbidden:     scripts, event handlers, <foreignObject>, everything unlisted
 ```
+The full lists are `ALLOWED_TAGS` / `ALLOWED_ATTRS_PER_TAG` in [src/content/capture.ts](src/content/capture.ts).
 
 ### Key Storage
 - **NIP-07 mode**: Keys stay in the user's wallet extension (Alby, nos2x, etc.)
@@ -204,30 +212,37 @@ Forbidden:     scripts, styles, event handlers, all other tags
 ### Event Types
 | Type | Kind | Usage |
 |---|---|---|
-| Highlight | 9802 | Quote captures (selected text) |
-| Note | 1 | Resource captures (page metadata) |
-| App Data | 30078 | Encrypted clips (planned) |
+| Long-form | 30023 | The captured article body as markdown (NIP-23) — where a rich capture's substance lives |
+| Note | 1 | Always published: carries the evaluation and links to the long-form, so the cast is visible in every Nostr client. Stands alone (summary + link) when the capture has no article body |
+| Contacts | 3 | Follow list |
+
+Every published cast also carries the NIP-89 tag `['client', 'discerned', '<version>']`.
+
+A kind-30078 (App Data) encrypted-clip event exists in the factory but is **not published** — clips stay in local IndexedDB. It's the placeholder for the NIP-44 private-clip feature listed under Phase 2.
 
 ### Tag Structure
-Evaluation is emitted as NIP-32 label tags (namespaced `l` values):
+Evaluation is emitted as NIP-32 label tags (namespaced `l` values). Every cast carries this base set:
 ```
-// Highlight (quote)
 ['r', url]
-['L', 'online.discerned.signal']
-['l', 'Masterpiece', 'online.discerned.signal']       // optional — omitted when unrated
-['L', 'online.discerned.qualifier']
-['l', 'Primary Source', 'online.discerned.qualifier'] // repeated, one per qualifier
 ['L', 'online.discerned.category']
 ['l', 'Tech', 'online.discerned.category']
-['context', '…surrounding text…']
-
-// Note (resource)
-['r', url]
 ['L', 'online.discerned.signal']
-['l', 'Worthwhile', 'online.discerned.signal']
-['L', 'online.discerned.category']
-['l', 'Science', 'online.discerned.category']
-['image', thumbnailUrl]            // optional OG image
+['l', 'Masterpiece', 'online.discerned.signal']       // omitted when unrated
+['L', 'online.discerned.qualifier']
+['l', 'Primary Source', 'online.discerned.qualifier'] // repeated, one per qualifier
+['t', 'discerned']
+['format', 'article']                                 // the ClipFormat captured
+['client', 'discerned', '<version>']                  // NIP-89
+['note', '…user's own note…']                         // only when a note was written
+```
+Plus, per capture shape:
+```
+['quote', '…selected text…']       // selection captures
+['context', '…surrounding text…']  // selection captures, when context was grabbed
+['title', pageTitle]
+['image', thumbnailUrl]            // first http(s) image; never a data: URI
+['imeta', 'url <imageUrl>']        // NIP-92, one per content image
+['a', '30023:<pubkey>:<captureId>', relay]   // kind-1 → its companion long-form
 ```
 
 ### Evaluation
@@ -248,9 +263,8 @@ Evaluation is emitted as NIP-32 label tags (namespaced `l` values):
 
 - NIP-44 encryption for CLIP is stubbed — clips are stored as plaintext JSON in IndexedDB pending full implementation
 - No retry logic for failed relay publishes
-- Guest clips are not yet exportable
+- Casting happens at capture time only — a stored clip cannot be cast later
 - Firefox not supported (Manifest V3 port planned)
-- No companion web viewer
 
 ---
 

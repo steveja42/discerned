@@ -161,4 +161,4 @@ Commands:
 
 ## Status
 
-MVP — Chrome extension and web app are functional. Test suite: 219 extension + 137 web unit tests (Vitest) and ~60 e2e spec files, all green (plus opt-in `LIVE`, `PRIMAL`, and corpus-sweep specs). Captured clips from div-soup SPAs (Nostr clients like primal.net, Mastodon, Bluesky) render as readable threads via the per-site tagger + `dx-*` marker system. Android and iOS sub-projects planned.
+Phase 1 shipped — the extension is published on the Chrome Web Store and the web app is live at discerned.online. Test suite: 219 extension + 137 web unit tests (Vitest) and ~60 e2e spec files, all green (plus opt-in `LIVE`, `PRIMAL`, and corpus-sweep specs). Captured clips from div-soup SPAs (Nostr clients like primal.net, Mastodon, Bluesky) render as readable threads via the per-site tagger + `dx-*` marker system. Android and iOS sub-projects planned.
