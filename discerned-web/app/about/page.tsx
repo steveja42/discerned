@@ -65,6 +65,18 @@ export default function AboutPage() {
           No algorithm deciding what you see — you decide.
         </p>
 
+        <h2 style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 500, color: 'var(--ink)', margin: '36px 0 12px', letterSpacing: '-0.015em' }}>
+          What&apos;s planned
+        </h2>
+        <p style={{ margin: '0 0 12px' }}>
+          <strong>Tipping.</strong> Send a small amount of Bitcoin straight to someone whose Discern
+          you valued — so praising good work can mean more than a click.
+        </p>
+        <p style={{ margin: '0 0 16px' }}>
+          <strong>Voting.</strong> Agree or disagree with someone else&apos;s assessment — turning one
+          reader&apos;s rating into a shared sense of whose judgement is worth trusting.
+        </p>
+
         <p style={{ margin: '32px 0 0', paddingTop: 24, borderTop: '1px solid var(--rule)', fontSize: 15 }}>
           Discerned is a small, independent project. If something is broken or missing,{' '}
           <Link href="/feedback" style={{ color: 'var(--accent-ink)', textDecoration: 'underline', textUnderlineOffset: 2 }}>
