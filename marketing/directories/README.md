@@ -4,9 +4,22 @@ Submissions to third-party app directories. Each file is the entry **as submitte
 in sync when the listing changes upstream, so this stays the source of truth rather than a
 snapshot of what was once submitted.
 
-| File | Directory | Submitted via |
-|---|---|---|
-| `nostrapps.toml` | [nostrapps.com](https://nostrapps.com) | PR to the site's repo |
+| File | Directory | Submitted via | Status |
+|---|---|---|---|
+| `nostrapps.toml` | [nostrapps.com](https://nostrapps.com) | PR to `apps.toml` in the site's repo | **submitted** |
+| `awesome-nostr-nostr.net.md` | [awesome-nostr](https://github.com/aljazceru/awesome-nostr) → [nostr.net](https://nostr.net) | PR adding a README line | **listed** — [PR #723](https://github.com/aljazceru/awesome-nostr/pull/723) merged |
+
+## NIP-89 (kind 31990) — deliberately NOT published
+
+Some directories (NostrHub) have no submission form and list apps from their NIP-89 handler
+announcements. **Discerned should not publish one.** A kind 31990 advertises "send me any
+naddr/nevent of these kinds and I will display it", and Discerned cannot: the feed filter is
+`{ kinds: [1, 30023], '#t': ['discerned'] }` (`discerned-web/lib/nostr/feed.ts`) and the app
+has no naddr/nevent route at all. It displays its own tagged events, not arbitrary ones.
+Publishing a handler would send users to a page that ignores what they clicked.
+
+Revisit only if a route that renders an arbitrary event is added. The `client` tag Discerned
+already stamps is a different, unrelated part of NIP-89.
 
 ## Maintenance notes
 

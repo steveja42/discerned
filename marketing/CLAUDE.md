@@ -62,6 +62,14 @@ Masterpiece. Signal is optional — an unrated clip is valid, so don't describe 
 mandatory. The definitive list is `SIGNAL_LEVELS` in
 `discerned-ext/src/shared/types.ts` — check it rather than trusting this file.
 
+**The user evaluates, not the extension.** Discerned does not clip or rate anything on its
+own — it is the instrument, the user is the agent. Never write "clips pages and rates them":
+it reads as automated scoring, which is the opposite of the product (human judgment, signed
+by a human key) and invites the "isn't this just AI ranking?" misread from exactly the
+audience most likely to care. Keep the user as the subject — *lets you clip*, *rate it
+yourself*, *your evaluation* — or use the imperative, which addresses them directly:
+"Clip anything on the web, rate it, publish your picks."
+
 **Spell out acronyms** on first use. NIP-07, npub, and DOM are fine unglossed; anything less
 common gets written out.
 
@@ -81,6 +89,18 @@ over a grand one.
 Avoid: "military-grade", "revolutionary", "the future of", stacked superlatives, and any
 capability that is stubbed or planned. If a claim can't be checked against shipped code,
 either cut it or mark it as planned in the copy itself.
+
+## Links
+
+**Lead with `discerned.online`, not the GitHub repo.** Where a listing takes one primary link,
+it goes to the web app. A repo as the headline link reads as source-only — an unfinished
+project — to someone scanning a directory of usable apps. In awesome-nostr the entries leading
+with a repo are the ones with no product to point at; the shipped ones (Deepmarks, Pinstr,
+Ditto) all lead with their site.
+
+Put the repo in a separate field where the format has one (`source` in nostrapps' TOML), or
+in the description as "Open source" where it doesn't. Same for the Chrome Web Store link:
+secondary, never the headline.
 
 ## Before shipping copy
 
