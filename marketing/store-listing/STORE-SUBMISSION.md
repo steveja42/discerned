@@ -216,12 +216,14 @@ Verified for the current build:
 - [x] No sourcemaps in the production build
 - [x] No test hooks (`__DISCERNED_TEST_*`) in the production build
 - [x] `pnpm type-check`, `pnpm lint`, `pnpm test` all clean
-- [x] Short description written (`manifest.json` `description`, 119/132 chars)
+- [x] Short description written (`manifest.json` `description`, 123/132 chars)
 - [x] Detailed description drafted (see the Store listing section above)
-- [ ] Privacy policy **deployed** and reachable at https://discerned.online/privacy
-- [ ] Screenshots (1280×800 or 640×400) — at least one, up to five
-- [x] Small promo tile (440×280) — `store-assets/promo-tile-440x280.png`
+- [x] Privacy policy **deployed** and reachable at https://discerned.online/privacy
+      (`discerned-web/app/privacy/page.tsx`, ships with the static export)
+- [x] Screenshots (1280×800 or 640×400) — four, in `discerned-web/public/press/`
+- [x] Small promo tile (440×280) — `store-listing/promo-tile-440x280-azure.png`
 - [ ] Version bumped in `manifest.json` if re-submitting
+      *(per-resubmission reminder — leave unticked by design)*
 
 Known consequence of removing `key`
 

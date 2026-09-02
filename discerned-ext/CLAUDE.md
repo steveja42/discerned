@@ -649,7 +649,7 @@ Published on the Chrome Web Store (store ID `gpfeknmodijdlehpnkfannklhplmfoma`).
 - NIP-44 encryption: stubbed — clips are plaintext JSON in IndexedDB
 - No retry logic for failed relay publishes
 - Casting is capture-time only — a stored clip cannot be cast later
-- Firefox support: not targeted yet
+- Firefox support: not built yet — the Manifest V3 port is Phase 3 (planned)
 
 ## File Layout
 

@@ -16,13 +16,15 @@ a marketing asset needs to ship, it goes in `discerned-web/public/`, not here.
 
 ## Layout
 
-| Folder | Holds |
+| Folder / file | Holds |
 |---|---|
+| `STRATEGY.md` | The marketing plan: positioning, the two tracks, ranked channels, timeline, metrics |
+| `PREREQUISITES.md` | Product gaps that block conversion — recommendations, not commitments |
 | `store-listing/` | Chrome Web Store submission checklist, promo tiles, marquees |
 | | *(screenshots live in `discerned-web/public/press/` — served from discerned.online)* |
 | `directories/` | Third-party app-directory submissions (nostrapps.com, …), as submitted |
-| `press-kit/` | Logo exports, one-pager, boilerplate description |
-| `copy/` | Taglines, elevator pitches, feature blurbs |
+| `press-kit/` | One-pager, boilerplate description. *(No image files — icons and screenshots are served from discerned.online; see its README.)* |
+| `copy/` | Taglines, elevator pitches, feature blurbs — and **`copy/claims.md`, the canonical claim registry** |
 | `social/` | Launch posts, Nostr/X threads |
 | `analytics/` | Install numbers, notes on what landed |
 | `archive/` | **Superseded drafts. Historical only — do NOT quote from these.** See below. |
@@ -104,12 +106,17 @@ secondary, never the headline.
 
 ## Before shipping copy
 
-1. Check the terminology rules above.
-2. Verify product claims against source — `SIGNAL_LEVELS` and `QUALIFIER_GROUPS` in
+1. Check the terminology rules above, and run the copy past `copy/banned-phrases.md`.
+2. **Every product claim must trace to an ID in `copy/claims.md`** — that file is the canonical
+   registry and records the source file proving each claim. If you need to say something new,
+   add the row with its proof first. Read its **Constraints** section too, not just the claim
+   rows: the likeliest error is two individually-true sentences combining into a false one
+   (private + you-own-it reading as *encrypted*, which is not shipped).
+3. Verify product claims against source — `SIGNAL_LEVELS` and `QUALIFIER_GROUPS` in
    `discerned-ext/src/shared/types.ts`, `INITIAL_CATEGORIES` in
    `discerned-ext/src/background/background.ts`.
-3. If the copy also appears in the app, edit `discerned-web/lib/marketing-copy.tsx` — the
+4. If the copy also appears in the app, edit `discerned-web/lib/marketing-copy.tsx` — the
    `PITCH` constant feeds both the first-visit popover and the About page hero. Copy that
    lives in two places drifts.
-4. Store-listing copy is version-coupled. Bump it in the same commit as
+5. Store-listing copy is version-coupled. Bump it in the same commit as
    `discerned-ext/manifest.json`, `discerned-ext/package.json`, `discerned-web/package.json`.
