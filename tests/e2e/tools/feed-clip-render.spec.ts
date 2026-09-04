@@ -15,12 +15,14 @@ import { test } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { launchWithExtension } from '../helpers/launchExtension';
+import { activateExtensionOnTab } from '../helpers/activateExtension';
+import { buildCastTemplates } from '../helpers/castFromCapture';
 
 const OUT = resolve(__dirname, '..', '..', '..', 'test-output');
 
 const SITES: Record<string, string> = {
   'facebook-reels': 'https://www.facebook.com/reel/',
-  'instagram-reels': 'https://www.instagram.com/reels/DbnxT2Duur8/',
+  'instagram-reels': process.env.FCR_URL ?? 'https://www.instagram.com/reels/DbnxT2Duur8/',
   'instagram-home': 'https://www.instagram.com/',
   'facebook-home': 'https://www.facebook.com/',
   'facebook-post': 'https://www.facebook.com/photo/?fbid=10163039872376188',
@@ -55,6 +57,10 @@ test('feed-clip-render: what the narrowed feed clip actually looks like', async 
       try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90_000 });
         await page.waitForTimeout(10_000);
+        // No broad host permission ships, so the content script binds only after
+        // the real activation gesture — without this the capture bridge below
+        // has no listener and every site reports "capture timeout".
+        await activateExtensionOnTab(ctx, page.url());
         // Let the video actually start painting frames — canvas capture of a
         // not-yet-decoded video yields a blank frame.
         await page.evaluate(async () => {
@@ -201,6 +207,31 @@ test('feed-clip-render: what the narrowed feed clip actually looks like', async 
           const h = String((cap as {bodyHtml?: string}).bodyHtml ?? '');
           const stripped = h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
           lines.push(`html text (first 200): ${JSON.stringify(stripped.slice(0, 200))}`);
+          // Which trusted classes actually survived sanitisation into the clip?
+          // Stamped-on-the-live-page is not the same as present-in-the-capture,
+          // and the difference is exactly where a layout silently dies.
+          const cls = new Map<string, number>();
+          for (const m of h.matchAll(/class="([^"]*)"/g)) {
+            for (const c of m[1].split(/\s+/)) {
+              if (c.startsWith('dx-') || c.startsWith('tweet-')) cls.set(c, (cls.get(c) ?? 0) + 1);
+            }
+          }
+          lines.push(`classes in captured html: ${JSON.stringify(Object.fromEntries([...cls].sort()))}`);
+          writeFileSync(resolve(OUT, `${name}-body.html`), h, 'utf8');
+          // Build the REAL cast markdown too. The clip and the cast are
+          // different render paths — htmlToMarkdown drops data:-only images and
+          // every .dx-avatar — so a clip that looks right can still cast with
+          // no image at all, which is not visible from the clip render.
+          try {
+            const tpl = await buildCastTemplates(page, cap);
+            const md = tpl.longFormTemplate?.content ?? '';
+            writeFileSync(resolve(OUT, `${name}-cast.md`), md, 'utf8');
+            const imgs = [...md.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map(m => m[1]);
+            lines.push(`cast markdown: ${md.length} chars, ${imgs.length} image(s)`);
+            imgs.forEach(u => lines.push(`  cast img: ${u.split('?')[0].slice(-58)}`));
+          } catch (e) {
+            lines.push(`cast build FAILED: ${(e as Error).message.split('\n')[0]}`);
+          }
           lines.push(`html has Eduardo: ${h.includes('Eduardo')}`);
         }
         lines.push(`pipeline: ${pipelineLogs.slice(0,6).join(' | ') || '(none)'}`);

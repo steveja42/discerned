@@ -1645,6 +1645,72 @@ a { color: inherit; }
    cards (an <a> wrapping a multi-element block), and icon/stat rows, and
    stamps these classes so default block flow doesn't stack everything
    vertically and link underline doesn't bleed into card content. */
+/* Instagram reel — mirror the source's own desktop layout: caption column
+   (avatar + username above the description) on the left, media in the middle,
+   engagement rail down the right. The source has these as sibling columns; the
+   tagger marks them and this lays them out, otherwise they stack vertically and
+   the clip reads nothing like the page the user saw. Falls back to a single
+   column on narrow viewports, where side-by-side would crush the video. */
+.clip-body .dx-reel {
+  display: grid;
+  /* caption | media | rail — the media column is the centrepiece, so it takes
+     its natural width and the caption flexes around it. */
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: 16px;
+  margin: 12px 0;
+}
+/* The caption and media columns sit inside the post wrapper, one level below
+   the grid, so the wrapper is made `display: contents` — its children then
+   participate in the grid directly. Without this the whole post collapsed into
+   a single grid cell and the columns stacked. */
+.clip-body .dx-reel > .dx-post { display: contents; }
+/* A floor on the caption column: below roughly this width the byline's
+   author/tag links wrap mid-phrase ("2 / people") and the prose reads as a
+   ragged sliver. */
+.clip-body .dx-reel-caption { grid-column: 1; min-width: min(240px, 100%); }
+.clip-body .dx-reel-caption .dx-header { flex-wrap: wrap; }
+.clip-body .dx-reel-media   { grid-column: 2; }
+.clip-body .dx-reel-rail    { grid-column: 3; }
+/* The rail is a vertical stack of count-labelled action glyphs. */
+.clip-body .dx-reel-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.clip-body .dx-reel-media img { max-height: 620px; width: auto; border-radius: 8px; }
+/* Collapse to Instagram's MOBILE stack (caption, then media, then a horizontal
+   action row) when the CLIP COLUMN is narrow — not when the window is. A clip
+   renders inside a container whose width is set by the reading pane, so a
+   viewport @media query is the wrong axis: a narrow detail panel on a wide
+   monitor would keep the three-column desktop layout and crush the video.
+   `container-type: inline-size` on .dx-reel makes its own width the query
+   axis; browsers without container-query support keep the desktop grid, which
+   degrades acceptably rather than breaking. */
+/* The container must be an ANCESTOR of what it lays out, not the grid itself:
+   `container-type: inline-size` on .dx-reel would make the query measure the
+   grid's own width, and at the clip column's typical width that matched the
+   narrow branch unconditionally — the desktop three-column layout could then
+   never apply at any window size. .clip-body is the reading column, which is
+   the width the layout should actually respond to. */
+.clip-body { container-type: inline-size; container-name: dxreel; }
+@container dxreel (max-width: 560px) {
+  .clip-body .dx-reel { grid-template-columns: minmax(0, 1fr); }
+  .clip-body .dx-reel-caption { grid-column: 1; grid-row: 1; }
+  .clip-body .dx-reel-media   { grid-column: 1; grid-row: 2; }
+  .clip-body .dx-reel-rail    { grid-column: 1; grid-row: 3; }
+  .clip-body .dx-reel-rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 18px;
+  }
+  .clip-body .dx-reel-media img { max-height: none; width: 100%; }
+}
+
 .clip-body .dx-header {
   display: flex;
   align-items: flex-start;

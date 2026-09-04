@@ -19,6 +19,7 @@ import { test } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { launchWithExtension } from '../helpers/launchExtension';
+import { activateExtensionOnTab } from '../helpers/activateExtension';
 
 const OUT = resolve(__dirname, '..', '..', '..', 'test-output');
 const REEL_URL = process.env.IG_URL ?? 'https://www.instagram.com/reels/DbnxT2Duur8/';
@@ -194,6 +195,11 @@ test('instagram-probe: what is actually capturable on a reel page', async () => 
     report.push('\n── button breakdown (inside dialog if present) ──', JSON.stringify(buttons, null, 2));
 
     // ── 3: what does the CURRENT pipeline capture today? ─────────────────
+    // Production ships no broad host permission, so the content script is only
+    // bound after the real activation gesture. Without this the capture bridge
+    // has no listener and every run reports "capture timeout" — which is what
+    // this probe did report until it was added.
+    await activateExtensionOnTab(ctx, page.url());
     const cap = await page.evaluate(() => new Promise((res) => {
       const t = setTimeout(() => res({ error: 'capture timeout' }), 40_000);
       const on = (e: MessageEvent) => {

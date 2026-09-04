@@ -167,6 +167,16 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'ig-og-probe',
+      testMatch: /tools\/ig-og-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'ig-climb-probe',
+      testMatch: /tools\/ig-climb-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
       name: 'modal-fp-probe',
       testMatch: /tools\/modal-fp-probe\.spec\.ts$/,
       retries: 0,

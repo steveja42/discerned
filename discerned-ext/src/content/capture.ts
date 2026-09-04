@@ -1380,6 +1380,53 @@ function isFacebookPostUrl(url: string): boolean {
  */
 
 /**
+ * Resolve a poster for an Instagram reel/video, whose <video> is ALWAYS a
+ * `blob:` MSE stream with `poster: null` (measured across every URL shape:
+ * /reel/, /reels/ and /p/). Both of substituteVideosWithPosters' normal routes
+ * therefore fail — the canvas grab taints cross-origin, and the `blob:` src
+ * fails its `^https:` test — so the video was being REMOVED outright and the
+ * clip landed with no media at all.
+ *
+ * Order mirrors fbResolvePoster: the largest cdninstagram/fbcdn cover frame
+ * inside the player subtree, then the page's declared og:image. Instagram
+ * serves a correct og:image (the video's cover frame) on all three URL shapes
+ * even when the DOM lookup finds nothing, which is what makes this reliable.
+ *
+ * Scoped to the player subtree deliberately: the /reels/ route preloads the
+ * next several reels (measured: 7-8 <video> elements, each with its own cover
+ * frame in the DOM), so a document-wide "largest image" pick would routinely
+ * return a NEIGHBOURING reel's poster.
+ */
+function igResolvePoster(video: HTMLVideoElement | null): string | null {
+  const fromAttr = video?.getAttribute('poster') ?? null;
+  if (fromAttr && isSafeImageSrc(fromAttr)) return fromAttr;
+
+  // Climb to the post's own container before searching, so a preloaded
+  // neighbour's cover frame can't win.
+  const scope = video?.closest('article, [role="main"], [role="dialog"]')
+    ?? video?.parentElement ?? null;
+  if (scope) {
+    // Size from the stamped width/height attributes, not naturalWidth: this can
+    // run against a DETACHED clone whose images were never loaded, where every
+    // natural dimension reads 0 and the filter rejects everything.
+    const sizeOf = (img: HTMLImageElement): number => {
+      const w = parseInt(img.getAttribute('width') ?? '', 10);
+      const h = parseInt(img.getAttribute('height') ?? '', 10);
+      if (Number.isFinite(w) && Number.isFinite(h)) return w * h;
+      return img.naturalWidth * img.naturalHeight;
+    };
+    const candidate = Array.from(scope.querySelectorAll<HTMLImageElement>(
+      'img[src*="cdninstagram"], img[src*="fbcdn"]'))
+      .filter(img => isSafeImageSrc(img.src) && sizeOf(img) >= 150 * 150)
+      .sort((a, b) => sizeOf(b) - sizeOf(a))[0] ?? null;
+    if (candidate) return candidate.src;
+  }
+
+  const og = document.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content;
+  return og && isSafeImageSrc(og) ? og : null;
+}
+
+/**
  * Read the src of an <img> OR an SVG-mask avatar (<svg><image xlink:href>) —
  * Facebook renders the small circular avatar both ways depending on page
  * shape (measured: a photo permalink uses the SVG-mask shape with no <img>
@@ -5099,7 +5146,185 @@ function pickVisibleFeedPost(posts: Element[]): Element | null {
 }
 
 /**
- * Instagram home feed (instagram.com/). Each post is a real `<article>` — the
+ * Instagram's /reel/ + /reels/ player route, which has NO <article> anywhere
+ * (measured) and preloads the next several reels into the same page — so the
+ * generic path captured every queued reel's chrome and, because no root was
+ * returned, never promoted this tagger's dx-excl marks.
+ *
+ * Picks the reel occupying the viewport, walks up to the container that holds
+ * both its media and its caption, and returns that as the capture root.
+ */
+function tagInstagramReel(root: Document | Element): Element | void {
+  const videos = Array.from(root.querySelectorAll('video'));
+  if (!videos.length) return;
+
+  // The visible reel: largest viewport intersection among the queued players.
+  const visible = pickVisibleFeedPost(videos) ?? videos[0];
+  const vr = visible.getBoundingClientRect();
+  if (vr.width <= 0 || vr.height <= 0) return;
+
+  // Climb to the first ancestor holding BOTH the media and the caption. The
+  // media column is deeply nested: measured on a live reel, the <video> sits
+  // TWELVE levels below the block that first includes the caption (L1-L12 are
+  // 385x688 media wrappers carrying only the player-glyph labels; the caption
+  // joins at L13). So the cap must clear 13, and the test cannot look at an
+  // anchor's own wrapper — at L13 the caption block holds 205 chars while each
+  // author anchor's closest <div> is a short 30-char chrome wrapper, which is
+  // why an anchor-anchored predicate reported "no caption" all the way up.
+  //
+  // Test the SUBTREE's own prose instead: the caption is in scope once the
+  // block's text exceeds the glyph labels by a real margin.
+  const GLYPH_TEXT_MAX = 60;
+  const hasCaption = (el: Element): boolean =>
+    (el.textContent ?? '').replace(/\s+/g, ' ').trim().length > GLYPH_TEXT_MAX;
+
+  let post: Element = visible;
+  let found = false;
+  for (let i = 0; i < 16 && post.parentElement; i++) {
+    post = post.parentElement;
+    // Another queued reel has come into scope before the caption did — bail
+    // rather than capture the whole preload queue.
+    if (post.querySelectorAll('video').length > 1) return;
+    if (hasCaption(post)) { found = true; break; }
+  }
+  if (!found || post.querySelectorAll('video').length > 1) return;
+
+  appendClass(post, 'dx-post');
+  // NOTE: `dx-reel` (the grid container) must NOT go on the element this
+  // function returns — the capture loop emits `clone.innerHTML`, so the
+  // returned root's own class is shed and only its CHILDREN survive. Stamped
+  // here, the grid silently disappeared and the caption/media columns rendered
+  // as plain stacked siblings. Returning the PARENT below keeps `post` (with
+  // its grid class) inside the emitted HTML.
+  appendClass(post, 'dx-reel');
+
+  // Player-chrome glyphs: mute/play/tagged-users. The aria-label is on the
+  // <svg>, NOT on the wrapping [role=button] (measured: those report
+  // ariaLabel null with hasSvg true), and the label text is all that survives
+  // sanitisation — so unexcluded they ship as a stray glyph stack.
+  post.querySelectorAll(
+    'svg[aria-label="Audio is muted"], svg[aria-label="Audio is playing"],' +
+    'svg[aria-label="Play button icon"], svg[aria-label="Tagged users"]',
+  ).forEach(el => appendClass(el.closest('[role="button"]') ?? el, 'dx-excl'));
+  // The audio-track thumbnail is player chrome, not post media: a 24x24 <img
+  // alt="Audio image"> that re-uses the author's avatar URL, so it slips past
+  // every size/host filter and shipped as a stray fourth image.
+  post.querySelectorAll('img[alt="Audio image"], img[alt*="audio" i]')
+    .forEach(el => appendClass(el, 'dx-excl'));
+  // The audio-track chip that floats over the player: a small round thumbnail
+  // with no caption value, which renders as a stray avatar-sized image beside
+  // the media column once the player's own CSS is gone.
+  const railScopeEl = post.parentElement ?? post;
+  railScopeEl.querySelectorAll('a[href*="/reels/audio/"], a[href*="/audio/"]')
+    .forEach(el => appendClass(el, 'dx-excl'));
+
+  // Drop the <video> itself when Instagram has already rendered its own
+  // full-size cover frame (measured: a 403x690 <img> eleven levels above the
+  // player). substituteVideosWithPosters would otherwise ALSO synthesise a
+  // poster from og:image, shipping the same frame twice — and that synthetic
+  // copy carries only a data: URI, so it is dropped from the cast while the
+  // real one survives. Marked here, on the LIVE DOM, where the measurement is
+  // valid; the same test on the detached clone reads every rect as 0x0.
+  {
+    let scopeEl: Element = visible;
+    for (let i = 0; i < 11 && scopeEl.parentElement; i++) scopeEl = scopeEl.parentElement;
+    const coverFrame = Array.from(scopeEl.querySelectorAll('img')).some(img => {
+      const r = img.getBoundingClientRect();
+      return r.width >= 150 && r.height >= 150;
+    });
+    if (coverFrame) appendClass(visible, 'dx-excl');
+  }
+
+  const avatar = post.querySelector('img[alt*="profile picture" i]');
+  if (avatar) appendClass(avatar, 'dx-avatar');
+  const authorLink = Array.from(post.querySelectorAll('a[href^="/"]'))
+    .find(a => (a.textContent ?? '').trim().length > 0
+      && !(a.textContent ?? '').trim().includes(' ')) ?? null;
+  if (avatar && authorLink) {
+    const header = commonWrapper(avatar, authorLink, post);
+    if (header) appendClass(header, 'dx-header');
+  }
+
+  // Column roles, so the clip can mirror Instagram's own desktop layout:
+  // caption column (avatar + name above the description) left, media centre,
+  // engagement rail right. They are SIBLING columns in the source; tagging
+  // them is what lets globals.css lay them out instead of stacking them.
+  // Anchor the media column on the COVER FRAME, not the <video>: the video is
+  // excluded above when a real cover frame exists, and a column anchored to it
+  // was unwrapped along with it — the dx-reel-media class then vanished from
+  // the captured HTML and the image fell outside the grid entirely.
+  const coverImg = Array.from(post.querySelectorAll('img')).find(img => {
+    const r = img.getBoundingClientRect();
+    return r.width >= 150 && r.height >= 150;
+  }) ?? null;
+  const mediaAnchor: Element | null = coverImg ?? visible;
+  const mediaCol = mediaAnchor.parentElement;
+  if (mediaCol && post.contains(mediaCol) && mediaCol !== post) {
+    appendClass(mediaCol, 'dx-reel-media');
+  }
+  // The caption column is the post's own child that carries the prose but not
+  // the video — its sibling is the media column (measured: 321px caption beside
+  // a 387px media column, meeting at the level this climb stopped on).
+  const captionCol = Array.from(post.children).find(c =>
+    !c.contains(visible) && hasCaption(c)) ?? null;
+  if (captionCol) appendClass(captionCol, 'dx-reel-caption');
+
+  // Engagement rail — the Like/Comment/Share/Save column beside the video.
+  // Measured: the Like <svg> is SEVEN levels below the rail container (each
+  // intervening level is a 24x24 single-child wrapper around the one glyph),
+  // so climb until the block actually holds the sibling actions — identified
+  // by carrying several glyphs and their counts — rather than assuming a
+  // fixed depth, which landed on a 24x24 wrapper and stamped nothing useful.
+  // Searched from the PARENT scope, not `post` — measured, the rail is a
+  // sibling of the media column (a 60x684 block at x=838 reading
+  // "Like311Comment20ShareSaveMore"), so a post-scoped lookup never saw it.
+  const railScope = post.parentElement ?? post;
+  const likeGlyph = railScope.querySelector('svg[aria-label="Like"]');
+  if (likeGlyph) {
+    let rail: Element | null = likeGlyph;
+    for (let i = 0; i < 10 && rail.parentElement; i++) {
+      rail = rail.parentElement;
+      if (rail.querySelectorAll('svg').length >= 3 && !rail.contains(visible)) break;
+    }
+    if (rail && rail !== post && rail !== railScope
+      && !rail.contains(visible) && rail.querySelectorAll('svg').length >= 3) {
+      appendClass(rail, 'dx-reel-rail');
+    }
+  }
+
+  // Return the PARENT, not `post`: the capture loop emits the returned root's
+  // innerHTML, so returning `post` would shed its own `dx-reel` grid class and
+  // leave the caption/media columns as unstyled stacked siblings. Returning one
+  // level up keeps the grid element itself inside the emitted HTML, and brings
+  // the engagement rail (a SIBLING of the media column, measured at x=838) into
+  // scope so it can be tagged at all.
+  const scope = post.parentElement;
+  if (!scope || scope.querySelectorAll('video').length > 1) {
+    log(LL.DEBUG, 'Discerned: tagInstagram scoped to the visible reel (no parent scope)',
+      'url:', window.location.href);
+    return post;
+  }
+  // The grid must sit on the element that actually PARENTS all three columns.
+  // Measured: the rail is a SIBLING of `post`, not a descendant, so a grid on
+  // `post` laid out the caption alone and stacked media and rail beneath it.
+  // `scope` is that shared parent — but the capture loop emits the returned
+  // root's innerHTML, shedding its class, so the grid goes on `scope` and the
+  // GRANDPARENT is returned to keep it inside the emitted HTML.
+  post.classList.remove('dx-reel');
+  appendClass(scope, 'dx-reel');
+  const emitScope = scope.parentElement;
+  if (emitScope && emitScope.querySelectorAll('video').length <= 1) {
+    log(LL.DEBUG, 'Discerned: tagInstagram scoped to the visible reel',
+      'url:', window.location.href);
+    return emitScope;
+  }
+  log(LL.DEBUG, 'Discerned: tagInstagram scoped to the visible reel',
+    'url:', window.location.href);
+  return scope;
+}
+
+/**
+ * Instagram home feed (instagram.com/). Each post is a real <article> — the
  * one stable hook on the page (every class is a hashed atomic name like
  * `x1qjc9v5`, rebuilt per deploy). Measured anatomy of one post: a 32x32 avatar
  * `img[alt$="profile picture"]`, an author anchor, a `<time>`, the photo/video,
@@ -5110,9 +5335,23 @@ function pickVisibleFeedPost(posts: Element[]): Element | null {
  * coverage 111% → 17%).
  */
 function tagInstagram(root: Document | Element): Element | void {
+  // Player-chrome glyphs. On a reel these are mute/play SVGs whose accessible
+  // name is the only thing surviving sanitisation, so they ship as a stray
+  // 🔇 / ▶ stack above the caption. The aria-label sits on the <svg> itself,
+  // NOT on the wrapping [role=button] (measured: those report ariaLabel null
+  // with hasSvg true), so match the svg and exclude its button wrapper.
+  root.querySelectorAll(
+    'svg[aria-label="Audio is muted"], svg[aria-label="Audio is playing"], svg[aria-label="Play button icon"]',
+  ).forEach(el => appendClass(el.closest('[role="button"]') ?? el, 'dx-excl'));
+
   const posts = Array.from(root.querySelectorAll('article'))
     .filter(a => (a.textContent ?? '').trim().length > 0 || a.querySelector('img, video'));
-  if (!posts.length) return;
+  // The /reel(s)/ player route serves NO <article> at all (measured:
+  // articleCount 0, videoCount 7-8 — the next reels are preloaded into the same
+  // page). Scope to the one reel the user is actually looking at and return it
+  // as the capture root; without a returned root the dx-excl marks below are
+  // never promoted, which is why the player glyphs kept surviving.
+  if (!posts.length) return tagInstagramReel(root);
 
   for (const post of posts) {
     appendClass(post, 'dx-post');
@@ -5468,9 +5707,12 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     name: 'instagram',
     match: h => /(^|\.)instagram\.com$/i.test(h),
     tag: tagInstagram,
-    // `article` is the only stable hook (all classes are hashed atomic names).
-    // The avatar alt text is Instagram's own accessibility string.
-    anchors: ['article', 'img[alt*="profile picture" i]'],
+    // All classes are hashed atomic names, so these are the only stable hooks.
+    // `article` exists on the FEED but not on the /reel(s)/ player route
+    // (measured: articleCount 0 there), so it is grouped with the reel's own
+    // container rather than required on its own — an ungrouped `article` made
+    // the canary report a dead anchor on every healthy reel page.
+    anchors: ['article, svg[aria-label*="Audio is" i]', 'img[alt*="profile picture" i]'],
   },
   {
     name: 'facebook',
@@ -6990,6 +7232,22 @@ function matchVideoEmbed(src: string): VideoEmbedInfo | null {
       } catch { /* malformed href param — fall through */ }
     }
   }
+  // Instagram — third-party pages embed a post/reel via /p/<code>/embed/ or
+  // /reel/<code>/embed/. No derivable thumbnail (the cover frame lives behind a
+  // signed cdninstagram URL), so this is a link card. The canonical /reel/ form
+  // is what Instagram's own `link[rel=canonical]` reports for a reel, even when
+  // the browser was served the /reels/ route.
+  if (/(^|\.)instagram\.com$/i.test(host)) {
+    const m = u.pathname.match(/^\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/);
+    if (m) {
+      const kind = m[1] === 'p' ? 'p' : m[1] === 'tv' ? 'tv' : 'reel';
+      return {
+        poster: null,
+        href: `https://www.instagram.com/${kind}/${m[2]}/`,
+        label: kind === 'p' ? 'Instagram post' : 'Instagram video',
+      };
+    }
+  }
   return null;
 }
 
@@ -7073,6 +7331,60 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
       img.alt = 'Video';
       (wrapper ?? video).replaceWith(img);
       return;
+    }
+    // Instagram (and any host serving a blob: MSE stream with no poster): both
+    // routes above fail by construction, so resolve from the page's own cover
+    // frame / og:image before falling through to removal.
+    if (/(^|\.)instagram\.com$/i.test(testHostOverride ?? window.location.hostname)) {
+      // Instagram often renders its OWN full-size preview <img> behind the
+      // player (measured: a 403x690 alt="" cover frame beside the <video>).
+      // Adding a resolved poster on top of that ships the same frame twice, so
+      // drop the video and keep the page's existing image.
+      // Instagram renders its OWN full-size cover frame as a sibling <img>
+      // near the player (measured: a 403x690 alt="" image beside a 385x688
+      // <video>). Adding a resolved poster on top ships the same frame twice,
+      // so prefer the page's existing image. Search a few levels up, not just
+      // the immediate parent — the preview sits outside the video's own
+      // wrapper, which is why a parent-only check never found it.
+      // Measured: the <video> is ~12 levels below the block that also holds the
+      // cover frame, so a shallow climb never found it (the duplicate shipped
+      // three times before this was measured rather than assumed).
+      // Measured on a live reel: the video's OWN cover frame shares an ancestor
+      // 11 levels up, while the neighbouring queued reels' frames only meet it
+      // at 17. So the scope must be exactly deep enough to include the former
+      // and stop short of the latter — a wider `.closest()` scope pulled in the
+      // neighbours, and a shallower climb found nothing at all.
+      let previewScope: Element = video;
+      for (let i = 0; i < 11 && previewScope.parentElement; i++) {
+        previewScope = previewScope.parentElement;
+      }
+      // Size from the width/height ATTRIBUTES, never getBoundingClientRect():
+      // this runs on the DETACHED clone, where every rect is 0x0, so a
+      // rect-based test silently never matched and the duplicate poster shipped
+      // regardless of how the scope was tuned. annotateLiveImageSizes stamps
+      // these attributes from the live DOM before cloning.
+      const existing = Array.from(previewScope.querySelectorAll('img')).find(img => {
+        const w = parseInt(img.getAttribute('width') ?? '', 10);
+        const h = parseInt(img.getAttribute('height') ?? '', 10);
+        return Number.isFinite(w) && Number.isFinite(h) && w >= 150 && h >= 150;
+      });
+      if (existing) {
+        (wrapper ?? video).remove();
+        return;
+      }
+      const igPoster = igResolvePoster(video as HTMLVideoElement);
+      if (igPoster && isSafeImageSrc(igPoster)) {
+        const img = document.createElement('img');
+        img.src = igPoster;
+        img.alt = 'Video';
+        // Keep the REAL url: htmlToMarkdown's image-real-url rule publishes
+        // data-dx-src and DROPS any image whose only source is a data: URI, so
+        // without this the poster survives in the clip but vanishes from the
+        // cast — which is exactly "the cast has no image".
+        img.setAttribute('data-dx-src', igPoster);
+        (wrapper ?? video).replaceWith(img);
+        return;
+      }
     }
     // No usable poster. Try to produce a "▶ Video" link from the first <source>.
     const srcUrl = video.getAttribute('src') ??
