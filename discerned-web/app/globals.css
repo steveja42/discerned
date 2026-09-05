@@ -1431,7 +1431,12 @@ a { color: inherit; }
    image renders no larger than the source drew it. Only images the source drew
    SMALL are affected; heroes and article photos (no width attr, or a large one)
    keep the old full-width behaviour. */
-.clip-body img[width]:not(.tweet-avatar):not(.tweet-badge-emoji) {
+/* `.dx-avatar` is excluded: this caps max-width at the image's `width`
+   ATTRIBUTE, and a max-width always beats a width — so a 24px-stamped avatar
+   rendered 24 wide x 44 tall (a narrow oval) despite the 44px rule below,
+   whose `!important` cannot win against a smaller max-width. Snapchat stamps
+   width="24" on a 640x640 square source, so the crop was never the cause. */
+.clip-body img[width]:not(.tweet-avatar):not(.tweet-badge-emoji):not(.dx-avatar) {
   width: auto;
   max-width: min(100%, attr(width px, 100%)) !important;
 }

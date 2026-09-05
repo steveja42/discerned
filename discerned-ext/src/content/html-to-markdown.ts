@@ -200,9 +200,16 @@ function getService(): TurndownService {
     filter: (node) => node.nodeName === 'A',
     replacement: (content, node) => {
       const href = (node as HTMLElement).getAttribute('href') ?? '';
-      const text = content.trim();
+      let text = content.trim();
       if (!text) return '';
       if (/\n/.test(text) || !/^https?:/i.test(href)) return content;
+      // Strip block markers the inner content produced. An anchor wrapping a
+      // heading (Snapchat /web wraps the avatar AND the username in one link,
+      // and the username is an <h3>) collapsed to `[### name](url)`, which
+      // renders with a line struck through it. The link is the anchor's job;
+      // the heading level is meaningless inside one.
+      text = text.replace(/^#{1,6}\s+/, '').replace(/^>\s+/, '').trim();
+      if (!text) return '';
       return `[${text}](${href})`;
     },
   });

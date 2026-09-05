@@ -3336,6 +3336,77 @@ function withThumbnailFallback(
   return `<figure><img src="${thumbUrl}" alt="${alt}"></figure>\n${html}`;
 }
 
+/**
+ * Stage-by-stage element census for the capture pipeline.
+ *
+ * Diagnosing "the clip is missing X" repeatedly came down to one question the
+ * logs could not answer: which STAGE dropped it? The tagger's root can
+ * provably contain eight images and the finished clip carry one, and every
+ * stage in between is a plausible culprit — so the fix ends up guessed rather
+ * than found. This counts the interesting node kinds after each mutating step
+ * and logs a single line per capture, e.g.
+ *
+ *   Discerned: pipeline census — clone:8i/2v/1a | postClone:8i/0v/2a |
+ *   removeMarked:1i/0v/1a | ...
+ *
+ * i = <img>, v = <video>, a = <a>, p = <picture>. A sharp drop names the
+ * stage to look at. Tree-shaken out of production builds.
+ */
+/**
+ * Prefer the post's OWN poster over a site-wide `og:image`.
+ *
+ * On a feed whose posts share one page URL, `og:image` is the same generic
+ * image for every post — measured on snapchat.com/web, every clip's library
+ * preview and every cast hero was Snapchat's own branding, because the head
+ * tags legitimately agree with `location` (both say "/web") so the staleness
+ * guard passes. The captured body already holds the right picture: the play
+ * card's poster, which the pipeline built from this post's own video frame.
+ *
+ * Only overrides when the body poster is a real inlined image; a `data:` URI
+ * is fine here (the clip's thumbnail is stored, not published — the cast's
+ * hero comes from the markdown's own image URLs).
+ */
+function posterFromBody(html: string, current: string | null): string | null {
+  const m = /<img[^>]*class="[^"]*tweet-video-poster[^"]*"[^>]*src="([^"]+)"/.exec(html)
+    ?? /<img[^>]*src="([^"]+)"[^>]*class="[^"]*tweet-video-poster[^"]*"/.exec(html);
+  return m?.[1] ?? current;
+}
+
+function censusOf(root: Element | DocumentFragment): string {
+  const q = (sel: string) => (root as Element).querySelectorAll(sel).length;
+  return `${q('img')}i/${q('video')}v/${q('a')}a/${q('picture')}p`;
+}
+
+/**
+ * Per-image detail for the census: what each <img> is and where it sits.
+ * Only emitted when `DISCERNED_CENSUS_IMGS` is set on window, so the ordinary
+ * census line stays short.
+ */
+function censusImgs(root: Element | DocumentFragment): string {
+  return Array.from((root as Element).querySelectorAll('img')).map(i => {
+    const src = i.getAttribute('src') ?? '';
+    const parent = i.parentElement?.tagName.toLowerCase() ?? '-';
+    return `${parent}>img[${(i.getAttribute('alt') ?? '').slice(0, 12)}|${src.slice(0, 12)}]`;
+  }).join(', ');
+}
+
+function makeCensus(url: string): { at: (stage: string, root: Element | DocumentFragment) => void; flush: () => void } {
+  if (!__DISCERNED_DEV_BUILD__) {
+    return { at: () => undefined, flush: () => undefined };
+  }
+  const parts: string[] = [];
+  const detail = !!(window as unknown as { DISCERNED_CENSUS_IMGS?: boolean }).DISCERNED_CENSUS_IMGS;
+  return {
+    at: (stage, root) => {
+      parts.push(`${stage}:${censusOf(root)}`);
+      if (detail) log(LL.DEBUG, `Discerned: census imgs @${stage} — ${censusImgs(root)}`, 'url:', url);
+    },
+    flush: () => {
+      if (parts.length) log(LL.DEBUG, `Discerned: pipeline census — ${parts.join(' | ')}`, 'url:', url);
+    },
+  };
+}
+
 async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const base = baseFields();
   log(LL.DEBUG, `Discerned: extractArticle — smartArticleDetection=${opts.smartArticleDetection} stripInlineStyles=${opts.stripInlineStyles}`, 'url:', base.url);
@@ -3421,6 +3492,8 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     const cleanup = markExcluded(document.body);
     const sizeCleanup = annotateLiveImageSizes(articleEl);
     const clone = deepCloneWithShadow(articleEl);
+    const census = makeCensus(base.url);
+    census.at('clone', clone);
     sizeCleanup();
     cleanup();
     clone.querySelector('#discerned-overlay')?.remove();
@@ -3431,10 +3504,14 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       try { siteTaggerPostClone(clone); }
       catch (err) { log(LL.WARN, 'Discerned: site tagger postClone failed:', err); }
     }
+    census.at('postClone', clone);
     removeMarked(clone);
+    census.at('removeMarked', clone);
     stripSizeMarkers(clone);
     stripPageChrome(clone);
+    census.at('stripChrome', clone);
     substituteVideosWithPosters(clone, liveVideoFrames);
+    census.at('videoPosters', clone);
     substituteStarRatings(clone);
     await substituteEmbeddedTweets(clone, harvestedTweets);
     substituteVideoEmbeds(clone);
@@ -3442,8 +3519,11 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     // above/beside the caption (no-op unless markMediaForHoist marked it).
     hoistMarkedMedia(clone);
     tagSemanticStructure(clone);
+    census.at('preSanitise', clone);
     const imgsBefore = clone.querySelectorAll('img').length;
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
+    census.at('sanitised', clone);
+    census.flush();
     const imgsAfter = clone.querySelectorAll('img[style]').length;
     log(LL.DEBUG, `Discerned: sanitiseTreeInPlace done — ${imgsBefore} imgs, ${imgsAfter} with remaining inline style, stripInlineStyles=${opts.stripInlineStyles}`, 'url:', base.url);
     log(LL.TRACE, `Discerned: sanitised bodyHtml (first 2000 chars): ${clone.innerHTML.slice(0, 2000)}`, 'url:', base.url);
@@ -3460,7 +3540,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       format: 'article',
       bodyHtml: inlined,
       bodyText: proseText(tier1BodyRoot, imageUrls),
-      thumbnail: inlinedThumbnail,
+      thumbnail: posterFromBody(inlined, inlinedThumbnail),
       thumbnailUrl,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
@@ -3502,6 +3582,8 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       siteTaggerRoot.querySelectorAll('.dx-excl').forEach(el => el.setAttribute(EXCL_MARKER, '1'));
     }
     const clone = deepCloneWithShadow(expanded);
+    const census = makeCensus(base.url);
+    census.at('clone', clone);
     sizeCleanup();
     cleanup();
     clone.querySelector('#discerned-overlay')?.remove();
@@ -3517,12 +3599,16 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       try { siteTaggerPostClone(clone); }
       catch (err) { log(LL.WARN, 'Discerned: site tagger postClone failed:', err); }
     }
+    census.at('postClone', clone);
     removeMarked(clone);
+    census.at('removeMarked', clone);
     stripSizeMarkers(clone);
     // Skip chrome-strip when a site tagger authoritatively scoped this root —
     // the tagger may have intentionally retained landmark elements.
     if (!siteTaggerRoot) stripPageChrome(clone);
+    census.at('stripChrome', clone);
     substituteVideosWithPosters(clone, liveVideoFrames);
+    census.at('videoPosters', clone);
     substituteStarRatings(clone);
     await substituteEmbeddedTweets(clone, harvestedTweets);
     substituteVideoEmbeds(clone);
@@ -3530,7 +3616,10 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     // above/beside the caption (no-op unless markMediaForHoist marked it).
     hoistMarkedMedia(clone);
     tagSemanticStructure(clone);
+    census.at('preSanitise', clone);
     sanitiseTreeInPlace(clone as HTMLElement, opts.stripInlineStyles);
+    census.at('sanitised', clone);
+    census.flush();
     // Before inlining, so a recovered hero is inlined + counted in imageUrls
     // (the cast's image set) exactly like an in-body image would be.
     const layoutHtml = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title);
@@ -3546,7 +3635,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       format: 'article',
       bodyHtml: inlined,
       bodyText: proseText(layoutBodyRoot, imageUrls),
-      thumbnail: inlinedThumbnail,
+      thumbnail: posterFromBody(inlined, inlinedThumbnail),
       thumbnailUrl,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
@@ -3577,7 +3666,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       title: parsed.title || base.title,
       bodyHtml: inlined,
       bodyText,
-      thumbnail: inlinedThumbnail,
+      thumbnail: posterFromBody(inlined, inlinedThumbnail),
       thumbnailUrl,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
@@ -5908,6 +5997,222 @@ function tagTikTok(root: Document | Element): Element | void {
 }
 
 /**
+ * Snapchat Spotlight (snapchat.com/spotlight, /@user/spotlight/<id>).
+ *
+ * Measured hooks — Snapchat ships stable `data-testid`s, unlike the hashed
+ * class names on Instagram/TikTok:
+ *   eachFeedItem            one post (6 mounted at a time on the feed)
+ *   spotlightFeed           the feed column
+ *   desktopSpotlightPlayer  the player for the current post
+ *   storyWebPlayer          wrapper directly around the <video>
+ *   playerContentVideo      the <video> itself
+ *   metaDataContainer       author / caption / sound strip
+ *
+ * Note the generic path captures this page BADLY (measured: the site footer —
+ * "Company, Careers, News…" — and no video), which is why a tagger is needed.
+ */
+function tagSnapchat(root: Document | Element): Element | void {
+  const items = Array.from(root.querySelectorAll('[data-testid="eachFeedItem"]'));
+  const player = root.querySelector('[data-testid="desktopSpotlightPlayer"]');
+
+  // ── snapchat.com/web ────────────────────────────────────────────────────
+  // A vertical feed with no data-testids at all: the current post, plus the
+  // bottom of the previous one and the top of the next. Measured by climbing
+  // from the visible <video>: L2 is the post itself ("20M Nareman Rahman 24K"
+  // — avatar, name and counts, ONE video); by L5 the text has begun repeating
+  // as neighbours creep in, and L7 holds 2 videos and 24 images. So the scope
+  // is the last ancestor that still contains exactly one video.
+  if (!items.length && !player) {
+    const vids = Array.from(root.querySelectorAll('video'));
+    if (!vids.length) return;
+    const current = pickVisibleFeedPost(vids);
+    if (!current) return;
+    let post: Element = current;
+    for (let i = 0; i < 12 && post.parentElement; i++) {
+      const next = post.parentElement;
+      // Stop before a neighbouring post joins.
+      if (next.querySelectorAll('video').length > 1) break;
+      const txt = (next.textContent ?? '').replace(/\s+/g, ' ').trim();
+      const half = txt.slice(0, Math.floor(txt.length / 2));
+      if (half.length > 8 && txt.indexOf(half, half.length) !== -1) break;
+      post = next;
+    }
+    appendClass(post, 'dx-post');
+    const avatar = post.querySelector('img[width="24"], img[alt]:not([alt=""])');
+    if (avatar) appendClass(avatar, 'dx-avatar');
+    log(LL.DEBUG, 'Discerned: tagSnapchat scoped to the current /web feed post',
+      'url:', window.location.href);
+    return post;
+  }
+  if (!items.length && !player) return;
+
+  for (const item of items) {
+    appendClass(item, 'dx-post');
+    const meta = item.querySelector('[data-testid="metaDataContainer"]');
+    if (meta) appendClass(meta, 'dx-byline');
+  }
+  // Page chrome: the nav rail and the site-wide footer are what the generic
+  // finder was picking instead of the post.
+  // Scoped to the site's OWN chrome. A blanket `nav`/`footer` exclusion also
+  // caught the post's byline on Spotlight — the avatar and username sit inside
+  // a nav-ish container there — so the capture came out with the poster and
+  // counts but no author (verified by reading the captured HTML).
+  root.querySelectorAll(
+    '[data-testid="ConsumerNav_Desktop"], [data-testid="Search_Bar"], [data-testid="ConsumerNav_ImageIcon"]',
+  ).forEach(el => appendClass(el, 'dx-excl'));
+  // The site footer, but only the page-level one (never a post's own).
+  const siteFooter = root.querySelector('footer');
+  if (siteFooter && !siteFooter.querySelector('video')) appendClass(siteFooter, 'dx-excl');
+
+  // Recirculation blocks BELOW the post: the "Related:" topic rail, the
+  // comments panel and the "Up next" rail. These sit inside the scope the tagger
+  // has to return (the byline lives at the same level), so they are excluded
+  // by name rather than by narrowing the root. Identified by their own leading
+  // label, matched on the element's whole text so a caption merely containing
+  // the word survives.
+  const RECIRC = /^(related:?|comments?|up next|view more details|more like this)\b/i;
+  Array.from(root.querySelectorAll('div, section')).forEach(el => {
+    if (el.querySelector('video, a.tweet-video')) return; // holds the post itself
+    const first = (el.firstElementChild?.textContent ?? el.textContent ?? '')
+      .replace(/\s+/g, ' ').trim();
+    if (first && first.length < 60 && RECIRC.test(first)) appendClass(el, 'dx-excl');
+  });
+
+  // A permalink page shows one post; the feed mounts several, so scope to the
+  // one on screen (same viewport-dominance rule as the other feed taggers).
+  if (player) {
+    // Return an ANCESTOR of the player, not the player itself. Measured, the
+    // player subtree holds only controls (playButton, muteButton …) — the
+    // username, date, sound and the reaction counts are SIBLINGS three and
+    // four levels up ("96k1.9k17k22k" and "🐝Aug 29Original Sound<user>").
+    // Scoping to the player captured the poster and nothing else, which is
+    // exactly the missing byline/avatar/reactions.
+    // Climb until the AVATAR is in scope, not a fixed number of levels.
+    // Measured from the <video>: the counts appear at L10 and the username +
+    // profilePicture avatar only at L11, so a 4-level climb (which is what
+    // this did) captured the poster and counts but never the byline.
+    // Climb from the player until the AVATAR is in scope. Always climb —
+    // an `eachFeedItem` ancestor is NOT a shortcut here: those also wrap the
+    // side-rail thumbnails, and taking one skipped the climb and produced a
+    // scope with the poster and counts but no byline (verified by reading the
+    // captured HTML: 1 img, no profilePicture).
+    let post: Element = player;
+    for (let i = 0; i < 14 && post.parentElement; i++) {
+      if (post.querySelector('[data-testid="profilePicture"], img[alt="Profile Picture"]')) break;
+      post = post.parentElement;
+    }
+    appendClass(post, 'dx-post');
+    // Tag the counts row so it renders as a stat strip rather than a run-on
+    // number ("96k1.9k17k22k").
+    for (const el of Array.from(post.querySelectorAll('div'))) {
+      if (el.children.length >= 3 && el.querySelector('video')) continue;
+      const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+      if (/^(\d+(\.\d+)?[km]?){3,}$/i.test(t.replace(/\s/g, ''))) {
+        appendClass(el, 'dx-stats');
+        break;
+      }
+    }
+    log(LL.DEBUG, 'Discerned: tagSnapchat scoped to the spotlight post',
+      'url:', window.location.href);
+    return post;
+  }
+  const visible = pickVisibleFeedPost(items);
+  if (visible) return visible;
+}
+
+/**
+ * The permalink for the Snapchat Spotlight post currently on screen.
+ *
+ * Derived from `window.location` when on a permalink, else from the visible
+ * item's own `feedItemLink` anchor. NOT from `<link rel="canonical">`: on the
+ * feed that reports the bare "/spotlight" URL rather than the current post
+ * (measured), the same SPA hazard as Instagram and YouTube.
+ */
+function snapchatVideoUrl(item: Element | null): string | null {
+  const path = testPathOverride ?? window.location.pathname;
+  const fromUrl = path.match(/^\/(@[^/]+)\/spotlight\/([A-Za-z0-9_-]{10,})/);
+  if (fromUrl) return `https://www.snapchat.com/${fromUrl[1]}/spotlight/${fromUrl[2]}`;
+  const href = item?.querySelector<HTMLAnchorElement>('a[href*="/spotlight/"]')?.getAttribute('href')
+    ?? document.querySelector<HTMLAnchorElement>('a[data-testid="feedItemLink"]')?.getAttribute('href');
+  if (!href) return null;
+  try { return new URL(href, 'https://www.snapchat.com').toString(); } catch { return null; }
+}
+
+/**
+ * Wrap Snapchat's poster in a play card on the detached clone.
+ *
+ * Snapchat is the easy case among the video sites: its <video> carries BOTH a
+ * real `poster` attribute and an `https:` src (measured on Spotlight), rather
+ * than the `blob:` MSE streams Instagram/TikTok/Facebook use. The poster is
+ * therefore taken straight from the attribute.
+ */
+function postCloneSnapchat(clone: Element): void {
+  // Hoist avatars out of <picture>. Snapchat renders the profile picture as
+  // `<div><picture><source…><img></picture></div>` — measured: the element
+  // carrying data-testid="profilePicture" is a DIV with no src of its own, and
+  // `picture` is not in ALLOWED_TAGS, so sanitisation took the real <img> down
+  // with it. That is why Spotlight captured a poster and counts but never the
+  // avatar. Replacing each <picture> with its own <img> keeps the image in a
+  // tag that survives.
+  clone.querySelectorAll('picture').forEach(pic => {
+    const img = pic.querySelector('img');
+    if (img) pic.replaceWith(img); else pic.remove();
+  });
+  // Mark the profile picture so the clip renders it as a round avatar pin.
+  const avatarImg = clone.querySelector('[data-testid="profilePicture"] img')
+    ?? clone.querySelector('img[alt="Profile Picture"]');
+  if (avatarImg) appendClass(avatarImg, 'dx-avatar');
+
+  if (clone.querySelector('a.tweet-video')) return;
+  // Link target, best available. `/web` has NO per-post permalink — measured,
+  // the post carries no post-scoped anchor and the address bar never changes —
+  // so the author's profile is the only destination. Without this the poster
+  // was a dead image with no link at all.
+  const href = snapchatVideoUrl(clone)
+    ?? clone.querySelector<HTMLAnchorElement>('a[href*="/@"]')?.getAttribute('href')
+    ?? null;
+  const video = clone.querySelector<HTMLVideoElement>('video, [data-testid="playerContentVideo"]');
+  const poster = video?.getAttribute('poster') ?? null;
+  if (!href) return;
+  // On /web the <video> is a blob: stream with NO poster attribute, so there is
+  // nothing to build a card from here — substituteVideosWithPosters runs later
+  // and swaps that video for a canvas frame. Mark the video instead: the
+  // substitution wraps its replacement image in this link.
+  if (!poster || !isSafeImageSrc(poster)) {
+    if (video) video.setAttribute('data-dx-link', href);
+    return;
+  }
+  const doc = clone.ownerDocument;
+  const img = doc.createElement('img');
+  img.setAttribute('src', poster);
+  img.setAttribute('alt', 'Video thumbnail');
+  img.setAttribute('data-dx-src', poster);
+  img.className = 'tweet-video-poster';
+  const link = doc.createElement('a');
+  link.className = 'tweet-video';
+  link.setAttribute('href', href);
+  link.appendChild(img);
+  const play = doc.createElement('div');
+  play.className = 'tweet-video-play';
+  play.textContent = '▶';
+  link.appendChild(play);
+  // Replace the player subtree so the (unplayable, stripped) <video> does not
+  // also ship — the same duplicate-image trap TikTok hit.
+  // Replace the SMALLEST wrapper that holds the video and nothing else.
+  // `desktopSpotlightPlayer` was in this list and is far too big on Spotlight:
+  // the byline sits inside it, so replacing it took the avatar and username
+  // with the video (measured: the tagger root has 8 images, the capture had
+  // 1). Never replace a node that contains images we want to keep.
+  const candidates = [
+    video?.closest('[data-testid="storyWebPlayer"]'),
+    video?.parentElement,
+    video,
+  ];
+  const target = candidates.find(el => el && el.querySelectorAll('img').length === 0) ?? video;
+  target?.replaceWith(link);
+}
+
+/**
  * The permalink for the TikTok video currently on screen, or null.
  *
  * Measured on the feed: a `<video>` is a `blob:` stream with no poster
@@ -6003,6 +6308,19 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     // extractFacebookPost's Tier-0 gate before this tagger runs at all, but the
     // anchor must still hold for the cases that fall through to it.)
     anchors: ['[data-ad-rendering-role="story_message"], [data-ad-comet-preview="message"], [role="dialog"], video'],
+  },
+  {
+    name: 'snapchat',
+    match: h => /(^|\.)snapchat\.com$/i.test(h),
+    tag: tagSnapchat,
+    postClone: postCloneSnapchat,
+    // Stable data-testids (Snapchat ships them; classes are hashed).
+    // Snapchat serves two very different shapes and they share no hook:
+    // Spotlight has data-testids, /web has NONE (its feed is plain divs). A
+    // Spotlight-only anchor list made `allDead` fire on /web and the tagger
+    // was skipped entirely, so its branch never ran. `main video` keeps the
+    // /web shape alive without matching arbitrary pages.
+    anchors: ['[data-testid="eachFeedItem"], [data-testid="desktopSpotlightPlayer"], video'],
   },
   {
     name: 'tiktok',
@@ -6951,7 +7269,12 @@ const ALLOWED_ATTRS_GLOBAL = new Set(['style', 'class']);
 // from the Twitter extractor. Both are added by our code, not the source page.
 const TRUSTED_CLASS_PREFIXES = ['dx-', 'tweet-'];
 const ALLOWED_ATTRS_PER_TAG: Record<string, Set<string>> = {
-  a:   new Set(['href']),
+  // `target`/`rel` are allowed so the `target="_blank"` the href branch sets a
+  // few lines below actually survives — the allowlist stripped it right back
+  // off, so every captured link opened in the CURRENT tab and navigated the
+  // web app away from the library. `rel` is forced to noopener/noreferrer
+  // there, and `target` can only ever be the literal "_blank" this code sets.
+  a:   new Set(['href', 'target', 'rel']),
   img: new Set(['src', 'alt', 'title', 'width', 'height', 'data-dx-src', 'data-discerned-currentsrc']),
   // Note: keys here MUST be lowercase — sanitiseElement compares attr.name.toLowerCase().
   // SVG camelCase attrs (viewBox, gradientUnits, etc.) are written as their lowercased
@@ -7621,6 +7944,27 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
       const img = document.createElement('img');
       img.src = poster;
       img.alt = 'Video';
+      // A site tagger can stamp `data-dx-link` on a video whose poster only
+      // materialises HERE (a blob: stream, where the poster is the canvas
+      // frame grabbed before cloning). Wrapping the replacement gives that
+      // poster a destination — otherwise it ships as an image with no link at
+      // all, which is what a Snapchat /web capture produced.
+      const dxLink = video.getAttribute('data-dx-link');
+      if (dxLink) {
+        const a = document.createElement('a');
+        a.className = 'tweet-video';
+        a.setAttribute('href', dxLink);
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener noreferrer');
+        img.className = 'tweet-video-poster';
+        a.appendChild(img);
+        const play = document.createElement('div');
+        play.className = 'tweet-video-play';
+        play.textContent = '▶';
+        a.appendChild(play);
+        (wrapper ?? video).replaceWith(a);
+        return;
+      }
       (wrapper ?? video).replaceWith(img);
       return;
     }
@@ -8394,6 +8738,13 @@ function removeGenericChrome(root: Element): void {
       const total = (p.textContent ?? '').replace(/\s+/g, ' ').length;
       if (total > (strong ? 2500 : 1500)) break; // too big — would eat article content
       if (hasLongProse(p)) break;
+      // Never climb past the post's own MEDIA. The guards above are text-based
+      // and a media post has almost no text, so on Snapchat Spotlight (whose
+      // recommendation rail is labelled "Related:") the climb reached a
+      // container holding the whole post and removed it — byline, avatar and
+      // all (measured: removeGenericChrome took 9i/8a → 1i/1a). A container
+      // holding a play card or a marked post is content, not a chrome module.
+      if (p.querySelector('a.tweet-video, .dx-post, video')) break;
       if (strong) {
         // Unambiguous module heading: the enclosing prose-free container IS
         // the module, whatever mix of links/images/teaser text it holds.
@@ -9074,7 +9425,14 @@ function sanitiseTreeInPlace(root: Element, stripStyles = false) {
   // Space out former flex/grid children BEFORE the attribute-stripping walk
   // consumes the live-layout markers, then drop text-identified page chrome.
   applyFlexSeparation(root);
-  removeGenericChrome(root);
+  if (__DISCERNED_DEV_BUILD__) {
+    const b = `${root.querySelectorAll('img').length}i/${root.querySelectorAll('a').length}a`;
+    removeGenericChrome(root);
+    const a = `${root.querySelectorAll('img').length}i/${root.querySelectorAll('a').length}a`;
+    if (b !== a) log(LL.DEBUG, `Discerned: census — removeGenericChrome ${b} → ${a}`, 'url:', window.location.href);
+  } else {
+    removeGenericChrome(root);
+  }
   stripZeroWidthChars(root);
   tagProseWrappers(root);
 
@@ -9149,7 +9507,16 @@ function sanitiseTreeInPlace(root: Element, stripStyles = false) {
   // same media (Reddit's blur-preview + main + lightbox-source pattern, news
   // sites' AMP <amp-img fallback> + <img> twins, <picture> with explicit
   // <source> + <img> when the sanitiser strips <picture>/<source> wrappers).
-  dedupAdjacentImages(root);
+  if (__DISCERNED_DEV_BUILD__) {
+    const before = root.querySelectorAll('img').length;
+    dedupAdjacentImages(root);
+    const after = root.querySelectorAll('img').length;
+    if (before !== after) {
+      log(LL.DEBUG, `Discerned: census — dedupAdjacentImages ${before}i → ${after}i`, 'url:', window.location.href);
+    }
+  } else {
+    dedupAdjacentImages(root);
+  }
 
   // Collapse elements whose subtree has no visible content. Runs after the
   // sanitisation walk so unwrapping/attribute-stripping have already produced

@@ -82,6 +82,15 @@ export function resolveVideoEmbed(rawUrl: string): VideoEmbed | null {
     }
   }
 
+  // Snapchat is deliberately NOT here: it cannot be embedded at all.
+  // Measured on a Spotlight permalink — `X-Frame-Options: DENY` plus
+  // `frame-ancestors https://localhost:3000 https://www.snapchat.com`, so any
+  // iframe is refused by the browser (0 videos, "Framing ... denied" console
+  // error). There is also no embed route to fall back on: `/embed/<id>` 404s,
+  // and `/spotlight/embed/<id>` returns 200 but plays a DIFFERENT video, i.e.
+  // it ignores the id entirely. Returning null keeps the captured poster as a
+  // plain link-out card, which is the honest behaviour.
+
   // TikTok — /@user/video/<id>; the embed player is keyed on the id alone.
   if (host === 'tiktok.com') {
     const id = u.pathname.match(/\/video\/(\d{6,})/)?.[1];

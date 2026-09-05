@@ -182,6 +182,11 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'census',
+      testMatch: /tools[/]census[.]spec[.]ts$/,
+      retries: 0,
+    },
+    {
       name: 'ig-spa-link',
       testMatch: /tools\/ig-spa-link\.spec\.ts$/,
       retries: 0,

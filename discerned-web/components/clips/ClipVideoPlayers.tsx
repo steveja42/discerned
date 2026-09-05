@@ -95,6 +95,7 @@ export function useClipVideoPlayers(
       // Respect the ways a person asks for a new tab/window.
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const target = e.target as Element | null;
+
       const card = target?.closest?.('a.tweet-video, a.dx-video-link');
       // Resolve the body fresh: after a re-render `ref.current` is a detached
       // div, so a containment test against it rejects every real click.
@@ -279,6 +280,26 @@ export function useClipVideoPlayers(
     // element is REUSED, not recreated, so playback position survives.
     // Look the body up fresh each time: `ref.current` points at the div that
     // existed when the effect ran, which a re-render has already discarded.
+    /**
+     * Force every link in the clip body to open in a NEW tab.
+     *
+     * The extension's sanitiser stamps `target="_blank"` at capture time, but
+     * a clip captured before that rule existed carries none — and the body is
+     * injected as raw HTML, so React never sees these anchors. Without this,
+     * clicking a captured username or avatar navigated the app away from the
+     * library. Runs on mount and on every mutation, so it also covers bodies
+     * that arrive asynchronously.
+     */
+    const externaliseLinks = () => {
+      const root = document.querySelector('.detail .clip-body') ?? ref.current;
+      if (!root) return;
+      root.querySelectorAll('a[href]').forEach(a => {
+        if (a.getAttribute('target') === '_blank') return;
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener noreferrer');
+      });
+    };
+
     const restorePlayers = () => {
       const root = document.querySelector('.detail .clip-body') ?? ref.current;
       if (!root) return;
@@ -295,7 +316,8 @@ export function useClipVideoPlayers(
     // BECAUSE of a re-render, React has already rewritten the body before the
     // observer exists, so there is no mutation left to react to.
     restorePlayers();
-    const observer = new MutationObserver(restorePlayers);
+    externaliseLinks();
+    const observer = new MutationObserver(() => { restorePlayers(); externaliseLinks(); });
     // Observe a STABLE ancestor, not ref.current. React re-renders the body by
     // replacing that div wholesale, so an observer bound to it would be
     // watching a detached node and never see the replacement — which is why
