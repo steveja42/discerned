@@ -1575,6 +1575,14 @@ function fbResolvePoster(video: HTMLVideoElement | null): string | null {
   const fromAttr = video?.getAttribute('poster') ?? null;
   if (fromAttr && isSafeImageSrc(fromAttr)) return fromAttr;
 
+  // NOTE on scope: a bounded climb from the <video> was tried here and
+  // reverted. Measured on the reels route, levels 2-10 above the player
+  // contain only a 12x12 UI icon and the real cover frame first appears at
+  // level 12 — by which point the neighbouring reels' frames are in scope
+  // too. The wrong-poster bug was never about which images were searched: the
+  // caller was picking the wrong <video> to start from (largest, not most
+  // visible). This fallback only runs when the <video> has no poster
+  // attribute at all, which on Facebook is rare.
   const scope = video?.closest('[role="main"], [role="dialog"]') ?? video?.parentElement ?? document;
   const candidate = Array.from((scope as Element | Document).querySelectorAll<HTMLImageElement>('img[src*="fbcdn"], img[src*="scontent"]'))
     .filter(img => isSafeImageSrc(img.src))
@@ -1619,8 +1627,25 @@ function fbCleanCaption(msgEl: Element): Element {
     const singles = kids.filter(k => (k.textContent ?? '').trim().length === 1).length;
     if (kids.length >= 6 && singles >= kids.length * 0.7) el.remove();
   });
-  clone.querySelectorAll('a, [role="button"]').forEach(el => {
-    if (/^\s*(see more|see translation|show more)\s*$/i.test(el.textContent ?? '')) el.remove();
+  // Expander / translation controls. "Hide translation" is the state the
+  // control shows once a translation is ALREADY expanded, and it was missing
+  // here — so a translated post shipped a stray "Hide translation" line at the
+  // end of the caption.
+  clone.querySelectorAll('a, [role="button"], span[role="button"], div[role="button"]').forEach(el => {
+    if (/^\s*(see|show|hide)\s+(more|translation|original)\s*$/i.test(el.textContent ?? '')) el.remove();
+  });
+  // Flatten hashtag links to plain text.
+  //
+  // Facebook overlays hashtag anchors on the caption in a way that does not
+  // align with the visible text: measured, turndown emitted
+  // `[#diy #hac](…q=%23Halloween…)` — the link TEXT spans one range while its
+  // href belongs to a different tag, so a cast rendered a run of broken chips
+  // whose labels were sliced mid-word. The hrefs are worthless in a cast
+  // anyway: they carry Facebook's `__cft__`/`__tn__` tracking blobs and point
+  // at a search page. Keeping the text and dropping the anchor gives clean
+  // "#halloween #diy #hacks" prose.
+  clone.querySelectorAll('a[href*="/hashtag/"], a[href*="q=%23"]').forEach(el => {
+    el.replaceWith(...Array.from(el.childNodes));
   });
   // The site tagger runs on the live DOM before this builder does, so its
   // markers ride along on the clone. `dx-avatar` on an inline emoji <img> is
@@ -1903,14 +1928,32 @@ async function extractFacebookPost(
   // 0x0 <video> placeholder with a blob: src, no poster, and no nearby
   // thumbnail. Treating that as the post's medium replaced a perfectly good
   // photo post with a bare "▶ Video" link card.
-  const video = Array.from(root.querySelectorAll<HTMLVideoElement>('video'))
+  // Pick by VIEWPORT VISIBILITY first, size only as the tie-break.
+  //
+  // Sorting purely by area picked the wrong reel: the reels route keeps
+  // neighbouring reels mounted (measured: 2 <video> elements, the visible one
+  // covering just 24% of the viewport), so a larger OFF-SCREEN neighbour won
+  // and the clip captured that reel's poster. Every scope-narrowing attempt
+  // missed this, because the problem was never which images were searched —
+  // it was which <video> the search started from.
+  const videoCandidates = Array.from(root.querySelectorAll<HTMLVideoElement>('video'))
     .filter(v => {
       const r = v.getBoundingClientRect();
       return r.width >= 80 && r.height >= 80;
-    })
+    });
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const onScreenArea = (v: Element): number => {
+    const r = v.getBoundingClientRect();
+    const oy = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+    const ox = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+    return ox * oy;
+  };
+  const video = videoCandidates
     .sort((a, b) => {
+      const va = onScreenArea(a), vb = onScreenArea(b);
+      if (va !== vb) return vb - va;             // most visible wins
       const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-      return (rb.width * rb.height) - (ra.width * ra.height);
+      return (rb.width * rb.height) - (ra.width * ra.height); // then largest
     })[0] ?? null;
   const rawPoster = video ? fbResolvePoster(video) : null;
   const uuid = video?.getAttribute('data-uuid') ?? '';
@@ -3337,11 +3380,23 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const hasLayout = window.innerWidth > 0 && window.innerHeight > 0
     && document.body.getBoundingClientRect().height > 0;
   if (isFacebookHost() && hasLayout) {
-    // A single-post URL builds from the whole document; the FEED first picks
-    // the one post card the user is looking at (the same card-climb + visible
-    // -post choice tagFacebook uses), then builds from just that card. Both
-    // return null on a missing essential field and fall through to the tagger.
-    const fbRoot = isFacebookPostUrl(window.location.href) ? document : fbVisiblePostCard();
+    // A single-post URL normally builds from the whole document; the FEED
+    // first picks the one post card the user is looking at (the same
+    // card-climb + visible-post choice tagFacebook uses), then builds from
+    // just that card. Both return null on a missing essential field and fall
+    // through to the tagger.
+    //
+    // The exception is a REEL opened from the feed: Facebook renders it as an
+    // overlay above the still-present feed, so `document` finds the underlying
+    // post's byline and avatar and the clip shows a username and description
+    // belonging to a different post entirely. Scoping to the visible card
+    // fixes that — but ONLY for reels: applying it to every permalink broke
+    // shared posts, where the visible-card pick lands on the INNER shared card
+    // and the sharer's quote-card structure is lost (facebook-share baseline).
+    const fbIsReel = /\/reel\//.test(testPathOverride ?? window.location.pathname);
+    const fbRoot = isFacebookPostUrl(window.location.href)
+      ? (fbIsReel ? (fbVisiblePostCard() ?? document) : document)
+      : fbVisiblePostCard();
     if (fbRoot) {
       const fbPost = await extractFacebookPost(base, liveVideoFrames, fbRoot);
       if (fbPost) return fbPost;

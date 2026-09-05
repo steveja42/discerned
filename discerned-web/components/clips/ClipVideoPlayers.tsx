@@ -212,7 +212,6 @@ export function useClipVideoPlayers(
       out.rel = 'noopener noreferrer';
       out.className = 'clip-video-out';
       out.textContent = `Open on ${embed.provider}`;
-
       if (wrap.classList.contains('clip-video-embed--crop')) {
         // The crop box clips to the player (overflow: hidden), so the link
         // cannot live inside it — it would be cropped away with the chrome.
