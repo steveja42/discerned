@@ -381,11 +381,82 @@ function newId(): string {
 }
 
 function getPageThumbnail(): string | null {
-  const ogImage = document.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content;
-  if (ogImage) return ogImage;
+  // YouTube first: derive from the CURRENT ?v=. It is an SPA that never
+  // reloads between videos, and its <head> og:image is not reliably rewritten
+  // on client-side navigation — so the meta tag can still describe the
+  // PREVIOUS video, which is how a clip ended up carrying the wrong preview.
+  // The id-derived URL is computed from the page being captured right now and
+  // therefore cannot go stale.
+  const host = testHostOverride ?? window.location.hostname;
+  if (/(^|\.)youtube\.com$/i.test(host)) {
+    const vid = new URL(window.location.href).searchParams.get('v');
+    if (vid && /^[A-Za-z0-9_-]{11}$/.test(vid)) {
+      return `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+    }
+  }
+  // Refuse og:image when the page's own head tags describe a DIFFERENT URL
+  // than the one being captured. Single-page apps routinely leave <head>
+  // untouched on a client-side navigation: measured, TikTok, Bluesky and
+  // primal.net all keep the previous page's canonical/og:image after an
+  // in-page route change (as did YouTube and Instagram, each of which produced
+  // a real "wrong video/thumbnail" bug). Falling through to the first in-page
+  // <img> uses the live DOM, which is always current.
+  if (headTagsDescribeCurrentPage()) {
+    const ogImage = document.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content;
+    if (ogImage) return ogImage;
+  }
   const firstImg = document.querySelector<HTMLImageElement>('img');
   return firstImg?.src || null;
 }
+
+/**
+ * True when the document's declared canonical/og:url agrees with the address
+ * bar — i.e. `<head>` has kept up with the current page.
+ *
+ * Compares PATH only: the tags legitimately differ from `location` in host
+ * (`m.` vs `www.`), in query (tracking params), and in shape (Instagram serves
+ * `/reels/<code>/` while its canonical is `/reel/<code>/`), so a strict URL
+ * match would reject perfectly fresh tags. A path that shares no meaningful
+ * segment with the current one is the reliable signal of a stale head.
+ *
+ * Conservative by design: with no canonical/og:url to check it returns true,
+ * because the overwhelming majority of pages are ordinary documents whose head
+ * is correct, and refusing og:image there would lose good thumbnails.
+ */
+function headTagsDescribeCurrentPage(): boolean {
+  const declared = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href
+    ?? document.querySelector<HTMLMetaElement>('meta[property="og:url"]')?.content
+    ?? '';
+  if (!declared) return true;
+  let declaredPath: string;
+  try { declaredPath = new URL(declared, window.location.href).pathname; } catch { return true; }
+  // Honour the test path override: a fixture is served from
+  // 127.0.0.1/<name>.html while the saved page's canonical still names the
+  // real permalink, so without this every fixture looked "stale" and lost its
+  // og:image — which silently gutted the facebook-reel baseline.
+  const herePath = testPathOverride ?? window.location.pathname;
+  if (declaredPath === herePath) return true;
+  // Compare the identifying segments (ids, slugs, handles) while ignoring the
+  // ROUTE words that describe shape rather than identity — otherwise
+  // /reel/<a> and /reels/<b> would "match" on their common prefix. Filtering
+  // by length alone was not enough: TikTok's "@nasa" vs "@natgeo" are both
+  // short, so both were discarded and a plainly stale head read as unjudgeable.
+  const ROUTE_WORDS = new Set([
+    'p', 'reel', 'reels', 'tv', 'video', 'videos', 'watch', 'status', 'posts',
+    'post', 'r', 'u', 'user', 'profile', 'embed', 'shorts', 'live', 'story',
+    'stories', 'photo', 'share', 'comments', 'home', 'www', 'en', 'index',
+  ]);
+  const idSegs = (p: string) => p.split('/')
+    .map(s => s.trim().toLowerCase())
+    .filter(s => s.length > 0 && !ROUTE_WORDS.has(s));
+  const here = idSegs(herePath);
+  const there = idSegs(declaredPath);
+  // Nothing distinctive on either side (a bare "/" or "/home") — can't judge,
+  // so don't block.
+  if (!here.length || !there.length) return true;
+  return here.some(s => there.includes(s));
+}
+
 
 /**
  * True when the page DECLARED this thumbnail as its social/preview image
@@ -399,6 +470,11 @@ function getPageThumbnail(): string | null {
  * "did it fetch?" check can't catch it — provenance is the real signal.
  */
 function isDeclaredThumbnail(): boolean {
+  // A stale og:image is not a declaration about THIS page (see
+  // headTagsDescribeCurrentPage): without this, an SPA navigation could
+  // promote the previously viewed post's picture into the clip body, which is
+  // a more visible wrong than simply having no hero.
+  if (!headTagsDescribeCurrentPage()) return false;
   return !!document.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content;
 }
 
@@ -1422,6 +1498,10 @@ function igResolvePoster(video: HTMLVideoElement | null): string | null {
     if (candidate) return candidate.src;
   }
 
+  // Only when <head> still describes the page being captured — on an SPA these
+  // tags lag a client-side navigation and would hand back the previously
+  // viewed post's cover frame.
+  if (!headTagsDescribeCurrentPage()) return null;
   const og = document.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content;
   return og && isSafeImageSrc(og) ? og : null;
 }
@@ -1504,6 +1584,10 @@ function fbResolvePoster(video: HTMLVideoElement | null): string | null {
     })[0] ?? null;
   if (candidate) return candidate.src;
 
+  // Only when <head> still describes the page being captured — on an SPA these
+  // tags lag a client-side navigation and would hand back the previously
+  // viewed post's cover frame.
+  if (!headTagsDescribeCurrentPage()) return null;
   const og = document.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content;
   return og && isSafeImageSrc(og) ? og : null;
 }
@@ -1867,7 +1951,10 @@ async function extractFacebookPost(
   // it. Facebook's own boilerplate ("See posts, photos and more on Facebook.")
   // and empty strings are excluded so an absent caption stays honestly absent
   // rather than showing filler text.
-  const metaCaption = (msgEl || root instanceof Element ? '' : (
+  // Also gated on the head still describing THIS page: Facebook is an SPA, and
+  // a stale og:description would caption the post with the previously viewed
+  // one's text — a wrong caption reads as authoritative, so absent is better.
+  const metaCaption = (msgEl || root instanceof Element || !headTagsDescribeCurrentPage() ? '' : (
     document.querySelector<HTMLMetaElement>('meta[property="og:description"]')?.content
     ?? document.querySelector<HTMLMetaElement>('meta[name="description"]')?.content
     ?? ''
@@ -4761,13 +4848,6 @@ function tagYoutube(root: Document | Element): Element | void {
   const primaryInner = root.querySelector('#primary-inner');
   if (!primaryInner) return undefined;
 
-  // Read the live player's poster URL so postCloneYoutube can use it
-  // when synthesising the hero <figure> on the clone. We do NOT mutate
-  // the live player here — `player.replaceWith(...)` on the live document
-  // breaks YouTube's SPA (the player stops responding to navigation
-  // between videos until the page is reloaded).
-  const player = primaryInner.querySelector('#player, #player-container, ytd-player');
-  ytLivePosterUrl = player?.querySelector('video[poster]')?.getAttribute('poster') ?? null;
 
   // YT's content column is a busy stack of widgets: title, action strip,
   // description, chapters chips, "Shorts remixing this video", merch,
@@ -5211,6 +5291,17 @@ function tagInstagramReel(root: Document | Element): Element | void {
   // every size/host filter and shipped as a stray fourth image.
   post.querySelectorAll('img[alt="Audio image"], img[alt*="audio" i]')
     .forEach(el => appendClass(el, 'dx-excl'));
+  // "Follow" is an action button, not part of the author's identity — in the
+  // cast it renders inside the byline as "**pdxcd · • · Follow · 2 people**".
+  Array.from(post.querySelectorAll('[role="button"], button, a'))
+    .filter(el => /^follow(ing)?$/i.test((el.textContent ?? '').trim()))
+    .forEach(el => appendClass(el, 'dx-excl'));
+  // Instagram's own separator glyph between name and Follow. With Follow gone
+  // it is a dangling bullet, and the markdown byline joins on " · " already,
+  // so it renders as "pdxcd · • · 2 people".
+  Array.from(post.querySelectorAll('span, div'))
+    .filter(el => el.children.length === 0 && /^[•·]$/.test((el.textContent ?? '').trim()))
+    .forEach(el => appendClass(el, 'dx-excl'));
   // The audio-track chip that floats over the player: a small round thumbnail
   // with no caption value, which renders as a stray avatar-sized image beside
   // the media column once the player's own CSS is gone.
@@ -5262,6 +5353,10 @@ function tagInstagramReel(root: Document | Element): Element | void {
   if (mediaCol && post.contains(mediaCol) && mediaCol !== post) {
     appendClass(mediaCol, 'dx-reel-media');
   }
+  // Mark the cover frame so postCloneInstagram can wrap it in a play card on
+  // the DETACHED clone. The tagger must never restructure the live page (it is
+  // the user's real session), so only the marker is stamped here.
+  if (coverImg) appendClass(coverImg, 'dx-reel-poster');
   // The caption column is the post's own child that carries the prose but not
   // the video — its sibling is the media column (measured: 321px caption beside
   // a 387px media column, meeting at the level this climb stopped on).
@@ -5289,6 +5384,12 @@ function tagInstagramReel(root: Document | Element): Element | void {
     if (rail && rail !== post && rail !== railScope
       && !rail.contains(visible) && rail.querySelectorAll('svg').length >= 3) {
       appendClass(rail, 'dx-reel-rail');
+      // Also dx-stats: htmlToMarkdown's dx-stats-counts rule collapses an
+      // engagement row to a single "379 · 27" line. Without it the cast
+      // exploded the rail into ten lines ("Like", "379", "Comment", "27",
+      // "Share", "Save", "More"), since markdown has no column layout to
+      // hold it together.
+      appendClass(rail, 'dx-stats');
     }
   }
 
@@ -5321,6 +5422,55 @@ function tagInstagramReel(root: Document | Element): Element | void {
   log(LL.DEBUG, 'Discerned: tagInstagram scoped to the visible reel',
     'url:', window.location.href);
   return scope;
+}
+
+/**
+ * Wrap the reel's cover frame in a `tweet-video` play card, on the detached
+ * clone. The web app swaps such a card for an inline player on click and
+ * resolves the provider from the href, so the clip stores a poster + a
+ * canonical URL and never the video bytes (platform CDNs serve those behind
+ * expiring signed tokens, and a `blob:` MSE source dies with the tab).
+ *
+ * Runs as postClone because the live tagger must not restructure the user's
+ * real page — see the site-tagger rules.
+ */
+function postCloneInstagram(clone: Element): void {
+  const poster = clone.querySelector('.dx-reel-poster');
+  if (!poster || poster.closest('a.tweet-video')) return;
+  const href = igCanonicalPostUrl();
+  if (!href) return;
+  const doc = poster.ownerDocument;
+  const link = doc.createElement('a');
+  link.className = 'tweet-video';
+  link.setAttribute('href', href);
+  appendClass(poster, 'tweet-video-poster');
+  poster.parentElement?.insertBefore(link, poster);
+  link.appendChild(poster);
+  // The centred play glyph, matching the tweet-card video treatment.
+  const play = doc.createElement('div');
+  play.className = 'tweet-video-play';
+  play.textContent = '▶';
+  link.appendChild(play);
+}
+
+/**
+ * The canonical permalink for the reel/post currently on screen. Instagram
+ * serves the player at /reels/<code>/ but the embeddable form is the singular
+ * /reel/<code>/, so the shortcode is re-formatted rather than read from a tag.
+ *
+ * Derived from `window.location`, NEVER from `<link rel="canonical">` or
+ * `og:url`. Instagram is an SPA and does not rewrite those head tags on a
+ * client-side navigation: measured, after moving from reel A to reel B the
+ * location is B while canonical and og:url both still say A. Preferring the
+ * tag (as this did) made a fresh clip embed the PREVIOUSLY viewed reel's
+ * video. Same failure mode as YouTube's stale og:image thumbnail — on an SPA,
+ * only the live URL can be trusted.
+ */
+function igCanonicalPostUrl(): string | null {
+  const m = window.location.pathname.match(/^\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/);
+  if (!m) return null;
+  const kind = m[1] === 'p' ? 'p' : m[1] === 'tv' ? 'tv' : 'reel';
+  return `https://www.instagram.com/${kind}/${m[2]}/`;
 }
 
 /**
@@ -5707,6 +5857,7 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     name: 'instagram',
     match: h => /(^|\.)instagram\.com$/i.test(h),
     tag: tagInstagram,
+    postClone: postCloneInstagram,
     // All classes are hashed atomic names, so these are the only stable hooks.
     // `article` exists on the FEED but not on the /reel(s)/ player route
     // (measured: articleCount 0 there), so it is grouped with the reel's own
@@ -6011,13 +6162,6 @@ let siteTaggerRoot: Element | null = null;
 // replacement, Reddit byline column rebuild).
 let siteTaggerPostClone: SitePostClone | null = null;
 
-// Captured by tagYoutube on the LIVE page and consumed by postCloneYoutube
-// on the clone. The live <video> element's `poster` attribute is the
-// highest-resolution thumbnail YT has cached for the current video; the
-// clone tree no longer has the live <video>, so we have to read it before
-// the clone is built.
-let ytLivePosterUrl: string | null = null;
-
 /**
  * Post-clone transformer for Reddit. Runs on the detached clone after
  * removeMarked has dropped chrome but BEFORE sanitisation. Restructures the
@@ -6111,18 +6255,34 @@ function postCloneYoutube(clone: Element): void {
   const player = clone.querySelector('#player, #player-container, ytd-player');
   const videoId = new URL(window.location.href).searchParams.get('v');
   if (player && videoId) {
-    const posterUrl = ytLivePosterUrl && /^https?:\/\//.test(ytLivePosterUrl)
-      ? ytLivePosterUrl
-      : `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+    // Derive the poster from the CURRENT video id, and only fall back to the
+    // live player's own poster when that id-derived URL isn't usable.
+    //
+    // The order used to be reversed, and it produced the PREVIOUS video's
+    // thumbnail: YouTube is an SPA that never reloads between videos, so the
+    // content script (and this module-level variable) survives the navigation
+    // while `ytLivePosterUrl` still holds whatever was playing when the script
+    // last ran. The id-derived URL cannot go stale — it is computed from the
+    // ?v= of the page being captured right now.
+    const posterUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
     const figure = doc.createElement('figure');
     const link = doc.createElement('a');
     link.setAttribute('href', `https://www.youtube.com/watch?v=${videoId}`);
+    // tweet-video marks this as a playable poster card: the web app swaps it
+    // for an inline player on click. Without the class the delegated handler
+    // never matched and the card just opened a new YouTube tab.
+    link.className = 'tweet-video';
     const img = doc.createElement('img');
     img.setAttribute('src', posterUrl);
     img.setAttribute('alt', 'Video thumbnail');
     img.setAttribute('width', '1280');
     img.setAttribute('height', '720');
+    img.className = 'tweet-video-poster';
     link.appendChild(img);
+    const play = doc.createElement('div');
+    play.className = 'tweet-video-play';
+    play.textContent = '▶';
+    link.appendChild(play);
     figure.appendChild(link);
     player.replaceWith(figure);
   } else if (player) {

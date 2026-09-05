@@ -3,7 +3,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ClipData } from '@/lib/types';
@@ -11,6 +11,8 @@ import type { ClipBody } from '@/lib/bridge/ClipStoreContext';
 import { authorLabel, type AuthorProfile } from '@/lib/nostr/profiles';
 import { CATEGORIES, signalRank } from '@/lib/constants';
 import { requestClipBody } from '@/lib/bridge/extension-bridge';
+import { useClipVideoPlayers } from '@/components/clips/ClipVideoPlayers';
+import { resolveVideoEmbed } from '@/lib/video-embed';
 
 interface DetailPanelProps {
   clip: ClipData | null;
@@ -149,10 +151,61 @@ function NoteEditor({
 // while the clip looked fine. `no-referrer` sends none at all, which those
 // hotlink rules allow. Applied to EVERY cast-image path (markdown, hero,
 // gallery, inline) so the behaviour doesn't depend on which one renders.
+/**
+ * The rich clip body, memoized on its HTML.
+ *
+ * This exists to keep the DOM node ALIVE across unrelated re-renders of the
+ * panel — toggling fullscreen being the one people hit. Rendered inline, React
+ * rebuilt this subtree on every parent render, and a click-to-play iframe
+ * swapped into it was detached and re-attached. Detaching a cross-origin
+ * iframe destroys its content, so re-attaching the same element reloads it and
+ * the video restarts from the beginning. (Measured on the real page: the
+ * mutation sequence was `iframe REMOVED` then `iframe ADDED` on every toggle.)
+ *
+ * With React.memo the element is reused whenever `html` is unchanged, so the
+ * iframe is never detached and playback simply continues.
+ */
+const ClipHtmlBody = React.memo(function ClipHtmlBody({
+  html, bodyRef,
+}: { html: string; bodyRef: React.RefObject<HTMLDivElement | null> }) {
+  return (
+    <div
+      ref={bodyRef}
+      className="clip-body"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+});
+
 const MD_COMPONENTS = {
   img: (props: React.ImgHTMLAttributes<HTMLImageElement>) =>
     // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
     <img {...props} referrerPolicy="no-referrer" />,
+  // A cast body is markdown, so its video appears as a linked thumbnail:
+  // [![](poster)](watch-url). When that href is a provider we can embed, mark
+  // the anchor as a play card so the same click-to-play handler that serves
+  // rich clip bodies also serves casts — otherwise a cast could only ever
+  // bounce the reader out to the source site.
+  a: ({ href, children, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+    // Don't test `c.type === 'img'`: MD_COMPONENTS overrides `img`, so
+    // react-markdown hands us the CUSTOM component, never the intrinsic tag —
+    // that comparison was always false, so no cast link was ever marked
+    // playable and every one opened the source in a new tab. The href is the
+    // real signal: only a provider we can embed resolves at all.
+    const playable = !!href && !!resolveVideoEmbed(href);
+    return (
+      <a
+        {...rest}
+        href={href}
+        className={playable ? 'tweet-video' : rest.className}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {children}
+        {playable && <span className="tweet-video-play">▶</span>}
+      </a>
+    );
+  },
 };
 
 function renderTextWithBreaks(text: string, imageUrls?: Set<string>): React.ReactNode {
@@ -180,6 +233,23 @@ function renderTextWithBreaks(text: string, imageUrls?: Set<string>): React.Reac
 
 export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodies, onBodyFetched, onAuthorContextMenu }: DetailPanelProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Click-to-play: delegated on the clip body. The body arrives ASYNCHRONOUSLY
+  // (requestClipBody fetches it from the extension after first paint), so the
+  // dependency must include whether the body is actually present — keying on
+  // the clip id alone left the effect running once against a null ref and
+  // never re-running when the HTML landed, so no listener was ever attached
+  // and every poster just opened the source in a new tab.
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const clipBodyHtml = clip
+    ? (bodies.get(clip.capture.id)?.bodyHtml ?? clip.capture.bodyHtml)
+    : undefined;
+  // Cast bodies render from `markdown` instead of bodyHtml, so that branch has
+  // to key the effect too — otherwise a cast's play card never gets a listener.
+  useClipVideoPlayers(
+    bodyRef,
+    [clip?.capture.id, !!clipBodyHtml, !!clip?.capture.markdown],
+    clip?.capture.id ?? null,
+  );
 
   // Leaving fullscreen when the selected clip changes underneath it (e.g. List
   // view's single detail pane swaps clips while a card is expanded) avoids a
@@ -338,12 +408,7 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
         // The author's own bridged clips carry rich dx-* bodyHtml — render it as
         // before (full fidelity). It wins over the public markdown.
         if (bodyHtml) {
-          return (
-            <div
-              className="clip-body"
-              dangerouslySetInnerHTML={{ __html: bodyHtml }}
-            />
-          );
+          return <ClipHtmlBody html={bodyHtml} bodyRef={bodyRef} />;
         }
         // Public NIP-23 long-form (kind 30023): content is markdown. Render it
         // through the same .clip-body prose styles. Images resolve from the
@@ -364,7 +429,7 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
           const heroInBody =
             !!thumbnail && markdownHasImage(capture.markdown, thumbnail);
           return (
-            <div className="clip-body">
+            <div className="clip-body" ref={bodyRef}>
               {thumbnail && !heroInBody && <img className="longform-hero" src={thumbnail} alt="" referrerPolicy="no-referrer" />}
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{capture.markdown}</ReactMarkdown>
             </div>

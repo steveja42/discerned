@@ -177,6 +177,16 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'yt-spa-poster-probe',
+      testMatch: /tools\/yt-spa-poster-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'ig-spa-link',
+      testMatch: /tools\/ig-spa-link\.spec\.ts$/,
+      retries: 0,
+    },
+    {
       name: 'modal-fp-probe',
       testMatch: /tools\/modal-fp-probe\.spec\.ts$/,
       retries: 0,

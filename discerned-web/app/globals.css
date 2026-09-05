@@ -1165,6 +1165,64 @@ a { color: inherit; }
   z-index: 150;
   border-left: 0;
 }
+/* Fullscreen exists to give the content the whole window, so the player takes
+   the height available rather than staying at its in-column size. The vh caps
+   that keep an inline player reasonable are the wrong limit here. */
+/* Fullscreen gives the player a bigger height budget. The wrapper's own inline
+   max-width encodes this video's ratio, so the multiplier below scales that
+   ratio-correct width rather than imposing a shape of its own — it can make
+   the player larger but never distort it. `--dx-fs-scale` is the ratio between
+   the fullscreen and inline height caps. */
+/* Fullscreen: give the player the window's height, but never more than it.
+   The frame's own aspect-ratio turns width into height, so the width must be
+   capped at whatever this video's ratio yields for the available height —
+   `--dx-embed-ar` (width/height, set inline at play time). Scaling the inline
+   width by a fixed factor instead let a 9:16 reel compute a height taller than
+   the screen, which is the reported overflow.
+   The `!important` beats the inline max-width the component sets for the
+   in-column case, so toggling fullscreen after playback still re-bounds it. */
+.detail--fullscreen .clip-body .clip-video-embed {
+  /* Two SEPARATE constraints, not `min(100%, calc(...))`. Mixing a percentage
+     with a vh-based calc inside min() resolved to the 100% branch — measured,
+     the computed max-width came back as plain "100%" and a 9:16 reel overflowed
+     the viewport by ~1680px. `width: 100%` already bounds it to the column, so
+     max-width only has to carry the height-derived cap. */
+  /* --dx-box-ar is whichever ratio GOVERNS this box's height: the crop band
+     for a cropped embed, the video's own ratio otherwise. Using --dx-embed-ar
+     unconditionally undersized a cropped player, because its height comes from
+     the band (width x1.25), not from the video's 9:16. */
+  max-width: calc((100vh - 190px) * var(--dx-box-ar, var(--dx-embed-ar, 1.7778))) !important;
+  width: 100%;
+  margin-inline: auto;
+}
+/* Same bound for the not-yet-played poster, so entering fullscreen does not
+   make the thumbnail overflow either. */
+.detail--fullscreen .clip-body .dx-reel-media img,
+.detail--fullscreen .clip-body .dx-reel-media .tweet-video-poster,
+.detail--fullscreen .clip-body .tweet-video > img {
+  max-height: calc(100vh - 210px) !important;
+  width: auto !important;
+}
+/* The row carries the same inline max-width as the embed (set for the in-column
+   case), so it would clamp the player before the fullscreen rule above could
+   widen it. */
+.detail--fullscreen .clip-body .clip-video-crop-row {
+  /* Lift the in-column inline max-width so the embed's own fullscreen cap can
+     widen it. NOT `width: fit-content` — the row's widest in-flow child is the
+     "Open on…" link (the player is absolutely positioned inside its wrapper),
+     so shrink-wrapping collapsed the row to the link's ~111px and the embed's
+     `width: 100%` resolved against that. */
+  max-width: none !important;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.detail--fullscreen .clip-body .clip-video-embed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
 .detail-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 60px 24px;
@@ -1420,12 +1478,139 @@ a { color: inherit; }
 .clip-body .tweet-video-poster { max-width: 100% !important; width: auto !important; height: auto; display: block !important; margin: 0 !important; border-radius: 0 !important; }
 .clip-body .tweet-video-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); }
 .clip-body .tweet-video-play svg { fill: #fff; filter: drop-shadow(0 1px 4px rgba(0,0,0,0.5)); }
+/* A text play glyph (used where building inline SVG in the capture pipeline
+   would be more markup than it is worth) needs its own sizing — the rule above
+   only reaches an <svg> child, so an unstyled "▶" rendered at body font-size
+   beside the poster instead of centred on it. */
+.clip-body .tweet-video-play { color: #fff; font-size: 44px; line-height: 1; text-shadow: 0 1px 6px rgba(0,0,0,0.6); }
 .clip-body .tweet-video-duration { position: absolute; bottom: 8px; right: 10px; background: rgba(0,0,0,0.65); color: #fff; font-family: var(--sans); font-size: 12px; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
 .clip-body .tweet-video-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .clip-body .tweet-video-grid .tweet-video { flex: 1 1 calc(50% - 3px); margin-top: 0; min-width: 0; }
 .clip-body .tweet-text img { width: 1.2em !important; height: 1.2em !important; vertical-align: middle; display: inline !important; margin: 0 !important; border-radius: 0 !important; }
 .clip-body div:empty { display: none; }
 .clip-body .dx-video-link { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--rule-soft); border-radius: 8px; font-family: var(--sans); font-size: 14px; text-decoration: none !important; color: var(--ink-2) !important; margin: 8px 0; }
+
+/* Click-to-play. The poster card swaps itself for this on click; nothing is
+   requested from the provider until then, so opening a clip never announces
+   the viewer to YouTube/Instagram/etc. 16:9 is the safe default frame — a
+   vertical reel letterboxes inside it rather than overflowing the column. */
+/* The embed replaces a poster card that may have been inside an absolutely
+   positioned / transformed player wrapper from the source page. Reset that
+   context so nothing from the surrounding capture paints over the iframe —
+   the reported symptom was source-page text sitting on top of the player. */
+.clip-body .clip-video-embed {
+  display: block;
+  margin: 10px 0;
+  /* The player must own its band outright. The captured page's own overlay
+     chrome (YouTube paints the title, channel and controls as absolutely
+     positioned layers over the video) otherwise renders ON TOP of the iframe,
+     which is what put stray words across the playing video. A high z-index on
+     a positioned block, plus `isolation`, keeps those layers behind it. */
+  position: relative;
+  z-index: 10;
+  isolation: isolate;
+  clear: both;
+}
+/* Neutralise any absolute/transform context inherited from the player wrapper
+   the card was lifted out of, so the iframe lays out in normal flow. */
+.clip-body .clip-video-embed,
+.clip-body .clip-video-embed > * { transform: none !important; }
+/* Static only for an UNCROPPED player. A cropped one positions its iframe
+   absolutely to shift the provider's chrome out of view, and forcing static
+   here undid that. */
+.clip-body .clip-video-embed:not(.clip-video-embed--crop) > iframe { position: static !important; }
+
+/* Crop a provider embed down to just its player.
+   Instagram has no media-only route — every variant ships the full post card —
+   so the iframe is made TALLER than the visible box and shifted up by the
+   header's share of the width, with the wrapper clipping the rest. The offsets
+   are percentages of WIDTH because the embed's chrome scales with its width.
+   The wrapper's own aspect-ratio (set inline from the video) governs the
+   visible box, so the cropped player still keeps the video's real shape. */
+/* The repeated class in this selector is deliberate, not a typo.
+   The generic reset below is `.clip-body :not(a):not(b):not(c):not(d)`, whose
+   four :not() classes give it specificity (0,4,0) — and specificity outranks
+   source order even between two !important declarations. A plain
+   `.clip-body .clip-video-embed--crop` is only (0,2,0), so the reset flattened
+   this box (`position: static`, `aspect-ratio: auto`), the wrapper grew to the
+   iframe's full height, and nothing was cropped. Repeating the class raises
+   this to (0,4,0) and lets it win WITHOUT editing the reset's own selector —
+   which was tried, and silently broke the bluesky baseline. */
+.clip-body .clip-video-embed.clip-video-embed--crop.clip-video-embed--crop.clip-video-embed--crop {
+  position: relative !important;
+  overflow: hidden;
+  /* The visible box IS the player band. Measured, its HEIGHT is width x 1.25
+     at every width, and `aspect-ratio` is width/height — hence 1/1.25 = 0.8. */
+  border-radius: 8px;
+  background: #000;
+  aspect-ratio: var(--dx-crop-player-ar, 0.8) !important;
+}
+/* Same specificity story as the wrapper above — the reset's four :not()
+   classes would otherwise force this iframe back to `position: static` and
+   undo the upward shift that hides the embed's header. */
+.clip-body .clip-video-embed--crop.clip-video-embed--crop > iframe.clip-video-frame {
+  position: absolute !important;
+  left: 0;
+  width: 100%;
+  /* The header is a FIXED 54px at every embed width, so it is subtracted in
+     pixels, not as a percentage — a proportional shift under-cropped at wide
+     sizes and left the like bar and comment box on screen. Height is the
+     player band plus that header; everything below simply overflows and is
+     clipped by the wrapper. */
+  /* !important because the reset sets `inset: auto !important`, which resets
+     `top` and left the iframe at 0 — the embed's header stayed visible and the
+     crop hid the wrong end. */
+  top: calc(var(--dx-crop-header, 54px) * -1) !important;
+  height: calc(100% + var(--dx-crop-header, 54px)) !important;
+  aspect-ratio: auto !important;
+  max-height: none;
+  border-radius: 0;
+}
+/* The crop wrapper clips to the player, so the fallback link cannot live
+   inside it — the iframe is cropped by `overflow: hidden` and the link would
+   be clipped with it. It is moved to a sibling row by the component instead;
+   this rule only keeps it readable there. */
+.clip-body .clip-video-crop-row > .clip-video-out { display: inline-block; margin-top: 6px; }
+/* Fill the available width and take whatever height that implies at the
+   video's own aspect ratio (set inline from the poster at play time). A player
+   may therefore be LARGER than the poster it replaced when the column is wide
+   — that is deliberate: the poster is a thumbnail, the player is the content.
+   The height cap is generous rather than tight so a 9:16 reel stays tall; it
+   exists only to stop a very narrow column producing an absurdly long frame. */
+.clip-body .clip-video-frame {
+  display: block;
+  /* Height-bound, width follows. A `width: 100%` + `max-height` pair does NOT
+     preserve the ratio: the cap trims the height while the width stays at
+     100%, so a portrait reel came out stretched into a wide box. Capping
+     height and letting `aspect-ratio` compute the width keeps the video's real
+     shape at every container size, and the max-width guard stops a very wide
+     video from overflowing a narrow column. */
+  /* Fill the wrapper; the wrapper's max-width (set inline at play time from
+     the height cap and this video's ratio) is what bounds the size. An iframe
+     cannot letterbox its own content, so height must never be capped here —
+     that stretched portrait videos into wide boxes. */
+  width: 100%;
+  height: auto;
+  /* The ratio is NOT set here. `.clip-body *` further down applies
+     `aspect-ratio: auto !important`, which beats both this declaration and the
+     inline style the component sets — so a value here reads as authoritative
+     while doing nothing. The real ratio is re-asserted after that reset (search
+     --dx-embed-ar), which is the only place it can win. */
+  border: 0;
+  border-radius: 8px;
+  background: #000;
+}
+.clip-body .clip-video-out {
+  display: inline-block;
+  margin-top: 6px;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-2) !important;
+}
+/* A poster that CAN play in place gets a pointer + hover lift, so the
+   affordance differs from a card that merely opens the source. */
+.clip-body a.tweet-video { cursor: pointer; }
+.clip-body a.tweet-video:hover .tweet-video-play { background: rgba(0,0,0,0.45); }
 .clip-body p { margin: 0 0 1em; }
 .clip-body h1, .clip-body h2, .clip-body h3, .clip-body h4 { margin: 1.2em 0 0.4em; line-height: 1.25; font-weight: 600; }
 /* SPA headings often carry an INLINE `white-space: nowrap` (plus an outsized
@@ -1465,7 +1650,12 @@ a { color: inherit; }
    in a wide grid squeezes its prose to one character per line in the single
    -column clip. Release the clamp only where the box actually holds text and
    carries no media of its own — an avatar/thumbnail wrapper keeps its width. */
-.clip-body div[style*="width"]:not(:has(img)):not(:has(svg)):not(:has(video)):not(.dx-avatar):not(.dx-header):not(.dx-header *):not(.dx-reply-row):not(.dx-stats):not(.dx-author) {
+/* The click-to-play wrapper is excluded: it is our own chrome, carries an
+   inline max-width that encodes the video's aspect ratio, and holds an
+   <iframe> (which none of the :has() media guards above match). Without the
+   exclusion this rule's `max-width: 100% !important` overrode that cap and a
+   portrait video overflowed the viewport in fullscreen. */
+.clip-body div[style*="width"]:not(:has(img)):not(:has(svg)):not(:has(video)):not(:has(iframe)):not(.clip-video-embed):not(.dx-avatar):not(.dx-header):not(.dx-header *):not(.dx-reply-row):not(.dx-stats):not(.dx-author) {
   width: auto !important;
   min-width: 0 !important;
   max-width: 100% !important;
@@ -1572,6 +1762,33 @@ a { color: inherit; }
   inset: auto !important;
   aspect-ratio: auto !important;
 }
+/* Re-assert the click-to-play player AFTER that reset rather than adding
+   :not() exclusions to it. The player is our own chrome and needs its
+   per-video aspect-ratio (set inline at play time) plus a positioned box for
+   the crop; the reset would otherwise flatten it to an iframe's intrinsic
+   150px height. Editing the reset's own selector changed its specificity and
+   silently broke unrelated captures — it cost the bluesky thread baseline —
+   so that selector is left exactly as it was. */
+/* RESTORE the player's own ratio, which the reset above clears with
+   `aspect-ratio: auto !important`. `auto` here was a mistake that re-applied
+   the reset instead of undoing it, collapsing every player to an iframe's
+   intrinsic 150px height — a short letterboxed band. The values come from
+   custom properties the component sets inline per video, so this rule wins on
+   !important without hard-coding any shape. */
+/* UNCROPPED players only. A cropped one gets its geometry from the crop block
+   (the wrapper carries the band ratio; the iframe is absolutely positioned and
+   height-driven), so applying the video's own ratio here as well made the two
+   paths fight. */
+.clip-body .clip-video-embed:not(.clip-video-embed--crop) > .clip-video-frame {
+  aspect-ratio: var(--dx-embed-ar, 1.7778) !important;
+}
+/* A cropped embed is fully specified in the "Crop a provider embed" block
+   above — do not restate its geometry here. A second copy of these rules lived
+   at this position and fought the original on source order, which is what left
+   the Instagram player uncropped and short. */
+.clip-body .clip-video-embed--crop > .clip-video-frame {
+  aspect-ratio: auto !important;
+}
 /* Aspect-ratio sizer boxes (Bluesky/Mastodon wrap media in an empty box whose
    height comes from aspect-ratio + an absolutely-positioned img). Once position
    is reset the img flows out and the box collapses — but a min-height set in the
@@ -1605,6 +1822,12 @@ a { color: inherit; }
    onto its own line. Inside a tagged post, collapse wrapper-divs that hold only
    a single anchor (and no block content) back to inline so they flow within the
    sentence as they did on the source page. */
+/* A media card is NOT an inline text link: this rule matched the reel's
+   `<div class="dx-reel-media"><a class="tweet-video">` and forced the anchor
+   inline, where `width: fit-content` has no effect — the card then stayed the
+   cell's full width while the portrait poster inside it was narrower, and the
+   play overlay (absolutely positioned to the card) painted that difference as
+   a grey band down the right. */
 .clip-body .dx-post div:has(> a:only-child):not(.dx-header):not(.dx-reply-row):not(.dx-quote):not(.dx-quote-frag),
 .clip-body .dx-post div:has(> div > a:only-child):not(.dx-header):not(.dx-reply-row):not(.dx-quote):not(.dx-quote-frag) {
   display: inline !important;
@@ -1653,9 +1876,13 @@ a { color: inherit; }
    column on narrow viewports, where side-by-side would crush the video. */
 .clip-body .dx-reel {
   display: grid;
-  /* caption | media | rail — the media column is the centrepiece, so it takes
-     its natural width and the caption flexes around it. */
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  /* caption | media | rail. The caption gets a bounded ALLOCATION rather than
+     a share of the row: it is a fixed-size job (a byline and a paragraph), so
+     giving it `1fr` let it swallow width on a wide screen and squeeze the
+     video. The media column takes everything left over, so a wider view makes
+     the video bigger — which is the point of playing it here rather than on
+     the source site. */
+  grid-template-columns: clamp(240px, 32%, 380px) minmax(0, 1fr) auto;
   align-items: start;
   gap: 16px;
   margin: 12px 0;
@@ -1669,10 +1896,22 @@ a { color: inherit; }
    author/tag links wrap mid-phrase ("2 / people") and the prose reads as a
    ragged sliver. */
 .clip-body .dx-reel-caption { grid-column: 1; min-width: min(240px, 100%); }
-.clip-body .dx-reel-caption .dx-header { flex-wrap: wrap; }
-.clip-body .dx-reel-media   { grid-column: 2; }
+/* Keep the avatar on the byline's own line: `wrap` let the name/tag links drop
+   below the avatar once the column narrowed, so the header read as three
+   stacked fragments instead of one row. */
+.clip-body .dx-reel-caption .dx-header { flex-wrap: nowrap; align-items: center; gap: 8px; }
+.clip-body .dx-reel-caption .dx-header > * { min-width: 0; }
+.clip-body .dx-reel-media   { grid-column: 2; min-width: 0; }
+/* The card shrink-wraps to the poster INSIDE a full-width cell. Sizing the
+   cell itself with fit-content also stopped the video growing when the column
+   got wider; the overlay only needs the CARD to match the image, which
+   `width: fit-content` on .tweet-video already does. */
+.clip-body .dx-reel-media .tweet-video { margin-inline: auto; }
 .clip-body .dx-reel-rail    { grid-column: 3; }
-/* The rail is a vertical stack of count-labelled action glyphs. */
+/* The rail is a vertical stack of count-labelled action glyphs. It also carries
+   .dx-stats (so the cast's markdown rule collapses it to one line), and that
+   class is `display: flex` in row direction — so this must win on the axis. */
+.clip-body .dx-reel-rail.dx-stats,
 .clip-body .dx-reel-rail {
   display: flex;
   flex-direction: column;
@@ -1681,7 +1920,53 @@ a { color: inherit; }
   font-size: 13px;
   color: var(--ink-2);
 }
-.clip-body .dx-reel-media img { max-height: 620px; width: auto; border-radius: 8px; }
+/* Let the poster fill the media column and grow with it, rather than being
+   pinned to a fixed pixel height — on a wide view the reel should get bigger,
+   not sit at 620px with empty space beside it. */
+.clip-body .dx-reel-media img,
+.clip-body .dx-reel-media .tweet-video-poster {
+  /* HEIGHT-bound, width follows the image's own ratio.
+     Forcing `width: 100%` here stretched the poster to the cell and left a
+     grey sliver of cell background down the side wherever the ratio could not
+     fill it. Bounding height instead means the rendered box IS the image's
+     shape, so the card hugs it exactly and the centred play overlay lands on
+     the picture rather than in a gap beside it. */
+  width: auto !important;
+  height: auto !important;
+  max-width: 100%;
+  max-height: min(70vh, 560px);
+  border-radius: 8px;
+}
+/* The card must match the poster exactly: it is the containing block for the
+   centred play overlay. width:fit-content keeps it hugging a portrait poster
+   that the max-height has narrowed. */
+.clip-body .dx-reel-media .tweet-video {
+  /* The card must be EXACTLY the poster's box, because .tweet-video-play is
+     absolutely positioned to `inset: 0` against it — measured, a card 39px
+     wider than a portrait poster rendered those 39px as the overlay's dark
+     translucent panel down the right side (the reported grey sliver).
+     `fit-content` shrink-wraps to the image; `line-height: 0` removes the
+     inline-block baseline gap that would otherwise show below it. */
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 0;
+  line-height: 0;
+  vertical-align: top;
+}
+.clip-body .dx-reel-media { text-align: center; }
+/* A CAST body is markdown, so its play card is a plain anchor wrapping the
+   markdown image — it carries no .tweet-video-poster class and no fixed
+   width/height attributes. Size that image the same height-bound way as a clip
+   poster so the card hugs it and the ▶ overlay lands centred on the picture. */
+.clip-body .tweet-video > img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(70vh, 560px);
+  margin: 0;
+}
 /* Collapse to Instagram's MOBILE stack (caption, then media, then a horizontal
    action row) when the CLIP COLUMN is narrow — not when the window is. A clip
    renders inside a container whose width is set by the reading pane, so a
@@ -1690,14 +1975,17 @@ a { color: inherit; }
    `container-type: inline-size` on .dx-reel makes its own width the query
    axis; browsers without container-query support keep the desktop grid, which
    degrades acceptably rather than breaking. */
-/* The container must be an ANCESTOR of what it lays out, not the grid itself:
-   `container-type: inline-size` on .dx-reel would make the query measure the
-   grid's own width, and at the clip column's typical width that matched the
-   narrow branch unconditionally — the desktop three-column layout could then
-   never apply at any window size. .clip-body is the reading column, which is
-   the width the layout should actually respond to. */
-.clip-body { container-type: inline-size; container-name: dxreel; }
-@container dxreel (max-width: 560px) {
+/* Narrow-CONTAINER reflow WITHOUT a container query.
+   `container-type: inline-size` was tried and reverted twice: it applies size
+   containment to whatever it is set on, so on .clip-body it changed layout for
+   every clip on the site (the bluesky thread baseline lost its flex
+   dx-headers), and on .dx-reel it still leaked. `auto-fit` + `minmax` gives
+   the same behaviour with no containment: the three tracks sit side by side
+   while they fit, and collapse to a single column when the reel's own width
+   can no longer hold them — which is the reading column's width, not the
+   viewport's, exactly as intended. */
+.clip-body .dx-reel-caption { grid-row: auto; }
+@media (max-width: 900px) {
   .clip-body .dx-reel { grid-template-columns: minmax(0, 1fr); }
   .clip-body .dx-reel-caption { grid-column: 1; grid-row: 1; }
   .clip-body .dx-reel-media   { grid-column: 1; grid-row: 2; }
@@ -1728,8 +2016,30 @@ a { color: inherit; }
    When a dx-header contains a marked img.dx-avatar that is NOT a shallow child,
    float the avatar left and let the rest of the header text flow beside it.
    Keyed on :has() so it only affects headers with a marked avatar. */
+/* Not inside a reel caption: that column is narrow, and a floated avatar in a
+   `display: block` header lets the caption prose wrap around and over it, so
+   the avatar reads as clipped. A flex row keeps the avatar its own fixed
+   column there. */
 .clip-body .dx-header:has(img.dx-avatar) {
   display: block;
+}
+.clip-body .dx-reel-caption .dx-header:has(img.dx-avatar) {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 8px;
+}
+.clip-body .dx-reel-caption .dx-header:has(img.dx-avatar) img.dx-avatar,
+.clip-body .dx-reel-caption img.dx-avatar {
+  /* Beats the generic float below (equal specificity, later in the file) so
+     the reel's narrow caption column keeps a real flex row instead of prose
+     wrapping around a floated avatar. */
+  float: none !important;
+  flex: 0 0 auto;
+  margin: 0 !important;
+  /* `contain`, not the generic `cover`: a profile photo is square and crops
+     harmlessly, but this account's avatar is a wide logo, and `cover` filled
+     the 44px circle by cutting its sides off. */
+  object-fit: contain !important;
 }
 .clip-body .dx-header:has(img.dx-avatar) img.dx-avatar {
   /* !important needed to beat `.clip-body img { float: none !important }`. */

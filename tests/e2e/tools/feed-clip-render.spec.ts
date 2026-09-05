@@ -23,6 +23,7 @@ const OUT = resolve(__dirname, '..', '..', '..', 'test-output');
 const SITES: Record<string, string> = {
   'facebook-reels': 'https://www.facebook.com/reel/',
   'instagram-reels': process.env.FCR_URL ?? 'https://www.instagram.com/reels/DbnxT2Duur8/',
+  'youtube-watch': process.env.FCR_YT_URL ?? 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   'instagram-home': 'https://www.instagram.com/',
   'facebook-home': 'https://www.facebook.com/',
   'facebook-post': 'https://www.facebook.com/photo/?fbid=10163039872376188',
