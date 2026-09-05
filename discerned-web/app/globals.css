@@ -1195,6 +1195,56 @@ a { color: inherit; }
   width: 100%;
   margin-inline: auto;
 }
+/* A fixed-height embed has no ratio, so the height-derived width above is
+   meaningless for it: measured, it squeezed the TikTok player to 484px while
+   its 738px height stayed put, pushing the bottom past the viewport and
+   producing a scrollbar that the in-column view does not have. Give it the
+   column's width and clamp the height to what the panel can actually show. */
+.detail--fullscreen .clip-body .clip-video-embed.clip-video-embed--fixed.clip-video-embed--fixed {
+  /* Fullscreen must never make a fixed embed SMALLER than the in-column view.
+     Two earlier caps here did exactly that (measured: 938x738 in column ->
+     620x700 fullscreen): a width cap, because TikTok drops to a much smaller
+     internal layout below ~700px wide, and a `min()` height clamp, which
+     shrank the box whenever the viewport allowed less than its natural height.
+     Fullscreen has MORE room, so it simply keeps the natural size and grows
+     the height when the taller viewport permits. */
+  /* Capped at 940px, not 100%: an unbounded width stretched the box to
+     1852px with the video marooned in the middle. 940 is comfortably above
+     TikTok's ~700px breakpoint — below that its embed drops to a much smaller
+     internal player (measured: 211x280 at 620px wide vs 323x574 at 705px), so
+     a tighter cap makes the video SMALLER, which is what the earlier 620px
+     value did. */
+  /* Width: the embed's player is a fixed 323px wide whatever box it is given
+     (measured at 1366-2560px windows — always 323x574), so a wide box is pure
+     dead space. ~430px frames the player with a small margin; the earlier
+     940px left ~600px of emptiness around it. */
+  max-width: calc(min(430px, 100%) * var(--dx-fs-scale, 1)) !important;
+  /* Fullscreen ENLARGES. TikTok's embed lays out a fixed 323x574 player
+     whatever box it is given, so a bigger box alone changes nothing — the only
+     way to make the video bigger is to scale the whole iframe. `--dx-fs-scale`
+     is set from the available height at play time; the box is grown to match
+     so the scaled frame is not clipped.
+     Height stays the embed's natural value: shrinking it put a SECOND
+     scrollbar inside the player (its document stays ~738px whatever box it
+     gets), which is what an inner scrollbar on the video looked like. */
+  height: calc(var(--dx-fixed-h, 767px) * var(--dx-fs-scale, 1)) !important;
+  max-height: none !important;
+  margin-inline: auto;
+}
+/* Fill the wrapper exactly. Repeating the clamp here instead let the frame
+   round to a slightly taller box than its parent, leaving ~27px of overflow
+   inside the wrapper itself. */
+/* Scale the frame itself, keeping its LAYOUT size at the embed's natural
+   dimensions — the wrapper above is grown by the same factor so the scaled
+   frame fills it exactly. Transform is used rather than a bigger iframe
+   because TikTok's embed ignores the box size and always lays out a 323x574
+   player (measured at 400-2560px wide). */
+.detail--fullscreen .clip-body .clip-video-embed--fixed.clip-video-embed--fixed > .clip-video-frame {
+  width: min(430px, 100%) !important;
+  height: var(--dx-fixed-h, 767px) !important;
+  transform: scale(var(--dx-fs-scale, 1)) !important;
+  transform-origin: top left;
+}
 /* Same bound for the not-yet-played poster, so entering fullscreen does not
    make the thumbnail overflow either. */
 .detail--fullscreen .clip-body .dx-reel-media img,
@@ -1571,6 +1621,29 @@ a { color: inherit; }
    be clipped with it. It is moved to a sibling row by the component instead;
    this rule only keeps it readable there. */
 .clip-body .clip-video-crop-row > .clip-video-out { display: inline-block; margin-top: 6px; }
+
+/* A FIXED-HEIGHT provider embed (TikTok). Its layout does not scale with
+   width — measured, the body is 738px tall at every width — so the frame is
+   given that height outright rather than an aspect ratio, which was cutting
+   the bottom off. The class is repeated to reach the specificity of the
+   generic `.clip-body :not(…):not(…):not(…)` reset, which would otherwise win
+   on `aspect-ratio: auto !important` (see the crop block for the same trap). */
+.clip-body .clip-video-embed.clip-video-embed--fixed.clip-video-embed--fixed {
+  /* TikTok's own footer runs a little past the height it reports, so the box
+     clips it rather than reporting overflow (measured: +27px in BOTH modes,
+     i.e. not a fullscreen defect). The trimmed strip is the duplicate
+     "@handle" line under the player, not video. */
+  overflow: hidden;
+  aspect-ratio: auto !important;
+  height: var(--dx-fixed-h, 767px);
+  max-width: 100%;
+}
+.clip-body .clip-video-embed--fixed.clip-video-embed--fixed > .clip-video-frame {
+  aspect-ratio: auto !important;
+  width: 100%;
+  height: var(--dx-fixed-h, 767px);
+  max-height: none;
+}
 /* Fill the available width and take whatever height that implies at the
    video's own aspect ratio (set inline from the poster at play time). A player
    may therefore be LARGER than the poster it replaced when the column is wide

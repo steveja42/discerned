@@ -5907,6 +5907,72 @@ function tagTikTok(root: Document | Element): Element | void {
   }
 }
 
+/**
+ * The permalink for the TikTok video currently on screen, or null.
+ *
+ * Measured on the feed: a `<video>` is a `blob:` stream with no poster
+ * attribute, and the item carries NO `/video/<id>` anchor of its own — so the
+ * id can only come from the address bar (a permalink) or a link elsewhere on
+ * the page. Derived from `window.location` rather than a head tag, for the
+ * same reason as Instagram: TikTok is an SPA and does not rewrite canonical on
+ * a client-side navigation.
+ */
+function tiktokVideoUrl(item: Element | null): string | null {
+  const path = testPathOverride ?? window.location.pathname;
+  const fromUrl = path.match(/^\/(@[^/]+)\/video\/(\d{6,})/);
+  if (fromUrl) return `https://www.tiktok.com/${fromUrl[1]}/video/${fromUrl[2]}`;
+  // Feed/profile shapes: fall back to a permalink anchor inside the item.
+  const href = item?.querySelector<HTMLAnchorElement>('a[href*="/video/"]')?.getAttribute('href');
+  if (href) {
+    try { return new URL(href, 'https://www.tiktok.com').toString(); } catch { /* fall through */ }
+  }
+  // HOME FEED. Measured on tiktok.com/en: the address bar never changes (it
+  // stays "/en" even after advancing to the next video), canonical and og:url
+  // likewise, and the feed item carries NO /video/ anchor — so none of the
+  // usual sources yield an id. The id IS present inside the visible item's own
+  // markup though, as the 19-digit value TikTok renders into its item data.
+  // Scope the search to that item so a neighbouring video's id can't be picked.
+  if (item) {
+    const id = item.innerHTML.match(/\b(7\d{18})\b/)?.[1];
+    // A TikTok video id is 19 digits and, for anything posted in recent years,
+    // starts with 7 — which separates it from the other long numbers in the
+    // markup (timestamps, music ids, the 17-digit "09380000..." constants).
+    if (id) return `https://www.tiktok.com/video/${id}`;
+  }
+  return null;
+}
+
+/**
+ * Wrap the TikTok poster in a play card on the detached clone, so the web app
+ * can swap it for an inline player (see ClipVideoPlayers). Mirrors
+ * postCloneInstagram: the tagger must not restructure the live page, and the
+ * video bytes are unstorable (a `blob:` MSE stream that dies with the tab), so
+ * the clip keeps a poster plus a canonical URL.
+ */
+function postCloneTikTok(clone: Element): void {
+  if (clone.querySelector('a.tweet-video')) return;
+  const href = tiktokVideoUrl(clone);
+  if (!href) return;
+  // The poster is the item's largest image (measured: 387x688 on
+  // tiktok-origin.image, matching the player box).
+  const poster = Array.from(clone.querySelectorAll('img'))
+    .map(img => ({ img, w: parseInt(img.getAttribute('width') ?? '', 10) || img.naturalWidth }))
+    .filter(x => Number.isFinite(x.w) && x.w >= 150)
+    .sort((a, b) => b.w - a.w)[0]?.img ?? null;
+  if (!poster) return;
+  const doc = poster.ownerDocument;
+  const link = doc.createElement('a');
+  link.className = 'tweet-video';
+  link.setAttribute('href', href);
+  appendClass(poster, 'tweet-video-poster');
+  poster.parentElement?.insertBefore(link, poster);
+  link.appendChild(poster);
+  const play = doc.createElement('div');
+  play.className = 'tweet-video-play';
+  play.textContent = '▶';
+  link.appendChild(play);
+}
+
 const SITE_TAGGERS: SiteTagger_Entry[] = [
   {
     name: 'instagram',
@@ -5942,6 +6008,7 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     name: 'tiktok',
     match: h => /(^|\.)tiktok\.com$/i.test(h),
     tag: tagTikTok,
+    postClone: postCloneTikTok,
     // Feed item OR profile tile — mutually exclusive page shapes, so ONE grouped
     // anchor (same idiom as primal's `_primaryNote_, _noteThread_`).
     anchors: ['[data-e2e="recommend-list-item-container"], [data-e2e="user-post-item"]'],
@@ -7539,6 +7606,16 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
     // captured clip as visible text.
     const mediaController = video.closest('media-controller');
     const wrapper = tweetPhoto ?? mediaController ?? null;
+    // A site tagger has already built a play card around this post's poster
+    // (TikTok, Instagram), so adding another <img> here ships the SAME frame
+    // twice — the reported duplicate image below the player. Drop the video
+    // instead and let the existing card stand.
+    const cardNearby = video.closest('.dx-post, .dx-reel, article')?.querySelector('a.tweet-video')
+      ?? video.parentElement?.querySelector('a.tweet-video');
+    if (cardNearby) {
+      (wrapper ?? video).remove();
+      return;
+    }
     if (poster && isSafeImageSrc(poster)) {
       // Has a poster: swap the whole wrapper for a plain <img>.
       const img = document.createElement('img');
@@ -7622,6 +7699,10 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
   (root as Element).querySelectorAll<HTMLElement>('[style*="background-image"]').forEach(el => {
     const url = el.style.backgroundImage.match(/https?:\/\/[^"')\s]+/)?.[0];
     if (!url || !/\.(jpe?g|png|webp|gif)/i.test(url) || !isSafeImageSrc(url)) return;
+    // Already inside a play card, or sitting beside one: a site tagger has
+    // wrapped the real poster, and promoting this background as well shipped a
+    // SECOND copy of the same frame below the player.
+    if (el.closest('a.tweet-video') || el.parentElement?.querySelector('a.tweet-video')) return;
     // Skip CSS SPRITES. A sprite sheet is shown through a small window using a
     // non-zero `background-position`; a video poster always fills its box at
     // position 0. Without this test Facebook's reaction glyphs (one 20x20

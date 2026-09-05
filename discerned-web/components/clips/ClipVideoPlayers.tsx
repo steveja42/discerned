@@ -187,6 +187,20 @@ export function useClipVideoPlayers(
         // aspect-ratio is width/height, and the player's height is width x1.25.
         wrap.style.setProperty('--dx-crop-player-ar', String(1 / 1.25));
       }
+      if (embed.provider === 'TikTok') {
+        // TikTok's embed is a FIXED-HEIGHT layout, not a scalable one.
+        // Measured at 325/420/500px wide, its body is 738px tall every time:
+        // a 323x574 video plus ~164px of its own chrome (stat counts and a
+        // "Watch more on TikTok" footer). Sizing the frame from the poster's
+        // 9:16 ratio therefore gave it less height than the embed needs and
+        // clipped the bottom off. Pin the height instead and let the width
+        // stay at the column's, which is what the embed expects.
+        wrap.classList.add('clip-video-embed--fixed');
+        // 767px, not the 738px the embed's <body> reports: measured in the
+        // real panel, the iframe's content is 29px taller than that, which is
+        // the slight scrollbar the in-column view had.
+        wrap.style.setProperty('--dx-fixed-h', '767px');
+      }
       // Width is derived from whichever ratio actually GOVERNS the box height.
       // For a cropped embed that is the crop band (width x1.25), not the
       // video's own ratio — sizing the width from the video made the box
@@ -195,8 +209,13 @@ export function useClipVideoPlayers(
       const boxAr = wrap.classList.contains('clip-video-embed--crop')
         ? 1 / 1.25
         : pw / ph;
-      const wrapMaxWidth = Math.round(capPx * boxAr);
-      wrap.style.maxWidth = `${wrapMaxWidth}px`;
+      // A fixed-height embed has no ratio to derive a width from: its height is
+      // pinned, so capping the width by the poster's ratio would only make the
+      // box narrower without giving the embed the height it needs.
+      if (!wrap.classList.contains('clip-video-embed--fixed')) {
+        const wrapMaxWidth = Math.round(capPx * boxAr);
+        wrap.style.maxWidth = `${wrapMaxWidth}px`;
+      }
       // The governing ratio, for the fullscreen rule to re-derive a width from
       // the taller height budget it has available.
       wrap.style.setProperty('--dx-box-ar', String(boxAr));
@@ -205,6 +224,18 @@ export function useClipVideoPlayers(
       // Fullscreen CSS turns an available HEIGHT into a width using this
       // ratio, so the player fills the window without ever exceeding it.
       wrap.style.setProperty('--dx-embed-ar', String(pw / ph));
+      if (wrap.classList.contains('clip-video-embed--fixed')) {
+        // How much bigger can this embed get in fullscreen? TikTok lays out a
+        // fixed-size player regardless of its box, so the only way to enlarge
+        // the video is to scale the whole iframe. Fullscreen leaves the window
+        // height minus the panel's chrome (measured: ~334px above the embed
+        // plus ~30px for the link below), so the scale is that budget over the
+        // embed's natural height — never below 1, since fullscreen must never
+        // make the video smaller than the in-column view.
+        const natural = 767;
+        const budget = window.innerHeight - 364;
+        wrap.style.setProperty('--dx-fs-scale', String(Math.max(1, budget / natural)));
+      }
       wrap.appendChild(frame);
       const out = document.createElement('a');
       out.href = embed.href;
@@ -212,10 +243,13 @@ export function useClipVideoPlayers(
       out.rel = 'noopener noreferrer';
       out.className = 'clip-video-out';
       out.textContent = `Open on ${embed.provider}`;
-      if (wrap.classList.contains('clip-video-embed--crop')) {
-        // The crop box clips to the player (overflow: hidden), so the link
-        // cannot live inside it — it would be cropped away with the chrome.
-        // Wrap both in a row instead.
+      if (wrap.classList.contains('clip-video-embed--crop')
+        || wrap.classList.contains('clip-video-embed--fixed')) {
+        // The box has a pinned size (a crop clips to the player; a fixed embed
+        // has an exact height), so the link cannot live INSIDE it: measured on
+        // TikTok, the wrapper held a 767px iframe plus this 21px link in a
+        // 767px box, and those 29px of overflow were the slight scrollbar.
+        // Put both in a sibling row instead.
         const row = document.createElement('div');
         row.className = 'clip-video-crop-row';
         row.style.maxWidth = wrap.style.maxWidth;
