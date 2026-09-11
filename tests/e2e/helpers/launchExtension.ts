@@ -215,13 +215,18 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
     // Mute all tab audio so headed runs against YouTube / streaming sites
     // don't blast the user's speakers.
     '--mute-audio',
-    // Anti-detection: strip the Blink flag that exposes automation, drop
-    // the "Chrome is being controlled by automated test software" infobar
-    // fingerprint, and silence the testing-mode badge. Cloudflare's
-    // Turnstile reads these to flag the browser as a bot.
-    '--disable-blink-features=AutomationControlled',
-    // --exclude-switches is a chromedriver concept, not a Chrome flag; real
-    // Chrome flags it as unsupported. Only useful for bundled Chromium.
+    // Anti-detection: drop the "Chrome is being controlled by automated test
+    // software" infobar fingerprint. Cloudflare's Turnstile reads these to flag
+    // the browser as a bot.
+    //
+    // `--disable-blink-features=AutomationControlled` was REMOVED (2026-09-06):
+    // branded Chrome reports it as an unsupported flag and shows a warning
+    // banner on every launch. It is also no longer needed here — the
+    // `navigator.webdriver` override below does the same job from script, and
+    // the walls it was aimed at are cleared by the Google-referral navigation
+    // path instead (see gotoViaGoogle in corpus-sweep.spec.ts).
+    // --exclude-switches is likewise a chromedriver concept, not a Chrome flag;
+    // real Chrome flags it as unsupported. Only useful for bundled Chromium.
     ...(opts.channel ? [] : ['--exclude-switches=enable-automation']),
     '--disable-infobars',
   ];

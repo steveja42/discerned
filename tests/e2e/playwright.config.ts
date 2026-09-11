@@ -87,6 +87,11 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'google-referral-probe',
+      testMatch: /tools\/google-referral-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
       name: 'facebook-feed-fixture-visual',
       testMatch: /facebook-feed-fixture-visual\.spec\.ts$/,
       retries: 0,

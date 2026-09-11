@@ -22,7 +22,20 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const RUN_DIR = resolve(__dirname, '..', '..', '..', 'test-output', 'corpus-sweep-run');
+const OUT_ROOT = resolve(__dirname, '..', '..', '..', 'test-output');
+
+// --run-dir (or SWEEP_RUN_DIR) builds the gallery for a BACKUP folder instead
+// of the live run — the same flag review-queue.mjs, record-verdict.mjs and
+// slice-clip.py already take. Needed so a REGRESSED card can link to the
+// baseline's own gallery: without a built gallery on the other side there is
+// nothing to link TO, and the reviewer is left diffing two folders by hand.
+// Guard the index explicitly — `indexOf(...) + 1` reads args[0] as the value
+// when the flag is absent (the bug review-queue.mjs documents).
+const rdIdx = process.argv.indexOf('--run-dir');
+const rdArg = rdIdx >= 0 ? process.argv[rdIdx + 1] : process.env.SWEEP_RUN_DIR;
+const RUN_DIR = rdArg
+  ? (resolve(rdArg) === rdArg ? rdArg : resolve(OUT_ROOT, rdArg))
+  : resolve(OUT_ROOT, 'corpus-sweep-run');
 const OUT = resolve(RUN_DIR, 'sweep-gallery.html');
 
 const IMG_RE = /^(.+?)--(\d+)-(source|clip|cast)(?:-([a-z]+))?\.png$/;
@@ -91,6 +104,180 @@ function build() {
     findings = JSON.parse(readFileSync(resolve(RUN_DIR, 'visual-findings.json'), 'utf8')).findings ?? {};
   } catch { /* no findings file yet */ }
 
+  // ── Regression data: this run vs the most recent backup ──────────────────
+  // A sweep's most actionable signal is not "which domain scores worst" (the
+  // scorer's worst decile is dominated by text-heavy false positives) but
+  // "which domain got WORSE since last time". That needs the previous run's
+  // sidecars, which backup-sweep-run.mjs snapshots before each sweep.
+  // Uses the module-level OUT_ROOT (test-output/), not resolve(RUN_DIR,'..'):
+  // with --run-dir pointing at an absolute path outside test-output/, the
+  // relative form would look for backups in the wrong parent.
+  let prev = {};
+  let prevLabel = '';
+  let prevIsMerged = false;
+  let prevFindings = {};
+  try {
+    const backups = readdirSync(OUT_ROOT)
+      .filter(d => d.startsWith('corpus-sweep-run--backup-'))
+      .sort(); // stamped YYYY-MM-DDTHH-mm-ss → lexical order is chronological
+    if (backups.length) {
+      // Baseline = the most recent FULL-CORPUS backup, not simply the newest.
+      //
+      // Every sweep takes a backup on the way in, including the short recovery
+      // and single-domain runs, so "newest" is usually a snapshot of a partly
+      // re-run corpus taken minutes ago — comparing against that reports
+      // yesterday's recoveries as today's breakages (measured: librarything,
+      // rateyourmusic, netflix-techblog etc. all read as "broke" purely because
+      // the same-day baseline had inherited their captures from an older run).
+      // A run is "full" if it holds a sidecar for (nearly) every corpus domain
+      // AND those sidecars share one run window, so a merged folder that
+      // accumulated coverage over weeks does not qualify.
+      // SWEEP_BASELINE=<folder-name> overrides. The label is rendered in the
+      // toolbar so the comparison is never ambiguous.
+      const totalDomains = sites.size;
+      // A backup qualifies when MOST of its sidecars share one run window — not
+      // when its outer span is short. A real full run picks up a few stragglers
+      // afterwards (a recovery pass, a one-off re-capture), which stretches the
+      // outer span to weeks while the run itself was a single day. Measured on
+      // the 2026-09-05 backup: 202 of 206 domains captured inside one 16h window
+      // on 2026-08-30, plus 4 re-captured on 09-05 — outer span 159h. An
+      // outer-span test rejected it as "merged" and fell back to a worse
+      // baseline; a dominant-cohort test accepts it correctly.
+      const isFullRun = (name) => {
+        try {
+          const files = readdirSync(resolve(OUT_ROOT, name)).filter(f => /--score\.json$/.test(f));
+          if (files.length < totalDomains * 0.9) return false;
+          const times = [];
+          for (const f of files) {
+            try {
+              const t = Date.parse(JSON.parse(readFileSync(resolve(OUT_ROOT, name, f), 'utf8')).ranAt);
+              if (!Number.isNaN(t)) times.push(t);
+            } catch { /* skip */ }
+          }
+          if (times.length < 10) return false;
+          times.sort((a, b) => a - b);
+          // Largest count of sidecars falling inside any 24h window.
+          let best = 0;
+          for (let i = 0; i < times.length; i++) {
+            let j = i;
+            while (j < times.length && times[j] - times[i] <= 24 * 3_600_000) j++;
+            best = Math.max(best, j - i);
+          }
+          return best >= times.length * 0.8;
+        } catch { return false; }
+      };
+      const override = process.env.SWEEP_BASELINE;
+      const fullRun = [...backups].reverse().find(isFullRun);
+      prevLabel = override && backups.includes(override)
+        ? override
+        : (fullRun ?? backups[backups.length - 1]);
+      // Flag a merged baseline in the UI. Measured 2026-09-08: BOTH backups on
+      // disk span 159h and 300h, i.e. neither is a single full run — each
+      // accumulated coverage across many partial runs. Comparing against one
+      // still beats nothing, but a "broke" there can mean "this domain was last
+      // captured three weeks ago and has been failing since", which is a
+      // different claim from "this run broke it". Say so rather than implying a
+      // clean run-over-run diff.
+      prevIsMerged = !override && !fullRun;
+      const dir = resolve(OUT_ROOT, prevLabel);
+      for (const f of readdirSync(dir)) {
+        const m = f.match(/^(.+)--score\.json$/);
+        if (!m) continue;
+        try { prev[m[1]] = JSON.parse(readFileSync(resolve(dir, f), 'utf8')); } catch { /* skip */ }
+      }
+      // The baseline's VISUAL VERDICTS, which outrank its scores as a regression
+      // signal. The composite is a weak proxy — measured this corpus: the
+      // "text-coverage high" flag is 88% false positive (8 of 9 flagged clips
+      // were clean), and apnews scored 0.005 with NO flags while capturing a
+      // video rail instead of the article. A clean→flaw verdict change is a
+      // human (or reviewed) judgment about the clip; a composite delta is not.
+      try {
+        prevFindings = JSON.parse(
+          readFileSync(resolve(dir, 'visual-findings.json'), 'utf8'),
+        ).findings ?? {};
+      } catch { /* baseline predates verdict tracking */ }
+    }
+  } catch { /* no backups — regression sort degrades to "no data" */ }
+
+  /**
+   * Classify a domain's change since the previous run.
+   * Rank 0 sorts to the top of the regression view.
+   *   0 worse     — captured BOTH times, composite rose by >0.02
+   *   1 new       — no previous record
+   *   2 same      — unchanged, or moved less than the noise floor
+   *   3 better    — composite fell by >0.02
+   *   4 unrun     — skipped this run, or last run, or both
+   *
+   * A SKIP IS NOT A REGRESSION. A skip means the page never loaded — a bot
+   * wall, a 403, a rate-limited IP, a dead URL — so it says nothing about the
+   * capture pipeline, which is what this view exists to police. Treating skips
+   * as regressions actively misleads: after the 2026-09-08 session (where the
+   * exit IP was burnt and even Google served a captcha) SEVEN domains showed as
+   * "BROKE" purely because a wall appeared that evening, burying the five real
+   * capture regressions underneath them.
+   *
+   * Skips still get a pill (see regPill) so a domain that stopped loading is
+   * visible — it just sorts BELOW every real capture change instead of above.
+   */
+  function regressionOf(site, rec, finding) {
+    const p = prev[site];
+    const isOk = rec.status === 'ok';
+    const wasOk = p?.status === 'ok';
+    // Either side missing a real capture ⇒ no pipeline comparison is possible.
+    if (!isOk || (p && !wasOk)) {
+      return { kind: !isOk && p && !wasOk ? 'stillskip' : (!isOk ? 'nowskip' : 'wasskip'), rank: 6, delta: 0 };
+    }
+    if (!p) return { kind: 'new', rank: 4, delta: 0 };
+
+    // HIGHEST PRIORITY: an explicit `regression` field on the verdict. A
+    // reviewer who compared this capture against the previous run's image and
+    // said so outranks every inference — the composite delta and the verdict
+    // diff are both proxies for exactly this question.
+    if (finding?.regression === 'regressed') {
+      return { kind: 'stated-regression', rank: -1, delta: 0 };
+    }
+
+    // NEXT: the visual verdict — a judgment about the CLIP, which is what a
+    // capture regression actually means.
+    //
+    // Verdict changes are used whenever BOTH sides have one — the baseline's 206
+    // verdicts carry specific, image-derived notes and are real review, not
+    // filler. But their CONFIDENCE varies, and visual-findings.json says so
+    // itself: "AI review has produced confident, specific notes that did not
+    // match the image (walmart's empty section headings and ytmusic-album's
+    // missing title were both filed as 'clean'). An existing verdict is NOT
+    // evidence a person looked."
+    //
+    // So a verdict change against an UNSTAMPED baseline entry is reported as
+    // `verdict-recheck` (rank 1: worth opening, may be a review-standard
+    // difference rather than a capture change) while a change where both sides
+    // carry a `reviewedAt` stamp is a real `verdict-worse` (rank 0). Collapsing
+    // the two is wrong in both directions: gating them out entirely discards 206
+    // usable verdicts, and treating them as equal reported 31 clean→flaw flips
+    // that were only this session's stricter re-review.
+    const pf = prevFindings[site], nf = finding;
+    const pv = pf?.verdict, nv = nf?.verdict;
+    const sev = { clean: 0, flaw: 1, critical: 2 };
+    const comparable = pv in sev && nv in sev;
+    const bothStamped = !!pf?.reviewedAt && !!nf?.reviewedAt;
+    if (comparable && sev[nv] > sev[pv]) {
+      return bothStamped
+        ? { kind: 'verdict-worse', rank: 0, delta: 0, from: pv, to: nv }
+        : { kind: 'verdict-recheck', rank: 1, delta: 0, from: pv, to: nv };
+    }
+    if (comparable && sev[nv] < sev[pv]) {
+      return { kind: 'verdict-better', rank: 5, delta: 0, from: pv, to: nv };
+    }
+
+    // SECONDARY: the composite. Ranked BELOW any verdict change because it is a
+    // weak proxy (see prevFindings above) — useful for spotting a domain worth
+    // re-reviewing, not for concluding the capture got worse.
+    const d = (rec.scores?.composite ?? 0) - (p.scores?.composite ?? 0);
+    if (d > 0.02) return { kind: 'worse', rank: 2, delta: d };
+    if (d < -0.02) return { kind: 'better', rank: 5, delta: d };
+    return { kind: 'same', rank: 3, delta: d };
+  }
+
   // Build a plain data array the client sorts; default worst-score-first.
   const data = [...sites.entries()].map(([site, e]) => {
     const rec = e.rec ?? {};
@@ -103,8 +290,16 @@ function build() {
     // (tools/sweep-headed-manual.mjs writes source+clip images but doesn't run
     // the heuristics). Mark it so the badge reads "unscored", not a bogus -1.
     const unscored = rec.status === 'ok' && !rec.scores;
+    const reg = regressionOf(site, rec, finding);
     return {
       site,
+      reg: reg.kind,
+      regRank: reg.rank,
+      regDelta: reg.delta,
+      regFrom: reg.from ?? '',
+      regTo: reg.to ?? '',
+      prevComposite: prev[site]?.status === 'ok' ? (prev[site].scores?.composite ?? null) : null,
+      prevStatus: prev[site]?.status ?? null,
       mtime: e.mtime,
       status: rec.status ?? 'unknown',
       unscored,
@@ -167,6 +362,49 @@ function build() {
   };
   const verdictNote = (d) => d.finding?.note
     ? `<div class="vnote v-${d.finding.verdict}">${escapeHtml(d.finding.note)}</div>` : '';
+  // A REGRESSION's delta gets its OWN line, visually distinct from the general
+  // note — the two answer different questions ("what changed" vs "what's wrong
+  // now") and burying the first inside the second is what made target's first
+  // regression verdict unreadable at a glance.
+  // The link into the BASELINE gallery's own card for this site is what makes a
+  // regression checkable instead of merely asserted: the reviewer lands on the
+  // before-image rather than reconstructing which backup folder to open and
+  // hunting the domain in it. Points at the backup's sweep-gallery.html#site-X
+  // (build it with: node sweep-gallery.mjs --run-dir <backup-folder>), and is
+  // a sibling directory away, so a relative href works from either gallery.
+  const baselineLink = (site) => prevLabel
+    ? ` <a class="baseline-link" href="../${escapeHtml(prevLabel)}/sweep-gallery.html#site-${escapeHtml(site)}" title="Open this site's card in the baseline gallery (${escapeHtml(prevLabel.replace('corpus-sweep-run--backup-', ''))})">before ↗</a>`
+    : '';
+  const regressionLine = (d) => d.finding?.regression === 'regressed' && d.finding?.regressedFrom
+    ? `<div class="vregression">⚠ REGRESSED — ${escapeHtml(d.finding.regressedFrom)}${baselineLink(d.site)}</div>` : '';
+
+  // Change-since-last-run pill. Only rendered when it carries information:
+  // "same" and "still skipped" are the boring majority and would just be noise
+  // on every row. Shows the composite delta so "worse" is quantified, and the
+  // previous status for broke/fixed so the row explains itself without a diff.
+  const regPill = (d) => {
+    if (!d.reg || d.reg === 'same' || d.reg === 'stillskip') return '';
+    const label = {
+      // Verdict changes lead: these are judgments about the CLIP.
+      'stated-regression': `REGRESSION (reviewer-confirmed)`,
+      'verdict-worse': `REGRESSED ${d.regFrom}→${d.regTo}`,
+      // NOT phrased as a change to the capture. Measured: 30 of 35 of these
+      // have an essentially unchanged composite — the CLIP is the same and only
+      // the verdict moved, because the baseline entry was never checked against
+      // the image. "recheck clean→flaw" read like a regression claim; this says
+      // what it actually is.
+      'verdict-recheck': `verdict differs (was ${d.regFrom}, unverified)`,
+      'verdict-better': `improved ${d.regFrom}→${d.regTo}`,
+      worse: `score +${d.regDelta.toFixed(3)}`,
+      better: `score ${d.regDelta.toFixed(3)}`,
+      // Deliberately NOT called a regression: the page never loaded, so there is
+      // no capture to have regressed. Worded as a run outcome, not a verdict.
+      nowskip: `didn't load (was ok)`,
+      wasskip: `loaded (was skip)`,
+      new: `new`,
+    }[d.reg] ?? d.reg;
+    return `<span class="reg reg-${d.reg}" title="vs previous run">${label}</span>`;
+  };
 
   // Clickable overview rows. Scored domains link to their detail view; skip rows
   // are compact (no images to expand) so they render as a plain, non-link block.
@@ -174,14 +412,16 @@ function build() {
     const head = `<h2>
         ${badge(d)}
         ${verdictPill(d)}
+        ${regPill(d)}
         <span class="name">${d.site}</span>
         ${d.url ? `<a class="src-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">source ↗</a>` : ''}
         <span class="ts">${d.mtime ? new Date(d.mtime).toLocaleString() : ''}</span>
         ${d.status === 'skip' ? '' : '<span class="open-hint">click to expand →</span>'}
       </h2>
+      ${regressionLine(d)}
       ${verdictNote(d)}
       <div class="detail-line">${scoreDetail(d)}</div>`;
-    const dataAttrs = `data-composite="${d.composite}" data-mtime="${d.mtime}" data-status="${d.status}" data-finding="${d.findingRank}"`;
+    const dataAttrs = `data-composite="${d.composite}" data-mtime="${d.mtime}" data-status="${d.status}" data-finding="${d.findingRank}" data-regrank="${d.regRank}" data-regdelta="${d.regDelta}" data-reg="${d.reg}"`;
     if (d.status === 'skip') {
       return `<div class="site skip-row" ${dataAttrs}>${head}</div>`;
     }
@@ -208,11 +448,13 @@ function build() {
           <button class="back" type="button">← back</button>
           ${badge(d)}
           ${verdictPill(d)}
+        ${regPill(d)}
           <h2>${d.site}</h2>
           ${d.url ? `<a class="src-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener">source ↗</a>` : ''}
           <span class="detail-flags">${scoreDetail(d)}</span>
           <span class="restore-wrap"><button class="restore-cols" hidden>show all columns</button></span>
         </div>
+        ${regressionLine(d)}
         ${verdictNote(d)}
       </div>
       <div class="detail-cols">
@@ -277,11 +519,36 @@ function build() {
      result: we never reached real page content (bot-wall/403/dead URL/
      rate-limit), so there is nothing about our clipping to judge here. */
   .verdict.v-blocked  { background: #4a90d922; color: #4a90d9; }
+  /* Change-since-last-run pill. Deliberately OUTLINED rather than filled so it
+     reads as metadata about the run, never competing with the verdict pill,
+     which is the judgment about the clip itself. */
+  .reg { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    padding: 1px 7px; border-radius: 20px; border: 1px solid currentColor; }
+  .reg-stated-regression { color: #fff; background: #c62828; border-color: #c62828; }
+  .reg-verdict-worse   { color: #e05555; border-width: 2px; }
+  .reg-verdict-recheck { color: #f9a825; }
+  .reg-verdict-better { color: #4caf50; }
+  .reg-worse   { color: #f9a825; }
+  .reg-better  { color: #4caf50; }
+  /* Load outcomes, not capture verdicts — muted so they never read as a
+     regression. A skip means the page was never reached. */
+  .reg-nowskip { color: #4a90d9; }
+  .reg-wasskip { color: #4a90d9; }
+  .reg-new     { color: #9aa0a6; }
+  .baseline { margin-left: auto; font-size: 11px; color: #9aa0a6; }
   .vnote { font-size: 12.5px; margin: 0 0 6px; padding-left: 2px; border-left: 3px solid transparent; padding-left: 8px; }
   .vnote.v-critical { color: #e05555; border-color: #e05555; }
   .vnote.v-flaw     { color: #cc9a3d; border-color: #f9a825; }
   .vnote.v-clean    { color: #7aa; border-color: #4caf5066; }
   .vnote.v-blocked  { color: #4a90d9; border-color: #4a90d966; }
+  /* Deliberately styled as an ALERT, distinct from .vnote — it answers a
+     different question ("what changed") than the note ("what's wrong now"),
+     and the two must never be read as one run-on sentence. */
+  .vregression { font-size: 12.5px; font-weight: 600; margin: 0 0 6px; padding: 4px 8px;
+    color: #fff; background: #c62828; border-radius: 4px; }
+  .baseline-link { color: #fff; text-decoration: underline; white-space: nowrap;
+    margin-left: 6px; opacity: 0.92; }
+  .baseline-link:hover { opacity: 1; }
 
   .cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
   .col { min-width: 0; }
@@ -342,10 +609,15 @@ function build() {
   <div class="toolbar">
     <span>Sort:</span>
     <button id="sort-finding" class="active">visual finding</button>
+    <button id="sort-regression" title="Ranks: verdict regressions where both runs were image-verified, then verdict differences against an unverified baseline entry (usually the OLD verdict was wrong, not a new defect), then composite-score moves. Skips are not regressions and sort last.">regressions</button>
     <button id="sort-score">worst score</button>
     <button id="sort-date">newest run</button>
     <button id="filter-flagged">only flagged</button>
     <span class="count">${countLabel}</span>
+    <span class="baseline">${prevLabel
+      ? `regressions vs ${escapeHtml(prevLabel.replace('corpus-sweep-run--backup-', ''))}`
+        + (prevIsMerged ? ' <b>(merged snapshot, not one full run)</b>' : '')
+      : 'no baseline snapshot — regression sort unavailable'}</span>
   </div>
   <div id="overview">
     <h1>Corpus sweep — source · clip · cast</h1>
@@ -360,10 +632,11 @@ function build() {
     const list = document.getElementById('list');
     const sites = () => [...list.querySelectorAll('.site')];
     const byFinding = document.getElementById('sort-finding');
+    const byRegression = document.getElementById('sort-regression');
     const byScore = document.getElementById('sort-score');
     const byDate = document.getElementById('sort-date');
     const flaggedBtn = document.getElementById('filter-flagged');
-    const sortBtns = [byFinding, byScore, byDate];
+    const sortBtns = [byFinding, byRegression, byScore, byDate];
     let flaggedOnly = false;
 
     function resort(key) {
@@ -375,6 +648,14 @@ function build() {
           const fr = Number(a.dataset.finding) - Number(b.dataset.finding);
           if (fr !== 0) return fr;
           return Number(b.dataset.composite) - Number(a.dataset.composite);
+        }
+        if (key === 'regression') {
+          // broke → worse → new → same → better → fixed → still-skipped.
+          // Within "worse", the biggest composite JUMP first: that is the
+          // strongest signal of what this run changed for the worse.
+          const rr = Number(a.dataset.regrank) - Number(b.dataset.regrank);
+          if (rr !== 0) return rr;
+          return Number(b.dataset.regdelta) - Number(a.dataset.regdelta);
         }
         if (key === 'score') return Number(b.dataset.composite) - Number(a.dataset.composite);
         return Number(b.dataset.mtime) - Number(a.dataset.mtime);
@@ -395,6 +676,7 @@ function build() {
       resort(key);
     };
     byFinding.addEventListener('click', () => setSort(byFinding, 'finding'));
+    byRegression.addEventListener('click', () => setSort(byRegression, 'regression'));
     byScore.addEventListener('click', () => setSort(byScore, 'score'));
     byDate.addEventListener('click', () => setSort(byDate, 'date'));
     flaggedBtn.addEventListener('click', () => { flaggedOnly = !flaggedOnly; flaggedBtn.classList.toggle('active', flaggedOnly); applyFilter(); });

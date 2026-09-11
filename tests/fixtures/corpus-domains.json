@@ -185,6 +185,7 @@
     {
       "name": "hackernews",
       "url": "https://news.ycombinator.com/item?id=38713847",
+      "headed": true,
       "note": "HN comment thread — returns empty/iframe-wall body headless; capture via MANUAL HEADED pass."
     },
     {
@@ -426,7 +427,8 @@
     {
       "name": "target",
       "url": "https://www.target.com/p/razer-ornata-v3-tenkeyless-espeon-umbreon-edition/-/A-95017977",
-      "note": "PHASE 4.3 — ENTITY: Target product page, heavy commerce chrome. Discovered."
+      "headed": true,
+      "note": "PHASE 4.3 — ENTITY: Target product page, heavy commerce chrome. Discovered. PerimeterX 'press & hold' on a headless hit (2026-09-05) — same vendor as walmart, so it must never take a headless hit."
     },
     {
       "name": "walmart",

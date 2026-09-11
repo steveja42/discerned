@@ -6,7 +6,7 @@
 // Usage: node tests/e2e/tools/backup-sweep-run.mjs
 // Prints the backup path on success (so a caller/script can capture it).
 
-import { cpSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { cpSync, existsSync, readdirSync, statSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const OUT_ROOT = resolve(import.meta.dirname, '..', '..', '..', 'test-output');
@@ -32,4 +32,18 @@ const dest = resolve(OUT_ROOT, `corpus-sweep-run--backup-${stamp}`);
 
 cpSync(SRC, dest, { recursive: true });
 console.log(`Backed up ${files.length} files -> ${dest}`);
+
+// Prune old snapshots. Each is ~550 MB, and only the most recent one or two are
+// ever used as a comparison basis — a diff against a months-old run reports the
+// accumulated churn of every sweep since, which is noise, not a regression.
+// KEEP counts backups INCLUDING the one just made.
+const KEEP = Number(process.env.SWEEP_BACKUP_KEEP ?? 2);
+const backups = readdirSync(OUT_ROOT)
+  .filter(d => d.startsWith('corpus-sweep-run--backup-'))
+  .sort(); // stamped YYYY-MM-DDTHH-mm-ss, so lexical order IS chronological
+for (const old of backups.slice(0, Math.max(0, backups.length - KEEP))) {
+  rmSync(resolve(OUT_ROOT, old), { recursive: true, force: true });
+  console.log(`Pruned old backup: ${old}`);
+}
+
 console.log(dest); // last line: bare path, for scripting

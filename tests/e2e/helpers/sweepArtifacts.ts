@@ -51,6 +51,14 @@ export interface SweepRecord {
   status: 'ok' | 'skip';
   /** Present when status === 'skip': why the page didn't load. */
   skipReason?: string;
+  /**
+   * HTTP status of the main navigation, when one was observed.
+   * Distinguishes what the page TEXT cannot: 403 (site refuses us) vs 429
+   * (our IP is rate-limited, recoverable) vs 503 (CF interstitial) vs 200
+   * (challenge served with a success code). Undefined for click-through
+   * navigations, which have no single main response to read.
+   */
+  httpStatus?: number;
   /** Free-text provenance note (e.g. "manual headed capture …"). */
   note?: string;
   /** The four heuristic scores + composite (present when status === 'ok'). */

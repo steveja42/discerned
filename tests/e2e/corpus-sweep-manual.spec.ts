@@ -29,6 +29,19 @@ import { computeScores, measureInPage, CHROME_SWEEP_PHRASES, type SweepMeasureme
 import { refreshSweepGallery } from './helpers/sweepGallery';
 
 /**
+ * Jittered wait: `base + Math.random() * jitter` ms.
+ *
+ * Cloudflare's Bot Management scores BEHAVIOUR, not just rate — a wait that
+ * fires at an exact interval fingerprints as automation even at a low rate.
+ * Every wait a remote site can observe goes through here so none of them is a
+ * fixed constant. SWEEP_NO_JITTER=1 restores fixed timing for debugging.
+ */
+function jitterMs(base = 5_000, jitter = 3_000): number {
+  if (process.env.SWEEP_NO_JITTER) return base;
+  return Math.round(base + Math.random() * jitter);
+}
+
+/**
  * Auto-solve a PerimeterX 'Press & Hold' captcha so the manual pass clears the
  * gate ITSELF — never depending on (or stealing focus from) the user's clicks.
  * PerimeterX renders the button either in the top document or inside a
@@ -45,25 +58,53 @@ async function tryPressAndHold(page: Page): Promise<boolean> {
     '#px-captcha', '#px-captcha [role="button"]',
     '[aria-label*="Press" i]', '[aria-label*="hold" i]',
     'div[role="button"]:has-text("Press")', 'p:has-text("Press & Hold")',
+    // Zillow's gate labels the control "Verify you are human" / "Verify"
+    // instead of "Press & Hold", so the original list never matched it and the
+    // user had to hold the button by hand (reported 2026-09-08).
+    '[aria-label*="verify" i]', 'div[role="button"]:has-text("Verify")',
+    'button:has-text("Verify")', 'text=/verify (you are|yourself)/i',
     'text=/press\\s*&?\\s*hold/i',
   ];
-  for (const root of roots) {
-    for (const sel of SELECTORS) {
-      try {
-        const loc = root.locator(sel).first();
-        if (!(await loc.count())) continue;
-        const box = await loc.boundingBox({ timeout: 1_000 }).catch(() => null);
-        if (!box || box.width < 4 || box.height < 4) continue;
-        const cx = box.x + box.width / 2;
-        const cy = box.y + box.height / 2;
-        // Real press-and-HOLD via the page mouse (frame coordinates are relative
-        // to the top document viewport for boundingBox, so use page.mouse).
-        await page.mouse.move(cx, cy);
-        await page.mouse.down();
-        await page.waitForTimeout(8_000);
-        await page.mouse.up();
-        return true;
-      } catch { /* try the next selector/root */ }
+  // Hold durations to try in turn. A single fixed 8s hold is a guess: PerimeterX
+  // and its lookalikes want a *sustained* press whose required length varies,
+  // and holding too long can also register as a failed attempt. Escalating
+  // gives three real chances instead of one.
+  const HOLDS = [8_000, 12_000, 5_000];
+
+  /** Is a gate still on screen? Used to VERIFY a hold worked. */
+  const stillGated = async (): Promise<boolean> => {
+    const txt = await page.evaluate(() => document.body?.innerText ?? '').catch(() => '');
+    return /press ?& ?hold|verify you are human|robot or human|are you a human|just a moment|checking your browser/i.test(txt);
+  };
+
+  for (const hold of HOLDS) {
+    for (const root of roots) {
+      for (const sel of SELECTORS) {
+        try {
+          const loc = root.locator(sel).first();
+          if (!(await loc.count())) continue;
+          const box = await loc.boundingBox({ timeout: 1_000 }).catch(() => null);
+          if (!box || box.width < 4 || box.height < 4) continue;
+          const cx = box.x + box.width / 2;
+          const cy = box.y + box.height / 2;
+          // Real press-and-HOLD via the page mouse (frame coordinates are
+          // relative to the top document viewport for boundingBox, so use
+          // page.mouse). Approach with a short move first: an instantaneous
+          // teleport-then-press has no pointer trail, which is itself a signal.
+          await page.mouse.move(cx - 40, cy - 25);
+          await page.mouse.move(cx, cy, { steps: 8 });
+          await page.waitForTimeout(jitterMs(160, 220));
+          await page.mouse.down();
+          await page.waitForTimeout(jitterMs(hold, 900));
+          await page.mouse.up();
+          await page.waitForTimeout(jitterMs(2_000, 1_200));
+          // VERIFY. The old version returned true after any press, so the
+          // caller's "solved" branch fired even when the gate was untouched —
+          // which reads as "auto-solve works" while the user is holding the
+          // button by hand.
+          if (!(await stillGated())) return true;
+        } catch { /* try the next selector/root */ }
+      }
     }
   }
   return false;
@@ -148,7 +189,12 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
       try {
         // eslint-disable-next-line no-console
         console.log(`\n▶ ${d.name}  —  ${url}\n   → clear the block in the window now…`);
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40_000 }).catch(() => {});
+        // Keep the response: its STATUS is what separates "this site refuses
+        // us" (403) from "our IP is rate-limited" (429) when a domain stays
+        // walled — see SweepRecord.httpStatus.
+        const navResp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40_000 })
+          .catch(() => null);
+        rec.httpStatus = navResp?.status();
 
         // Poll until the page has been block-free for a SUSTAINED window, or
         // WAIT_MS. A single "looks clear" poll is NOT enough: some walls
@@ -195,11 +241,13 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
           // does. Runs only while `blocked`; on success the next poll sees it clear.
           if (blocked && !process.env.SWEEP_MANUAL_NO_AUTOSOLVE) {
             const solved = await tryPressAndHold(page).catch(() => false);
-            if (solved) { await page.waitForTimeout(1_500); continue; }
+            if (solved) { await page.waitForTimeout(jitterMs(1_200, 900)); continue; }
           }
           clearStreak = blocked ? 0 : clearStreak + 1;
           if (clearStreak >= STABLE_CLEARS) break;
-          await page.waitForTimeout(2_000);
+          // Jittered: this loop polls WHILE the challenge page is watching, so
+          // an exact 2.000s interval is measured by the system being waited on.
+          await page.waitForTimeout(jitterMs(2_000, 1_500));
         }
         } catch (loopErr) {
           if (!/has been closed/i.test(String((loopErr as Error).message))) throw loopErr;

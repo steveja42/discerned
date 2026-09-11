@@ -25,7 +25,11 @@
 //   SWEEP_NO_HEADED_RETRY=1 (skip the CF headed pass), SWEEP_NO_PX_FIRST=1
 //   (skip the PerimeterX headed-first pass — NOT recommended, see below),
 //   SWEEP_GAP=<seconds> (pause between domains, default 20 — see GAP_SECS;
-//   0 disables it for offline/localhost corpora or a single domain).
+//   0 disables it for offline/localhost corpora or a single domain),
+//   SWEEP_GAP_HEADED=<seconds> (EXTRA gap in the headed passes, default 25 —
+//   those passes cluster the most-defended sites back-to-back),
+//   SWEEP_RESUME=1 (skip domains already captured ok — use for recovery passes).
+// The gap is jittered ±35%: a constant interval is itself a machine signature.
 //
 // THREE-PASS flow:
 //  • Pass 0 — HEADED-FIRST: PerimeterX sites (PERIMETERX_SITES), logged-in social
@@ -58,7 +62,7 @@ import { sweepArtifacts, type SweepRecord } from './helpers/sweepArtifacts';
 import { computeScores, measureInPage, CHROME_SWEEP_PHRASES, type SweepMeasurements } from './helpers/sweepScorers';
 import { refreshSweepGallery } from './helpers/sweepGallery';
 
-interface DomainEntry { name: string; url: string; note?: string; headed?: boolean }
+interface DomainEntry { name: string; url: string; note?: string; headed?: boolean; google?: boolean }
 
 // Read once, BEFORE the headed-routing sets below (which derive from it) and
 // before DOMAINS, which applies SWEEP_ONLY/SWEEP_LIMIT filtering to this list.
@@ -108,6 +112,49 @@ const HEADED_ONLY_SITES = new Set(
   DOMAINS_RAW.filter(d => d.headed).map(d => d.name),
 );
 
+/**
+ * SWEEP_RESUME=1 — drop domains that already captured cleanly in THIS run's
+ * artifacts, so a re-run costs only the unfinished tail.
+ *
+ * Without it a single wall means re-running all 206 domains to retry the 30 that
+ * failed — which is not merely slow, it is counter-productive: run length is
+ * itself the bot signal ([[project_sweep_wall_is_cumulative_not_per_site]]), so
+ * the long re-run re-blocks the very domains it exists to recover. A resumed
+ * 30-domain tail is both ~7x faster and far likelier to clear the walls.
+ *
+ * Only `status: 'ok'` counts as done — a skip is exactly what we came back for.
+ * SWEEP_RESUME_MAX_AGE_H (default 96) bounds staleness so a resume can never
+ * silently pass off last month's captures as this run's. 96h, not 36: a full
+ * sweep runs for hours and its recovery passes trail it by a day or two, so a
+ * tighter window makes a legitimate resume re-capture the whole corpus — which
+ * is the long run the resume exists to avoid.
+ */
+function alreadyCaptured(): Set<string> {
+  const done = new Set<string>();
+  if (!process.env.SWEEP_RESUME) return done;
+  const maxAgeH = Number(process.env.SWEEP_RESUME_MAX_AGE_H ?? 96);
+  const cutoff = Date.now() - maxAgeH * 3_600_000;
+  let stale = 0, skipped = 0;
+  for (const d of DOMAINS_RAW) {
+    try {
+      const rec = JSON.parse(readFileSync(sweepArtifacts(d.name).score(), 'utf8'));
+      if (rec.status !== 'ok') { skipped++; continue; }
+      if (rec.ranAt && Date.parse(rec.ranAt) < cutoff) { stale++; continue; }
+      done.add(d.name);
+    } catch { /* no sidecar yet — needs capturing */ }
+  }
+  // Say WHY domains are being re-run. A resume that silently re-captures all 206
+  // (because the artifacts aged past the window) otherwise looks identical to a
+  // full run and quietly costs the hours the resume was meant to save.
+  // eslint-disable-next-line no-console
+  console.log(`SWEEP_RESUME: ${done.size} already ok, ${skipped} previously skipped, ${stale} older than ${maxAgeH}h (re-run).`);
+  if (stale > done.size && stale > 20) {
+    // eslint-disable-next-line no-console
+    console.log(`SWEEP_RESUME: most artifacts are stale — this will be a near-full run. Raise SWEEP_RESUME_MAX_AGE_H to reuse them.`);
+  }
+  return done;
+}
+
 const DOMAINS: DomainEntry[] = (() => {
   let list = DOMAINS_RAW;
   if (process.env.SWEEP_ONLY) {
@@ -118,11 +165,25 @@ const DOMAINS: DomainEntry[] = (() => {
     const skip = new Set(process.env.SWEEP_SKIP.split(',').map(s => s.trim()));
     list = list.filter(d => !skip.has(d.name));
   }
+  const done = alreadyCaptured();
+  if (done.size) {
+    list = list.filter(d => !done.has(d.name));
+    // eslint-disable-next-line no-console
+    console.log(`SWEEP_RESUME: skipping ${done.size} domain(s) already captured ok; ${list.length} remain.`);
+  }
   if (process.env.SWEEP_LIMIT) list = list.slice(0, Number(process.env.SWEEP_LIMIT));
   // A filter that matches NOTHING otherwise produces a green run over zero
   // domains, which reads as "the sweep passed" — a typo'd or renamed name
   // (SWEEP_ONLY=bbc when the entry is bbc-news) silently tests nothing at all.
   if (list.length === 0) {
+    // A RESUME that consumed the whole corpus is success, not a typo — every
+    // domain already captured ok. Throwing there would report the finished sweep
+    // as a failure, so return empty and let the run no-op into the gallery step.
+    if (done.size) {
+      // eslint-disable-next-line no-console
+      console.log('SWEEP_RESUME: every domain already captured ok — nothing left to run.');
+      return list;
+    }
     const filters = [
       process.env.SWEEP_ONLY && `SWEEP_ONLY=${process.env.SWEEP_ONLY}`,
       process.env.SWEEP_SKIP && `SWEEP_SKIP=${process.env.SWEEP_SKIP}`,
@@ -145,20 +206,46 @@ const DOMAINS: DomainEntry[] = (() => {
 async function tryPressAndHold(page: Page): Promise<boolean> {
   const roots = [page, ...page.frames()];
   const SELECTORS = ['#px-captcha', '#px-captcha [role="button"]', '[aria-label*="Press" i]',
-    '[aria-label*="hold" i]', 'text=/press\\s*&?\\s*hold/i'];
-  for (const root of roots) {
-    for (const sel of SELECTORS) {
-      try {
-        const loc = root.locator(sel).first();
-        if (!(await loc.count())) continue;
-        const box = await loc.boundingBox({ timeout: 1_000 }).catch(() => null);
-        if (!box || box.width < 4 || box.height < 4) continue;
-        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-        await page.mouse.down();
-        await page.waitForTimeout(8_000);
-        await page.mouse.up();
-        return true;
-      } catch { /* next */ }
+    '[aria-label*="hold" i]',
+    // Zillow's gate says "Verify you are human", not "Press & Hold" — the
+    // original list never matched it, so the user had to hold it by hand
+    // (reported 2026-09-08).
+    '[aria-label*="verify" i]', 'div[role="button"]:has-text("Verify")',
+    'button:has-text("Verify")', 'text=/verify (you are|yourself)/i',
+    'text=/press\\s*&?\\s*hold/i'];
+  // Escalating hold durations: the required press length varies by vendor and a
+  // single fixed 8s guess gets one chance. Holding too long can also fail.
+  const HOLDS = [8_000, 12_000, 5_000];
+  const stillGated = async (): Promise<boolean> => {
+    const txt = await page.evaluate(() => document.body?.innerText ?? '').catch(() => '');
+    return /press ?& ?hold|verify you are human|robot or human|are you a human|just a moment|checking your browser/i.test(txt);
+  };
+  for (const hold of HOLDS) {
+    for (const root of roots) {
+      for (const sel of SELECTORS) {
+        try {
+          const loc = root.locator(sel).first();
+          if (!(await loc.count())) continue;
+          const box = await loc.boundingBox({ timeout: 1_000 }).catch(() => null);
+          if (!box || box.width < 4 || box.height < 4) continue;
+          const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+          // Approach with a real pointer trail: an instantaneous teleport-then-
+          // press leaves no mouse movement, which is itself a bot signal.
+          await page.mouse.move(cx - 40, cy - 25);
+          await page.mouse.move(cx, cy, { steps: 8 });
+          // Jitter the pre-press pause and the hold itself: a human never
+          // pauses exactly 220ms then holds for exactly 8.000s, and this whole
+          // gesture happens under the captcha's direct observation.
+          await page.waitForTimeout(jitterMs(160, 220));
+          await page.mouse.down();
+          await page.waitForTimeout(jitterMs(hold, 900));
+          await page.mouse.up();
+          await page.waitForTimeout(jitterMs(2_000, 1_200));
+          // VERIFY rather than assuming: the old code returned true after any
+          // press, so a no-op press reported success while the gate stood.
+          if (!(await stillGated())) return true;
+        } catch { /* next */ }
+      }
     }
   }
   return false;
@@ -238,6 +325,55 @@ function persist(rec: SweepDriverRecord): void {
  * is opaque (nothing of ours could leak in a Referer). Returns the page that
  * ended up on `url`: the popup when target=_blank opened one, else the original.
  */
+/**
+ * Navigate by SEARCHING GOOGLE for the URL and clicking its organic result.
+ *
+ * PROVEN to defeat the walls a direct goto cannot (2026-09-06, 11 of 11 domains
+ * — politico, discogs, sciencemag, boardgamegeek, librarything, rateyourmusic,
+ * lemmy-thread, netflix-techblog, producthunt, openai-blog, medium-generic):
+ * each served real content via the Google path and was WALLED on a bare goto in
+ * the same session minutes later. See tools/google-referral-probe.spec.ts and
+ * [[project_google_referral_beats_walls]].
+ *
+ * This differs from gotoViaClick, which clicks a link on a `data:` URL — a real
+ * gesture, but NO referrer and no search lineage, which is why it never helped
+ * these domains.
+ *
+ * Returns the page that ended up on the target, or null when no result matched
+ * (the caller then falls back to a normal goto rather than losing the domain).
+ */
+async function gotoViaGoogle(
+  page: Page, url: string, timeoutMs = 45_000,
+): Promise<Page | null> {
+  await page.goto('https://www.google.com/search?q=' + encodeURIComponent(url),
+    { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+  await page.waitForTimeout(2_500);
+  const host = new URL(url).hostname.replace(/^www\./, '');
+  // Scope to the RESULTS container and require an http(s) href on the target
+  // host. A bare `a[href*="<host>"]:visible` also matches Google's own chrome —
+  // measured 2026-09-06: it hit the signed-in ACCOUNT PANEL, opened an overlay,
+  // and the page never left google.com, while the caller happily scored the
+  // Google SERP as the article.
+  const link = page
+    .locator(`#search a[href^="http"]:visible, #rso a[href^="http"]:visible`)
+    .filter({ hasNot: page.locator('[aria-hidden="true"]') })
+    .locator(`xpath=self::a[contains(@href, "${host}")]`)
+    .first();
+  if (!(await link.count())) return null;
+  await link.click({ timeout: 10_000 }).catch(() => undefined);
+  await page.waitForLoadState('domcontentloaded', { timeout: timeoutMs }).catch(() => undefined);
+  await page.waitForTimeout(1_500);
+  // ASSERT we actually left Google. Without this a failed click silently yields
+  // a SERP capture that scores as a healthy clip.
+  const landedHost = (() => {
+    try { return new URL(page.url()).hostname.replace(/^www\./, ''); } catch { return ''; }
+  })();
+  if (/(^|\.)google\./.test(landedHost) || !landedHost.includes(host.split('.').slice(-2)[0])) {
+    return null; // caller falls back to a direct goto
+  }
+  return page;
+}
+
 async function gotoViaClick(
   ctx: BrowserContext, page: Page, url: string, timeoutMs = 40_000,
 ): Promise<Page> {
@@ -277,20 +413,44 @@ async function captureDomain(
   // diagnosis (github-pr captured FINE and still timed out). Record the current
   // step so a timeout names it.
   const phase = (name: string) => { PHASE.set(d.name, name); };
+  // HTTP status of the main navigation. Recorded because the page TEXT alone
+  // cannot distinguish the cases that matter when a domain is walled:
+  //   403 — blocked outright, a property of the site/URL
+  //   429 — rate-limited, a property of OUR IP right now (recoverable)
+  //   503 — classic Cloudflare "checking your browser" interstitial
+  //   200 — a challenge page served with a success code (common for Turnstile)
+  // Without it, "still blocked" is ambiguous between "this site refuses us" and
+  // "we burnt the IP", which is exactly the question asked after the 2026-09-08
+  // session where even Google served a captcha.
+  let httpStatus: number | undefined;
   phase('load');
   try {
     // ── Load (load-vs-capture skip) ───────────────────────────────────────
     try {
-      // SWEEP_CLICK_NAV=1 arrives via a link click (Sec-Fetch-Site: cross-site,
-      // real user-gesture lineage) instead of a bare goto (Sec-Fetch-Site: none),
-      // matching how the user reaches walled sites from the gallery.
-      if (process.env.SWEEP_CLICK_NAV) {
+      // Domains marked `"google": true` in corpus-domains.json arrive via a
+      // clicked GOOGLE SEARCH RESULT, which is the only navigation shape proven
+      // to get past their walls (11/11 — see gotoViaGoogle). Falls back to a
+      // normal goto when no result matches, so a Google miss costs nothing.
+      // SWEEP_NO_GOOGLE=1 disables it (to re-measure whether a site still needs it).
+      if (d.google && !process.env.SWEEP_NO_GOOGLE) {
+        const landed = await gotoViaGoogle(page, url);
+        if (!landed) {
+          httpStatus = (await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40_000 }))?.status();
+        }
+      } else if (process.env.SWEEP_CLICK_NAV) {
+        // SWEEP_CLICK_NAV=1 arrives via a link click (Sec-Fetch-Site: cross-site,
+        // real user-gesture lineage) instead of a bare goto (Sec-Fetch-Site: none).
+        // NOTE: this sends NO referrer (data: launcher), which is why it never
+        // helped the walled set — use `"google": true` for those instead.
         const landed = await gotoViaClick(ctx, page, url);
         if (landed !== page) { owned?.add(landed); page = landed; }
       } else {
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40_000 });
+        httpStatus = (await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40_000 }))?.status();
       }
-      await page.waitForTimeout(3_500); // let SPA content paint
+      // Let SPA content paint. JITTERED: this fires on every domain right after
+      // navigation, so a fixed 3.5s here is the single most repeated timing
+      // signature the sweep emits. 3-5s keeps the old floor.
+      await page.waitForTimeout(jitterMs(3_000, 2_000));
       // PerimeterX 'Press & Hold' gate handling — HEADED only (a headless attempt
       // can't clear it and only escalates the risk score). The AUTO-SOLVER tries
       // first (press-and-hold ~8s per attempt) for a short window; if it still
@@ -372,7 +532,10 @@ async function captureDomain(
               break; // auto-solve failed and no human to ask — skip honestly
             }
           } else streak++;
-          await page.waitForTimeout(2_000);
+          // Gate-poll interval. JITTERED: this loop runs WHILE a challenge page
+          // is watching, so an exact 2.000s poll is the worst place to be
+          // metronomic — it is measured by the very system being waited on.
+          await page.waitForTimeout(jitterMs(2_000, 1_500));
         }
       }
       // Best-effort wait for a populated article body — some news sites (AP News,
@@ -548,7 +711,9 @@ async function captureDomain(
       return hardHit ? { hit: hardHit, len: t.length, cf: false } : null;
     }, url);
     if (interstitial) {
-      rec.skipReason = `challenge/error page ("${interstitial.hit}", ${interstitial.len} chars)`;
+      rec.httpStatus = httpStatus;
+      rec.skipReason = `challenge/error page ("${interstitial.hit}", ${interstitial.len} chars`
+        + `${httpStatus ? `, HTTP ${httpStatus}` : ''})`;
       rec.challenged = interstitial.cf; // driver retries CF challenges headed
       persist(rec);
       return rec;
@@ -683,6 +848,10 @@ async function captureDomain(
       )) as SweepMeasurements;
 
       rec.status = 'ok';
+      // Record on SUCCESS too, not just skips: a challenge page can be served
+      // with HTTP 200 and still capture "fine", so a status here is what later
+      // reveals a captured-but-bogus page (e.g. a 403 body that scored well).
+      rec.httpStatus = httpStatus;
       rec.scores = computeScores(measurements);
       delete rec.skipReason;
       delete rec.challenged;
@@ -740,12 +909,83 @@ const GAP_SECS = Number(process.env.SWEEP_GAP ?? 20);
 /** Current in-progress step per domain, so a deadline can name where it stalled. */
 const PHASE = new Map<string, string>();
 
+/**
+ * Jittered in-page wait: `base + Math.random() * jitter` ms.
+ *
+ * Cloudflare's Bot Management scores BEHAVIOUR, not just rate: a request firing
+ * at an exact interval (every 2.000s, every 3.500s) fingerprints as automation
+ * even when the overall rate is low. The between-domain gap has been jittered
+ * for a while (paceBeforeDomain), but every in-page wait was a hard-coded
+ * constant — `waitForTimeout(3_500)` after each nav, `2_000` between gate polls
+ * — so each domain still emitted the same metronome pattern.
+ *
+ * Defaults follow the 5s base + 0-3s jitter guidance, giving 5-8s. Call sites
+ * that need a different scale pass their own base/jitter; what matters is that
+ * NO wait is a fixed constant.
+ *
+ * SWEEP_NO_JITTER=1 restores fixed timing (for reproducing a timing-sensitive
+ * bug, never for a real run).
+ */
+function jitterMs(base = 5_000, jitter = 3_000): number {
+  if (process.env.SWEEP_NO_JITTER) return base;
+  return Math.round(base + Math.random() * jitter);
+}
+
+/**
+ * Reorder so no two domains sharing a registrable host run back-to-back.
+ *
+ * The corpus lists related entries adjacently (imdb + imdb-name, goodreads-book +
+ * goodreads-author, three librarything-*), which means the sweep hits ONE host
+ * twice within a gap — the single strongest rate-limit trigger, and worse than
+ * the overall cadence because it needs no cross-site correlation to detect.
+ * Stable otherwise: a domain only moves when it would collide, so run order
+ * stays predictable and the corpus file's own ordering is preserved.
+ */
+function spaceSameHost(list: DomainEntry[]): DomainEntry[] {
+  const hostOf = (d: DomainEntry): string => {
+    try {
+      // Registrable-ish: last two labels ("imdb.com" for both imdb entries).
+      return new URL(d.url).hostname.replace(/^www\./, '').split('.').slice(-2).join('.');
+    } catch { return d.name; }
+  };
+  const out: DomainEntry[] = [];
+  const pending = [...list];
+  while (pending.length) {
+    const prev = out.length ? hostOf(out[out.length - 1]) : '';
+    // Prefer the first entry whose host differs from the previous one; if every
+    // remaining entry collides (a tail of one host), take it rather than loop.
+    let i = pending.findIndex(d => hostOf(d) !== prev);
+    if (i < 0) i = 0;
+    out.push(pending.splice(i, 1)[0]);
+  }
+  return out;
+}
+
 /** Pace before each domain except the first of a pass. */
-async function paceBeforeDomain(first: boolean, name: string): Promise<void> {
+/**
+ * Extra seconds added to the gap in the HEADED passes. Those passes are the
+ * PerimeterX / Cloudflare / logged-in-social set — i.e. the corpus's most
+ * heavily defended sites, run BACK-TO-BACK. That clustering is the worst case
+ * for a vendor scoring cadence across a run, and it shows: politico and
+ * medium-generic skipped inside the first six domains of a 20s-gap run.
+ * SWEEP_GAP_HEADED overrides; 0 makes the headed passes use the plain gap.
+ */
+const GAP_HEADED_EXTRA = Number(process.env.SWEEP_GAP_HEADED ?? 25);
+
+/**
+ * Pace before each domain except the first of a pass.
+ *
+ * The delay is JITTERED (±35%), not fixed. A constant inter-request interval is
+ * itself a machine signature — no human clicks through unrelated sites on an
+ * exact metronome — and the sweep's whole defence here is looking unremarkable.
+ */
+async function paceBeforeDomain(first: boolean, name: string, headed = false): Promise<void> {
   if (first || GAP_SECS <= 0) return;
+  const base = GAP_SECS + (headed ? GAP_HEADED_EXTRA : 0);
+  const secs = Math.max(1, Math.round(base * (0.65 + Math.random() * 0.7)));
   // eslint-disable-next-line no-console
-  console.log(`   … pausing ${GAP_SECS}s before ${name} (avoid rate-limit)`);
-  await new Promise(r => setTimeout(r, GAP_SECS * 1_000));
+  console.log(`   … pausing ${secs}s before ${name} (avoid rate-limit)`);
+  await new Promise(r => setTimeout(r, secs * 1_000));
 }
 
 async function captureDomainDeadlined(
@@ -806,7 +1046,10 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
   // SWEEP_GAP adds a fixed pause before every domain but the first, and a domain
   // can be visited in TWO passes (headless, then the headed retry), so budget the
   // gap twice per domain. Omitting this would re-create the mid-run kill above.
-  const perDomain = 75_000 + DOMAIN_TIMEOUT_MS + GAP_SECS * 2_000;
+  // Budget the headed extra + the jitter's upper bound (1.35x) too, or a run with
+  // a wide headed gap is killed mid-pass by the very timeout meant to protect it.
+  const perDomain = 75_000 + DOMAIN_TIMEOUT_MS
+    + Math.round((GAP_SECS + GAP_HEADED_EXTRA) * 1.35) * 2_000;
   test.setTimeout(Math.max(DOMAINS.length * perDomain, 300_000) + 120_000);
 
   const rawUserDataDir = process.env.RAW_USER_DATA_DIR ??
@@ -828,8 +1071,8 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
   const headedFirst = (n: string): boolean =>
     !process.env.SWEEP_NO_PX_FIRST
     && (PERIMETERX_SITES.has(n) || SOCIAL_FEED_SITES.has(n) || HEADED_ONLY_SITES.has(n));
-  const pxDomains = DOMAINS.filter(d => headedFirst(d.name));
-  const headlessDomains = DOMAINS.filter(d => !headedFirst(d.name));
+  const pxDomains = spaceSameHost(DOMAINS.filter(d => headedFirst(d.name)));
+  const headlessDomains = spaceSameHost(DOMAINS.filter(d => !headedFirst(d.name)));
 
   // ── Pass 0: HEADED-FIRST for PerimeterX sites (before any headless hit) ──
   // A clean headed session's FIRST impression is the best chance to clear
@@ -846,7 +1089,7 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
     });
     try {
       for (const [i, d] of pxDomains.entries()) {
-        await paceBeforeDomain(i === 0, d.name);
+        await paceBeforeDomain(i === 0, d.name, true);
         const rec = await captureDomainDeadlined(pxCtx, d, true);
         mergeRecord(acc, rec);
         // eslint-disable-next-line no-console
@@ -910,7 +1153,7 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
     });
     try {
       for (const [i, d] of cfDomains.entries()) {
-        await paceBeforeDomain(i === 0, d.name);
+        await paceBeforeDomain(i === 0, d.name, true);
         // `true` = this context IS headed. It was omitted before, so the gate-wait
         // loop (gated on ctxIsHeaded) NEVER RAN in the headed-retry pass — the one
         // pass whose whole purpose is clearing walls in a real window. A CF wall
@@ -931,7 +1174,20 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
   }
 
   // ── Ranked summary + gallery ────────────────────────────────────────────
-  const records = [...acc.values()];
+  // Read the WHOLE corpus back off disk rather than reporting only `acc`: on a
+  // resumed run acc holds just the retried tail, so a summary built from it would
+  // claim "30 domains" for a 206-domain sweep and rank a worst decile of 3.
+  // Sidecars are the run's real state — this pass's records were just persisted
+  // into them, so the merge is a superset and matches acc exactly on a full run.
+  const records: SweepDriverRecord[] = DOMAINS_RAW.map((d) => {
+    const live = acc.get(d.name);
+    if (live) return live;
+    try {
+      return JSON.parse(readFileSync(sweepArtifacts(d.name).score(), 'utf8')) as SweepDriverRecord;
+    } catch {
+      return undefined;
+    }
+  }).filter((r): r is SweepDriverRecord => !!r);
   const scored = records.filter(r => r.status === 'ok');
   const skipped = records.filter(r => r.status === 'skip');
   scored.sort((a, b) => (b.scores!.composite) - (a.scores!.composite));
@@ -942,6 +1198,15 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
     '',
     'Worst decile (eyeball these):',
     ...worst.map(r => `  ${r.scores!.composite.toFixed(3)}  ${r.domain.padEnd(20)} [${r.scores!.flags.join(', ')}]`),
+    // The skip list IS the retry command's argument — printing it saves grepping
+    // 206 sidecars to find out what to feed the next pass.
+    ...(skipped.length ? [
+      '',
+      `Skipped (${skipped.length}) — retry with SWEEP_RESUME=1, or headed via corpus-sweep-manual:`,
+      ...skipped.map(r => `  ${r.domain.padEnd(24)} ${r.skipReason ?? ''}`),
+      '',
+      `  SWEEP_ONLY=${skipped.map(r => r.domain).join(',')}`,
+    ] : []),
   ].join('\n');
   writeFileSync(resolve(art_dir(), 'sweep-summary.txt'), summary + '\n', 'utf8');
   // eslint-disable-next-line no-console
