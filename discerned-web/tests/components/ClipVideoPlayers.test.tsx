@@ -33,8 +33,12 @@ describe('useClipVideoPlayers', () => {
     const frame = document.querySelector('iframe.clip-video-frame') as HTMLIFrameElement | null;
     expect(frame).not.toBeNull();
     expect(frame!.src).toContain('youtube-nocookie.com/embed/dQw4w9WgXcQ');
-    // The card is gone; a way out to the source remains.
-    expect(document.querySelector('a.tweet-video')).toBeNull();
+    // The card is HIDDEN, not removed: it lives inside dangerouslySetInnerHTML,
+    // so React still owns the node and detaching it throws removeChild on the
+    // next reconcile (see mountPlayer). A way out to the source remains.
+    const swapped = document.querySelector('a.tweet-video') as HTMLElement | null;
+    expect(swapped, 'card stays in the DOM for React').not.toBeNull();
+    expect(swapped!.style.display, 'card is hidden').toBe('none');
     expect(screen.getByText('Open on YouTube')).toBeTruthy();
   });
 

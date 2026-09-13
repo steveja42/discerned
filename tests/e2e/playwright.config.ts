@@ -212,6 +212,16 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'ig-reel-live-capture',
+      testMatch: /tools\/ig-reel-live-capture\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'reel-avatar-probe',
+      testMatch: /tools\/reel-avatar-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
       name: 'video-card-geom-probe',
       testMatch: /tools\/video-card-geom-probe\.spec\.ts$/,
       retries: 0,

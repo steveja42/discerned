@@ -180,6 +180,131 @@ extend to casts: only the clip is durable. Reflected in the permissions-page cop
 (`src/permissions/permissions.html`), which says so in plain language — that page
 is user-facing, so keep protocol jargon ("relay", "kind-30023") out of it.
 
+**On a FEED, the og:image is not this post's picture — and the clip and the cast
+need separate fixes.** Where every post shares one page URL (snapchat.com/web and
+instagram.com/?hl=en are the measured cases), `og:image` is the site's own
+branding, and the staleness guard legitimately passes because the head tags
+really do agree with `location`. `feedSafeThumbnail` therefore DROPS a declared
+og:image whenever a tagger narrowed a multi-post feed (`narrowedFromFeed`, set by
+`pickVisibleFeedPost` when it sees >1 post); getPageThumbnail's first-`<img>`
+fallback is kept, since that is read from the live DOM and is genuinely this
+post's. Two different fields then carry the image, so fixing one leaves the other
+visibly wrong:
+
+- `capture.thumbnail` → the clip's library preview. Corrected by
+  `posterFromBody`, which prefers the body's play-card poster (a `data:` URI is
+  fine — the clip is stored, not published).
+- `capture.thumbnailUrl` → the CAST's hero, because `pickImageUrl`
+  (`shared/nostr/events.ts`) ranks it FIRST and skips `data:` URIs. Corrected by
+  `castImageUrlFromBody`, which publishes the poster's real URL from
+  `data-dx-src`, and otherwise sets it to **null** — on `/web` the poster is a
+  canvas grab off a `blob:` stream and has no http(s) URL at all, so the cast
+  correctly ships with no hero rather than heroing another post's branding.
+
+Both prefer a `tweet-video-poster`, so the ordinary article path (where
+`withThumbnailFallback` may legitimately promote the og:image into the body) is
+untouched. A **photo** feed post has no play card at all (Instagram's feed is
+mostly photos), so both fall back to the post's own lead image — skipping the
+byline avatar, which is the first `<img>` in document order on Instagram and
+would otherwise hero a 32px profile thumbnail. Guarded by
+`tests/extraction/cast-hero-poster.test.ts` and
+`tests/extraction/feed-og-image.test.ts`.
+
+**Two reel-render defects, both measured with `tools/reel-avatar-probe.spec.ts`
+(`REELAV=1 REELAV_HTML=<file>`), which renders captured markup through the REAL
+`.clip-body` stylesheet and reports geometry.** Reason about neither from the
+cascade — the first attempt at each targeted the wrong rule.
+
+- **Avatar overlapped the username / the byline stacked.** Measured against a
+  LIVE capture (`tools/ig-reel-live-capture.spec.ts`, Chrome closed) and
+  rendered as an IMAGE, not a scalar — three hand-built approximations each
+  behaved differently from the real clip, and an `overlapPx` of -8 was reported
+  while the render was still visibly wrong. The real header has THREE flex
+  children: the avatar `<a>`, the username `<div>`, and a third `<div>` holding
+  "N people" plus a location link. Because they are SIBLINGS, no width rule
+  could pull "N people" up beside the name; what broke it was the generic name
+  branch rule (`.dx-header > :not(:first-child)`, which stacks name over handle
+  and sets `flex-wrap: wrap`) turning each into its own line. The reel header is
+  therefore pinned to one content-sized row. Also exclude reels from the bsky
+  float rule: a reel's avatar is deeply nested too, so that rule out-specified
+  the reel's own `float: none` and dropped the avatar under the text.
+- **Media did not lead.** The `.dx-reel-caption` flex exception only applies when
+  the tagger finds a caption column, which needs a direct child holding the prose
+  but NOT the video — it fails on reels nesting both in one wrapper. The rule is
+  now keyed on `.dx-reel` too, which is stamped unconditionally.
+
+**The reel's three-column row (caption | media | rail).** The grid existed but
+never applied: measured with `tools/reel-avatar-probe.spec.ts`, the tracks
+computed correctly (380/781/39px) while `.dx-reel-media` sat at l=24 r=404 —
+identical to the caption, i.e. stacked under it with the rail stranded ~800px to
+the right. Three causes, each needing its own fix:
+
+- `.dx-reel-media` computed `display: inline`, so it was not a grid item at all.
+  The `@mention`/`#hashtag` inline-collapse rule
+  (`.dx-post div:has(> a:only-child)`, `inline !important`) matched it, because a
+  play card IS a div holding exactly one anchor. The reel's three column classes
+  are now excluded from it.
+- The real markup nests one unnamed `<div>` between `.dx-post` and the columns,
+  and that wrapper matched the same collapse rule. Wrappers holding a column are
+  excluded there too and set `display: contents`.
+- Without an explicit `grid-row: 1` the media (whose wrapper is `display:
+  contents`, so it is placed independently) landed in its own row ABOVE the
+  caption and rail.
+
+The media track is `minmax(0, auto)` with `justify-content: start`, not `1fr`: a
+free-expanding middle track left ~300px of dead space between the caption and a
+portrait reel. The byline is `flex: 0 1 auto` + `nowrap` so it shrinks inside its
+own track instead of sliding under the poster — `flex-wrap: wrap` there
+reintroduces the avatar/username overlap (measured overlapPx back to 44).
+
+**Play-in-place must not shrink the video (clip only; a cast has no `dx-*`
+markers, so none of this applies there).** Two independent causes, both measured
+with `REELAV_PLAY=1` on the probe, which clicks the card and reports the frame:
+
+- The media grid track is content-sized, but an **iframe has no intrinsic
+  width**, so a bare `auto` collapsed the player to 118x201px even though its
+  wrapper allowed 590px. The track is `minmax(min(320px, 100%), 1fr)` — the
+  `1fr` matters as much as the floor: content-sizing made the WIDE layout worse
+  than the narrow one (measured 320px of media track at a 1280px viewport but
+  852px at 900px, where the stack collapses to one column), so playing a reel on
+  a big screen gave a SMALLER player than on a small one.
+- `ClipVideoPlayers.tsx` derives the wrapper's inline `max-width` from `capPx`,
+  which is a **HEIGHT** budget (`capPx * boxAr`). Where little height is
+  available — a short viewport, or the narrow single-column stack — it floored
+  at `240 x 0.8 = 192px` while the column was 552px wide. The width now also
+  takes the column's own width into account, bounded BOTH ways: a width-only
+  rule made a portrait reel 1119px tall in a 900px stack.
+
+Both height bounds are **relative, with no absolute ceiling** — the old hard
+`900px` in `capPx` and in `maxByViewport` made the player plateau at 720px wide
+however tall the screen was. What remains is the space the card actually has and
+`innerHeight * 0.82`, so the VISIBLE box tracks the viewport exactly (measured
+738 / 1181 / 1771px at 900 / 1440 / 2160px tall). A cropped embed's iframe is
+`100% + 54px` and shifted up on purpose, so its own `getBoundingClientRect`
+height reads ~54px over budget — that band is clipped by the wrapper, not
+visible overflow; measure the WRAPPER when checking this.
+
+Also: `.dx-reel-media` is `text-align: left`, not `center`, so the shrink-wrapped
+poster and the full-width player occupy the same box and the frame does not jump
+sideways on play. And the narrow-stack `@media` block must set the caption's
+`grid-row` INSIDE the query — as a bare rule it leaked out and silently undid the
+single-row desktop layout.
+
+**An Instagram REEL must ship a play card, not a flat image.** A reel's `<video>`
+is always a `blob:` MSE stream, and Instagram renders its own full-size cover
+frame beside it. `substituteVideosWithPosters` detected that frame and removed
+the video — right (it avoids shipping the same frame twice) but it left the cover
+as a bare `<img>` with no link and no play glyph, so the reel could not be played
+from the clip. All three routes now build the `tweet-video` card: the page's own
+cover frame, the `igResolvePoster` synthesised one, and `tagInstagramReel`'s
+`dx-reel-poster` mark (which the live tagger had only stamped on the *feed*
+path). The href is the singular `/reel/<code>/` form — what `video-embed.ts`
+resolves to an embeddable player. `igCanonicalPostUrl` also honours
+`testPathOverride` now, like every other path reader in the file. Guarded by
+`tests/extraction/instagram-reel-poster.test.ts`, which drives `full-page`:
+under jsdom there is no layout, so an `article` capture of the fixture falls to
+Readability and the `<video>` is stripped before substitution ever runs.
+
 **The grant can be given later.** Declining at onboarding is not final — the
 overlay's Settings drawer shows an "Images" card (`initImagePermissionCard()` in
 `overlay.ts`) whenever the permission is absent, and hides it once granted.

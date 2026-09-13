@@ -1906,11 +1906,17 @@ a { color: inherit; }
    cell's full width while the portrait poster inside it was narrower, and the
    play overlay (absolutely positioned to the card) painted that difference as
    a grey band down the right. */
-.clip-body .dx-post div:has(> a:only-child):not(.dx-header):not(.dx-reply-row):not(.dx-quote):not(.dx-quote-frag),
-.clip-body .dx-post div:has(> div > a:only-child):not(.dx-header):not(.dx-reply-row):not(.dx-quote):not(.dx-quote-frag) {
+/* MEASURED (tools/reel-avatar-probe): `.dx-reel-media` holds exactly one <a>
+   (the play card), so it matched here and computed `display: inline` — it was
+   then not a grid item at all and never took column 2. The grid tracks were
+   right (380/781/39px) while the media measured l=24 r=404, stacked under the
+   caption with the rail stranded ~800px to its right. Exclude the reel's three
+   COLUMN elements; the inline collapse is for @mention/#hashtag wrappers. */
+.clip-body .dx-post div:has(> a:only-child):not(.dx-header):not(.dx-reply-row):not(.dx-quote):not(.dx-quote-frag):not(.dx-reel-media):not(.dx-reel-caption):not(.dx-reel-rail):not(:has(> .dx-reel-media)):not(:has(> .dx-reel-caption)):not(:has(> .dx-reel-rail)),
+.clip-body .dx-post div:has(> div > a:only-child):not(.dx-header):not(.dx-reply-row):not(.dx-quote):not(.dx-quote-frag):not(.dx-reel-media):not(.dx-reel-caption):not(.dx-reel-rail):not(:has(> .dx-reel-media)):not(:has(> .dx-reel-caption)):not(:has(> .dx-reel-rail)) {
   display: inline !important;
 }
-.clip-body .dx-post div:has(> a:only-child):not(.dx-header):not(.dx-reply-row):not(.dx-quote):not(.dx-quote-frag) > a {
+.clip-body .dx-post div:has(> a:only-child):not(.dx-header):not(.dx-reply-row):not(.dx-quote):not(.dx-quote-frag):not(.dx-reel-media):not(.dx-reel-caption):not(.dx-reel-rail):not(:has(> .dx-reel-media)):not(:has(> .dx-reel-caption)):not(:has(> .dx-reel-rail)) > a {
   display: inline !important;
 }
 /* Restore flex containers. Div-soup SPAs set `display:flex` via a stripped CSS
@@ -1960,7 +1966,25 @@ a { color: inherit; }
      video. The media column takes everything left over, so a wider view makes
      the video bigger — which is the point of playing it here rather than on
      the source site. */
-  grid-template-columns: clamp(240px, 32%, 380px) minmax(0, 1fr) auto;
+  /* The media column is sized to CONTENT (the poster shrink-wraps to its own
+     aspect), not `1fr`: a free-expanding middle track left ~300px of dead space
+     between the caption and a portrait reel, pushing the rail to the far edge.
+     `justify-content: start` then keeps the three columns grouped together.
+     The MINIMUM matters: on play-in-place the poster is swapped for an iframe,
+     which has NO intrinsic width, so a bare `auto` track collapsed the player
+     to 118x201px (measured) even though its wrapper allowed 590px. The floor
+     keeps a played video the same size as the poster it replaced. */
+  /* The media track gets a real SHARE of the row, not just the poster's own
+     width. Content-sizing it (`auto`) made the wide layout WORSE than the
+     narrow one: measured, the track was 320px at a 1280px viewport but 852px
+     at 900px (where the stack collapses to one column), so playing a reel on a
+     big screen gave a SMALLER player than on a small one. `minmax` with a
+     percentage floor lets the video grow with the space available, which is
+     the point of playing it here rather than on the source site. */
+  grid-template-columns:
+    clamp(240px, 32%, 380px)
+    minmax(min(320px, 100%), 1fr)
+    auto;
   align-items: start;
   gap: 16px;
   margin: 12px 0;
@@ -1970,22 +1994,49 @@ a { color: inherit; }
    participate in the grid directly. Without this the whole post collapsed into
    a single grid cell and the columns stacked. */
 .clip-body .dx-reel > .dx-post { display: contents; }
+/* MEASURED (tools/reel-avatar-probe) on a LIVE capture: the real markup nests
+   the columns one level deeper than `.dx-post` — `.dx-reel > .dx-post > div >
+   .dx-reel-media`. That unnamed wrapper became the grid item, so the media
+   never reached column 2: the grid tracks computed correctly (380/781/39px)
+   while .dx-reel-media measured l=24 r=404, identical to the caption, i.e.
+   stacked under it with the rail stranded ~800px to the right. Dissolve any
+   wrapper that merely contains a column so the columns themselves are the
+   grid items. */
+.clip-body .dx-reel > .dx-post > div:has(> .dx-reel-media),
+.clip-body .dx-reel > .dx-post > div:has(> .dx-reel-caption),
+.clip-body .dx-reel > .dx-post > div:has(> .dx-reel-rail),
+.clip-body .dx-reel > div:has(> .dx-reel-media),
+.clip-body .dx-reel > div:has(> .dx-reel-caption),
+.clip-body .dx-reel > div:has(> .dx-reel-rail) {
+  display: contents !important;
+}
 /* A floor on the caption column: below roughly this width the byline's
    author/tag links wrap mid-phrase ("2 / people") and the prose reads as a
    ragged sliver. */
-.clip-body .dx-reel-caption { grid-column: 1; min-width: min(240px, 100%); }
+/* All three columns on ONE row. Without an explicit row the media — whose
+   wrapper is `display: contents` and so is placed independently — landed in its
+   own row ABOVE the caption and rail, which read as a stacked video with the
+   byline underneath rather than the source page's single row. */
+.clip-body .dx-reel-caption { grid-column: 1; grid-row: 1; min-width: min(240px, 100%); }
 /* Keep the avatar on the byline's own line: `wrap` let the name/tag links drop
    below the avatar once the column narrowed, so the header read as three
    stacked fragments instead of one row. */
 .clip-body .dx-reel-caption .dx-header { flex-wrap: nowrap; align-items: center; gap: 8px; }
 .clip-body .dx-reel-caption .dx-header > * { min-width: 0; }
-.clip-body .dx-reel-media   { grid-column: 2; min-width: 0; }
+.clip-body .dx-reel-media   { grid-column: 2; grid-row: 1; min-width: 0; }
+/* MEASURED: .dx-reel-media computed `display: inline`, so it was not a grid
+   item at all and never took column 2 — the generic inline-descendant rules in
+   the dx-header block reach it. Pin the three columns block-level. */
+.clip-body .dx-reel-media,
+.clip-body .dx-reel-caption,
+.clip-body .dx-reel-rail { display: block; }
+.clip-body .dx-reel-rail.dx-stats { display: flex; }
 /* The card shrink-wraps to the poster INSIDE a full-width cell. Sizing the
    cell itself with fit-content also stopped the video growing when the column
    got wider; the overlay only needs the CARD to match the image, which
    `width: fit-content` on .tweet-video already does. */
 .clip-body .dx-reel-media .tweet-video { margin-inline: auto; }
-.clip-body .dx-reel-rail    { grid-column: 3; }
+.clip-body .dx-reel-rail    { grid-column: 3; grid-row: 1; }
 /* The rail is a vertical stack of count-labelled action glyphs. It also carries
    .dx-stats (so the cast's markdown rule collapses it to one line), and that
    class is `display: flex` in row direction — so this must win on the axis. */
@@ -2032,7 +2083,10 @@ a { color: inherit; }
   line-height: 0;
   vertical-align: top;
 }
-.clip-body .dx-reel-media { text-align: center; }
+/* Left-align the media column so the POSTER and the PLAYER occupy the same
+   box. With `center` the shrink-wrapped poster floated to the middle of the
+   track while the player filled it, so the frame jumped sideways on play. */
+.clip-body .dx-reel-media { text-align: left; }
 /* A CAST body is markdown, so its play card is a plain anchor wrapping the
    markdown image — it carries no .tweet-video-poster class and no fixed
    width/height attributes. Size that image the same height-bound way as a clip
@@ -2062,8 +2116,11 @@ a { color: inherit; }
    while they fit, and collapse to a single column when the reel's own width
    can no longer hold them — which is the reading column's width, not the
    viewport's, exactly as intended. */
-.clip-body .dx-reel-caption { grid-row: auto; }
 @media (max-width: 900px) {
+  /* Inside the stack the caption leads; outside it, `grid-row: 1` (set above)
+     is what keeps caption/media/rail on ONE row, so this must NOT leak out of
+     the query — as a bare rule it silently undid the single-row layout. */
+  .clip-body .dx-reel-caption { grid-row: 1; }
   .clip-body .dx-reel { grid-template-columns: minmax(0, 1fr); }
   .clip-body .dx-reel-caption { grid-column: 1; grid-row: 1; }
   .clip-body .dx-reel-media   { grid-column: 1; grid-row: 2; }
@@ -2075,6 +2132,11 @@ a { color: inherit; }
     gap: 18px;
   }
   .clip-body .dx-reel-media img { max-height: none; width: 100%; }
+  /* …and the play-in-place frame, which is a separate element from the poster:
+     without this a played reel stayed at the track's collapsed width (measured
+     192px) while the poster it replaced filled the column. */
+  .clip-body .dx-reel-media .clip-video-embed,
+  .clip-body .dx-reel-media .tweet-video { width: 100%; max-width: 100%; }
 }
 
 .clip-body .dx-header {
@@ -2098,31 +2160,105 @@ a { color: inherit; }
    `display: block` header lets the caption prose wrap around and over it, so
    the avatar reads as clipped. A flex row keeps the avatar its own fixed
    column there. */
-.clip-body .dx-header:has(img.dx-avatar) {
+/* MEASURED (tools/reel-avatar-probe): the float is for a DEEPLY-NESTED avatar
+   only. When the avatar is a DIRECT child of the header (Instagram's feed post)
+   the flex row above already works, and floating it instead put the avatar
+   underneath the username — measured overlapPx 44, i.e. the avatar's whole
+   width, with the next link wrapped onto a second line. `:not(:has(> ...))`
+   keeps the float for the bsky shape it was written for. */
+.clip-body .dx-header:has(img.dx-avatar):not(:has(> img.dx-avatar)):not(.dx-reel *):not(.dx-reel-caption *) {
   display: block;
 }
+/* MEASURED (tools/reel-avatar-probe) against a LIVE reel capture: the reel
+   header has THREE flex children — the avatar <a>, the username <div>, and a
+   third <div> holding "N people" plus a location link. They are SIBLINGS, so
+   "6 people" is not inside the username's box and no width rule could pull it
+   up; the generic name-branch rule below (which stacks name over handle, and
+   sets flex-wrap: wrap) turned each into its own line instead. Keep the reel's
+   header one content-sized row. */
+.clip-body .dx-reel .dx-header:has(img.dx-avatar) > *,
+.clip-body .dx-reel-caption .dx-header:has(img.dx-avatar) > * {
+  display: inline-flex !important;
+  /* `1 1 auto`, not `0 0 auto`: with a content-sized media column the byline
+     must SHRINK inside its own column. Fixed-size children overflowed the
+     caption track and slid under the poster, hiding "N people". */
+  flex: 0 1 auto !important;
+  flex-wrap: nowrap !important;
+  align-items: center;
+  width: auto !important;
+  min-width: 0 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The byline row itself must not spill past its grid track. */
+.clip-body .dx-reel .dx-header:has(img.dx-avatar),
 .clip-body .dx-reel-caption .dx-header:has(img.dx-avatar) {
+  max-width: 100%;
+  overflow: hidden;
+  /* NOT `flex-wrap: wrap` — that is what put the avatar back on its own line
+     and dropped the username under it (measured overlapPx 44 again). */
+  flex-wrap: nowrap;
+  column-gap: 8px;
+}
+/* The avatar is the one part that must never shrink. */
+.clip-body .dx-reel .dx-header:has(img.dx-avatar) > *:has(img.dx-avatar),
+.clip-body .dx-reel-caption .dx-header:has(img.dx-avatar) > *:has(img.dx-avatar) {
+  flex: 0 0 auto !important;
+}
+/* …and the wrappers INSIDE each of those children must not re-stack. */
+.clip-body .dx-reel .dx-header:has(img.dx-avatar) > * > div,
+.clip-body .dx-reel-caption .dx-header:has(img.dx-avatar) > * > div {
+  display: inline-flex !important;
+  align-items: center;
+  width: auto !important;
+}
+
+/* `.dx-reel` as well as `.dx-reel-caption`: the caption column is only tagged
+   when the tagger can find a direct child holding the prose but NOT the video,
+   which fails on reel layouts that nest both in one wrapper. The header then
+   fell back to the float and the username ran over the avatar. `.dx-reel` is
+   stamped unconditionally on the post, so it holds either way. */
+.clip-body .dx-reel-caption .dx-header:has(img.dx-avatar),
+.clip-body .dx-reel .dx-header:has(img.dx-avatar) {
   display: flex !important;
   align-items: flex-start;
   gap: 8px;
 }
 .clip-body .dx-reel-caption .dx-header:has(img.dx-avatar) img.dx-avatar,
-.clip-body .dx-reel-caption img.dx-avatar {
+.clip-body .dx-reel-caption img.dx-avatar,
+.clip-body .dx-reel .dx-header:has(img.dx-avatar) img.dx-avatar,
+.clip-body .dx-reel img.dx-avatar {
   /* Beats the generic float below (equal specificity, later in the file) so
      the reel's narrow caption column keeps a real flex row instead of prose
      wrapping around a floated avatar. */
   float: none !important;
   flex: 0 0 auto;
-  margin: 0 !important;
+  /* MEASURED (tools/reel-avatar-probe): when the avatar is nested in wrapper
+     <span>s it shares ONE flex child with the username, so the header's `gap`
+     never separates them and the two met exactly (overlapPx 0). The gap must
+     come from the avatar. Set HERE rather than in a separate later rule: the
+     `:has()` argument in these selectors out-specifies a plain descendant
+     selector, so a new rule appended afterwards silently never won. */
+  margin: 0 8px 0 0 !important;
   /* `contain`, not the generic `cover`: a profile photo is square and crops
      harmlessly, but this account's avatar is a wide logo, and `cover` filled
      the 44px circle by cutting its sides off. */
   object-fit: contain !important;
 }
-.clip-body .dx-header:has(img.dx-avatar) img.dx-avatar {
+/* `:not(.dx-reel *)` — a reel's avatar is ALSO deeply nested (measured: it sits
+   under <a><div><div><span style="width:32px">), so without this exclusion the
+   float rule out-specified the reel's own `float: none` above and the avatar
+   dropped underneath the username: overlapPx 44, the reported overlap. */
+.clip-body .dx-header:has(img.dx-avatar):not(:has(> img.dx-avatar)):not(.dx-reel *):not(.dx-reel-caption *) img.dx-avatar {
   /* !important needed to beat `.clip-body img { float: none !important }`. */
   float: left !important;
   margin: 2px 10px 2px 0 !important;
+}
+/* Direct-child avatar: stays a flex item, just needs the gap. */
+.clip-body .dx-header:has(> img.dx-avatar) > img.dx-avatar {
+  float: none !important;
+  margin: 0 8px 0 0 !important;
 }
 /* With the avatar floated out, the name/handle text in the bsky reply header
    is nested inside wrapper <div>s that carry the live page's inline
@@ -2141,6 +2277,19 @@ a { color: inherit; }
   display: inline;
   max-width: none !important;
   flex-shrink: 1 !important;
+}
+/* MEASURED (tools/reel-avatar-probe) on REAL reel markup: the rule above forces
+   every header descendant inline, but the avatar itself stays `display: block`
+   (44px) — so inside a reel, where the avatar is nested under
+   <a><div><div><span>, it broke the inline flow and the username wrapped onto
+   the NEXT LINE under it (avatar top 357, name top 369, both left 24). That is
+   the reported overlap. Make the avatar's own ancestor chain a row instead. */
+.clip-body .dx-reel .dx-header:has(img.dx-avatar) *:has(img.dx-avatar),
+.clip-body .dx-reel-caption .dx-header:has(img.dx-avatar) *:has(img.dx-avatar) {
+  display: inline-flex !important;
+  align-items: center;
+  vertical-align: middle;
+  width: auto !important;
 }
 /* The avatar branch (first child with an img) shouldn't stretch. */
 .clip-body .dx-header > :first-child {

@@ -4,7 +4,10 @@
 // columns — the video dominating the frame, the author/caption beside it — but
 // in DOM order the caption comes FIRST. A clip is a single column, so the video
 // rendered at the very BOTTOM, the opposite of the source's emphasis where the
-// video IS the post. (The cast was unaffected: it derives its own image order.)
+// video IS the post. The CAST is affected too (reported 2026-09-11: "the video
+// poster is at the bottom, it should be at the top") — its markdown mirrors the
+// captured body's order — and the single /reels/<code>/ permalink never hoisted
+// at all, because maybeNarrowToVisiblePost needs sibling posts to fire.
 //
 // The hoist is deliberately scoped to posts that maybeNarrowToVisiblePost
 // selected. An ARTICLE's images belong exactly where the author placed them, so
@@ -15,7 +18,7 @@
 // caption the way the live page does.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { captureContext } from '@/content/capture';
+import { captureContext, __setTestHostOverride, __setTestPathOverride } from '@/content/capture';
 
 const VW = 1280;
 const VH = 720;
@@ -44,7 +47,11 @@ beforeEach(() => {
   }) as CSSStyleDeclaration) as typeof window.getComputedStyle;
 });
 
-afterEach(() => { window.getComputedStyle = originalGCS; });
+afterEach(() => {
+  window.getComputedStyle = originalGCS;
+  __setTestHostOverride(null);
+  __setTestPathOverride(null);
+});
 
 const CAPTION = 'I know I made the transition between feudalism to capitalism a little murky lol but if you want better clarity then you are gonna have to watch my longer videos.';
 
@@ -86,6 +93,43 @@ describe('feed-post media hoist', () => {
     expect(imgAt, 'media must come BEFORE the caption').toBeLessThan(textAt);
   });
 
+
+  it('leads a SINGLE reel permalink with the media too', async () => {
+    // The /reels/<code>/ route serves ONE reel, so maybeNarrowToVisiblePost —
+    // which needs sibling posts — never fires and the hoist never ran. The
+    // caption led, and because the cast's markdown mirrors that order the
+    // published video poster sat at the BOTTOM of the cast.
+    __setTestHostOverride('www.instagram.com');
+    __setTestPathOverride('/reels/DdIpkEaiXt2/');
+    const post = document.createElement('div');
+    post.className = 'reel';
+    post.innerHTML =
+      // The tagger's anchor manifest must match or applySiteTagger skips it
+      // (graceful degradation) and the generic path drops the media.
+      `<div class="text"><img alt="carol's profile picture" src="https://scontent.cdninstagram.com/a.jpg">` +
+      `<a href="/carol/">carol</a><p>SOLO ${CAPTION}</p></div>` +
+      `<div class="media"><svg aria-label="Audio is muted"></svg>` +
+      `<img alt="cover frame" src="https://scontent.cdninstagram.com/c.jpg">` +
+      `<video src="blob:https://www.instagram.com/x"></video></div>`;
+    document.body.appendChild(post);
+    boxes.set(post, { top: 0, left: 0, w: 1200, h: VH });
+    // Caption LEFT, media BESIDE it — Instagram's desktop reel arrangement.
+    boxes.set(post.querySelector('.text')!, { top: 400, left: 20, w: 300, h: 200 });
+    boxes.set(post.querySelector('p')!, { top: 400, left: 20, w: 300, h: 200 });
+    boxes.set(post.querySelector('.media')!, { top: 0, left: 440, w: 400, h: 700 });
+    boxes.set(post.querySelector('img')!, { top: 0, left: 440, w: 400, h: 700 });
+    boxes.set(post.querySelector('video')!, { top: 0, left: 440, w: 400, h: 700 });
+    boxes.set(post.querySelector('img[alt*="profile"]')!, { top: 400, left: 20, w: 32, h: 32 });
+    boxes.set(post.querySelector('a')!, { top: 400, left: 60, w: 100, h: 20 });
+
+    const cap = await captureContext('article', { smartArticleDetection: false, stripInlineStyles: false });
+    const html = cap.bodyHtml ?? '';
+    const imgAt = html.indexOf('<img');
+    const textAt = html.indexOf('SOLO');
+    expect(imgAt, 'an image is present').toBeGreaterThan(-1);
+    expect(textAt, 'the caption is present').toBeGreaterThan(-1);
+    expect(imgAt, 'media must lead so the CAST heroes it too').toBeLessThan(textAt);
+  });
 
   it('never reorders an ordinary article (hoist is feed-only)', async () => {
     // The regression that matters: an article's images belong exactly where the

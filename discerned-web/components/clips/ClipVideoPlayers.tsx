@@ -148,7 +148,11 @@ export function useClipVideoPlayers(
       const cardTop = card.getBoundingClientRect().top;
       const scroller = card.closest('.clip-body')?.parentElement;
       const available = (scroller?.getBoundingClientRect().bottom ?? window.innerHeight) - cardTop;
-      const capPx = Math.max(240, Math.min(available - 48, window.innerHeight * 0.82, 900));
+      // No absolute ceiling: a 900px cap stopped the player growing on a tall
+      // screen, which is the whole point of playing it here. The bounds that
+      // remain are RELATIVE — the space the card actually has, and a share of
+      // the window so a portrait reel never runs past the viewport.
+      const capPx = Math.max(240, Math.min(available - 48, window.innerHeight * 0.82));
       frame.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
       frame.setAttribute('allowfullscreen', 'true');
       frame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
@@ -214,7 +218,25 @@ export function useClipVideoPlayers(
       // pinned, so capping the width by the poster's ratio would only make the
       // box narrower without giving the embed the height it needs.
       if (!wrap.classList.contains('clip-video-embed--fixed')) {
-        const wrapMaxWidth = Math.round(capPx * boxAr);
+        // capPx is a HEIGHT budget, so this is a height-derived width. When the
+        // height available is small (a short viewport, or the narrow single
+        // column stack where the reel's media row sits low) it floored at
+        // 240 x 0.8 = 192px while the column was 552px wide — the reported
+        // "video shrinks very small" on play. Raise the floor to the column's
+        // own width, but keep BOTH bounds: a width-only rule made a portrait
+        // reel 1119px tall in a 900px-wide stack.
+        // Measure the COLUMN the card sits in (the card itself is shrink-wrapped
+        // to the poster, and `wrap` is not yet in its final parent here).
+        const colEl = card.closest('.dx-reel-media') ?? card.parentElement;
+        const colW = colEl?.getBoundingClientRect().width ?? 0;
+        const byHeight = capPx * boxAr;
+        // The tallest this box may get, whatever the column width allows.
+        // Viewport-relative only — no absolute ceiling, so a tall screen gets a
+        // correspondingly tall player.
+        const maxByViewport = Math.round(window.innerHeight * 0.82 * boxAr);
+        const wrapMaxWidth = Math.round(
+          colW > 0 ? Math.min(Math.max(byHeight, Math.min(colW, maxByViewport)), colW) : byHeight,
+        );
         wrap.style.maxWidth = `${wrapMaxWidth}px`;
       }
       // The governing ratio, for the fullscreen rule to re-derive a width from

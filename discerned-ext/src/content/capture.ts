@@ -3369,7 +3369,88 @@ function withThumbnailFallback(
 function posterFromBody(html: string, current: string | null): string | null {
   const m = /<img[^>]*class="[^"]*tweet-video-poster[^"]*"[^>]*src="([^"]+)"/.exec(html)
     ?? /<img[^>]*src="([^"]+)"[^>]*class="[^"]*tweet-video-poster[^"]*"/.exec(html);
-  return m?.[1] ?? current;
+  if (m) return m[1];
+  // A narrowed feed post dropped its og:image (see feedSafeThumbnail), so a
+  // PHOTO post has no poster to recover — use its own first image, or the clip
+  // would lose its library preview entirely.
+  if (!current && narrowedFromFeed) return firstInlinedImage(html);
+  return current;
+}
+
+/**
+ * Drop a page-level og:image when the capture was narrowed out of a FEED.
+ *
+ * A feed serves many posts under one URL, so `headTagsDescribeCurrentPage`
+ * legitimately passes and og:image becomes the thumbnail — but it describes the
+ * SITE (instagram.com/?hl=en serves a generic branding card), not the post that
+ * was captured. It then wins `pickImageUrl`, which ranks thumbnailUrl ahead of
+ * the post's own imageUrls, and heroes the cast with Instagram's logo.
+ *
+ * Only the DECLARED og:image is dropped; getPageThumbnail's first-<img>
+ * fallback is read from the live DOM and so is genuinely this post's.
+ */
+function feedSafeThumbnail(url: string | null): string | null {
+  if (!url || !narrowedFromFeed) return url;
+  const og = document.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content;
+  return og && url === og ? null : url;
+}
+
+/**
+ * The CAST counterpart of posterFromBody — corrects `thumbnailUrl`, which
+ * pickImageUrl ranks first, so a feed's site-wide og:image can't hero the cast.
+ * A poster with no real http(s) URL (a canvas frame off a blob: stream) drops
+ * it to null: no hero beats another post's branding.
+ */
+export function castImageUrlFromBody(html: string, current: string | null): string | null {
+  const poster = /<img[^>]*class="[^"]*tweet-video-poster[^"]*"[^>]*>/.exec(html)?.[0]
+    ?? /<img[^>]*>/.exec(html.match(/<a[^>]*class="[^"]*tweet-video[^"]*"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? '')?.[0];
+  if (!poster) {
+    // Photo post narrowed out of a feed: no play card, and the site's og:image
+    // was dropped. Hero the post's own first image instead of nothing.
+    if (!current && narrowedFromFeed) return firstRealImageUrl(html);
+    return current;
+  }
+  const real = /data-dx-src="([^"]+)"/.exec(poster)?.[1]
+    ?? (/src="(https?:[^"]+)"/.exec(poster)?.[1] ?? null);
+  return real && isSafeImageSrc(real) ? decodeHtmlAttr(real) : null;
+}
+
+// Clip-preview counterpart of firstRealImageUrl: same avatar/size skipping, but
+// takes the inlined `src` (a data: URI is fine — the clip is stored, not cast).
+function firstInlinedImage(html: string): string | null {
+  for (const tag of html.match(/<img[^>]*>/gi) ?? []) {
+    if (/dx-avatar|profile picture/i.test(tag)) continue;
+    const w = parseInt(/\swidth="(\d+)"/.exec(tag)?.[1] ?? '', 10);
+    const h = parseInt(/\sheight="(\d+)"/.exec(tag)?.[1] ?? '', 10);
+    if (Number.isFinite(w) && Number.isFinite(h) && (w < 150 || h < 150)) continue;
+    const src = /\ssrc="([^"]+)"/.exec(tag)?.[1];
+    if (src && isSafeImageSrc(src)) return src;
+  }
+  return null;
+}
+
+// The post's own lead image, for a feed post with no play card. After inlining
+// the base64 lives in `src` and the true URL in `data-dx-src`, so prefer that.
+// Skips the byline avatar (dx-avatar, or a small/"profile picture" image) —
+// otherwise the cast heroes a 32px profile thumbnail, which on Instagram's feed
+// is the first <img> in document order.
+function firstRealImageUrl(html: string): string | null {
+  for (const tag of html.match(/<img[^>]*>/gi) ?? []) {
+    if (/dx-avatar|profile picture/i.test(tag)) continue;
+    const w = parseInt(/\swidth="(\d+)"/.exec(tag)?.[1] ?? '', 10);
+    const h = parseInt(/\sheight="(\d+)"/.exec(tag)?.[1] ?? '', 10);
+    if (Number.isFinite(w) && Number.isFinite(h) && (w < 150 || h < 150)) continue;
+    const real = /data-dx-src="([^"]+)"/.exec(tag)?.[1]
+      ?? /\ssrc="(https?:[^"]+)"/.exec(tag)?.[1];
+    if (real && isSafeImageSrc(real)) return decodeHtmlAttr(real);
+  }
+  return null;
+}
+
+// Attribute values are HTML-escaped when data-dx-src is written; undo that so
+// the cast publishes the URL the page actually serves.
+function decodeHtmlAttr(v: string): string {
+  return v.replace(/&quot;/g, '"').replace(/&amp;/g, '&');
 }
 
 function censusOf(root: Element | DocumentFragment): string {
@@ -3475,7 +3556,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     }
   }
 
-  const thumbnailUrl = getPageThumbnail();
+  const thumbnailUrl = feedSafeThumbnail(getPageThumbnail());
   const inlinedThumbnail = thumbnailUrl ? await inlineImage(thumbnailUrl) : null;
 
   // Tier 1: semantic article element — preserves images at their correct positions.
@@ -3515,8 +3596,8 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     substituteStarRatings(clone);
     await substituteEmbeddedTweets(clone, harvestedTweets);
     substituteVideoEmbeds(clone);
-    // Feed posts only: lead with the media when the source laid it out
-    // above/beside the caption (no-op unless markMediaForHoist marked it).
+    // Feed posts and Instagram reels: lead with the media when the source laid
+    // it out above/beside the caption (no-op unless markMediaForHoist marked it).
     hoistMarkedMedia(clone);
     tagSemanticStructure(clone);
     census.at('preSanitise', clone);
@@ -3541,7 +3622,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       bodyHtml: inlined,
       bodyText: proseText(tier1BodyRoot, imageUrls),
       thumbnail: posterFromBody(inlined, inlinedThumbnail),
-      thumbnailUrl,
+      thumbnailUrl: castImageUrlFromBody(inlined, thumbnailUrl),
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
   }
@@ -3612,8 +3693,8 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     substituteStarRatings(clone);
     await substituteEmbeddedTweets(clone, harvestedTweets);
     substituteVideoEmbeds(clone);
-    // Feed posts only: lead with the media when the source laid it out
-    // above/beside the caption (no-op unless markMediaForHoist marked it).
+    // Feed posts and Instagram reels: lead with the media when the source laid
+    // it out above/beside the caption (no-op unless markMediaForHoist marked it).
     hoistMarkedMedia(clone);
     tagSemanticStructure(clone);
     census.at('preSanitise', clone);
@@ -3636,7 +3717,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       bodyHtml: inlined,
       bodyText: proseText(layoutBodyRoot, imageUrls),
       thumbnail: posterFromBody(inlined, inlinedThumbnail),
-      thumbnailUrl,
+      thumbnailUrl: castImageUrlFromBody(inlined, thumbnailUrl),
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
   }
@@ -3667,7 +3748,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       bodyHtml: inlined,
       bodyText,
       thumbnail: posterFromBody(inlined, inlinedThumbnail),
-      thumbnailUrl,
+      thumbnailUrl: castImageUrlFromBody(inlined, thumbnailUrl),
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
   }
@@ -5349,12 +5430,23 @@ interface SiteTagger_Entry {
 // Each tagger scopes the capture to the post nearest the top of the viewport by
 // returning it as the capture root, and stamps dx-* markers on its parts.
 
+// Set when a tagger narrowed a multi-post feed to the one visible post. The
+// page's og:image then belongs to the SITE (Instagram's login card), not to the
+// captured post, so it must not become the clip preview or the cast hero.
+// Reset per capture by resetFeedNarrowing().
+let narrowedFromFeed = false;
+
+function resetFeedNarrowing(): void { narrowedFromFeed = false; }
+
 /**
  * Pick the feed post the user is looking at: the one covering the most of the
  * viewport, preferring posts whose top edge is at or above the fold. Shared by
  * the three social taggers, whose feeds are all vertical column-card lists.
  */
 function pickVisibleFeedPost(posts: Element[]): Element | null {
+  // A feed shows many posts under ONE page URL, so the page-level og:image
+  // describes the site, not this post — see narrowedFromFeed.
+  if (posts.length > 1) narrowedFromFeed = true;
   const vw = window.innerWidth, vh = window.innerHeight;
   if (!posts.length || vw <= 0 || vh <= 0) return null;
   let best: Element | null = null;
@@ -5463,11 +5555,17 @@ function tagInstagramReel(root: Document | Element): Element | void {
   {
     let scopeEl: Element = visible;
     for (let i = 0; i < 11 && scopeEl.parentElement; i++) scopeEl = scopeEl.parentElement;
-    const coverFrame = Array.from(scopeEl.querySelectorAll('img')).some(img => {
+    const coverFrame = Array.from(scopeEl.querySelectorAll('img')).find(img => {
       const r = img.getBoundingClientRect();
       return r.width >= 150 && r.height >= 150;
-    });
-    if (coverFrame) appendClass(visible, 'dx-excl');
+    }) ?? null;
+    if (coverFrame) {
+      appendClass(visible, 'dx-excl');
+      // The <video> is dropped, so this frame is the ONLY media left. Mark it
+      // as the poster or postCloneInstagram finds nothing and the reel ships as
+      // a flat, unclickable image with no way to play it.
+      appendClass(coverFrame, 'dx-reel-poster');
+    }
   }
 
   const avatar = post.querySelector('img[alt*="profile picture" i]');
@@ -5536,6 +5634,13 @@ function tagInstagramReel(root: Document | Element): Element | void {
       appendClass(rail, 'dx-stats');
     }
   }
+
+  // Instagram lays a reel out with the media BESIDE the caption (media centre,
+  // caption left), so the poster follows the caption in DOM order and the CAST
+  // — whose markdown mirrors that order — put the video at the BOTTOM. Hoisting
+  // is measured on the live layout here, applied to the clone by
+  // hoistMarkedMedia. Only the feed path called this before.
+  markMediaForHoist(post);
 
   // Return the PARENT, not `post`: the capture loop emits the returned root's
   // innerHTML, so returning `post` would shed its own `dx-reel` grid class and
@@ -5611,7 +5716,8 @@ function postCloneInstagram(clone: Element): void {
  * only the live URL can be trusted.
  */
 function igCanonicalPostUrl(): string | null {
-  const m = window.location.pathname.match(/^\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/);
+  const path = testPathOverride ?? window.location.pathname;
+  const m = path.match(/^\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/);
   if (!m) return null;
   const kind = m[1] === 'p' ? 'p' : m[1] === 'tv' ? 'tv' : 'reel';
   return `https://www.instagram.com/${kind}/${m[2]}/`;
@@ -6552,6 +6658,7 @@ function applySiteTagger(): boolean {
   siteTaggerActive = false;
   siteTaggerRoot = null;
   siteTaggerPostClone = null;
+  resetFeedNarrowing();
   const host = testHostOverride ?? window.location.hostname;
   for (const t of SITE_TAGGERS) {
     if (t.match(host)) {
@@ -8005,6 +8112,22 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
         return Number.isFinite(w) && Number.isFinite(h) && w >= 150 && h >= 150;
       });
       if (existing) {
+        // The page's own cover frame stays, but it is the ONLY media left once
+        // the video goes — so make it click-to-play rather than a flat image
+        // (the reported "reel clip shows no main photo / can't be played").
+        const existingHref = igCanonicalPostUrl();
+        if (existingHref && !existing.closest('a.tweet-video')) {
+          appendClass(existing, 'tweet-video-poster');
+          const a = document.createElement('a');
+          a.className = 'tweet-video';
+          a.setAttribute('href', existingHref);
+          existing.parentElement?.insertBefore(a, existing);
+          a.appendChild(existing);
+          const play = document.createElement('div');
+          play.className = 'tweet-video-play';
+          play.textContent = '▶';
+          a.appendChild(play);
+        }
         (wrapper ?? video).remove();
         return;
       }
@@ -8018,6 +8141,23 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
         // without this the poster survives in the clip but vanishes from the
         // cast — which is exactly "the cast has no image".
         img.setAttribute('data-dx-src', igPoster);
+        // Wrap in a play card so the reel is click-to-play like every other
+        // video site, instead of a flat image. The href is the reel permalink;
+        // video-embed.ts resolves it to an embeddable player.
+        const igHref = igCanonicalPostUrl();
+        if (igHref) {
+          img.className = 'tweet-video-poster';
+          const a = document.createElement('a');
+          a.className = 'tweet-video';
+          a.setAttribute('href', igHref);
+          a.appendChild(img);
+          const play = document.createElement('div');
+          play.className = 'tweet-video-play';
+          play.textContent = '▶';
+          a.appendChild(play);
+          (wrapper ?? video).replaceWith(a);
+          return;
+        }
         (wrapper ?? video).replaceWith(img);
         return;
       }
