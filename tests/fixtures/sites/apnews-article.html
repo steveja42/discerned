@@ -16,6 +16,19 @@
   .vf-comment { padding: 12px 0; border-top: 1px solid #ddd; }
   .vf-comment p { font-size: 15px; line-height: 1.5; }
   header, nav, footer, aside { display: block; }
+  /* Leading video player + "More Videos" playlist rail, as AP renders above
+     the story. The rail's thumbnails are UNRELATED videos. */
+  .VideoPlayer { width: 720px; }
+  .VideoPlayer-controls { height: 28px; }
+  .PlaylistRail { width: 720px; }
+  .PlaylistRail-item { display: block; margin: 6px 0; }
+  .PlaylistRail-item img { width: 320px; height: 180px; }
+  /* Photo carousel: a fixed-height track whose slides are absolutely
+     positioned at left:N00%, so only the active one is on screen. */
+  .Carousel { position: relative; width: 720px; height: 480px; overflow: hidden; }
+  .Carousel-track { position: relative; width: 100%; height: 100%; }
+  .Carousel-slide { position: absolute; top: 0; width: 100%; }
+  .Carousel-slide img { width: 720px; height: 420px; }
 </style>
 </head>
 <body>
@@ -26,6 +39,55 @@
 
   <main class="Page-main" data-module data-padding="none">
     <div class="Page-storyBody">
+      <!-- Leading VIDEO player + "More Videos" playlist rail. AP renders this
+           ABOVE the story; its thumbnails are unrelated videos, so a clip that
+           keeps it buries the headline and byline under thousands of pixels. -->
+      <div class="VideoPlayer" data-module="video-player">
+        <video poster="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="720" height="405"></video>
+        <div class="VideoPlayer-controls"><button aria-label="Replay"></button><button aria-label="Next"></button><button aria-label="Mute"></button><span>00:00</span><span>00:42</span></div>
+      </div>
+      <div class="PlaylistRail" data-module="playlist">
+        <h3 class="PlaylistRail-title">More Videos</h3>
+        <a class="PlaylistRail-item" href="/video/first-day-of-school-in-ukraine"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="320" height="180" alt="First day of school in Ukraine"><span>First day of school in Ukraine</span></a>
+        <a class="PlaylistRail-item" href="/video/penguins-get-a-new-enclosure"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="320" height="180" alt="Penguins get a new enclosure"><span>Penguins get a new enclosure</span></a>
+        <a class="PlaylistRail-item" href="/video/kremlin-meeting-on-energy-talks"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="320" height="180" alt="Kremlin meeting on energy talks"><span>Kremlin meeting on energy talks</span></a>
+        <a class="PlaylistRail-item" href="/video/police-chief-briefs-reporters"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="320" height="180" alt="Police chief briefs reporters"><span>Police chief briefs reporters</span></a>
+        <a class="PlaylistRail-item" href="/video/mayor-responds-to-the-ruling"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="320" height="180" alt="Mayor responds to the ruling"><span>Mayor responds to the ruling</span></a>
+        <a class="PlaylistRail-item" href="/video/ap-newsminute"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="320" height="180" alt="AP Newsminute"><span>AP Newsminute</span></a>
+        <a class="PlaylistRail-item" href="/video/lawmakers-gather-for-a-vote"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="320" height="180" alt="Lawmakers gather for a vote"><span>Lawmakers gather for a vote</span></a>
+      </div>
+
+      <!-- Photo carousel. Only the left:0% slide is on screen; the other five
+           sit at left:100%..500%, entirely outside the track. -->
+      <div class="Carousel" data-module="carousel">
+        <div class="Carousel-track">
+          <div class="Carousel-slide" style="left: 0%;">
+            <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="720" height="420" alt="At least 3 killed, 45 injured in Russian airstrikes in Zaporizhzhia, Ukraine officials say">
+            <div class="Carousel-caption"><span>1 of 6<span>&nbsp;|&nbsp;</span></span><span><p>At least 3 killed, 45 injured in Russian airstrikes in Zaporizhzhia, Ukraine officials say</p></span></div>
+          </div>
+          <div class="Carousel-slide" style="left: 100%;">
+            <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="720" height="420" alt="A residential building is seen in fire following a Russian air attack in Kramatorsk, Donetsk region, Ukraine.">
+            <div class="Carousel-caption"><span>2 of 6<span>&nbsp;|&nbsp;</span></span><span><p>A residential building is seen in fire following a Russian air attack in Kramatorsk, Donetsk region, Ukraine.</p></span></div>
+          </div>
+          <div class="Carousel-slide" style="left: 200%;">
+            <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="720" height="420" alt="Firefighters put out a fire in a residential building following a Russian air attack in Pavlohrad, Ukraine.">
+            <div class="Carousel-caption"><span>3 of 6<span>&nbsp;|&nbsp;</span></span><span><p>Firefighters put out a fire in a residential building following a Russian air attack in Pavlohrad, Ukraine.</p></span></div>
+          </div>
+          <div class="Carousel-slide" style="left: 300%;">
+            <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="720" height="420" alt="Firefighters put out a fire following a Russian air attack in Pavlohrad, Dnipropetrovsk region, Ukraine.">
+            <div class="Carousel-caption"><span>4 of 6<span>&nbsp;|&nbsp;</span></span><span><p>Firefighters put out a fire following a Russian air attack in Pavlohrad, Dnipropetrovsk region, Ukraine.</p></span></div>
+          </div>
+          <div class="Carousel-slide" style="left: 400%;">
+            <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="720" height="420" alt="People gather to denounce the decision to dismiss the defense minister, Kyiv, Ukraine.">
+            <div class="Carousel-caption"><span>5 of 6<span>&nbsp;|&nbsp;</span></span><span><p>People gather to denounce the decision to dismiss the defense minister, Kyiv, Ukraine.</p></span></div>
+          </div>
+          <div class="Carousel-slide" style="left: 500%;">
+            <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="720" height="420" alt="Residents look at their ruined home following a Russian air guided bomb strike in Zaporizhzhia, Ukraine.">
+            <div class="Carousel-caption"><span>6 of 6<span>&nbsp;|&nbsp;</span></span><span><p>Residents look at their ruined home following a Russian air guided bomb strike in Zaporizhzhia, Ukraine.</p></span></div>
+          </div>
+        </div>
+      </div>
+
       <h1 class="Page-headline">Russia launches massive drone and missile barrage across Ukraine</h1>
       <div class="Page-authors">
         <span class="Link">By ILLIA NOVIKOV and HANNA ARHIROVA</span>

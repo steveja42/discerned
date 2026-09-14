@@ -28,8 +28,38 @@
 .PARAMETER Resume
   Retry only domains not yet captured ok. Use for the recovery passes.
 
+.PARAMETER Attended
+  Run the ATTENDED pass (corpus-sweep-manual) instead of the automated sweep:
+  each domain opens in a visible window and waits for you to clear its gate.
+  Requires -Only (there is no sensible default set to sit and watch).
+
+  Use this for domains the automated passes keep skipping as gated. The gate
+  wait is per-site and ends the moment the page is stably gate-free, so a site
+  you clear in five seconds costs five seconds. If you CAN'T clear one, just
+  close the tab — that is the documented escape hatch, and the run moves
+  straight to the next domain rather than burning the rest of the wait.
+
+  Never takes a backup (it captures a handful of domains, not a run) and does
+  not accept -Resume, whose "skip what's already ok" logic is meaningless for
+  an explicitly-named list.
+
+.PARAMETER WaitSecs
+  Attended only: per-site ceiling on the gate wait (SWEEP_MANUAL_WAIT_MS).
+  Default 120. A ceiling, not a fixed cost.
+
+.PARAMETER Window
+  Attended only: headed window geometry (SWEEP_WINDOW). Default 'max'
+  (maximised) so the window stops moving between runs — Chrome otherwise
+  places it itself on every launch. Also accepts '<W>x<H>' or '<W>x<H>+<X>+<Y>';
+  pass '' to leave placement to Chrome.
+
+  Note this also drops Playwright's fixed 1280x720 viewport (the page then
+  fills the window), which is why it is opt-in and NOT used by the automated
+  passes — their pixel baselines depend on that exact viewport.
+
 .PARAMETER Only
-  Comma-separated domain subset (passed through as SWEEP_ONLY).
+  Comma-separated domain subset (passed through as SWEEP_ONLY, or
+  SWEEP_MANUAL_ONLY under -Attended).
 
 .PARAMETER Gap
   Seconds between domains (SWEEP_GAP). Default 20 for a full run; raise to
@@ -46,6 +76,10 @@
   # Recovery pass over whatever was blocked, paced wider.
   powershell -ExecutionPolicy Bypass -File scripts/corpus-sweep-run.ps1 -Resume -Gap 45 -Foreground
 
+.EXAMPLE
+  # Attended pass: sit with it and clear the gates by hand. Close a tab to skip.
+  powershell -ExecutionPolicy Bypass -File scripts/corpus-sweep-run.ps1 -Attended -Only discogs,producthunt
+
 .NOTES
   Uses `powershell` (Windows PowerShell 5.1), not `pwsh` — PowerShell 7 is not
   installed on this machine, so a pwsh invocation fails with CommandNotFound.
@@ -53,6 +87,9 @@
 [CmdletBinding()]
 param(
   [switch]$Resume,
+  [switch]$Attended,
+  [int]$WaitSecs = 120,
+  [string]$Window = 'max',
   [string]$Only = '',
   [int]$Gap = 20,
   # Extra seconds on top of -Gap for the HEADED passes, which cluster the
@@ -125,6 +162,80 @@ try {
   Warn 'No web app on http://localhost:3000 — the clip/cast render steps will fail.'
   Warn 'Start it with: cd discerned-web; pnpm dev'
   exit 1
+}
+
+# ── Attended pass ───────────────────────────────────────────────────────────
+# Runs corpus-sweep-manual, which opens each domain in a visible window and
+# waits for the user to clear its gate. Placed BEFORE the backup step and
+# exiting from here, so an attended pass can never snapshot the run folder:
+# it captures a named handful, and a backup is for a full sweep only.
+#
+# Note this is a DIFFERENT spec from the automated sweep, not the same one with
+# SWEEP_UNATTENDED unset. corpus-sweep's own gate wait tops out at 20 polls and
+# its passes are built around not blocking; corpus-sweep-manual is the one that
+# waits per-site, auto-solves Press & Hold without stealing focus, and treats a
+# closed tab as "skip to the next domain".
+if ($Attended) {
+  if (-not $Only) {
+    Warn '-Attended requires -Only <domains> - there is no default set worth sitting and watching.'
+    Warn 'Get the currently-gated list from: node tests/e2e/tools/review-queue.mjs'
+    exit 1
+  }
+  if ($Resume) {
+    Warn '-Attended cannot be combined with -Resume (which skips already-ok domains;'
+    Warn 'an explicitly-named attended list is the point). Drop -Resume.'
+    exit 1
+  }
+
+  Step "Capture - ATTENDED (visible window, you clear the gates): $Only"
+  Write-Host '  Clear each gate in the window as it appears.' -ForegroundColor Cyan
+  Write-Host '  Can''t clear one? CLOSE THE TAB - it skips straight to the next domain.' -ForegroundColor Cyan
+  Write-Host "  Per-site wait ceiling: $WaitSecs s (ends early the moment the page is clear)." -ForegroundColor Cyan
+  Write-Host ''
+
+  $env:SWEEP_MANUAL = '1'
+  $env:SWEEP_MANUAL_ONLY = $Only
+  $env:SWEEP_MANUAL_WAIT_MS = "$($WaitSecs * 1000)"
+  # Maximise the window for an attended pass, since you are looking at it and
+  # clicking in it. Chrome otherwise re-places the window on every launch, so it
+  # keeps moving between runs. Override with -Window '1600x1000+0+0', or
+  # -Window '' to leave placement to Chrome.
+  if ($null -ne $Window -and $Window -ne '') { $env:SWEEP_WINDOW = $Window }
+  else { Remove-Item Env:\SWEEP_WINDOW -ErrorAction SilentlyContinue }
+
+  $log = Join-Path $repo 'test-output\sweep-attended.log'
+  Remove-Item $log -ErrorAction SilentlyContinue
+  # Always foreground: the entire point is that you are watching this window.
+  #
+  # NO `2>&1` here, and $ErrorActionPreference is relaxed for the call. Under
+  # PS 5.1, redirecting a NATIVE command's stderr wraps each line in an
+  # ErrorRecord (NativeCommandError); with ErrorActionPreference='Stop' that is
+  # TERMINATING, so the script died on Playwright's harmless "NO_COLOR is
+  # ignored" warning — observed killing an attended run after 2 of 5 domains,
+  # with the remaining 3 never attempted. Playwright's stderr still reaches the
+  # console; it just isn't teed into the log.
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  pnpm exec playwright test -c tests/e2e/playwright.config.ts --project=corpus-sweep-manual |
+    Tee-Object -FilePath $log
+  $ErrorActionPreference = $prevEap
+
+  Step 'Attended capture done - slicing for review'
+  # Same pre-slice as the -Foreground path: a raw clip PNG downscales ~4x on
+  # read and its text is unreadable, so slice before handing it to a reviewer.
+  $captured = ($Only -split ',') |
+    ForEach-Object { $_.Trim() } |
+    Where-Object { $_ -and (Test-Path (Join-Path $repo "test-output\corpus-sweep-run\$_--2-clip.png")) }
+  if ($captured) {
+    $domainArg = ($captured -join ',')
+    python3 tests/e2e/tools/slice-clip.py $domainArg | Out-Null
+    python3 tests/e2e/tools/slice-clip.py $domainArg --cast | Out-Null
+    Ok "Sliced: $domainArg"
+  } else {
+    Warn 'No clips captured - every domain was gated or skipped.'
+  }
+  node tests/e2e/tools/review-queue.mjs --stats
+  exit 0
 }
 
 # ── Backup ──────────────────────────────────────────────────────────────────

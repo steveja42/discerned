@@ -61,6 +61,35 @@ export const EXTENSION_PATH = resolve(__dirname, '..', '..', '..', 'discerned-ex
 // Subdirs named 'test', 'medium', etc. let specs share login state across runs.
 const PROFILES_ROOT = resolve(__dirname, '..', '..', '..', '.vscode', 'browser-test-profiles');
 
+/**
+ * Chrome window flags from SWEEP_WINDOW, for headed runs.
+ *
+ * 'max' maximises; '<W>x<H>' sets a size; '<W>x<H>+<X>+<Y>' also positions it.
+ * Unset returns [] — Chrome places the window as it always has, so nothing
+ * changes for runs that don't opt in.
+ */
+function windowArgs(): string[] {
+  const spec = (process.env.SWEEP_WINDOW ?? '').trim();
+  if (!spec) return [];
+  if (/^max(imized)?$/i.test(spec)) return ['--start-maximized'];
+  const m = /^(\d+)x(\d+)(?:\+(-?\d+)\+(-?\d+))?$/.exec(spec);
+  if (!m) return [];
+  const out = [`--window-size=${m[1]},${m[2]}`];
+  if (m[3] !== undefined) out.push(`--window-position=${m[3]},${m[4]}`);
+  return out;
+}
+
+/**
+ * Playwright's fixed 1280x720 `viewport` overrides the OS window size, so
+ * --start-maximized alone gives a maximised window with a small page inside it.
+ * `viewport: null` makes the page fill the window instead. Only when the caller
+ * opted into SWEEP_WINDOW — otherwise the fixed viewport stays, since pixel
+ * baselines and clip screenshots depend on a deterministic 1280x720.
+ */
+function viewportFor(): { width: number; height: number } | null {
+  return process.env.SWEEP_WINDOW ? null : { width: 1280, height: 720 };
+}
+
 export interface ExtensionContext {
   ctx: BrowserContext;
   userDataDir: string;
@@ -229,6 +258,14 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
     // real Chrome flags it as unsupported. Only useful for bundled Chromium.
     ...(opts.channel ? [] : ['--exclude-switches=enable-automation']),
     '--disable-infobars',
+    // Window geometry for HEADED runs. Chrome otherwise places the window
+    // itself on every launch, so an attended pass keeps reappearing somewhere
+    // new and a maximised window never stays maximised — a real annoyance when
+    // you are sitting there clearing gates by hand.
+    //   SWEEP_WINDOW=max            → start maximised
+    //   SWEEP_WINDOW=<W>x<H>[+X+Y]  → explicit size, optional position
+    // Headless is unaffected (there is no window to place).
+    ...(headed ? windowArgs() : []),
   ];
 
   let ctx: BrowserContext;
@@ -268,7 +305,7 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
         '--no-sandbox',
       ],
       args,
-      viewport: { width: 1280, height: 720 },
+      viewport: viewportFor(),
     });
   } else {
     ctx = await chromium.launchPersistentContext(userDataDir, {
@@ -281,9 +318,11 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
       userAgent: REAL_UA,
       locale: 'en-US',
       args,
-      viewport: { width: 1280, height: 720 },
+      viewport: viewportFor(),
     });
   }
+
+  // (window geometry is applied via SWEEP_WINDOW_* in `args` above)
 
   // Hide the most common automation tells from page JS:
   //   - navigator.webdriver should be undefined (Playwright sets it to true)

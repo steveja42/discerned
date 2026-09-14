@@ -20,9 +20,20 @@ import { readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_ROOT = resolve(__dirname, '..', '..', '..', 'test-output');
+
+/**
+ * md5 of a clip PNG, or null when it does not exist. Used to prove a capture
+ * is byte-identical across runs, which outranks any verdict diff.
+ */
+function clipHash(p) {
+  try { return createHash('md5').update(readFileSync(p)).digest('hex'); }
+  catch { return null; }
+}
+
 
 // --run-dir (or SWEEP_RUN_DIR) builds the gallery for a BACKUP folder instead
 // of the live run — the same flag review-queue.mjs, record-verdict.mjs and
@@ -116,6 +127,7 @@ function build() {
   let prevLabel = '';
   let prevIsMerged = false;
   let prevFindings = {};
+  const prevSameImage = new Set();
   try {
     const backups = readdirSync(OUT_ROOT)
       .filter(d => d.startsWith('corpus-sweep-run--backup-'))
@@ -196,6 +208,21 @@ function build() {
           readFileSync(resolve(dir, 'visual-findings.json'), 'utf8'),
         ).findings ?? {};
       } catch { /* baseline predates verdict tracking */ }
+
+      // Hash each side's CLIP image. A byte-identical clip is decisive: the
+      // capture did not change, so a verdict that moved clean→flaw is a review
+      // -standard difference, never a capture regression. Without this the
+      // `bothStamped` test alone mislabels them — measured 2026-09-13: of 28
+      // clean→flaw pairs with both sides stamped, FIFTEEN had byte-identical
+      // clips (bbc-news, wikipedia-en, github-repo, python-docs, …), all of
+      // them shown to the user as "REGRESSED clean→flaw". A stamp means someone
+      // reviewed it, not that they applied the same standard; the pixels are
+      // the only evidence that settles it.
+      for (const site of Object.keys(prev)) {
+        const a = clipHash(resolve(dir, `${site}--2-clip.png`));
+        const b = clipHash(resolve(RUN_DIR, `${site}--2-clip.png`));
+        if (a && b && a === b) prevSameImage.add(site);
+      }
     }
   } catch { /* no backups — regression sort degrades to "no data" */ }
 
@@ -236,6 +263,16 @@ function build() {
     if (finding?.regression === 'regressed') {
       return { kind: 'stated-regression', rank: -1, delta: 0 };
     }
+    // …and the SAME authority in the other direction. A reviewer who opened both
+    // images and recorded `regression: "none"` has answered exactly the question
+    // the verdict-diff below only guesses at, so an explicit "no" must outrank it
+    // too. Honouring only "regressed" was asymmetric: lastfm, imdb-name and
+    // newsweek were each confirmed against the baseline image (lastfm's
+    // brown/olive unreadable text is plainly IN the baseline that was filed
+    // `clean`), marked `none`, and still rendered as "REGRESSED clean→flaw".
+    // Not an early return: it must not mask a real COMPOSITE jump, only the
+    // verdict-diff inference below, which is the part it actually answers.
+    const reviewerSaysNo = finding?.regression === 'none';
 
     // NEXT: the visual verdict — a judgment about the CLIP, which is what a
     // capture regression actually means.
@@ -260,7 +297,39 @@ function build() {
     const sev = { clean: 0, flaw: 1, critical: 2 };
     const comparable = pv in sev && nv in sev;
     const bothStamped = !!pf?.reviewedAt && !!nf?.reviewedAt;
-    if (comparable && sev[nv] > sev[pv]) {
+    if (comparable && sev[nv] > sev[pv] && !reviewerSaysNo) {
+      // A BYTE-IDENTICAL clip settles it: the capture is unchanged, so the
+      // verdict moved because the standard did, not because anything broke.
+      // This outranks `bothStamped` — a stamp says someone reviewed it, not
+      // that they applied the same standard, and both passes here were AI
+      // review of differing strictness.
+      if (prevSameImage.has(site)) {
+        return { kind: 'verdict-standard', rank: 5, delta: 0, from: pv, to: nv };
+      }
+      // SCOPE: a regression needs a WORSE CAPTURE than last time, judged on the
+      // same surface. When the new verdict is driven by a surface the baseline
+      // never reviewed — typically `where: "cast"` against a clip-only baseline
+      // — there is no prior judgment of that surface to have regressed FROM.
+      // It is a first-time finding, so it must not be reported as a regression.
+      // Measured 2026-09-13: 7 of the 26 remaining REGRESSED cards read
+      // "Clip is clean; on the cast …" (aws-blog, chosun, github-pr, huffpost,
+      // kotaku, mdn, smashingmagazine, techcrunch, theatlantic) — the clip was
+      // still clean and only the newly-reviewed cast carried the flaw.
+      const scope = (w) => (w === 'both' || w === 'clip+cast' ? 'both' : w || 'clip');
+      if (scope(nf.where) !== 'both' && scope(pf.where) !== scope(nf.where)) {
+        return { kind: 'verdict-newscope', rank: 5, delta: 0, from: pv, to: nv, surface: scope(nf.where) };
+      }
+      // CO-REVIEWED: both verdicts written on the same DAY are one review
+      // session that happened to cover both folders — never a run-over-run
+      // comparison, so a difference between them is the reviewer's standard
+      // moving mid-session, not the capture changing. Measured 2026-09-13: all
+      // three REGRESSED cards a human spot-checked (lastfm, imdb-name,
+      // newsweek) were stamped 2026-09-09 on BOTH sides, and lastfm's
+      // "brown/olive background, unreadable dark text" was plainly present in
+      // the baseline image that had been filed `clean`.
+      if (pf.reviewedAt.slice(0, 10) === nf.reviewedAt.slice(0, 10)) {
+        return { kind: 'verdict-coreviewed', rank: 5, delta: 0, from: pv, to: nv };
+      }
       return bothStamped
         ? { kind: 'verdict-worse', rank: 0, delta: 0, from: pv, to: nv }
         : { kind: 'verdict-recheck', rank: 1, delta: 0, from: pv, to: nv };
@@ -298,6 +367,7 @@ function build() {
       regDelta: reg.delta,
       regFrom: reg.from ?? '',
       regTo: reg.to ?? '',
+      regSurface: reg.surface ?? '',
       prevComposite: prev[site]?.status === 'ok' ? (prev[site].scores?.composite ?? null) : null,
       prevStatus: prev[site]?.status ?? null,
       mtime: e.mtime,
@@ -394,6 +464,14 @@ function build() {
       // the image. "recheck clean→flaw" read like a regression claim; this says
       // what it actually is.
       'verdict-recheck': `verdict differs (was ${d.regFrom}, unverified)`,
+      // Same pixels, different verdict — say so plainly rather than implying a
+      // capture change. Ranked with the "better" tier so it sorts well below
+      // every real capture change.
+      'verdict-standard': `same image, stricter review (was ${d.regFrom})`,
+      // First look at this surface — no prior judgment of it to regress from.
+      'verdict-newscope': `${d.regSurface || 'cast'} reviewed first time (clip was ${d.regFrom})`,
+      // Both verdicts from one review session — a standard difference, not a run diff.
+      'verdict-coreviewed': `re-reviewed same session (was ${d.regFrom})`,
       'verdict-better': `improved ${d.regFrom}→${d.regTo}`,
       worse: `score +${d.regDelta.toFixed(3)}`,
       better: `score ${d.regDelta.toFixed(3)}`,
@@ -403,7 +481,16 @@ function build() {
       wasskip: `loaded (was skip)`,
       new: `new`,
     }[d.reg] ?? d.reg;
-    return `<span class="reg reg-${d.reg}" title="vs previous run">${label}</span>`;
+    // Every card that CLAIMS a change gets a link into the baseline gallery's
+    // own card for the same site, so the claim is checkable in one click
+    // instead of hunting the right backup folder by hand. Previously only a
+    // reviewer-stated regression carried one, which left the gallery-COMPUTED
+    // verdict-worse cards — the ones a reviewer most needs to verify — with no
+    // way back to the before-image.
+    const wantsBefore = ['stated-regression', 'verdict-worse', 'verdict-recheck',
+      'verdict-standard', 'verdict-newscope', 'verdict-coreviewed', 'verdict-better', 'worse', 'better'].includes(d.reg);
+    return `<span class="reg reg-${d.reg}" title="vs previous run">${label}</span>`
+      + (wantsBefore ? baselineLink(d.site) : '');
   };
 
   // Clickable overview rows. Scored domains link to their detail view; skip rows
@@ -528,6 +615,10 @@ function build() {
   .reg-verdict-worse   { color: #e05555; border-width: 2px; }
   .reg-verdict-recheck { color: #f9a825; }
   .reg-verdict-better { color: #4caf50; }
+  /* Same pixels, stricter review — muted grey: it is not a capture change. */
+  .reg-verdict-standard { color: #9e9e9e; }
+  .reg-verdict-newscope { color: #9e9e9e; }
+  .reg-verdict-coreviewed { color: #9e9e9e; }
   .reg-worse   { color: #f9a825; }
   .reg-better  { color: #4caf50; }
   /* Load outcomes, not capture verdicts — muted so they never read as a
@@ -546,8 +637,15 @@ function build() {
      and the two must never be read as one run-on sentence. */
   .vregression { font-size: 12.5px; font-weight: 600; margin: 0 0 6px; padding: 4px 8px;
     color: #fff; background: #c62828; border-radius: 4px; }
-  .baseline-link { color: #fff; text-decoration: underline; white-space: nowrap;
-    margin-left: 6px; opacity: 0.92; }
+  /* Link colour: the page has no dark background, so the standalone link in the
+     h2 row must NOT be white — it was, because this rule was written only for
+     the .vregression banner below (white text on red #c62828) and reused as-is
+     when the link was added to the pill row, rendering it white-on-white and
+     invisible. Default to the same blue as .src-link, and keep white ONLY
+     inside the red banner. */
+  .baseline-link { color: #4a90d9; text-decoration: underline; white-space: nowrap;
+    font-size: 12px; font-weight: normal; margin-left: 6px; opacity: 0.92; }
+  .vregression .baseline-link { color: #fff; }
   .baseline-link:hover { opacity: 1; }
 
   .cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }

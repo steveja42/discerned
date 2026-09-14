@@ -254,13 +254,13 @@
       "reviewedAt": "2026-09-09T03:25:31.675Z"
     },
     "homedepot": {
-      "verdict": "blocked",
+      "verdict": "flaw",
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Bot-gate stub served instead of the page; nothing reached the capture pipeline, so this says nothing about clipping.",
+      "note": "Real product page in both (was a bot-gate stub); price renders '$ 5 97' in clip and cast, so the split is in the source markup.",
       "by": "ai",
-      "reviewedAt": "2026-09-11T16:50:37.574Z"
+      "reviewedAt": "2026-09-14T02:49:43.278Z"
     },
     "npmjs": {
       "verdict": "flaw",
@@ -1138,11 +1138,11 @@
     "lastfm": {
       "verdict": "flaw",
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "The clip top area renders on a brown/olive background with near-unreadable dark text; the cast is clean.",
+      "note": "Clip top area renders on a brown/olive background with near-unreadable dark text; identical in the 09-05 baseline (only the hero photo and rank differ), so pre-existing.",
       "by": "ai",
-      "reviewedAt": "2026-09-09T05:51:20.035Z"
+      "reviewedAt": "2026-09-14T03:50:21.858Z"
     },
     "myanimelist": {
       "verdict": "flaw",
@@ -1399,11 +1399,11 @@
     "newsweek": {
       "verdict": "flaw",
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "On the clip a Read More recirc headline collapses into a narrow vertical column with one syllable per line; the cast renders it cleanly.",
+      "note": "A Read More recirc headline collapses into a narrow column on the clip; not shown to be new versus the baseline.",
       "by": "ai",
-      "reviewedAt": "2026-09-09T05:51:20.035Z"
+      "reviewedAt": "2026-09-14T03:50:21.858Z"
     },
     "theguardian": {
       "verdict": "flaw",
@@ -1416,12 +1416,12 @@
     },
     "apnews": {
       "verdict": "flaw",
-      "where": "both",
-      "regression": "regressed",
-      "regressedFrom": "Baseline opened on the photo carousel in 3 bands; this run prepends a video player and More Videos thumbnail rail, pushing the byline to band 3.",
-      "note": "Article is fully captured with byline and section headings, but sits below ~4700px of video player, thumbnail rail and expanded carousel.",
+      "where": "clip",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Captured during a video pre-roll ad, which brings a thumbnail rail with it; user captured the same URL ad-free earlier and got hero-then-article, so page state not a pipeline change. Headline missing from the clip.",
       "by": "ai",
-      "reviewedAt": "2026-09-11T16:50:37.574Z"
+      "reviewedAt": "2026-09-14T03:16:12.596Z"
     },
     "cloudflare-blog": {
       "verdict": "clean",
@@ -1558,15 +1558,6 @@
       "by": "ai",
       "reviewedAt": "2026-09-11T16:45:48.278Z"
     },
-    "apnews-tech": {
-      "verdict": "flaw",
-      "where": "both",
-      "regression": "regressed",
-      "regressedFrom": "Baseline had no video rail; this run prepends a video player and rail, pushing the byline to band 5.",
-      "note": "Article is fully captured with byline and section headings, but sits below ~7200px of video rail and an expanded 11-image carousel.",
-      "by": "ai",
-      "reviewedAt": "2026-09-11T16:50:37.574Z"
-    },
     "goodreads-author": {
       "verdict": "clean",
       "where": "both",
@@ -1579,11 +1570,11 @@
     "imdb-name": {
       "verdict": "flaw",
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "A large black video box with no poster renders after the video card on clip and cast; the cast also has label-less stats.",
+      "note": "A large black video box with no poster renders after the video card, and the cast has label-less stats; not shown to be new versus the baseline.",
       "by": "ai",
-      "reviewedAt": "2026-09-09T05:46:12.657Z"
+      "reviewedAt": "2026-09-14T03:50:21.858Z"
     },
     "japantimes": {
       "verdict": "flaw",
@@ -1728,6 +1719,132 @@
       "note": "Series link, title, author, description, genres, page/publication info, reading stats and the full About the author bio all render cleanly on clip and cast.",
       "by": "ai",
       "reviewedAt": "2026-09-09T05:50:59.950Z"
+    },
+    "discogs": {
+      "verdict": "clean",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Clip and cast both correct: title, cover, release metadata table, tracklist, credits, barcodes, reviews. Cast renders the cover better than the clip (not squashed).",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T02:49:12.613Z"
+    },
+    "producthunt": {
+      "verdict": "flaw",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Cast loses the Launches section content, leaving bare vote counts with no product names or dates.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T02:49:19.332Z"
+    },
+    "medium-generic": {
+      "verdict": "clean",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Clip: title, subtitle, avatar byline and full body, only a topic-tag row of chrome. Cast is cleaner still (chrome gone, byline consolidated, images render); stray separator run only.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T02:49:12.613Z"
+    },
+    "netflix-techblog": {
+      "verdict": "clean",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Title, avatar, read-time, author list and body all correct; the cast's literal '**' marker leak is present identically in the 09-05 baseline, so not counted against this run.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T03:15:48.810Z"
+    },
+    "politico": {
+      "verdict": "flaw",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Both correct; an 'Add POLITICO on Google' chrome link and a 'Watch: The Conversation' recirculation block survive in each.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T02:49:43.278Z"
+    },
+    "msn-slideshow": {
+      "verdict": "flaw",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Correct article in both (no preloaded-next regression on the new /ar- URL); both start at the prose with no headline, byline or hero image.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T02:49:12.613Z"
+    },
+    "librarything-author": {
+      "verdict": "clean",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Photo, bibliography with copies/reviews, tag cloud and Common Knowledge all correct in clip and cast.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T02:50:13.080Z"
+    },
+    "librarything": {
+      "verdict": "blocked",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Served the logged-out homepage instead of the work page, so nothing reached the capture pipeline; likely a rate-limit from repeated loads.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T02:57:38.862Z"
+    },
+    "librarything-catalog": {
+      "verdict": "blocked",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Byte-identical to the librarything capture: the logged-out homepage, so the known cross-frame catalog defect cannot be reached yet.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T02:50:13.080Z"
+    },
+    "openai-blog": {
+      "verdict": "clean",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Date, headline and body with heading hierarchy correct in both; only a residual 'Listen to article' line.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T02:50:13.080Z"
+    },
+    "sciencemag": {
+      "verdict": "flaw",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Body correct in both but neither shows a headline or byline, and the cast's issue cover is a broken image showing alt text.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T02:49:43.278Z"
+    },
+    "rateyourmusic": {
+      "verdict": "flaw",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Cast renders Lists as raw unconverted markdown in code fences; clip collapses a broken rating image alt text to one character per line.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T02:52:12.380Z"
+    },
+    "lemmy-thread": {
+      "verdict": "flaw",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Cast leaks icon names as literal text ('minus-square', 'arrow-up') and runs handles together.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T02:49:19.332Z"
+    },
+    "boardgamegeek": {
+      "verdict": "clean",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Box art and full game description captured; missing title heading and stats block are present identically in the 09-05 baseline, so not counted against this run.",
+      "by": "ai",
+      "reviewedAt": "2026-09-14T03:15:48.810Z"
     }
   }
 }

@@ -3892,6 +3892,45 @@ const EXCL_MARKER = 'data-discerned-excl';
  * an attached node. The markers survive cloneNode/cloneContents, so the clone
  * can be cleaned up with removeMarked() afterward.
  */
+/**
+ * True when `el` is one slide of a horizontal slide TRACK — i.e. it has at
+ * least one sibling positioned the same way at a different percentage offset.
+ *
+ * The sibling test is the whole guard. A lone `position:absolute; left:100%`
+ * element is an ordinary offset decoration (a badge parked beside its parent,
+ * a flyout menu) and must survive; only a repeated one-frame-apart pattern is
+ * a slide track. Deliberately NOT keyed on carousel class names — AP's track
+ * carries none, and CAROUSEL_CLASS_RE would miss it.
+ */
+/**
+ * True when `el` sits in a run of siblings that each carry their OWN inline
+ * `left: N%`, i.e. a slide track.
+ *
+ * Deliberately does NOT require `position: absolute`. That check made the guard
+ * TIMING-DEPENDENT: AP News sets the track's positioning from a stylesheet, so
+ * a capture taken before that CSS has applied (the sweep grabs the page 3-5s
+ * after domcontentloaded, often while a video pre-roll is still running)
+ * computed `position: static`, the guard failed open, and all six slides
+ * shipped stacked. The fixture declares `position:absolute` INLINE, so the
+ * offline spec passed throughout and the defect only ever reproduced live.
+ *
+ * The sibling percentage pattern alone is already unambiguous — several
+ * siblings each offset by a whole frame IS a slide track, whatever the
+ * positioning scheme — and it is read from the style ATTRIBUTE, so it holds
+ * before CSS applies and under jsdom's zero-size layout.
+ */
+function isCarouselSlide(el: Element): boolean {
+  const parent = el.parentElement;
+  if (!parent) return false;
+  const offsets = new Set<string>();
+  for (const sib of Array.from(parent.children)) {
+    if (!(sib instanceof HTMLElement)) continue;
+    const m = /^(-?\d+(?:\.\d+)?)%$/.exec(sib.style.left || '');
+    if (m) offsets.add(m[1]);
+  }
+  return offsets.size >= 2;
+}
+
 function markExcluded(root: HTMLElement = document.body): () => void {
   // Third-party reader-comment widgets (Viafoura, Disqus, Coral, OpenWeb, …).
   // These are marked here — on the LIVE DOM, where their id/class still exist
@@ -4038,6 +4077,28 @@ function markExcluded(root: HTMLElement = document.body): () => void {
     if (el.getAttribute('aria-hidden') === 'true') {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) el.setAttribute(EXCL_MARKER, '1');
+    }
+    // INACTIVE carousel slides. A slide track positions every slide absolutely
+    // and offsets the inactive ones fully outside the visible frame
+    // (AP News: six photo slides at left:0%,100%,…,500% inside one
+    // overflow:hidden track). Nothing above catches them — they are visible,
+    // non-zero-area and unclipped — so once sanitisation strips the track's
+    // CSS the clip shows ALL six stacked, which is what buried AP's byline.
+    //
+    // Keyed on the slide's own percentage offset rather than on measured
+    // geometry: the percentage IS the page's statement that the slide sits a
+    // whole frame away, it survives a zero-size layout (jsdom), and it cannot
+    // mistake a merely scrolled-past element for an inactive slide.
+    // NOT gated on `s.position === 'absolute'`: the positioning often comes from
+    // a stylesheet, and a capture taken before it applies computes `static`,
+    // which silently disabled this whole guard on the live page while the
+    // inline-styled fixture kept passing. The inline `left: N%` plus matching
+    // siblings is the timing-independent signal — see isCarouselSlide.
+    if (el instanceof HTMLElement) {
+      const off = /^(-?\d+(?:\.\d+)?)%$/.exec(el.style.left || '');
+      if (off && Math.abs(parseFloat(off[1])) >= 100 && isCarouselSlide(el)) {
+        el.setAttribute(EXCL_MARKER, '1');
+      }
     }
   });
   return () => querySelectorAllDeep(root, `[${EXCL_MARKER}]`).forEach(el => el.removeAttribute(EXCL_MARKER));
@@ -7325,6 +7386,27 @@ function tagSemanticStructure(root: Element): void {
     widget.remove();
   });
 
+  // VIDEO transport controls (AP News's player renders replay/next/mute buttons
+  // plus "00:00"/"00:42" timecodes above the story). The buttons sanitise down
+  // to empty glyphs and the timecodes to a bare digit strip — a row of chrome
+  // that reads as content. The poster frame itself is left alone; only the
+  // control bar goes. Identified by its own shape — ≥2 transport buttons or a
+  // timecode pair, and no prose — so it needs no per-site selector.
+  const TRANSPORT_RE = /^(replay|play|pause|next|previous|mute|unmute|fullscreen|captions|settings|volume)$/i;
+  const TIMECODE_RE = /^\d{1,2}:\d{2}(:\d{2})?$/;
+  root.querySelectorAll('div, span, section, footer').forEach(el => {
+    if (!root.contains(el)) return;
+    const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (text.length > 40) return; // a control bar is glyphs + timecodes, never prose
+    if (el.querySelector('img, video, picture, a[href]')) return;
+    const buttons = Array.from(el.querySelectorAll('button'));
+    const transport = buttons.filter(b =>
+      TRANSPORT_RE.test((b.getAttribute('aria-label') ?? b.textContent ?? '').trim())).length;
+    const timecodes = Array.from(el.querySelectorAll('span'))
+      .filter(s => TIMECODE_RE.test((s.textContent ?? '').trim())).length;
+    if (transport >= 2 || (timecodes >= 2 && buttons.length === transport)) el.remove();
+  });
+
   // Avatar-less bylines (news sites: Breitbart, NYT, WaPo, etc.) — these
   // look like "Author Name and Author Name | Date | Counter" all on one line.
   // Detect: an element whose direct text/structure contains an <address> OR
@@ -8639,6 +8721,9 @@ const STRONG_RELATED_RE = new RegExp(
   '^(discover more|want to know more\\??|you might also like|recommended for you' +
   '|suggested for you|most (read|popular)|trending now|up next' +
   '|related (articles|stories|posts)|readers also enjoyed' +
+  // Video/photo playlist rails. AP News leads a story with a player plus a
+  // "More Videos" rail of UNRELATED clips, burying the headline and byline.
+  '|more (videos|photos|galleries)|watch more|related videos' +
   '|more (\\w+ )?stories on \\w.*)$', 'i');
 
 // E-commerce cross-sell rail HEADINGS (Amazon "Frequently bought together",
@@ -8687,7 +8772,10 @@ const RELATED_HEADING_RE = new RegExp(
   '^(discover more|want to know more\\??|related(:| articles| stories| posts| topics)?' +
   '|recommended( for you)?|read (next|more)|more from\\b.*|you might also like' +
   '|readers also enjoyed|more (\\w+ )?stories on \\w.*' +
-  '|most (read|popular)|trending( now)?|suggested for you|up next|popular in\\b.*)$', 'i');
+  '|most (read|popular)|trending( now)?|suggested for you|up next|popular in\\b.*' +
+  // Video/photo playlist rails — also in STRONG_RELATED_RE. Seeds are filtered
+  // by THIS regex, so a heading missing here never reaches the strong branch.
+  '|more (videos|photos|galleries)|watch more|related videos)$', 'i');
 // Newsletter signup copy.
 const NEWSLETTER_RE =
   /(subscribe to (our|the) newsletter|sign up for (our|the) |never miss the news|directly to your inbox|daily recap of|get our (free )?newsletter)/i;

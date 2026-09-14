@@ -4,7 +4,7 @@
     {
       "name": "apnews",
       "url": "https://apnews.com/article/russia-ukraine-war-drones-missiles-zelenskyy-f42baa61109fcb43b7efabf5334c4f50",
-      "note": "wire news article"
+      "note": "wire news article. Exercises the comment-widget-aware Tier 1 path (AP has no real <article>, only <main class='Page-main'>, while Viafoura renders each comment as <article class='vf3-comment'>) plus the video-rail + photo-carousel exclusions. A second AP entry (apnews-tech, a wildfires story on the SAME host and template) was REMOVED 2026-09-13: it reported the identical defect as this one, added a same-host double hit per sweep that rate-limited the second load (403 'performing security verification'), and every distinct behaviour it covered is guarded offline by tests/fixtures/sites/apnews-article.html + apnews-article-fixture-visual.spec.ts (pixel baseline) and discerned-ext/tests/extraction/comment-widget.test.ts."
     },
     {
       "name": "reuters",
@@ -307,11 +307,6 @@
       "name": "cbsnews",
       "url": "https://www.cbsnews.com/news/chatgpt-health-medical-records-advice-expert-risks/",
       "note": "PHASE 4.3 — news article"
-    },
-    {
-      "name": "apnews-tech",
-      "url": "https://apnews.com/article/europe-wildfires-france-spain-bordeaux-5b9b063bdcf9b69867fa71ba31be8aa5",
-      "note": "PHASE 4.3 — wire news article (comment-widget-aware Tier 1; may need headed)"
     },
     {
       "name": "independent",
@@ -1030,8 +1025,8 @@
     },
     {
       "name": "msn-slideshow",
-      "url": "https://www.msn.com/en-us/entertainment/celebrities/paramount-s-star-trek-reboot-drops-kirk-for-new-era/ss-AA29f2aF",
-      "note": "PHASE 4.6 — FEED READER: MSN /ss- SLIDESHOW (a gallery, not prose). Guards the PRELOADED-NEXT-ARTICLE regression (user report 2026-08-03, 'the wrong thing is clipped'): MSN's infinite-scroll feed preloads the next stories into the SAME DOM (div.consumptionFeed_nextArticle), and the viewed gallery has NO <article> of its own — so Tier 1's first selector matched a PRELOADED story's <article class='article-reader-container'> and shipped a clip whose TITLE was this slideshow but whose BODY was an unrelated article. Fixed generically via PRELOADED_NEXT_SELECTOR at three layers (findArticleElement / scoreContentBlock / markExcluded), using closestDeep — native closest() stops at the first of MSN's ~350 open shadow roots. WATCH OUT: a regression here scores HEALTHY (the wrong body is full-length, well-formed prose), so the score alone will not catch it — check the clip screenshot actually shows Star Trek / Kirk, not whatever MSN preloaded next. Slideshow text lives in per-slide fragments, so expect lower text-coverage than a prose article."
+      "url": "https://www.msn.com/en-us/money/general/noah-s-ark-mystery-deepens-as-new-scans-show-boat-shaped-formation-is-more-than-just-rock/ar-AA2aEpib?cvid=6aa7487aed734e3d9f2a9abbbbcc4d97&ei=22",
+      "note": "PHASE 4.6 — FEED READER: MSN /ss- SLIDESHOW (a gallery, not prose). Guards the PRELOADED-NEXT-ARTICLE regression (user report 2026-08-03, 'the wrong thing is clipped'): MSN's infinite-scroll feed preloads the next stories into the SAME DOM (div.consumptionFeed_nextArticle), and the viewed gallery has NO <article> of its own — so Tier 1's first selector matched a PRELOADED story's <article class='article-reader-container'> and shipped a clip whose TITLE was this slideshow but whose BODY was an unrelated article. Fixed generically via PRELOADED_NEXT_SELECTOR at three layers (findArticleElement / scoreContentBlock / markExcluded), using closestDeep — native closest() stops at the first of MSN's ~350 open shadow roots. WATCH OUT: a regression here scores HEALTHY (the wrong body is full-length, well-formed prose), so the score alone will not catch it — check the clip screenshot actually shows Star Trek / Kirk, not whatever MSN preloaded next. Slideshow text lives in per-slide fragments, so expect lower text-coverage than a prose article. URL REPLACED 2026-09-13 (user-supplied) — the prior /ss- slideshow had gone stale. NOTE the shape changed: this is an /ar- ARTICLE, not an /ss- slideshow, so the live entry no longer exercises the has-no-<article>-of-its-own variant of the preloaded-next defect. That variant stays covered OFFLINE by tests/fixtures/sites/msn-slideshow.html + discerned-ext/tests/extraction/preloaded-next-article.test.ts; the live row still covers the preloaded-feed DOM generally. Repoint at a fresh /ss- URL if you want the slideshow shape live again."
     },
     {
       "name": "offguardian",
@@ -1077,6 +1072,12 @@
       "name": "tiktok-profile",
       "url": "https://www.tiktok.com/@nasa",
       "note": "PHASE 4.4 social feed - profile grid; tagTikTok tags tiles but deliberately does NOT scope a grid. Logged-out shows an empty grid",
+      "headed": true
+    },
+    {
+      "name": "snapchat-web",
+      "url": "https://www.snapchat.com/web",
+      "note": "social feed - stories/chat feed; tagSnapchat's /web branch scopes by climbing from the visible <video> (no data-testids, no per-post permalink). REFUSES HEADLESS ('Browser not supported' - the UA says HeadlessChrome), so headed-only. LOGIN REQUIRED in the warm profile",
       "headed": true
     }
   ]

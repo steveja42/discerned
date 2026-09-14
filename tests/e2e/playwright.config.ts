@@ -377,6 +377,11 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'apnews-article-fixture-visual',
+      testMatch: /apnews-article-fixture-visual\.spec\.ts$/,
+      retries: 0,
+    },
+    {
       name: 'news-article-fixture-visual',
       testMatch: /news-article-fixture-visual\.spec\.ts/,
       retries: 0,
