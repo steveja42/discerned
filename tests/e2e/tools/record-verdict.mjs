@@ -12,6 +12,7 @@
 //
 // Usage — one domain:
 //   node tests/e2e/tools/record-verdict.mjs bbc clean clip "Headline, hero and body captured cleanly."
+//   node tests/e2e/tools/record-verdict.mjs imdb flaw clip "Cast list missing." --severity 4
 //
 // Usage — many at once (preferred while reviewing a batch; one atomic write):
 //   node tests/e2e/tools/record-verdict.mjs --batch '[
@@ -21,6 +22,25 @@
 //   node tests/e2e/tools/record-verdict.mjs --batch-file verdicts.json
 //
 // verdict: clean | flaw | critical | blocked      where: clip | cast | both
+//
+// severity: 0-10, HOW BAD the capture is. The verdict is a coarse bucket; this
+//   is the number to sort and trend on. Required for flaw/critical (a defect
+//   with no magnitude cannot be prioritised), defaults to 0 for clean, and is
+//   omitted for blocked (nothing was captured, so there is nothing to rate).
+//
+//   0     perfect — indistinguishable from the source's content column
+//   1-2   cosmetic: spacing, a stray glyph, a slightly-off avatar
+//   3-4   a real but minor loss: one missing byline, a dropped caption,
+//         surviving chrome that a reader would scroll past
+//   5-6   a substantive piece is wrong or missing: no hero, broken comment
+//         thread, mangled stats row — still recognisably the right content
+//   7-8   the clip misrepresents the page: wrong block captured, most of the
+//         body absent, layout collapsed into unreadable columns
+//   9-10  unusable: empty, or entirely the wrong content (a video rail, a
+//         cookie wall, another post)
+//
+//   Rate what you SEE in the image, not what you infer about the cause, and
+//   rate the worst of clip/cast — `where` already records which surface.
 // regression: none | regressed | unknown  — is THIS capture worse than the
 //   previous run's for the same domain? State it explicitly; 'unknown' (the
 //   default) means nobody compared. A note for a `regressed` entry should say
@@ -42,6 +62,32 @@ const WHERES = new Set(['clip', 'cast', 'both']);
 // this corpus) and a verdict diff cannot tell a real regression from a baseline
 // entry that was never checked against the image.
 const REGRESSIONS = new Set(['none', 'regressed', 'unknown']);
+
+// A verdict is three coarse buckets; severity is the magnitude inside them, and
+// it is what the gallery sorts and badges on now that the computed composite is
+// gone (it was measured anti-predictive — see sweepScorers.ts). Keeping the two
+// consistent matters: a "flaw" rated 0 or a "clean" rated 6 is a typo, not a
+// judgment, and silently accepting either would poison the only real ranking.
+const SEVERITY_RANGE = { clean: [0, 2], flaw: [3, 7], critical: [6, 10] };
+
+function severityFor(e) {
+  if (e.verdict === 'blocked') return undefined;          // nothing captured to rate
+  if (e.severity === undefined || e.severity === null) {
+    if (e.verdict === 'clean') return 0;                  // the only safe default
+    fail(`${e.domain}: verdict "${e.verdict}" requires --severity 0-10 `
+      + `(3-7 flaw, 6-10 critical) — a defect with no magnitude cannot be ranked`);
+  }
+  const n = Number(e.severity);
+  if (!Number.isInteger(n) || n < 0 || n > 10) {
+    fail(`${e.domain}: severity must be an integer 0-10, got ${JSON.stringify(e.severity)}`);
+  }
+  const [lo, hi] = SEVERITY_RANGE[e.verdict] ?? [0, 10];
+  if (n < lo || n > hi) {
+    fail(`${e.domain}: severity ${n} contradicts verdict "${e.verdict}" `
+      + `(expected ${lo}-${hi}) — change one or the other`);
+  }
+  return n;
+}
 
 const args = process.argv.slice(2);
 const by = args.includes('--human') ? 'human' : 'ai';
@@ -75,9 +121,12 @@ if (batchIdx >= 0) {
   if (!p) fail('--batch-file needs a path');
   entries = JSON.parse(readFileSync(p, 'utf8'));
 } else {
-  const [domain, verdict, where, ...noteParts] = rest;
-  if (!domain || !verdict) fail('usage: record-verdict.mjs <domain> <verdict> [where] [note]');
-  entries = [{ domain, verdict, where: where || 'clip', note: noteParts.join(' ') }];
+  const sevIdx = rest.indexOf('--severity');
+  const sevArg = sevIdx >= 0 ? rest[sevIdx + 1] : undefined;
+  const positional = sevIdx >= 0 ? rest.filter((a, i) => i !== sevIdx && i !== sevIdx + 1) : rest;
+  const [domain, verdict, where, ...noteParts] = positional;
+  if (!domain || !verdict) fail('usage: record-verdict.mjs <domain> <verdict> [where] [note] [--severity N]');
+  entries = [{ domain, verdict, where: where || 'clip', note: noteParts.join(' '), severity: sevArg }];
 }
 
 if (!Array.isArray(entries) || entries.length === 0) fail('no verdict entries given');
@@ -98,6 +147,7 @@ for (const e of entries) {
     fail(`unknown domain "${e.domain}"${near.length ? ` — did you mean: ${near.join(', ')}?` : ''}`);
   }
   if (!VERDICTS.has(e.verdict)) fail(`bad verdict "${e.verdict}" for ${e.domain} (use ${[...VERDICTS].join('|')})`);
+  severityFor(e);   // validate now so a bad batch fails before anything is written
   if (e.where && !WHERES.has(e.where)) fail(`bad where "${e.where}" for ${e.domain} (use ${[...WHERES].join('|')})`);
   if (e.regression && !REGRESSIONS.has(e.regression)) {
     fail(`bad regression "${e.regression}" for ${e.domain} (use ${[...REGRESSIONS].join('|')})`);
@@ -129,8 +179,11 @@ doc.findings ??= {};
 
 const now = new Date().toISOString();
 for (const e of entries) {
+  const severity = severityFor(e);
   doc.findings[e.domain] = {
     verdict: e.verdict,
+    // 0-10 magnitude; absent only for 'blocked'. See SEVERITY_RANGE above.
+    ...(severity === undefined ? {} : { severity }),
     where: e.where || 'clip',
     // 'unknown' until a reviewer has actually compared against the prior run's
     // image — never silently defaulted to 'none', which would assert no
@@ -150,4 +203,7 @@ writeFileSync(FINDINGS, JSON.stringify(doc, null, 2) + '\n', 'utf8');
 
 const counts = entries.reduce((m, e) => (m[e.verdict] = (m[e.verdict] ?? 0) + 1, m), {});
 console.log(`Recorded ${entries.length} verdict(s) [${Object.entries(counts).map(([k, v]) => `${k}:${v}`).join(' ')}] by=${by}`);
-for (const e of entries) console.log(`  ${e.verdict.padEnd(8)} ${e.domain}`);
+for (const e of entries) {
+  const sev = severityFor(e);
+  console.log(`  ${e.verdict.padEnd(8)} ${sev === undefined ? '  -' : String(sev).padStart(2) + '/10'}  ${e.domain}`);
+}

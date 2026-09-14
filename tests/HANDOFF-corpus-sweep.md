@@ -308,7 +308,30 @@ surviving pre-tagger screenshot showed the OLD capture was also header-less
 AND truncated mid-sentence, so the new tagger is strictly better on text
 completeness, just still missing the header/avatar/photo.)
 
-### The composite score is unreliable in BOTH directions — treat it as sort order only
+### The composite score was REMOVED (2026-09-14) — it was measured anti-predictive
+
+The evidence below was the first half of the case; the measurement that settled
+it came later. Correlated against all 203 scored-and-reviewed domains (base rate
+36.9% `critical`/`flaw`), the composite scored **AUC 0.445** — *below* the 0.5
+coin-flip line, i.e. sorting by it was worse than alphabetical. Its worst-10 held
+**1** bad clip; **47 of 75** bad clips scored ≤0.02. Every individual heuristic
+sat at chance (0.46–0.54), and domains with **no flags** were bad at exactly the
+base rate, so the flags carried no information. The delta path was no better: of
+the 5 domains whose composite worsened between the two runs on disk, 2 were bad
+(40% vs the 37% base rate).
+
+So `composite` and `flags` are gone. What remains:
+- The four raw diagnostics (`textCoverage`, `blankRatio`, `aspectDistorted`,
+  `chromeHits`) as **context**, shown once you are already looking at an image.
+- `review-queue.mjs` orders by **whether the clip image changed** since the last
+  backup — objective, and exactly the triage question.
+- A reviewed **`severity` 0-10** on each verdict, which is what the gallery now
+  badges and sorts on. See CLAUDE.md → "Every verdict carries a 0-10 severity".
+
+The original note follows, since its examples are still the reason the number
+could never work:
+
+### The composite score was unreliable in BOTH directions
 
 Beyond the 7 false passes above, confirmed by eyeball against source screenshots:
 - **Low coverage ≠ bad clip**: `substack-generic` (2.3% coverage) and

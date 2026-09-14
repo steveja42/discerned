@@ -5,8 +5,8 @@
 //
 // A byte-identical PNG means the pipeline produced pixel-for-pixel the same
 // output — safe to skip. A changed PNG doesn't say GOOD or BAD, only DIFFERENT;
-// a human (or Claude) still has to look. Score deltas are reported alongside
-// so "changed AND got worse" sorts to the top.
+// a human (or Claude) still has to look. Where BOTH runs carry a reviewed
+// severity (0-10), its delta is shown so "changed AND got worse" sorts first.
 //
 // Usage:
 //   node tests/e2e/tools/diff-sweep-run.mjs <backup-dir> [--json]
@@ -58,6 +58,17 @@ function domainsIn(dir) {
   return names;
 }
 
+// Each side's reviewed verdicts. Severity is the only run-over-run QUALITY
+// signal there is: the old computed composite was measured anti-predictive
+// (AUC 0.445), so it is gone — see helpers/sweepScorers.ts.
+function findingsIn(dir) {
+  try {
+    return JSON.parse(readFileSync(resolve(dir, 'visual-findings.json'), 'utf8')).findings ?? {};
+  } catch { return {}; }
+}
+const curFindings = findingsIn(CURRENT);
+const bakFindings = findingsIn(BACKUP);
+
 const domains = new Set([...domainsIn(CURRENT), ...domainsIn(BACKUP)]);
 const IMG_KINDS = ['1-source', '2-clip', '3-cast'];
 
@@ -67,6 +78,8 @@ for (const domain of [...domains].sort()) {
   const bakScorePath = resolve(BACKUP, `${domain}--score.json`);
   const curScore = existsSync(curScorePath) ? JSON.parse(readFileSync(curScorePath, 'utf8')) : null;
   const bakScore = existsSync(bakScorePath) ? JSON.parse(readFileSync(bakScorePath, 'utf8')) : null;
+  const curFinding = curFindings[domain] ?? null;
+  const bakFinding = bakFindings[domain] ?? null;
 
   const imageDiffs = {};
   let anyImageChanged = false;
@@ -92,36 +105,36 @@ for (const domain of [...domains].sort()) {
     }
   }
 
-  const curComposite = curScore?.scores?.composite ?? null;
-  const bakComposite = bakScore?.scores?.composite ?? null;
-  const compositeDelta = (curComposite !== null && bakComposite !== null)
-    ? +(curComposite - bakComposite).toFixed(3)
+  const curSeverity = typeof curFinding?.severity === 'number' ? curFinding.severity : null;
+  const bakSeverity = typeof bakFinding?.severity === 'number' ? bakFinding.severity : null;
+  const severityDelta = (curSeverity !== null && bakSeverity !== null)
+    ? curSeverity - bakSeverity
     : null;
   const statusChanged = (curScore?.status ?? 'missing') !== (bakScore?.status ?? 'missing');
 
-  const changed = anyImageChanged || anyImageNew || anyImageMissing || statusChanged
-    || (compositeDelta !== null && Math.abs(compositeDelta) > 0.001);
+  // Severity is deliberately NOT part of `changed`: a re-rated clip with
+  // identical pixels is a review difference, not a capture change (measured on
+  // the gallery side: 15 of 28 verdict flips sat on byte-identical clips).
+  const changed = anyImageChanged || anyImageNew || anyImageMissing || statusChanged;
 
   results.push({
     domain,
     changed,
     curStatus: curScore?.status ?? 'missing',
     bakStatus: bakScore?.status ?? 'missing',
-    curComposite, bakComposite, compositeDelta,
-    curFlags: curScore?.scores?.flags ?? [],
+    curSeverity, bakSeverity, severityDelta,
     images: imageDiffs,
     regressedToSkip: (bakScore?.status === 'ok' && curScore?.status !== 'ok'),
     newlyOk: (bakScore?.status !== 'ok' && curScore?.status === 'ok'),
   });
 }
 
-// Rank: regressions-to-skip first, then worsened composite, then other changes,
-// then unchanged. Within "changed", worse composite delta (higher = worse, per
-// the sweep's own convention) sorts first.
+// Rank: regressions-to-skip first, then changed captures, then unchanged.
+// Within "changed", the biggest rise in REVIEWED severity first.
 results.sort((a, b) => {
   if (a.regressedToSkip !== b.regressedToSkip) return a.regressedToSkip ? -1 : 1;
   if (a.changed !== b.changed) return a.changed ? -1 : 1;
-  const ad = a.compositeDelta ?? 0, bd = b.compositeDelta ?? 0;
+  const ad = a.severityDelta ?? 0, bd = b.severityDelta ?? 0;
   return bd - ad;
 });
 
@@ -137,10 +150,12 @@ if (asJson) {
     if (!r.changed) continue;
     const tag = r.regressedToSkip ? 'REGRESSED->SKIP'
       : r.newlyOk ? 'NEWLY-OK'
-      : r.compositeDelta !== null && r.compositeDelta > 0.01 ? 'WORSE'
-      : r.compositeDelta !== null && r.compositeDelta < -0.01 ? 'BETTER'
+      : r.severityDelta !== null && r.severityDelta > 0 ? 'WORSE'
+      : r.severityDelta !== null && r.severityDelta < 0 ? 'BETTER'
       : 'CHANGED';
-    const deltaStr = r.compositeDelta !== null ? ` Δ${r.compositeDelta >= 0 ? '+' : ''}${r.compositeDelta}` : '';
+    // Blank when either side is unreviewed — honest: nobody has judged it, so
+    // no direction can be claimed.
+    const deltaStr = r.severityDelta ? ` sev${r.severityDelta > 0 ? '+' : ''}${r.severityDelta}` : '';
     const imgStr = IMG_KINDS.map(k => `${k}=${r.images[k]}`).join(' ');
     console.log(`[${tag.padEnd(16)}] ${r.domain.padEnd(22)}${deltaStr.padEnd(9)} ${imgStr}`);
   }

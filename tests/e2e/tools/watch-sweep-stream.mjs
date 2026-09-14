@@ -74,7 +74,7 @@ const target = only
 const total = target.size;
 const announced = new Set();
 
-/** @type {{domain:string, composite:number, flags:string[], hasCast:boolean}[]} */
+/** @type {{domain:string, cov:number, chromeHits:number, hasCast:boolean}[]} */
 let sliceQueue = [];
 
 /** Slice everything queued, then announce each with its SLICED paths — the
@@ -85,9 +85,12 @@ function flushSliceQueue() {
   sliceQueue = [];
   sliceBatch(batch.map(b => b.domain));
   for (const b of batch) {
-    const flagsStr = b.flags.length ? ` [${b.flags.join('; ')}]` : '';
+    // Diagnostics only — there is no quality score to print. Ranking by the old
+    // composite was measured anti-predictive, so a number here would just tell
+    // the reviewer which image to prejudge.
+    const diag = `cov=${(b.cov * 100).toFixed(0)}%` + (b.chromeHits ? ` chrome=${b.chromeHits}` : '');
     const castNote = b.hasCast ? '' : ' (no cast image)';
-    console.log(`READY ${b.domain} composite=${b.composite.toFixed(3)}${flagsStr}${castNote}`);
+    console.log(`READY ${b.domain} ${diag}${castNote}`);
     // Announce EVERY band the slicer wrote, not just band 1. slice-clip.py
     // defaults to 3 bands because content buried under prepended chrome (a
     // video rail, an expanded carousel) does not reach band 1 — announcing
@@ -148,8 +151,8 @@ function poll() {
       announced.add(domain);
       sliceQueue.push({
         domain,
-        composite: rec.scores?.composite ?? 0,
-        flags: rec.scores?.flags ?? [],
+        cov: rec.scores?.textCoverage ?? 0,
+        chromeHits: rec.scores?.chromeHits ?? 0,
         hasCast: existsSync(cast),
       });
     } else {

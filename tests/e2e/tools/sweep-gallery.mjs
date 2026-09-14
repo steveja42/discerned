@@ -8,7 +8,7 @@
 // while each panel's own scrollbar still nudges just that one for alignment — the
 // exact scroll behavior of live-gallery's detail view.
 //
-// On top of that shared model the sweep keeps its own extras: a composite score
+// On top of that shared model the sweep keeps its own extras: a severity badge
 // badge, the tripped-heuristic flags + raw metrics line, worst-score-first /
 // newest-run-first sorting, an "only flagged" filter, and compact skip rows.
 //
@@ -229,10 +229,10 @@ function build() {
   /**
    * Classify a domain's change since the previous run.
    * Rank 0 sorts to the top of the regression view.
-   *   0 worse     — captured BOTH times, composite rose by >0.02
+   *   0 worse     — captured BOTH times, clip image changed
    *   1 new       — no previous record
    *   2 same      — unchanged, or moved less than the noise floor
-   *   3 better    — composite fell by >0.02
+   *   3 better    — verdict improved since the baseline
    *   4 unrun     — skipped this run, or last run, or both
    *
    * A SKIP IS NOT A REGRESSION. A skip means the page never loaded — a bot
@@ -258,7 +258,7 @@ function build() {
 
     // HIGHEST PRIORITY: an explicit `regression` field on the verdict. A
     // reviewer who compared this capture against the previous run's image and
-    // said so outranks every inference — the composite delta and the verdict
+    // said so outranks every inference — the image-changed test and the verdict
     // diff are both proxies for exactly this question.
     if (finding?.regression === 'regressed') {
       return { kind: 'stated-regression', rank: -1, delta: 0 };
@@ -338,13 +338,13 @@ function build() {
       return { kind: 'verdict-better', rank: 5, delta: 0, from: pv, to: nv };
     }
 
-    // SECONDARY: the composite. Ranked BELOW any verdict change because it is a
-    // weak proxy (see prevFindings above) — useful for spotting a domain worth
-    // re-reviewing, not for concluding the capture got worse.
-    const d = (rec.scores?.composite ?? 0) - (p.scores?.composite ?? 0);
-    if (d > 0.02) return { kind: 'worse', rank: 2, delta: d };
-    if (d < -0.02) return { kind: 'better', rank: 5, delta: d };
-    return { kind: 'same', rank: 3, delta: d };
+    // SECONDARY: did the capture CHANGE? The composite delta used to live here,
+    // but it was measured at chance (of 5 domains whose composite worsened, 2
+    // were bad — the 37% base rate), so it ranked noise above real work. A clip
+    // whose bytes differ is an objective "there is something new to look at",
+    // with no claim about whether it got better or worse.
+    if (prevSameImage.has(site)) return { kind: 'same', rank: 3, delta: 0 };
+    return { kind: 'changed', rank: 2, delta: 0 };
   }
 
   // Build a plain data array the client sorts; default worst-score-first.
@@ -364,19 +364,20 @@ function build() {
       site,
       reg: reg.kind,
       regRank: reg.rank,
-      regDelta: reg.delta,
       regFrom: reg.from ?? '',
       regTo: reg.to ?? '',
       regSurface: reg.surface ?? '',
-      prevComposite: prev[site]?.status === 'ok' ? (prev[site].scores?.composite ?? null) : null,
+      prevSeverity: prevFindings[site]?.severity ?? null,
       prevStatus: prev[site]?.status ?? null,
       mtime: e.mtime,
       status: rec.status ?? 'unknown',
       unscored,
       note: rec.note ?? '',
       skipReason: rec.skipReason ?? '',
-      composite: scored ? rec.scores.composite : -1, // skips + unscored sort last
-      flags: scored ? rec.scores.flags : [],
+      // Reviewed severity 0-10; null when unreviewed. Sorts unreviewed last so
+      // the "severity" view leads with judged defects, not with unknowns.
+      severity: typeof finding?.severity === 'number' ? finding.severity : null,
+      sevSort: typeof finding?.severity === 'number' ? finding.severity : -1,
       scores: scored ? rec.scores : null,
       finding,
       findingRank,
@@ -404,13 +405,18 @@ function build() {
     return `<div class="col col-${kind}"><div class="col-label">${label}${list.length ? '' : ' <em>(none)</em>'} <button class="hide-col" title="hide this column">×</button></div><div class="dscroll">${imgs}</div></div>`;
   };
 
+  // The badge now carries the REVIEWED severity (0-10, written by
+  // record-verdict.mjs), not a computed score. The old composite badge was
+  // measured anti-predictive, so a number in this slot actively misled — a
+  // 0.005 badge sat on apnews while it captured the wrong block entirely.
   const badge = (d) => {
     if (d.status === 'skip') return `<span class="badge skip">SKIP</span>`;
     if (d.unscored) return `<span class="badge unk" title="manual headed capture — not scored">captured</span>`;
     if (d.status !== 'ok') return `<span class="badge unk">?</span>`;
-    const c = d.composite;
-    const cls = c >= 0.5 ? 'bad' : c >= 0.25 ? 'warn' : 'ok';
-    return `<span class="badge ${cls}">${c.toFixed(3)}</span>`;
+    const sev = d.severity;
+    if (sev === null) return `<span class="badge unk" title="captured, not yet reviewed">unrated</span>`;
+    const cls = sev >= 7 ? 'bad' : sev >= 3 ? 'warn' : 'ok';
+    return `<span class="badge ${cls}" title="reviewed severity (0 = perfect, 10 = unusable)">${sev}/10</span>`;
   };
 
   const scoreDetail = (d) => {
@@ -418,8 +424,10 @@ function build() {
     if (d.unscored) return `<span class="reason">${escapeHtml(d.note || 'manual headed capture — not scored')}</span>`;
     if (!d.scores) return '';
     const s = d.scores;
-    const flags = d.flags.length ? `<span class="flags">${d.flags.map(escapeHtml).join(' · ')}</span>` : '<span class="flags ok">clean</span>';
-    return `<span class="metrics">cov ${(s.textCoverage * 100).toFixed(0)}% · blank ${(s.blankRatio * 100).toFixed(0)}% · distort ${s.aspectDistorted} · chrome ${s.chromeHits}</span> ${flags}`;
+    // Diagnostics only — context for someone already looking at the image. No
+    // flags: they carried no signal (domains with zero flags were bad at exactly
+    // the 37% base rate). See sweepScorers.ts's header.
+    return `<span class="metrics" title="recorded diagnostics — not a quality score">cov ${(s.textCoverage * 100).toFixed(0)}% · blank ${(s.blankRatio * 100).toFixed(0)}% · distort ${s.aspectDistorted} · chrome ${s.chromeHits}</span>`;
   };
 
   // Human visual verdict pill (critical / flaw / clean) + its note. Distinct from
@@ -450,19 +458,18 @@ function build() {
 
   // Change-since-last-run pill. Only rendered when it carries information:
   // "same" and "still skipped" are the boring majority and would just be noise
-  // on every row. Shows the composite delta so "worse" is quantified, and the
-  // previous status for broke/fixed so the row explains itself without a diff.
+  // on every row. Shows the previous status for broke/fixed so the row explains
+  // itself without a diff.
   const regPill = (d) => {
     if (!d.reg || d.reg === 'same' || d.reg === 'stillskip') return '';
     const label = {
       // Verdict changes lead: these are judgments about the CLIP.
       'stated-regression': `REGRESSION (reviewer-confirmed)`,
       'verdict-worse': `REGRESSED ${d.regFrom}→${d.regTo}`,
-      // NOT phrased as a change to the capture. Measured: 30 of 35 of these
-      // have an essentially unchanged composite — the CLIP is the same and only
-      // the verdict moved, because the baseline entry was never checked against
-      // the image. "recheck clean→flaw" read like a regression claim; this says
-      // what it actually is.
+      // NOT phrased as a change to the capture. Measured: 30 of 35 of these had
+      // an unchanged clip — only the verdict moved, because the baseline entry
+      // was never checked against the image. "recheck clean→flaw" read like a
+      // regression claim; this says what it actually is.
       'verdict-recheck': `verdict differs (was ${d.regFrom}, unverified)`,
       // Same pixels, different verdict — say so plainly rather than implying a
       // capture change. Ranked with the "better" tier so it sorts well below
@@ -473,8 +480,9 @@ function build() {
       // Both verdicts from one review session — a standard difference, not a run diff.
       'verdict-coreviewed': `re-reviewed same session (was ${d.regFrom})`,
       'verdict-better': `improved ${d.regFrom}→${d.regTo}`,
-      worse: `score +${d.regDelta.toFixed(3)}`,
-      better: `score ${d.regDelta.toFixed(3)}`,
+      // No direction claimed: the bytes differ, which says there is something
+      // new to look at, not that it got worse. Judging that is the review's job.
+      changed: `capture changed`,
       // Deliberately NOT called a regression: the page never loaded, so there is
       // no capture to have regressed. Worded as a run outcome, not a verdict.
       nowskip: `didn't load (was ok)`,
@@ -488,7 +496,7 @@ function build() {
     // verdict-worse cards — the ones a reviewer most needs to verify — with no
     // way back to the before-image.
     const wantsBefore = ['stated-regression', 'verdict-worse', 'verdict-recheck',
-      'verdict-standard', 'verdict-newscope', 'verdict-coreviewed', 'verdict-better', 'worse', 'better'].includes(d.reg);
+      'verdict-standard', 'verdict-newscope', 'verdict-coreviewed', 'verdict-better', 'changed'].includes(d.reg);
     return `<span class="reg reg-${d.reg}" title="vs previous run">${label}</span>`
       + (wantsBefore ? baselineLink(d.site) : '');
   };
@@ -508,7 +516,7 @@ function build() {
       ${regressionLine(d)}
       ${verdictNote(d)}
       <div class="detail-line">${scoreDetail(d)}</div>`;
-    const dataAttrs = `data-composite="${d.composite}" data-mtime="${d.mtime}" data-status="${d.status}" data-finding="${d.findingRank}" data-regrank="${d.regRank}" data-regdelta="${d.regDelta}" data-reg="${d.reg}"`;
+    const dataAttrs = `data-sev="${d.sevSort}" data-mtime="${d.mtime}" data-status="${d.status}" data-finding="${d.findingRank}" data-regrank="${d.regRank}" data-reg="${d.reg}"`;
     if (d.status === 'skip') {
       return `<div class="site skip-row" ${dataAttrs}>${head}</div>`;
     }
@@ -619,8 +627,9 @@ function build() {
   .reg-verdict-standard { color: #9e9e9e; }
   .reg-verdict-newscope { color: #9e9e9e; }
   .reg-verdict-coreviewed { color: #9e9e9e; }
-  .reg-worse   { color: #f9a825; }
-  .reg-better  { color: #4caf50; }
+  /* Neutral blue: the capture differs from the baseline, with no claim about
+     which way. Colouring it amber would assert a regression nobody judged. */
+  .reg-changed { color: #4a90d9; }
   /* Load outcomes, not capture verdicts — muted so they never read as a
      regression. A skip means the page was never reached. */
   .reg-nowskip { color: #4a90d9; }
@@ -707,8 +716,8 @@ function build() {
   <div class="toolbar">
     <span>Sort:</span>
     <button id="sort-finding" class="active">visual finding</button>
-    <button id="sort-regression" title="Ranks: verdict regressions where both runs were image-verified, then verdict differences against an unverified baseline entry (usually the OLD verdict was wrong, not a new defect), then composite-score moves. Skips are not regressions and sort last.">regressions</button>
-    <button id="sort-score">worst score</button>
+    <button id="sort-regression" title="Ranks: verdict regressions where both runs were image-verified, then verdict differences against an unverified baseline entry (usually the OLD verdict was wrong, not a new defect), then captures whose clip image changed. Skips are not regressions and sort last.">regressions</button>
+    <button id="sort-score" title="Reviewed severity 0-10 (10 = unusable). Unreviewed domains sort last — no computed score stands in for a judgment.">worst severity</button>
     <button id="sort-date">newest run</button>
     <button id="filter-flagged">only flagged</button>
     <span class="count">${countLabel}</span>
@@ -741,31 +750,31 @@ function build() {
       const els = sites();
       els.sort((a, b) => {
         if (key === 'finding') {
-          // Reviewed verdict severity (critical→flaw→clean→unreviewed), then
-          // worst composite within the same verdict as a tie-breaker.
+          // Reviewed verdict (critical→flaw→clean→unreviewed), then the reviewed
+          // 0-10 severity within the same verdict as a tie-breaker.
           const fr = Number(a.dataset.finding) - Number(b.dataset.finding);
           if (fr !== 0) return fr;
-          return Number(b.dataset.composite) - Number(a.dataset.composite);
+          return Number(b.dataset.sev) - Number(a.dataset.sev);
         }
         if (key === 'regression') {
-          // broke → worse → new → same → better → fixed → still-skipped.
-          // Within "worse", the biggest composite JUMP first: that is the
-          // strongest signal of what this run changed for the worse.
+          // broke → changed → new → same → better → fixed → still-skipped.
+          // Ties break on reviewed severity: within one rank, the worst-judged
+          // clip is the one worth opening first.
           const rr = Number(a.dataset.regrank) - Number(b.dataset.regrank);
           if (rr !== 0) return rr;
-          return Number(b.dataset.regdelta) - Number(a.dataset.regdelta);
+          return Number(b.dataset.sev) - Number(a.dataset.sev);
         }
-        if (key === 'score') return Number(b.dataset.composite) - Number(a.dataset.composite);
+        if (key === 'score') return Number(b.dataset.sev) - Number(a.dataset.sev);
         return Number(b.dataset.mtime) - Number(a.dataset.mtime);
       });
       els.forEach((el) => list.appendChild(el));
     }
     function applyFilter() {
       for (const el of sites()) {
-        // "Only flagged" now respects the human verdict too: show anything the
-        // review marked critical/flaw, plus high-composite + skips.
+        // "Only flagged": anything the review marked critical/flaw, anything
+        // rated 3+/10, plus skips.
         const fr = Number(el.dataset.finding);
-        const flagged = fr <= 1 || Number(el.dataset.composite) >= 0.25 || el.dataset.status === 'skip';
+        const flagged = fr <= 1 || Number(el.dataset.sev) >= 3 || el.dataset.status === 'skip';
         el.classList.toggle('hidden', flaggedOnly && !flagged);
       }
     }

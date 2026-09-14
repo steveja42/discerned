@@ -4,7 +4,7 @@
 // previous run that happens to still be sitting in corpus-sweep-run/.
 //
 // Usage: node tests/e2e/tools/watch-sweep-run.mjs <sinceEpochSeconds>
-// Prints one line per newly-landed domain, oldest first: "<domain> <status> <composite|-> <mtimeIso>"
+// Prints one line per newly-landed domain, oldest first: "<domain> <status> <textCoverage|-> <mtimeIso>"
 
 import { readdirSync, statSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -24,16 +24,16 @@ for (const f of readdirSync(DIR)) {
   const st = statSync(full);
   const mtimeSec = st.mtimeMs / 1000;
   if (mtimeSec <= since) continue;
-  let status = '?', composite = '-';
+  let status = '?', cov = '-';
   try {
     const rec = JSON.parse(readFileSync(full, 'utf8'));
     status = rec.status ?? '?';
-    composite = rec.scores?.composite ?? '-';
+    cov = rec.scores?.textCoverage ?? '-';
   } catch { /* mid-write, skip this poll */ }
-  rows.push({ domain: m[1], status, composite, mtime: mtimeSec });
+  rows.push({ domain: m[1], status, cov, mtime: mtimeSec });
 }
 rows.sort((a, b) => a.mtime - b.mtime);
 for (const r of rows) {
-  console.log(`${r.domain}\t${r.status}\t${r.composite}\t${new Date(r.mtime * 1000).toISOString()}`);
+  console.log(`${r.domain}\t${r.status}\t${r.cov}\t${new Date(r.mtime * 1000).toISOString()}`);
 }
 if (rows.length === 0) console.error(`(no domains landed since ${new Date(since * 1000).toISOString()})`);

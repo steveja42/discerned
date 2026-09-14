@@ -61,10 +61,13 @@ export interface SweepRecord {
   httpStatus?: number;
   /** Free-text provenance note (e.g. "manual headed capture …"). */
   note?: string;
-  /** The four heuristic scores + composite (present when status === 'ok'). */
+  /** The four heuristic diagnostics (present when status === 'ok'). */
   scores?: SweepScores;
 }
 
+/** Recorded context for a reviewer already looking at the image — NOT a quality
+ *  ranking. The former `composite`/`flags` were measured anti-predictive and
+ *  removed; see sweepScorers.ts's header for the numbers. */
 export interface SweepScores {
   /** clip body text length / visible page text length (0..1+). */
   textCoverage: number;
@@ -74,8 +77,4 @@ export interface SweepScores {
   aspectDistorted: number;
   /** count of known page-chrome strings that survived into the clip body. */
   chromeHits: number;
-  /** 0..1 composite, 1 = worst. Drives the gallery's worst-first sort. */
-  composite: number;
-  /** Short labels of the heuristics that tripped their threshold. */
-  flags: string[];
 }

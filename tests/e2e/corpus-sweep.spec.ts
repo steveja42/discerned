@@ -297,6 +297,17 @@ async function purgeStoredClips(ctx: BrowserContext): Promise<number> {
   }
 }
 
+
+/** Compact one-line rendering of a capture's diagnostics for the run log. These
+ *  are context, not a score — there is no composite to print (see sweepScorers). */
+function diagLine(sc: { textCoverage: number; chromeHits: number; aspectDistorted: number; blankRatio: number }): string {
+  const bits = [`cov=${(sc.textCoverage * 100).toFixed(0)}%`];
+  if (sc.chromeHits) bits.push(`chrome=${sc.chromeHits}`);
+  if (sc.aspectDistorted) bits.push(`distort=${sc.aspectDistorted}`);
+  if (sc.blankRatio > 0.35) bits.push(`blank=${(sc.blankRatio * 100).toFixed(0)}%`);
+  return bits.join(' ');
+}
+
 test.describe.configure({ mode: 'serial' });
 
 // A record the driver marks with `challenged` when the skip was a Cloudflare /
@@ -1094,8 +1105,7 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
         mergeRecord(acc, rec);
         // eslint-disable-next-line no-console
         console.log(rec.status === 'ok'
-          ? `OK⊕   ${d.name.padEnd(20)} composite=${rec.scores!.composite.toFixed(3)} (px-headed)` +
-              (rec.scores!.flags.length ? `  [${rec.scores!.flags.join(', ')}]` : '')
+          ? `OK⊕   ${d.name.padEnd(20)} ${diagLine(rec.scores!)} (px-headed)`
           : `SKIP⊕ ${d.name.padEnd(20)} ${rec.skipReason} (px-headed)`);
       }
     } finally {
@@ -1128,8 +1138,7 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
       mergeRecord(acc, rec);
       // eslint-disable-next-line no-console
       console.log(rec.status === 'ok'
-        ? `OK    ${d.name.padEnd(20)} composite=${rec.scores!.composite.toFixed(3)}` +
-            (rec.scores!.flags.length ? `  [${rec.scores!.flags.join(', ')}]` : '')
+        ? `OK    ${d.name.padEnd(20)} ${diagLine(rec.scores!)}`
         : `SKIP  ${d.name.padEnd(20)} ${rec.skipReason}`);
     }
   } finally {
@@ -1164,8 +1173,7 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
         mergeRecord(acc, rec);
         // eslint-disable-next-line no-console
         console.log(rec.status === 'ok'
-          ? `OK*   ${d.name.padEnd(20)} composite=${rec.scores!.composite.toFixed(3)} (headed)` +
-              (rec.scores!.flags.length ? `  [${rec.scores!.flags.join(', ')}]` : '')
+          ? `OK*   ${d.name.padEnd(20)} ${diagLine(rec.scores!)} (headed)`
           : `SKIP* ${d.name.padEnd(20)} ${rec.skipReason} (headed)`);
       }
     } finally {
@@ -1190,14 +1198,20 @@ test('corpus-sweep: capture + score the corpus domains, build ranked gallery', a
   }).filter((r): r is SweepDriverRecord => !!r);
   const scored = records.filter(r => r.status === 'ok');
   const skipped = records.filter(r => r.status === 'skip');
-  scored.sort((a, b) => (b.scores!.composite) - (a.scores!.composite));
-  const worst = scored.slice(0, Math.max(1, Math.ceil(scored.length / 10)));
+  // No "worst decile" list any more: ranking by the old composite was measured
+  // ANTI-predictive (AUC 0.445; 1 of its top 10 was actually bad, against a 37%
+  // base rate), so it sent the reviewer to the wrong ten domains first. Every
+  // captured domain needs an eye on it; review-queue.mjs orders that work by
+  // whether the capture CHANGED, which is the one objective triage signal.
+  scored.sort((a, b) => a.domain.localeCompare(b.domain));
   const summary = [
     `Corpus sweep — ${new Date().toISOString()}`,
     `${records.length} domains · ${scored.length} scored · ${skipped.length} skipped`,
     '',
-    'Worst decile (eyeball these):',
-    ...worst.map(r => `  ${r.scores!.composite.toFixed(3)}  ${r.domain.padEnd(20)} [${r.scores!.flags.join(', ')}]`),
+    'Review with:  node tests/e2e/tools/review-queue.mjs',
+    '',
+    'Captured (diagnostics are context, not a ranking):',
+    ...scored.map(r => `  ${r.domain.padEnd(20)} ${diagLine(r.scores!)}`),
     // The skip list IS the retry command's argument — printing it saves grepping
     // 206 sidecars to find out what to feed the next pass.
     ...(skipped.length ? [

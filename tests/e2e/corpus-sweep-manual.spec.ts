@@ -374,8 +374,9 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
           rec.note = 'manual headed capture (block cleared with interaction)';
           writeFileSync(art.score(), JSON.stringify(rec, null, 2));
           // eslint-disable-next-line no-console
-          console.log(`   ✓ captured + scored — composite=${rec.scores.composite.toFixed(3)}` +
-            (rec.scores.flags.length ? `  [${rec.scores.flags.join(', ')}]` : ''));
+          console.log(`   ✓ captured + scored — cov=${(rec.scores.textCoverage * 100).toFixed(0)}%` +
+            (rec.scores.chromeHits ? ` chrome=${rec.scores.chromeHits}` : '') +
+            (rec.scores.aspectDistorted ? ` distort=${rec.scores.aspectDistorted}` : ''));
         } finally {
           await libPage.close().catch(() => undefined);
         }

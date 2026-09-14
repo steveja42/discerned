@@ -1,20 +1,27 @@
-// Phase 4.1 — content-free quality heuristics for the corpus sweep.
+// Phase 4.1 — content-free capture DIAGNOSTICS for the corpus sweep.
 //
-// For a domain we've never curated there is no ground-truth "expected" clip, so
-// we can't assert equality. Instead we score each capture with signals that
-// suggest something is wrong WITHOUT knowing what "right" is, then rank the
-// sweep worst-first and eyeball only the worst decile. Each heuristic maps onto
-// a defect class the pipeline has fought before:
+// These are recorded context, NOT a quality ranking. An earlier version combined
+// them into a 0..1 `composite` that ranked the review queue worst-first; that was
+// measured against 203 scored-and-reviewed domains and found ANTI-predictive:
 //
-//   - textCoverage     mis-scoped root / captured-everything  (Phase 3.4 self-check)
-//   - blankRatio       elements dropped mid-pipeline → holes
-//   - aspectDistorted  stretched-avatar / blur-triplet blobs   (Phase 2 primal)
-//   - chromeHits        generic chrome stripper missed this site (removeGenericChrome)
+//   AUC 0.445 (0.5 = coin flip)      worst-10 precision 1/10 = 10%
+//   base rate of a critical/flaw verdict: 36.9%
+//   63% of bad clips (47/75) scored <=0.02 — invisible to the ranking
 //
-// The scores are a TRIAGE FILTER, not a pass/fail gate — false positives (a
-// legitimately image-heavy or very short page) and false negatives (broken but
-// plausible content) are expected and acceptable because a human reviews the
-// ranked tail. The pixel-baseline fixture specs remain the real regression floor.
+// Per-heuristic AUC was 0.46-0.54, i.e. every signal sat at chance, and domains
+// with NO flags were bad 37% of the time — exactly the base rate, so the flags
+// carried no information. Sorting by composite was worse than alphabetical.
+//
+// The cause is structural, not a tuning problem: the defects that matter are
+// semantic ("every comment duplicated", "headline missing", "captured the video
+// rail instead of the article") and are invisible to text-length ratios, gap
+// pixels and aspect ratios. apnews scored 0.005 with zero flags while capturing
+// the wrong block entirely.
+//
+// So the numbers below are kept as CONTEXT a reviewer reads once already looking
+// at an image, and the queue is ordered by whether the capture actually changed.
+// Real quality signal comes from two places only: the pixel-baseline fixture
+// specs (the regression floor) and a model/human reading the slices.
 
 import type { SweepScores } from './sweepArtifacts';
 
@@ -30,9 +37,9 @@ export interface SweepMeasurements {
   chromeSamples: string[];
 }
 
-// Thresholds past which a heuristic is "flagged". Tuned conservatively — the
-// goal is to surface the obviously-bad tail, not to nitpick. Adjust after the
-// first ~50-domain run shows the score distribution.
+// Reference points for READING the diagnostics in the gallery (a value past one
+// of these is worth a glance once you are already looking at the image). They no
+// longer gate, flag or rank anything — see the header for why.
 export const THRESHOLDS = {
   textCoverageLow: 0.05,   // captured a sliver of the page
   textCoverageHigh: 0.9,   // captured essentially the whole page (chrome + all)
@@ -41,67 +48,17 @@ export const THRESHOLDS = {
   chromeHits: 3,           // 3+ known-chrome strings survived
 };
 
-/** Combine raw in-page measurements into normalised 0..1 scores + a composite
- *  (1 = worst) + the list of tripped heuristics. */
+/** Combine raw in-page measurements into recorded diagnostics. No composite and
+ *  no flags: see the header — they ranked below chance and are not computed. */
 export function computeScores(m: SweepMeasurements): SweepScores {
   const textCoverage = m.pageTextLen > 0 ? m.clipTextLen / m.pageTextLen : 0;
   const blankRatio = m.clipHeight > 0 ? Math.min(1, m.blankPx / m.clipHeight) : 0;
-
-  const flags: string[] = [];
-  // Normalise each heuristic to a 0..1 "badness" contribution.
-  // textCoverage: a sliver (captured almost nothing) is unambiguously bad. But
-  // HIGH coverage is NOT a defect on its own — a minimal-chrome text page
-  // (danluu, paulgraham, HN, Wikipedia article) legitimately captures ~90-100%
-  // of its own text, and that's the healthy case, not chrome leaking in. So the
-  // high-coverage signal only CONTRIBUTES to the composite when there's
-  // independent evidence chrome survived (chromeHits > 0). Absent that, we still
-  // surface an informational note but weight it zero so text-only pages don't
-  // dominate the worst-decile with false positives.
-  let textBad = 0;
-  if (textCoverage < THRESHOLDS.textCoverageLow) {
-    textBad = 1 - textCoverage / THRESHOLDS.textCoverageLow; // →1 as coverage→0
-    flags.push(`text-coverage low (${(textCoverage * 100).toFixed(1)}%)`);
-  } else if (textCoverage > THRESHOLDS.textCoverageHigh) {
-    if (m.chromeHits > 0) {
-      textBad = Math.min(1, (textCoverage - THRESHOLDS.textCoverageHigh) / (1 - THRESHOLDS.textCoverageHigh));
-      flags.push(`text-coverage high (${(textCoverage * 100).toFixed(0)}% — chrome likely included)`);
-    } else {
-      // High coverage, zero chrome hits: healthy full-text capture. Note it
-      // (a reviewer may still want to eyeball) but don't count it as badness.
-      // Coverage can exceed 100% when the source page under-measured its own
-      // innerText (lazy-loaded / cookie-walled body) — the clip legitimately
-      // holds MORE text than the throttled live DOM did. A literal "2121%" reads
-      // as a bug, so clamp the DISPLAYED figure to ">=100%" past 105%.
-      const pct = textCoverage > 1.05 ? '≥100' : (textCoverage * 100).toFixed(0);
-      flags.push(`text-coverage high (${pct}% — no chrome detected, likely healthy)`);
-    }
-  }
-
-  const blankBad = Math.min(1, blankRatio / Math.max(THRESHOLDS.blankRatio, 0.001));
-  if (blankRatio > THRESHOLDS.blankRatio) flags.push(`blank-space ${(blankRatio * 100).toFixed(0)}%`);
-
-  // Distortion + chrome are counts; saturate to 1 over a small span so a couple
-  // of hits already reads as "bad" without one outlier dominating the composite.
-  const distortBad = Math.min(1, m.aspectDistorted / 4);
-  if (m.aspectDistorted >= THRESHOLDS.aspectDistorted) flags.push(`${m.aspectDistorted} distorted image(s)`);
-
-  const chromeBad = Math.min(1, m.chromeHits / 8);
-  if (m.chromeHits >= THRESHOLDS.chromeHits) flags.push(`${m.chromeHits} chrome string(s)`);
-
-  // Weighted composite. text-coverage and chrome are the strongest "this clip is
-  // wrong" signals; blank + distortion are secondary. Weights sum to 1.
-  const composite = Math.min(
-    1,
-    0.35 * textBad + 0.30 * chromeBad + 0.20 * blankBad + 0.15 * distortBad,
-  );
 
   return {
     textCoverage: round(textCoverage),
     blankRatio: round(blankRatio),
     aspectDistorted: m.aspectDistorted,
     chromeHits: m.chromeHits,
-    composite: round(composite),
-    flags,
   };
 }
 

@@ -19,13 +19,14 @@
 // case [[feedback_refresh_gallery_and_verdict_after_each_fix]] exists to catch.
 //
 // Usage:
-//   node tests/e2e/tools/review-queue.mjs              # pending, worst-score first
+//   node tests/e2e/tools/review-queue.mjs              # pending, changed-captures first
 //   node tests/e2e/tools/review-queue.mjs --limit 15   # next N only
 //   node tests/e2e/tools/review-queue.mjs --stats      # counts only, no list
 //   node tests/e2e/tools/review-queue.mjs --json       # machine-readable
 //   node tests/e2e/tools/review-queue.mjs --all        # include already-reviewed
 
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -71,6 +72,30 @@ function mtime(path) {
 }
 
 const findings = loadFindings();
+// ── Triage order: did the CAPTURE change? ───────────────────────────
+// The queue used to be ordered worst-composite-first. Measured against 203
+// scored-and-reviewed domains that ranking was ANTI-predictive (AUC 0.445; the
+// worst-10 held 1 bad clip against a 36.9% base rate, and 47 of 75 bad clips
+// scored <=0.02), so it reliably sent the reviewer to the wrong domains first.
+//
+// What IS objective is whether this run's clip differs from the baseline's. It
+// makes no claim about quality — only that there is something new to look at,
+// which is exactly the triage question. A byte-identical clip whose verdict is
+// merely stale can wait; a changed one cannot.
+function md5(path) {
+  try { return createHash('md5').update(readFileSync(path)).digest('hex'); }
+  catch { return null; }
+}
+
+// Most recent backup folder, used only to ask "did this clip change?".
+let baselineDir = null;
+try {
+  const backups = readdirSync(OUT_ROOT)
+    .filter(f => f.startsWith('corpus-sweep-run--backup-'))
+    .sort();
+  if (backups.length) baselineDir = resolve(OUT_ROOT, backups[backups.length - 1]);
+} catch { /* no backups — every capture reads as new */ }
+
 const rows = [];
 
 for (const f of readdirSync(RUN_DIR)) {
@@ -90,7 +115,7 @@ for (const f of readdirSync(RUN_DIR)) {
   // reviewed — a skipped domain is the one most likely to need action.
   if (rec.status !== 'ok') {
     rows.push({
-      domain, kind: 'blocked', composite: null,
+      domain, kind: 'blocked', changed: true, scores: null,
       reason: rec.skipReason ?? 'skipped', verdict: finding?.verdict ?? null,
     });
     continue;
@@ -112,14 +137,19 @@ for (const f of readdirSync(RUN_DIR)) {
 
   if (!pending && !includeReviewed) continue;
 
+  // null = no baseline to compare against (treated as "changed", i.e. review it).
+  const baseClip = baselineDir ? resolve(baselineDir, `${domain}--2-clip.png`) : null;
+  const baseHash = baseClip ? md5(baseClip) : null;
+  const changed = !baseHash || baseHash !== md5(clip);
+
   rows.push({
     domain,
     kind: !finding ? 'new'
       : stale ? 'restale'
       : !finding.reviewedAt ? 'unstamped'
       : 'cast-unchecked',
-    composite: rec.scores?.composite ?? null,
-    flags: rec.scores?.flags ?? [],
+    changed,
+    scores: rec.scores ?? null,
     verdict: finding?.verdict ?? null,
     clip: existsSync(clip) ? clip : null,
     cast: existsSync(cast) ? cast : null,
@@ -127,12 +157,17 @@ for (const f of readdirSync(RUN_DIR)) {
   });
 }
 
-// Worst composite first: the scorer can't judge a clip, but it reliably ranks
-// which ones are most likely to be worth a human's first look.
+// Blocked first (they need an action, not an eyeball), then captures that
+// actually CHANGED since the baseline, then the rest alphabetically. See the
+// md5 helper above for why this replaced the composite ranking.
+const KIND_RANK = { new: 0, restale: 1, unstamped: 2, 'cast-unchecked': 3 };
 rows.sort((a, b) => {
   if (a.kind === 'blocked' && b.kind !== 'blocked') return -1;
   if (b.kind === 'blocked' && a.kind !== 'blocked') return 1;
-  return (b.composite ?? 0) - (a.composite ?? 0);
+  if (a.changed !== b.changed) return a.changed ? -1 : 1;
+  const k = (KIND_RANK[a.kind] ?? 9) - (KIND_RANK[b.kind] ?? 9);
+  if (k) return k;
+  return a.domain.localeCompare(b.domain);
 });
 
 const blocked = rows.filter(r => r.kind === 'blocked');
@@ -162,13 +197,16 @@ if (blocked.length) {
 }
 
 if (pendingRows.length) {
-  console.log(`\nAWAITING REVIEW (${pendingRows.length}, worst score first):`);
+  const changedCount = pendingRows.filter(r => r.changed).length;
+  console.log(`\nAWAITING REVIEW (${pendingRows.length}; ${changedCount} with a changed capture, listed first):`);
   for (const r of pendingRows.slice(0, limit)) {
     const tag = r.kind === 'restale' ? ' [re-captured, verdict stale]'
       : r.kind === 'unstamped' ? ' [unverified bulk verdict]'
       : r.kind === 'cast-unchecked' ? ' [clip verified, CAST NOT CHECKED]' : '';
-    const flags = r.flags?.length ? `  [${r.flags.join(', ')}]` : '';
-    console.log(`  ${(r.composite ?? 0).toFixed(3)}  ${r.domain.padEnd(24)}${flags}${tag}`);
+    const mark = r.changed ? 'CHANGED' : '  same ';
+    const cov = r.scores ? ` cov=${(r.scores.textCoverage * 100).toFixed(0)}%` : '';
+    const chrome = r.scores?.chromeHits ? ` chrome=${r.scores.chromeHits}` : '';
+    console.log(`  ${mark}  ${r.domain.padEnd(24)}${cov}${chrome}${tag}`);
     if (r.clip) console.log(`      ${r.clip}`);
     if (r.cast) console.log(`      ${r.cast}`);
   }
