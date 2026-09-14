@@ -3023,6 +3023,10 @@ function findContentBlockByLayout(): Element | null {
 // sharing it. Both terms are required: bsky also has partVis=1, so a
 // visible-count test alone would misclassify it and break a pixel-baselined
 // site — topShare (0.33 vs 0.99) is what separates them.
+// The winner must hold at least this share of the group's BIGGEST sibling's
+// text. Feed posts are roughly comparable; a page section masquerading as a
+// feed item is not. See maybeNarrowToVisiblePost for the Target measurement.
+const FEED_MIN_KEPT_TEXT_SHARE = 0.25;
 const FEED_MAX_VISIBLE_ITEMS = 1;      // more than one on screen ⇒ a thread
 const FEED_MIN_TOP_SHARE = 0.5;        // the post must OWN the viewport
 const FEED_MIN_SIBLINGS = 3;           // 2 similar blocks is a layout, not a feed
@@ -3205,6 +3209,15 @@ function maybeNarrowToVisiblePost(el: Element): Element {
     const hasContent = (winner.textContent ?? '').trim().length > 0
       || winner.querySelector('img, video') !== null;
     if (!hasContent) continue;
+    // A real feed's posts are COMPARABLE in size — narrowing to any one of them
+    // loses a similar amount. When one sibling dwarfs the winner, the group is
+    // not a feed: it is a page section (a sponsored rail, a carousel) sitting
+    // beside the real content, and narrowing would throw that content away.
+    // Measured on Target's PDP: the winner held 774 chars while a sibling held
+    // 15563, and the clip came out as "Show more images".
+    const keptText = (winner.textContent ?? '').trim().length;
+    const biggestText = Math.max(...items.map(i => (i.textContent ?? '').trim().length));
+    if (biggestText > 0 && keptText / biggestText < FEED_MIN_KEPT_TEXT_SHARE) continue;
 
     log(LL.DEBUG,
       `Discerned: narrowed to visible feed post — ${items.length} siblings, ` +
@@ -7433,6 +7446,53 @@ function tagSemanticStructure(root: Element): void {
     if (!looksByline) continue;
     appendClass(parent, 'dx-byline');
   }
+
+  tagKeyValueRows(root);
+}
+
+// A metadata LABEL/VALUE row: "Publish Date | 1977", "Language | Spanish".
+// Sites lay these out with grid/flex and a block-level label, so once the page
+// CSS is stripped the label and its value stack one per line and the table
+// reads as a column of orphaned words. applyFlexSeparation can't fix it — a
+// space between two block boxes still breaks the line. Stamping dx-kv lets the
+// clip CSS put the pair back on one row.
+//
+// Kept deliberately tight (2 children, short label, no prose/media/links in the
+// label) because "container with two children" is the commonest shape on the
+// web — a loose rule would re-flow ordinary content.
+const KV_LABEL_MAX_CHARS = 40;
+const KV_VALUE_MAX_CHARS = 200;
+
+function tagKeyValueRows(root: Element): void {
+  for (const row of Array.from(root.querySelectorAll('div, li'))) {
+    if (row.closest('.tweet-card')) continue;
+    if (row.classList.contains('dx-byline') || row.classList.contains('dx-stats')) continue;
+    const kids = Array.from(row.children);
+    if (kids.length !== 2) continue;
+
+    const [label, value] = kids;
+    // The label must be BLOCK-level. That is the whole defect: a block label
+    // forces its value onto the next line once the source grid CSS is gone.
+    // Two inline <span>s (a BBC "Name / Role" byline) already read correctly
+    // with the space applyFlexSeparation inserts — treating one as a "label"
+    // would grey the author's name and pin it to a metadata column.
+    if (!/^(DIV|DT|H3|H4|H5|H6)$/.test(label.tagName)) continue;
+    if (label.querySelector('img, video, picture, svg, a')) continue;
+
+    const labelText = (label.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const valueText = (value.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (labelText.length === 0 || valueText.length === 0) continue;
+    if (labelText.length > KV_LABEL_MAX_CHARS) continue;
+    if (valueText.length > KV_VALUE_MAX_CHARS) continue;
+    // Real prose is a paragraph, not a metadata value.
+    if (value.querySelector('p, blockquote, h1, h2, li')) continue;
+    // A label ending in a sentence is prose that happens to be short.
+    if (/[.!?]$/.test(labelText)) continue;
+
+    appendClass(row, 'dx-kv');
+    appendClass(label, 'dx-kv-label');
+    appendClass(value, 'dx-kv-value');
+  }
 }
 
 // ── Sanitisation ─────────────────────────────────────────────────────────────
@@ -9662,7 +9722,6 @@ function sanitiseTreeInPlace(root: Element, stripStyles = false) {
     removeGenericChrome(root);
   }
   stripZeroWidthChars(root);
-  tagProseWrappers(root);
 
   // VIDEO-PLAYER CONTROL CHROME. A player's control layer is a row of icon
   // buttons — play/pause, captions, cast, volume, settings, fullscreen, picture
@@ -9717,6 +9776,14 @@ function sanitiseTreeInPlace(root: Element, stripStyles = false) {
     sanitiseElement(node as Element, stripStyles);
   };
   Array.from(root.childNodes).forEach(walk);
+
+  // AFTER the walk, never before: the guard keys on `div > svg`, and on a
+  // web-components site the SVG's parent is still a custom element at that
+  // point (Open Library: ol-button, ol-icon). The walk is what unwraps those
+  // into <div>s — which is also what makes globals.css's `div:has(> svg)`
+  // icon-row rule start matching, so running earlier stamped nothing and a
+  // whole page section was flexed into one-character columns.
+  tagProseWrappers(root);
 
   // Drop the redundant small-thumbnail rail of a carousel/lightbox gallery
   // (main slides + duplicate thumbnail strip) — the same photo rendered twice.

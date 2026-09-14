@@ -672,9 +672,9 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Capture opens straight into the marketing feature-image gallery with no product title, price or buy box, on both clip and cast.",
+      "note": "Title, price and full About-this-item block now captured; the trailing Discover-more-options recommendation rail is still included.",
       "by": "ai",
-      "reviewedAt": "2026-09-09T03:15:09.333Z"
+      "reviewedAt": "2026-09-14T19:32:40.998Z"
     },
     "substack-generic": {
       "verdict": "clean",
@@ -1163,13 +1163,13 @@
       "reviewedAt": "2026-09-09T05:34:36.397Z"
     },
     "openlibrary": {
-      "verdict": "critical",
+      "verdict": "clean",
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "The edition-notes table collapses to one value per line and the author link is duplicated as a broken variant (Roal'd Dal'), on both clip and cast.",
+      "note": "Edition table, Book Details sections and Work Description prose all render at full width; the paginated editions table shows 3 of 10 as the source does.",
       "by": "ai",
-      "reviewedAt": "2026-09-09T05:34:36.397Z"
+      "reviewedAt": "2026-09-14T21:12:46.617Z"
     },
     "techcrunch": {
       "verdict": "flaw",

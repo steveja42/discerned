@@ -1739,6 +1739,28 @@ a { color: inherit; }
   max-width: 100% !important;
 }
 
+/* A heading squeezed to a sliver by a flex parent wraps one letter per line.
+   Measured on Target's tab strip: "Details" rendered 28px wide x 66px tall
+   beside "Specifications" at 127x22, because the source's own width rules lived
+   in its stylesheet and did not survive capture. A heading should never be
+   narrower than its own longest word. */
+.clip-body :is(h1, h2, h3, h4, h5, h6) {
+  min-width: min-content;
+}
+/* …and the flex ITEM wrapping it, which is the box actually being squeezed.
+   Measured: the row is [label][icon][the whole expanded panel, 1165px], and the
+   panel hogs it. `min-width` alone does not help — `flex-shrink: 1` still wins —
+   so the label must be pinned unshrinkable and kept on one line. The flex
+   container takes `display:inline-flex` from the source's stylesheet, not an
+   inline style, so it cannot be matched on [style]; key off the heading. */
+.clip-body div:has(> :is(h1, h2, h3, h4, h5, h6)):not(:has(img)):not(:has(svg)):not(:has(video)):not(:has(iframe)):not([class*="dx-"]):not([class*="tweet-"]) {
+  flex-shrink: 0;
+  min-width: min-content;
+}
+.clip-body div:has(> :is(h1, h2, h3, h4, h5, h6)):not(:has(p)):not(:has(img)):not(:has(svg)):not(:has(video)):not(:has(iframe)):not([class*="dx-"]):not([class*="tweet-"]) > :is(h1, h2, h3, h4, h5, h6) {
+  white-space: nowrap;
+}
+
 /* Generic fallbacks for captured articles from arbitrary sites — these run on
    any .clip-body content. The X.com .tweet-* rules above take precedence on
    tweet captures because the extractor adds those classes; nothing here
@@ -2633,6 +2655,33 @@ a { color: inherit; }
 .clip-body .dx-stats--end {
   justify-content: flex-end;
   gap: 4px 24px;
+}
+/* dx-kv is a metadata label/value pair ("Publish Date | 1977") that the source
+   laid out with grid/flex. Both halves are usually block-level, so without this
+   they stack one per line and the table reads as orphaned words. The label gets
+   a stable column so consecutive rows line up. */
+.clip-body .dx-kv {
+  display: flex;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 2px;
+  margin: 2px 0;
+}
+.clip-body .dx-kv-label {
+  flex: 0 0 auto;
+  min-width: 120px;
+  color: var(--ink-3);
+  font-size: 14px;
+}
+.clip-body .dx-kv-value {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Narrow screens: a 120px label column plus a value doesn't fit, so let the
+   pair wrap back to two lines rather than squeezing the value to a sliver. */
+@media (max-width: 520px) {
+  .clip-body .dx-kv { flex-wrap: wrap; }
+  .clip-body .dx-kv-label { min-width: 0; }
 }
 /* Compact zap rows (reply-level _zapHighlightsCompact_) already show the
    zap total inline. The _footer_ stats row immediately after repeats the same

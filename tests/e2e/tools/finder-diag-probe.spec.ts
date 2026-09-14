@@ -96,6 +96,10 @@ const TARGETS: Record<string, string> = {
   // ebay captures NOTHING at all. Suspected scoreContentBlock gap: an identity
   // block is short, link/button-dense and <p>-free, so it scores near zero.
   'imdb-name': 'https://www.imdb.com/name/nm0000138/',
+  // Sweep "critical" (2026-09-09): the edition-notes label/value table collapses
+  // to one cell per line and the author renders twice ("Roald Dahl and Roal'd
+  // Dal'"), with a stack of Borrow/Listen/WorldCat chrome above the title.
+  openlibrary: 'https://openlibrary.org/works/OL45804W/Fantastic_Mr_Fox',
   ebay: 'https://www.ebay.com/itm/397652415204',
   target: 'https://www.target.com/p/razer-ornata-v3-tenkeyless-espeon-umbreon-edition/-/A-95017977',
   lastfm: 'https://www.last.fm/music/Radiohead',
@@ -170,10 +174,17 @@ test('live-page diagnostics (finder / picker)', async () => {
           console.log(`   ⏸ ${name}: holding up to ${waitSecs}s — clear anything blocking the page…`);
           const deadline = Date.now() + waitSecs * 1_000;
           while (Date.now() < deadline) {
-            const alive = await page.evaluate(
-              () => document.querySelectorAll('a[href]').length,
-            ).catch(() => 0);
-            if (alive >= 20) break;
+            // "Alive" must mean the GATE is gone, not merely that links exist —
+            // a PerimeterX interstitial carries plenty of its own links, so a
+            // bare link count broke out instantly and the probe then measured
+            // the gate page while the human was still pressing and holding.
+            const alive = await page.evaluate(() => {
+              const t = (document.body?.innerText ?? '').toLowerCase();
+              const gated = t.length < 40
+                || /press\s*&?\s*hold|robot or human|make sure you'?re a human|verify you are human/.test(t);
+              return !gated && document.querySelectorAll('a[href]').length >= 20;
+            }).catch(() => false);
+            if (alive) break;
             await page.waitForTimeout(2_000);
           }
         }
@@ -525,11 +536,33 @@ test('live-page diagnostics (finder / picker)', async () => {
           out.push(`  ${String(b.score).padStart(8)} | ${(b.tag + '.' + b.cls).padEnd(46)} | ${String(b.textLen).padStart(6)} | ${String(b.visLen).padStart(6)} | ${String(b.area).padStart(9)} | ${String(b.linkRatio).padStart(4)} | ${String(b.p).padStart(3)} | ${String(b.img).padStart(3)}`);
         }
 
+        // The pipeline census logs to the page console at DEBUG (dev builds).
+        // It is the only way to see WHICH stage dropped the content when the
+        // finder picked a good block but the capture came out near-empty.
+        const censusLines: string[] = [];
+        page.on('console', (m) => {
+          const t = m.text();
+          if (/census|layout-finder|selfCheck|narrowed|expand|handoff|prose-wrap/i.test(t)) censusLines.push(t);
+        });
+
         // Bind the content script FIRST. Production ships no broad host
         // permission, so the test bridge has no listener until the activeTab
         // gesture injects it — without this every target reports a bogus
         // "capture timeout" that looks like a capture defect but is just an
         // un-injected page (fortune, 2026-08-30).
+        // Record whether a bot gate is covering the page AT CAPTURE TIME. A
+        // PerimeterX interstitial can appear seconds AFTER the real page
+        // renders, and a capture taken then measures the gate, not the site —
+        // an ambiguity that has already produced one wrong diagnosis.
+        const gateState = await page.evaluate(() => {
+          const t = (document.body?.innerText ?? '').toLowerCase();
+          return /press\s*&?\s*hold|robot or human|verify you are human/.test(t)
+            ? 'GATE VISIBLE' : 'no gate';
+        }).catch(() => 'unknown');
+        out.push(`  gate at capture: ${gateState}`);
+
+
+
         await activateExtensionOnPage(page).catch((e) => {
           out.push(`ACTIVATION FAILED: ${(e as Error).message.split('\n')[0]}`);
         });
@@ -559,6 +592,8 @@ test('live-page diagnostics (finder / picker)', async () => {
           const diagLines = res.diag ?? [];
           out.push('  pipeline stages: ' + (diagLines.length ? '' : '(none captured)'));
           for (const d of diagLines) out.push('    ' + d);
+          out.push('  console census: ' + (censusLines.length ? '' : '(none)'));
+          for (const c of censusLines) out.push('    ' + c);
           writeFileSync(resolve(__dirname, '..', '..', '..', 'test-output', `finder-diag-${name}-body.html`), body, 'utf8');
         }
       } catch (e) {
