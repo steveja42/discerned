@@ -48,14 +48,18 @@
   Default 120. A ceiling, not a fixed cost.
 
 .PARAMETER Window
-  Attended only: headed window geometry (SWEEP_WINDOW). Default 'max'
-  (maximised) so the window stops moving between runs — Chrome otherwise
-  places it itself on every launch. Also accepts '<W>x<H>' or '<W>x<H>+<X>+<Y>';
-  pass '' to leave placement to Chrome.
+  Attended only: OVERRIDE the headed window geometry (SWEEP_WINDOW).
 
-  Note this also drops Playwright's fixed 1280x720 viewport (the page then
-  fills the window), which is why it is opt-in and NOT used by the automated
-  passes — their pixel baselines depend on that exact viewport.
+  Empty by default, which is what you want: Chrome remembers window size and
+  position per profile (browser.window_placement in its Preferences), including
+  WHICH MONITOR, so a headed run reopens exactly where you left it. Passing
+  geometry overrules that memory, so only do it when a deterministic window is
+  actually wanted - 'max', '<W>x<H>' or '<W>x<H>+<X>+<Y>'.
+
+  Explicit coordinates are the wrong tool on a multi-monitor setup: they replay
+  raw pixels with no knowledge of which displays exist, so a monitor that is off
+  or rearranged puts the window off-screen. Chrome validates its remembered
+  placement against the current displays instead.
 
 .PARAMETER Only
   Comma-separated domain subset (passed through as SWEEP_ONLY, or
@@ -89,7 +93,7 @@ param(
   [switch]$Resume,
   [switch]$Attended,
   [int]$WaitSecs = 120,
-  [string]$Window = 'max',
+  [string]$Window = '',
   [string]$Only = '',
   [int]$Gap = 20,
   # Extra seconds on top of -Gap for the HEADED passes, which cluster the
@@ -191,15 +195,16 @@ if ($Attended) {
   Write-Host '  Clear each gate in the window as it appears.' -ForegroundColor Cyan
   Write-Host '  Can''t clear one? CLOSE THE TAB - it skips straight to the next domain.' -ForegroundColor Cyan
   Write-Host "  Per-site wait ceiling: $WaitSecs s (ends early the moment the page is clear)." -ForegroundColor Cyan
+  if ($Window) { Write-Host "  Window override: $Window" -ForegroundColor Cyan }
+  else { Write-Host '  Window: reopening where Chrome last left it (per profile, incl. monitor).' -ForegroundColor Cyan }
   Write-Host ''
 
   $env:SWEEP_MANUAL = '1'
   $env:SWEEP_MANUAL_ONLY = $Only
   $env:SWEEP_MANUAL_WAIT_MS = "$($WaitSecs * 1000)"
-  # Maximise the window for an attended pass, since you are looking at it and
-  # clicking in it. Chrome otherwise re-places the window on every launch, so it
-  # keeps moving between runs. Override with -Window '1600x1000+0+0', or
-  # -Window '' to leave placement to Chrome.
+  # Window geometry is normally LEFT ALONE: Chrome remembers size, position and
+  # monitor per profile, so the headed window reopens where you left it. Only an
+  # explicit -Window overrides that (see the .PARAMETER Window notes).
   if ($null -ne $Window -and $Window -ne '') { $env:SWEEP_WINDOW = $Window }
   else { Remove-Item Env:\SWEEP_WINDOW -ErrorAction SilentlyContinue }
 

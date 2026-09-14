@@ -62,11 +62,21 @@ export const EXTENSION_PATH = resolve(__dirname, '..', '..', '..', 'discerned-ex
 const PROFILES_ROOT = resolve(__dirname, '..', '..', '..', '.vscode', 'browser-test-profiles');
 
 /**
- * Chrome window flags from SWEEP_WINDOW, for headed runs.
+ * Chrome window flags for HEADED runs.
  *
- * 'max' maximises; '<W>x<H>' sets a size; '<W>x<H>+<X>+<Y>' also positions it.
- * Unset returns [] — Chrome places the window as it always has, so nothing
- * changes for runs that don't opt in.
+ * Default: NO flags. Chrome already remembers window size/position per profile
+ * (it stores them in the profile's `Preferences` under
+ * `browser.window_placement`), so a headed run reopens exactly where you left
+ * it — attended or not — provided we do not overrule it. The window used to
+ * jump around only because Playwright's explicit `--window-size` /
+ * `--window-position` overrode that memory, and its fixed 1280x720 `viewport`
+ * overrode the page size inside the window. Passing neither is the whole fix;
+ * no geometry needs saving or restoring here.
+ *
+ * SWEEP_WINDOW overrides Chrome's memory for one run, when a deterministic
+ * window is actually wanted:
+ *   'max'                 → maximise
+ *   '<W>x<H>[+<X>+<Y>]'   → explicit size, optional position
  */
 function windowArgs(): string[] {
   const spec = (process.env.SWEEP_WINDOW ?? '').trim();
@@ -80,14 +90,16 @@ function windowArgs(): string[] {
 }
 
 /**
- * Playwright's fixed 1280x720 `viewport` overrides the OS window size, so
- * --start-maximized alone gives a maximised window with a small page inside it.
- * `viewport: null` makes the page fill the window instead. Only when the caller
- * opted into SWEEP_WINDOW — otherwise the fixed viewport stays, since pixel
- * baselines and clip screenshots depend on a deterministic 1280x720.
+ * Playwright's fixed 1280x720 `viewport` sizes the PAGE independently of the
+ * window, so a restored (or maximised) window would still render a small page
+ * inside it. `null` makes the page fill whatever window Chrome opened.
+ *
+ * HEADLESS always keeps the fixed viewport — the pixel baselines and clip
+ * screenshots depend on a deterministic 1280x720, and there is no window to
+ * track. Headed runs are for looking at, so they follow the window.
  */
-function viewportFor(): { width: number; height: number } | null {
-  return process.env.SWEEP_WINDOW ? null : { width: 1280, height: 720 };
+function viewportFor(headed: boolean): { width: number; height: number } | null {
+  return headed ? null : { width: 1280, height: 720 };
 }
 
 export interface ExtensionContext {
@@ -305,7 +317,7 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
         '--no-sandbox',
       ],
       args,
-      viewport: viewportFor(),
+      viewport: viewportFor(headed),
     });
   } else {
     ctx = await chromium.launchPersistentContext(userDataDir, {
@@ -318,11 +330,11 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
       userAgent: REAL_UA,
       locale: 'en-US',
       args,
-      viewport: viewportFor(),
+      viewport: viewportFor(headed),
     });
   }
 
-  // (window geometry is applied via SWEEP_WINDOW_* in `args` above)
+  // (window geometry: see windowArgs() — Chrome remembers it per profile)
 
   // Hide the most common automation tells from page JS:
   //   - navigator.webdriver should be undefined (Playwright sets it to true)
