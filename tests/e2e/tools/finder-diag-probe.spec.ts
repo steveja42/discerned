@@ -117,6 +117,47 @@ const TARGETS: Record<string, string> = {
   fortune: 'https://fortune.com/2026/07/27/greenhouse-ceo-daniel-chait-ai-doom-loop-job-seekers-spam-interview-applications-unemployment/',
 };
 
+/**
+ * The corpus is the SINGLE SOURCE OF TRUTH for a domain's URL.
+ *
+ * TARGETS above is a curated diagnosis list — each entry carries the reason that
+ * domain is worth probing, which corpus-domains.json does not record, so the map
+ * stays. What it must NOT do is keep its own COPY of the URL: the corpus entry
+ * gets re-pointed when a story 404s or a site reshapes its paths, and a stale
+ * duplicate here then probes a different page than the sweep captured while
+ * reporting under the sweep's name.
+ *
+ * Measured 2026-09-14: `msn-slideshow` here pointed at a Star Trek slideshow
+ * while the corpus (and the sweep artifact being diagnosed) used a Noah's Ark
+ * article. The probe loaded MSN's "This story is unavailable" error page and
+ * reported 0 prose / 0 blocks — a confident diagnosis of the wrong page.
+ *
+ * So: the corpus URL WINS wherever the name exists there, and the map's value is
+ * a fallback for names the corpus doesn't carry. A divergence is printed rather
+ * than silently corrected, because a drifted entry is worth fixing at the source.
+ */
+function resolveTargets(): Record<string, string> {
+  let corpus: Record<string, string> = {};
+  try {
+    const raw = JSON.parse(readFileSync(
+      resolve(__dirname, '..', '..', 'fixtures', 'corpus-domains.json'), 'utf8',
+    )) as { domains: Array<{ name: string; url: string }> };
+    corpus = Object.fromEntries(raw.domains.map(d => [d.name, d.url]));
+  } catch { return TARGETS; }
+
+  const out: Record<string, string> = {};
+  for (const [name, url] of Object.entries(TARGETS)) {
+    const fromCorpus = corpus[name];
+    if (fromCorpus && fromCorpus !== url) {
+      // eslint-disable-next-line no-console
+      console.log(`   ⚠ ${name}: TARGETS URL is stale, using corpus URL\n`
+        + `       TARGETS: ${url}\n       corpus : ${fromCorpus}`);
+    }
+    out[name] = fromCorpus ?? url;
+  }
+  return out;
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test('live-page diagnostics (finder / picker)', async () => {
@@ -131,7 +172,7 @@ test('live-page diagnostics (finder / picker)', async () => {
     : null;
   const entries: Array<[string, string]> = pickerMode
     ? pickerSeeds.filter(s => !only || only.has(s.name)).map(s => [s.name, s.seedUrl])
-    : Object.entries(TARGETS).filter(([n]) => !only || only.has(n));
+    : Object.entries(resolveTargets()).filter(([n]) => !only || only.has(n));
 
   const waitSecs = Number(process.env.DIAG_WAIT ?? 0);
   const gapSecs = Number(process.env.DIAG_GAP ?? 0);
@@ -560,6 +601,28 @@ test('live-page diagnostics (finder / picker)', async () => {
             ? 'GATE VISIBLE' : 'no gate';
         }).catch(() => 'unknown');
         out.push(`  gate at capture: ${gateState}`);
+
+        // NO ARTICLE REACHED THE DOM — say so LOUDLY and stop implying a finder
+        // verdict. The gate check above only matches three known interstitial
+        // phrases, so a page that served no article at all reports "no gate",
+        // which reads as "the page is fine". Measured 2026-09-14 on MSN: the
+        // probe printed `prose 0 / totalBodyText 102` + "no gate", then a
+        // full block-scoring table that LOOKED like a finder diagnosis and was
+        // read as one — sending the investigation after a non-existent
+        // shadow-DOM bug while the real defect was elsewhere. This is the same
+        // trap DIAG_WAIT's loop already documents: absence of a known gate
+        // signature is not evidence of a live page; require POSITIVE evidence.
+        //
+        // When this fires the block table below is measuring chrome, not
+        // content, and no finder conclusion may be drawn from this run.
+        if (diag.proseParagraphs === 0 || diag.totalBodyText < 500) {
+          out.push(`  *** NO ARTICLE IN DOM — ${diag.proseParagraphs} prose <p>, `
+            + `${diag.totalBodyText} chars of body text. The page served no article to `
+            + `script (bot-serve, JS-gated render, or closed shadow roots).`);
+          out.push('  *** This run CANNOT diagnose the layout finder: the blocks below are '
+            + 'page chrome. Re-run headed (DIAG_HEADED=1) or in a warmed profile before '
+            + 'concluding anything about capture.');
+        }
 
 
 

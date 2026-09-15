@@ -55,7 +55,10 @@ function clearServiceWorkerCache(userDataDir: string, profileFolder = 'Default')
 
 // Always load from dist-test/ so the e2e suite never touches your local dev
 // install in dist/. `pnpm build:test` (the e2e pretest hook) writes here.
-export const EXTENSION_PATH = resolve(__dirname, '..', '..', '..', 'discerned-ext', 'dist-test');
+// EXT_PATH_OVERRIDE points the harness at another build (e.g. a git-worktree
+// build of an older commit) so two versions can be compared on one page.
+export const EXTENSION_PATH = process.env.EXT_PATH_OVERRIDE
+  ?? resolve(__dirname, '..', '..', '..', 'discerned-ext', 'dist-test');
 
 // Root for reusable browser profiles. Gitignored at .vscode/browser-test-profiles/.
 // Subdirs named 'test', 'medium', etc. let specs share login state across runs.
