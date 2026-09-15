@@ -544,6 +544,10 @@ export interface CaptureOptions {
  */
 export async function captureContext(format: ClipFormat, opts: CaptureOptions = { smartArticleDetection: false, stripInlineStyles: false }): Promise<Capture> {
   let capture: Capture;
+  // Refreshed per capture: the grant can be given mid-session from the overlay's
+  // Settings drawer, and withThumbnailFallback needs to know whether a failed
+  // inline means "no permission" (hotlink it) or "broken image" (drop it).
+  await refreshImageInliningGrant();
   switch (format) {
     case 'selection':           capture = await extractSelection(); break;
     case 'article':             capture = await extractArticle(opts); break;
@@ -3353,13 +3357,41 @@ function proseText(root: Element, imageUrls?: string[]): string {
  */
 function withThumbnailFallback(
   html: string, thumbUrl: string | null, inlinedThumb: string | null, title: string,
+  decodedThumb = false,
 ): string {
   if (/<img[\s>]/i.test(html)) return html;
   if (!thumbUrl || !isSafeImageSrc(thumbUrl)) return html;
   // Guard 1 — the page nominated this image, we didn't guess it.
   if (!isDeclaredThumbnail()) return html;
-  // Guard 2 — the thumbnail actually fetched (data: URI, not the fallback URL).
-  if (!inlinedThumb || !inlinedThumb.startsWith('data:')) return html;
+  // Guard 2 — the image is known to display. A data: URI proves it fetched.
+  // WITHOUT the optional <all_urls> grant nothing can inline, so requiring a
+  // data: URI made the hero conditional on a permission that is only supposed
+  // to decide inlined-vs-hotlinked (see CLAUDE.md: "without it clips hotlink
+  // images instead of embedding them"). It silently dropped the image instead,
+  // which is the reported "no image unless all-URLs is permitted".
+  // inlineImage returns the ORIGINAL url both when the fetch failed and when
+  // there was no permission to try, so the return value can't tell them apart —
+  // ask the permission directly and hotlink when it is simply absent.
+  // Guard 2 — the image is known to DISPLAY. A data: URI proves it fetched.
+  //
+  // Ungranted, nothing can inline, so requiring a data: URI dropped every hero —
+  // the reported "no image unless all-URLs is permitted", even though the grant
+  // is only meant to choose inlined-vs-hotlinked. But hotlinking unconditionally
+  // is not the fix either: it put a broken-image glyph + alt text at the top of
+  // three pixel baselines whose fixtures declare an unreachable og:image
+  // (example.com), which is the exact regression this guard was written for.
+  //
+  // So prove reachability without the grant: `decodedThumb` is the result of
+  // letting the PAGE load the URL in a throwaway Image(), which needs no host
+  // permission (an <img> may fetch cross-origin). Reached here it is true only
+  // when the browser actually decoded it.
+  //
+  // GRANTED and still no data: URI means the privileged fetch genuinely FAILED
+  // (dead URL, oversize, timeout) — still dropped, as before.
+  if (!inlinedThumb || !inlinedThumb.startsWith('data:')) {
+    if (imageInliningGranted !== false) return html;
+    if (!decodedThumb) return html;
+  }
   const alt = title.replace(/"/g, '&quot;');
   return `<figure><img src="${thumbUrl}" alt="${alt}"></figure>\n${html}`;
 }
@@ -3586,6 +3618,11 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
 
   const thumbnailUrl = feedSafeThumbnail(getPageThumbnail());
   const inlinedThumbnail = thumbnailUrl ? await inlineImage(thumbnailUrl) : null;
+  // Only needed when we may have to hotlink: no grant, and nothing inlined.
+  const decodedThumbnail = (thumbnailUrl && imageInliningGranted === false
+    && !inlinedThumbnail?.startsWith('data:'))
+    ? await canPageLoadImage(thumbnailUrl)
+    : false;
 
   // Tier 1: semantic article element — preserves images at their correct positions.
   // Skipped when a site tagger pinned an explicit capture root (Tier 1.5 below
@@ -3638,7 +3675,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     log(LL.TRACE, `Discerned: sanitised bodyHtml (first 2000 chars): ${clone.innerHTML.slice(0, 2000)}`, 'url:', base.url);
     // Recover the hero when the semantic root held no images — see
     // withThumbnailFallback (keeps the clip and the cast consistent).
-    const tier1Html = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title);
+    const tier1Html = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title, decodedThumbnail);
     const { html: inlined, imageUrls } = await inlineAllImages(tier1Html);
     log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     const tier1BodyRoot = imageUrls.length > 0
@@ -3731,7 +3768,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     census.flush();
     // Before inlining, so a recovered hero is inlined + counted in imageUrls
     // (the cast's image set) exactly like an in-body image would be.
-    const layoutHtml = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title);
+    const layoutHtml = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title, decodedThumbnail);
     const { html: inlined, imageUrls } = await inlineAllImages(layoutHtml);
     log(LL.DEBUG, `Discerned: layout-finder imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     // proseText walks the CLONE, which has no <figure> we just prepended — pass
@@ -3756,6 +3793,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     log(LL.DEBUG, 'Discerned: article captured via Readability', 'url:', base.url);
     const sanitized = withThumbnailFallback(
       sanitizeHtmlString(parsed.content), thumbnailUrl, inlinedThumbnail, parsed.title || base.title,
+      decodedThumbnail,
     );
     const { html: inlined, imageUrls } = await inlineAllImages(sanitized);
     log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
@@ -5526,6 +5564,38 @@ interface SiteTagger_Entry {
 let narrowedFromFeed = false;
 
 function resetFeedNarrowing(): void { narrowedFromFeed = false; }
+
+// Whether the optional <all_urls> grant is held, refreshed once per capture.
+// null = not yet known (treat as granted, so a failed query can only preserve
+// the old behaviour rather than inject an image that may be broken).
+let imageInliningGranted: boolean | null = null;
+
+/**
+ * Can the PAGE load this image? An <img> may fetch cross-origin with no host
+ * permission, so this proves a URL resolves when the privileged fetch is not
+ * available. Used only in the ungranted branch of withThumbnailFallback's
+ * Guard 2, where the alternative is hotlinking a URL that may be dead.
+ */
+function canPageLoadImage(url: string, timeoutMs = 4000): Promise<boolean> {
+  return new Promise((res) => {
+    const img = new Image();
+    const done = (ok: boolean) => { img.onload = img.onerror = null; res(ok); };
+    const timer = setTimeout(() => done(false), timeoutMs);
+    img.onload = () => { clearTimeout(timer); done(img.naturalWidth > 0); };
+    img.onerror = () => { clearTimeout(timer); done(false); };
+    img.src = url;
+  });
+}
+
+async function refreshImageInliningGrant(): Promise<void> {
+  try {
+    const res = await chrome.runtime.sendMessage({ type: 'GET_IMAGE_PERMISSION' });
+    const granted = (res as { data?: { granted?: boolean } } | undefined)?.data?.granted;
+    imageInliningGranted = typeof granted === 'boolean' ? granted : null;
+  } catch {
+    imageInliningGranted = null;
+  }
+}
 
 /**
  * Pick the feed post the user is looking at: the one covering the most of the
