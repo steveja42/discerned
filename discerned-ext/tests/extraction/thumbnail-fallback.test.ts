@@ -55,6 +55,55 @@ describe('og:image hero fallback (withThumbnailFallback)', () => {
     });
   }
 
+  it('recovers the hero on a SYNDICATED article (cross-host canonical)', async () => {
+    // Regression, 2026-09-14. A syndicating site declares canonical = the
+    // ORIGINAL publisher (MSN republishing Daily Mail: canonical=dailymail.com)
+    // while its og:url correctly names the MSN URL. headTagsDescribeCurrentPage
+    // read canonical FIRST, compared the Daily Mail path, found no shared
+    // segment (noah-s-ark-mystery-deepens… vs noahs-ark-durupinar…) and judged
+    // a perfectly CURRENT head stale — so isDeclaredThumbnail returned false,
+    // Guard 1 rejected, and the clip lost its hero.
+    //
+    // A cross-host canonical is a SYNDICATION pointer, not a staleness signal;
+    // og:url is the tag that names this page. Same-host canonical still wins,
+    // which is what keeps the SPA (Instagram/TikTok) protection intact.
+    loadFixture(FIXTURE, PAGE_URL);
+    const head = document.head;
+    const link = document.createElement('link');
+    link.rel = 'canonical';
+    link.href = 'https://www.dailymail.com/sciencetech/article-16070205/noahs-ark-durupinar-mount-ararat-scans.html';
+    head.appendChild(link);
+    const og = document.createElement('meta');
+    og.setAttribute('property', 'og:url');
+    og.content = PAGE_URL;
+    head.appendChild(og);
+
+    const cap = await captureContext('article', { smartArticleDetection: false, stripInlineStyles: false });
+
+    expect((cap.bodyHtml ?? '').match(/<img[^>]*>/gi) ?? [],
+      'syndicated article still recovers its hero').toHaveLength(1);
+    expect(cap.bodyText ?? '').toContain('AstraZeneca shares have taken');
+  });
+
+  it('still rejects a STALE same-host canonical (SPA navigation)', async () => {
+    // The other half of the rule: a same-host canonical naming a DIFFERENT
+    // page is the real staleness signal the guard exists for, and must still
+    // suppress the hero rather than promote the previous post's picture.
+    loadFixture(FIXTURE, PAGE_URL);
+    const link = document.createElement('link');
+    link.rel = 'canonical';
+    // No shared identifying segment: the locale ("en-us") is shared by every
+    // MSN article, and idSegs keeps it, so a same-locale URL matches on that
+    // alone. Use a path that shares nothing.
+    link.href = 'https://www.msn.com/de-de/nachrichten/other/ein-voellig-anderer-artikel/ar-BB99zzzz';
+    document.head.appendChild(link);
+
+    const cap = await captureContext('article', { smartArticleDetection: false, stripInlineStyles: false });
+
+    expect((cap.bodyHtml ?? '').match(/<img[^>]*>/gi) ?? [],
+      'stale same-host canonical still suppresses the hero').toHaveLength(0);
+  });
+
   it('does NOT inject a first-<img> GUESS when the page declares no og:image', async () => {
     // getPageThumbnail falls back to the first <img> on the page when there is
     // no og:image. That guess is fine for a library-row thumbnail but is NOT a

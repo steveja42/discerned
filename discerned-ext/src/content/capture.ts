@@ -424,9 +424,24 @@ function getPageThumbnail(): string | null {
  * is correct, and refusing og:image there would lose good thumbnails.
  */
 function headTagsDescribeCurrentPage(): boolean {
-  const declared = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href
-    ?? document.querySelector<HTMLMetaElement>('meta[property="og:url"]')?.content
-    ?? '';
+  const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href ?? '';
+  const ogUrl = document.querySelector<HTMLMetaElement>('meta[property="og:url"]')?.content ?? '';
+  // A CROSS-HOST canonical is a syndication pointer, not a staleness signal.
+  // The two tags answer different questions: canonical says "which URL should
+  // be indexed for this content" (deliberately another site's when republished),
+  // og:url says "the URL of THIS page" — which is what this function asks.
+  // MSN republishes Daily Mail and declares canonical=dailymail.com with a
+  // correct og:url; comparing the Daily Mail path found no shared segment
+  // (noah-s-ark-mystery-deepens… vs noahs-ark-durupinar…), so a perfectly
+  // current head read as stale and the clip lost its hero image entirely.
+  // Same-host canonical still wins: an SPA that leaves stale tags behind leaves
+  // a SAME-host stale canonical, so the Instagram/TikTok protection is intact.
+  let sameHostCanonical = true;
+  if (canonical) {
+    try { sameHostCanonical = new URL(canonical, window.location.href).hostname === window.location.hostname; }
+    catch { sameHostCanonical = true; }
+  }
+  const declared = (canonical && sameHostCanonical) ? canonical : (ogUrl || canonical);
   if (!declared) return true;
   let declaredPath: string;
   try { declaredPath = new URL(declared, window.location.href).pathname; } catch { return true; }

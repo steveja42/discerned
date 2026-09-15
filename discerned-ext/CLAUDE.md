@@ -180,6 +180,28 @@ extend to casts: only the clip is durable. Reflected in the permissions-page cop
 (`src/permissions/permissions.html`), which says so in plain language — that page
 is user-facing, so keep protocol jargon ("relay", "kind-30023") out of it.
 
+**A CROSS-HOST canonical is syndication, not staleness.** `headTagsDescribeCurrentPage()`
+guards against an SPA navigation leaving the previous post's `og:image` in the
+head, by comparing the declared URL's path against `location`. It read
+`link[rel=canonical]` FIRST — but a **syndicating** site declares canonical =
+the ORIGINAL publisher while its `og:url` correctly names itself. MSN
+republishing Daily Mail declares
+`canonical=dailymail.com/sciencetech/article-16070205/noahs-ark-durupinar-…`
+against a location of `/…/noah-s-ark-mystery-deepens-…/ar-AA2aEpib`; no path
+segment matches (the two publishers slug the same story differently), so a
+perfectly CURRENT head was judged stale, `isDeclaredThumbnail()` returned false,
+and `withThumbnailFallback`'s Guard 1 rejected — the clip lost its hero AND most
+of its body (measured on the live page: `bodyHtml` 2,265 → 177,294 chars, imgs
+0 → 1 once fixed). Rule: a canonical on a **different host** answers "which URL
+should be indexed for this content", not "is this head current", so `og:url`
+(which names THIS page) wins there. **Same-host canonical still wins**, which is
+what keeps the SPA protection intact — an SPA leaves a SAME-host stale canonical.
+Guarded by two tests in `tests/extraction/thumbnail-fallback.test.ts` (the
+syndicated-recovery case and the stale-same-host case). Note the stale-case test
+must use a path sharing NO segment: `idSegs` keeps the locale, so two `en-us`
+MSN URLs "match" on that alone. This affects every syndicated article (MSN,
+Yahoo, AOL, aggregators), not just MSN.
+
 **On a FEED, the og:image is not this post's picture — and the clip and the cast
 need separate fixes.** Where every post shares one page URL (snapchat.com/web and
 instagram.com/?hl=en are the measured cases), `og:image` is the site's own
