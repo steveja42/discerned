@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "Discerned",
   "version": "0.2.4",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoCQWVSU6riKLtqCa/YS7fL5Sj81Q556Yx3B9SEMkU4YxNLI/CK89CyyFrXd3exw5fy527tkyU3t/z0n/40RzrK+VzIZc7lRY/xXQ6HzPAhVcK9j4c9K6kiQDmFcvdTqulUOFtzZZzx+/vVb4QodXNkwbISNqTx83N9HC9Su5if2Wi3bFHtKwrnOuFxWoWF3ZpQXc//7lF6N5sYaIGGQBP6zjMpfakI+l4RJmGCd0OLobHEnarl5C9y/Fq6ynolVMfdcsqui6hVrP1XRjHhwbiMCavhvcflUwD26TH/9QcztFjxZjAwuc3YIDhYQTKFuzerZGSpiin3ywKLFnLrWy6QIDAQAB",
   "description": "Web clipper for saving articles, quotes and pages. Rate and tag what you clip, and publish your picks to Nostr if you want.",
   "permissions": [
     "contextMenus",

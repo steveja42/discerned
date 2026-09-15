@@ -17,9 +17,18 @@ import baseManifest from './manifest.json';
 // exercise (injectDiscerned, its ordering, the idempotency guards, the built-file
 // paths) is byte-identical to production. activeTab itself is the one part no
 // spec can cover — verify it by hand against a dist-pack build.
+// `key` pins the extension ID to the Web Store's (so a side-loaded dev build shares
+// the store build's IndexedDB). CWS REJECTS an uploaded package carrying a key, so
+// the production build — the only one ever uploaded — strips it.
 function manifestFor(mode: string) {
   const isDev = mode === 'development';
-  if (!isDev) return baseManifest;
+  if (!isDev) {
+    if (mode === 'production') {
+      const { key: _key, ...withoutKey } = baseManifest as typeof baseManifest & { key?: string };
+      return withoutKey;
+    }
+    return baseManifest;
+  }
 
   // DEV ONLY — and this does NOT change how the extension behaves.
   //
