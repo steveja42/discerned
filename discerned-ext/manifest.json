@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Discerned",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Web clipper for saving articles, quotes and pages. Rate and tag what you clip, and publish your picks to Nostr if you want.",
   "permissions": [
     "contextMenus",
