@@ -213,13 +213,13 @@
     },
     "cbsnews": {
       "verdict": "clean",
-      "severity": 2,
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Kicker, headline, byline, date and full body prose with links all render correctly; a video transport-control strip leaks mid-article and no hero is present.",
+      "note": "Hero, headline, byline and full body; video transport bar gone.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:29:17.719Z"
+      "reviewedAt": "2026-09-16T14:36:27.847Z"
     },
     "independent": {
       "verdict": "clean",
@@ -342,13 +342,13 @@
     },
     "chicagotribune": {
       "verdict": "flaw",
-      "severity": 6,
+      "severity": 3,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Headline, hero with gallery counter, caption and byline render, but the body truncates after three paragraphs into an Afternoon-Briefing newsletter signup at 17% coverage.",
+      "note": "Newsletter block no longer replaces the body, but a bare SIGN UP button remains.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:59:27.387Z"
+      "reviewedAt": "2026-09-16T14:36:27.847Z"
     },
     "yahoofinance": {
       "verdict": "clean",
@@ -448,7 +448,7 @@
       "regressedFrom": "",
       "note": "The navbar fox logo renders as a ~350px hero at the top where the site shows a small header mark; README content below is correct.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T22:55:26.449Z"
+      "reviewedAt": "2026-09-16T14:39:30.551445Z"
     },
     "sec-edgar": {
       "verdict": "clean",
@@ -498,7 +498,7 @@
       "regressedFrom": "",
       "note": "Cast pads the Rust example throughout (use serde :: { Deserialize , Serialize };, x : i32 ,) while string literals keep correct spacing; clip is clean.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:17:20.669Z"
+      "reviewedAt": "2026-09-16T14:39:30.551445Z"
     },
     "lefigaro": {
       "verdict": "flaw",
@@ -508,7 +508,7 @@
       "regressedFrom": "",
       "note": "Audio-player timer strip is gone; French headline, byline, dates, body with quotes and headings render correctly, but a share-icon list, podcast promo card and bare Publicite label survive.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:04:18.273Z"
+      "reviewedAt": "2026-09-16T14:39:30.551445Z"
     },
     "biorxiv": {
       "verdict": "clean",
@@ -598,7 +598,7 @@
       "regressedFrom": "",
       "note": "Chapter headings and body prose with italics render correctly on clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:21:11.952Z"
+      "reviewedAt": "2026-09-16T14:39:30.551445Z"
     },
     "stripe-docs": {
       "verdict": "clean",
@@ -608,7 +608,7 @@
       "regressedFrom": "",
       "note": "Hero card, title, intro, step markers, headings, shell command and inline code spans all render correctly; a space precedes punctuation after some inline code.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:23:57.219Z"
+      "reviewedAt": "2026-09-16T14:39:30.551445Z"
     },
     "wikidata": {
       "verdict": "clean",
@@ -618,7 +618,7 @@
       "regressedFrom": "",
       "note": "Entity title with Q-ID, description, multi-language table, Statements, portrait with metadata and the multilingual caption list all render correctly across many scripts.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:11:04.527Z"
+      "reviewedAt": "2026-09-16T14:39:30.551445Z"
     },
     "wiktionary": {
       "verdict": "flaw",
@@ -638,7 +638,7 @@
       "regressedFrom": "",
       "note": "The site logo renders ~280px tall at the top where the site shows a small header mark; Headmatter and opinion below are correct.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T22:55:26.449Z"
+      "reviewedAt": "2026-09-16T14:39:30.551445Z"
     },
     "ndtv": {
       "verdict": "flaw",
@@ -861,14 +861,14 @@
       "reviewedAt": "2026-09-15T07:01:22.533Z"
     },
     "playstore": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Material icon ligature names still render as literal text (chevron_right, arrow_forward) beside the screenshot and heading; the app description itself is complete.",
+      "note": "Material icon ligature words no longer render as text.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:14:13.460Z"
+      "reviewedAt": "2026-09-16T14:36:27.847Z"
     },
     "simonwillison": {
       "verdict": "flaw",
@@ -991,24 +991,24 @@
       "reviewedAt": "2026-09-15T05:28:00.400Z"
     },
     "wired": {
-      "verdict": "clean",
-      "severity": 1,
+      "verdict": "flaw",
+      "severity": 4,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Hero, kicker, headline, dek, byline, photo credit and full body prose with inline links all render correctly.",
+      "note": "Paywalled stub captured faithfully, but the inbox-signup block survives.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:05:31.527Z"
+      "reviewedAt": "2026-09-16T14:36:27.847Z"
     },
     "reason": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Headline, dek, byline, hero and body with links all render, but a Listen-to-this-article audio widget survives and an unrelated video card sits mid-article.",
+      "note": "Listen-to-this-article strip gone; article intact.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:55:14.328Z"
+      "reviewedAt": "2026-09-16T14:36:27.847Z"
     },
     "signalvnoise": {
       "verdict": "flaw",
@@ -1311,14 +1311,14 @@
       "reviewedAt": "2026-09-15T06:08:38.581Z"
     },
     "nypost": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Black video box is gone; headline, byline, hero with caption and full body render correctly, but a video transport strip (00:00 04:15 with control glyphs) leaks mid-article.",
+      "note": "Video transport timecode bar no longer leaks into the body.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:51:51.635Z"
+      "reviewedAt": "2026-09-16T14:36:27.847Z"
     },
     "superuser": {
       "verdict": "clean",
@@ -1402,13 +1402,13 @@
     },
     "bandcamp": {
       "verdict": "clean",
-      "severity": 1,
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Banner, tags, title, artist, album art, fan reviews, supporter avatar grid, purchase info and the numbered tracklist with durations all render correctly.",
+      "note": "All 30 track durations intact in clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:46:47.835Z"
+      "reviewedAt": "2026-09-16T14:36:27.847Z"
     },
     "britannica": {
       "verdict": "clean",
@@ -1651,14 +1651,14 @@
       "reviewedAt": "2026-09-15T05:25:41.869Z"
     },
     "japantimes": {
-      "verdict": "flaw",
-      "severity": 4,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Body with captioned photos and quotes renders correctly, but a trailing KEYWORDS tag block and related-story recirc continue past the article's end.",
+      "note": "Audio narration strip gone; headline, hero, byline and body intact.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:58:05.921Z"
+      "reviewedAt": "2026-09-16T14:36:27.847Z"
     },
     "kaggle": {
       "verdict": "flaw",
@@ -1748,7 +1748,7 @@
       "regressedFrom": "",
       "note": "Question body and the full C++ and Java code blocks render correctly with indentation and operators intact; a stray Copy label leads each block.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:23:54.975Z"
+      "reviewedAt": "2026-09-16T14:39:30.551445Z"
     },
     "steam": {
       "verdict": "flaw",
@@ -1868,7 +1868,7 @@
       "regressedFrom": "",
       "note": "Hero image with credit and the full body render correctly (syndicated-hero fix holding), but no headline appears above the hero.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:40:31.228Z"
+      "reviewedAt": "2026-09-16T14:39:30.551445Z"
     },
     "librarything-author": {
       "verdict": "clean",
@@ -1988,7 +1988,7 @@
       "regressedFrom": "",
       "note": "The navbar elephant logo renders as a ~450px hero at the top where the site shows a small header icon; content below is correct.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T22:54:51.790Z"
+      "reviewedAt": "2026-09-16T14:39:30.551445Z"
     },
     "tildes": {
       "verdict": "flaw",
@@ -1998,7 +1998,7 @@
       "regressedFrom": "",
       "note": "The site favicon renders as a ~150px block at the top where the site shows a small header icon; comments and metadata below are correct.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T22:54:51.790Z"
+      "reviewedAt": "2026-09-16T14:39:30.551445Z"
     },
     "thedailybeast": {
       "verdict": "flaw",
