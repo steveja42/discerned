@@ -33,11 +33,14 @@ const dest = resolve(OUT_ROOT, `corpus-sweep-run--backup-${stamp}`);
 cpSync(SRC, dest, { recursive: true });
 console.log(`Backed up ${files.length} files -> ${dest}`);
 
-// Prune old snapshots. Each is ~550 MB, and only the most recent one or two are
-// ever used as a comparison basis — a diff against a months-old run reports the
-// accumulated churn of every sweep since, which is noise, not a regression.
+// Prune old snapshots. Each is ~550 MB, so they cannot be kept forever — but
+// keeping too FEW loses the evidence a regression needs. Measured 2026-09-15:
+// snapchat-web cast was fine on 09-12 and is 9/10 critical now, and with KEEP=2
+// both surviving backups were from the same day, so the regression could not be
+// demonstrated and had to be recorded as `regression: "none"`. Five spans a
+// working week, which is the window in which a regression is actually noticed.
 // KEEP counts backups INCLUDING the one just made.
-const KEEP = Number(process.env.SWEEP_BACKUP_KEEP ?? 2);
+const KEEP = Number(process.env.SWEEP_BACKUP_KEEP ?? 5);
 const backups = readdirSync(OUT_ROOT)
   .filter(d => d.startsWith('corpus-sweep-run--backup-'))
   .sort(); // stamped YYYY-MM-DDTHH-mm-ss, so lexical order IS chronological

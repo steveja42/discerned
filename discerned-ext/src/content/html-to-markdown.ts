@@ -317,10 +317,18 @@ function getService(): TurndownService {
       const dxSrc = img?.getAttribute('data-dx-src') ?? '';
       const src = img?.getAttribute('src') ?? '';
       const url = /^https?:/i.test(dxSrc) ? dxSrc : /^https?:/i.test(src) ? src : '';
-      if (!url) return '';
-      const image = `![Video thumbnail](${url})`;
       const href = el.getAttribute('href') ?? '';
-      return `\n\n${/^https?:/i.test(href) ? `[${image}](${href})` : image}\n\n`;
+      const linkable = /^https?:/i.test(href);
+      // No http(s) poster: the image is a canvas grab off a blob: stream, so it
+      // exists only as a data: URI that a cast must not carry (base64 art is far
+      // too large for a relay — see the image-real-url rule). Returning '' here
+      // dropped the WHOLE card, which on Snapchat /web is the entire post: the
+      // clip showed poster + views + author + caption while the cast rendered
+      // "2.4M / M'kidoWtf / 32K" with no video at all. Emit the link instead, so
+      // the cast still points at something playable.
+      if (!url) return linkable ? `\n\n[▶ Watch video](${href})\n\n` : '';
+      const image = `![Video thumbnail](${url})`;
+      return `\n\n${linkable ? `[${image}](${href})` : image}\n\n`;
     },
   });
 

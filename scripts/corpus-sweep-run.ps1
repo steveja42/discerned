@@ -72,8 +72,29 @@
 .PARAMETER Foreground
   Run attached and wait, instead of detaching. Use for short recovery passes.
 
+.PARAMETER Backup
+  Snapshot the CURRENT corpus-sweep-run/ before overwriting it, so the run you
+  are about to start has something to be compared against.
+
+  OFF by default, and deliberately so. It used to be automatic, but a sweep is
+  re-run far more often than it completes - a preflight failure, a burnt IP, a
+  wrong flag - and every one of those rotated a good baseline out of the
+  retention window, replacing it with a copy of the failed run. Measured
+  2026-09-15: snapchat-web's cast was fine on 09-12 and is now 9/10 critical,
+  but both surviving backups were from the same day, so the regression could
+  not be shown and had to be filed as 'regression: none'.
+
+  Pass it when starting a real sweep. Omit it when re-running after an error.
+  Retention is five backups (SWEEP_BACKUP_KEEP), about a working week.
+
 .EXAMPLE
-  # Full fortnightly run — start it, then review while it captures.
+  # Full fortnightly run - snapshot the previous run first, then review while
+  # it captures. Use -Backup on the run you intend to compare against.
+  powershell -ExecutionPolicy Bypass -File scripts/corpus-sweep-run.ps1 -Backup
+
+.EXAMPLE
+  # Re-run after an error (bad flag, burnt IP, failed preflight). NO -Backup:
+  # the existing baseline is the good one and must not be rotated out.
   powershell -ExecutionPolicy Bypass -File scripts/corpus-sweep-run.ps1
 
 .EXAMPLE
@@ -100,7 +121,7 @@ param(
   # most-defended sites (PerimeterX / Cloudflare / logged-in social) together.
   [int]$GapHeaded = 25,
   [switch]$Foreground,
-  [switch]$SkipBackup,
+  [switch]$Backup,
   [switch]$Stop
 )
 
@@ -244,13 +265,25 @@ if ($Attended) {
 }
 
 # ── Backup ──────────────────────────────────────────────────────────────────
-# Skipped on a resume: the run in progress IS the current state, and snapshotting
-# a half-finished run would just add a partial folder to compare against.
-if (-not $SkipBackup -and -not $Resume) {
+# OPT-IN, because a backup used to be taken on every non-resume run and a sweep
+# is re-run far more often than it is completed: a preflight failure, a burnt
+# IP, a bad flag. Each of those rotated a GOOD baseline out of the retention
+# window and replaced it with a copy of the run that just failed. Measured
+# 2026-09-15: snapchat-web's cast regressed sometime after 09-12 and both
+# surviving backups were same-day, so it could not be demonstrated.
+#
+# So: pass -Backup when STARTING a real sweep you intend to compare against.
+# Omit it when re-running after an error, which is the common case.
+#
+# Still never taken on a resume: the run in progress IS the current state, and
+# snapshotting a half-finished run adds a partial folder to compare against.
+if ($Backup -and -not $Resume) {
   Step 'Backing up previous run (comparison basis)'
   node tests/e2e/tools/backup-sweep-run.mjs
+} elseif ($Backup -and $Resume) {
+  Step 'Backup skipped (-Resume: the run in progress is the current state)'
 } else {
-  Step 'Backup skipped'
+  Step 'Backup skipped (pass -Backup to snapshot the previous run first)'
 }
 
 # ── Capture ─────────────────────────────────────────────────────────────────

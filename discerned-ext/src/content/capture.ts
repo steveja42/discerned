@@ -3046,6 +3046,10 @@ function findContentBlockByLayout(): Element | null {
 // text. Feed posts are roughly comparable; a page section masquerading as a
 // feed item is not. See maybeNarrowToVisiblePost for the Target measurement.
 const FEED_MIN_KEPT_TEXT_SHARE = 0.25;
+// A feed post's own prose, in characters, below which it is a teaser card.
+const FEED_POST_MIN_PROSE = 120;
+// Above this share of link text, the "post" is a headline wrapped in an <a>.
+const FEED_POST_MAX_LINK_RATIO = 0.6;
 const FEED_MAX_VISIBLE_ITEMS = 1;      // more than one on screen ⇒ a thread
 const FEED_MIN_TOP_SHARE = 0.5;        // the post must OWN the viewport
 const FEED_MIN_SIBLINGS = 3;           // 2 similar blocks is a layout, not a feed
@@ -3178,6 +3182,32 @@ function viewportShareOf(el: Element): number {
  * Runs BEFORE maybeExpandToFeed: if this narrows, expansion is skipped (they
  * are exact opposites).
  */
+/**
+ * True when an element looks like a FEED POST rather than a teaser card.
+ *
+ * The narrowing heuristic's size checks cannot tell the two apart: a
+ * related-articles rail and a feed both render same-signature siblings, and a
+ * big teaser can out-measure a small post. What separates them is what the
+ * element CONTAINS — a post has prose of its own, while a teaser is a headline
+ * inside a link. Measured on politico, whose rail item cleared every size gate
+ * and took the article down with it.
+ */
+function looksLikeFeedPost(el: Element): boolean {
+  const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+  if (text.length === 0) return false;
+
+  // Link-dominated means a headline wrapped in an <a>, not written content.
+  const linkText = Array.from(el.querySelectorAll('a'))
+    .reduce((n, a) => n + (a.textContent ?? '').trim().length, 0);
+  if (linkText / text.length > FEED_POST_MAX_LINK_RATIO) return false;
+
+  // Prose the element owns outside its links. A caption-only photo post is
+  // still a post, so media counts as evidence too.
+  const prose = text.length - linkText;
+  if (prose >= FEED_POST_MIN_PROSE) return true;
+  return !!el.querySelector('img, video, picture');
+}
+
 function maybeNarrowToVisiblePost(el: Element): Element {
   const vw = window.innerWidth, vh = window.innerHeight;
   if (vw <= 0 || vh <= 0) return el; // jsdom / no layout — can't judge visibility
@@ -3237,6 +3267,14 @@ function maybeNarrowToVisiblePost(el: Element): Element {
     const keptText = (winner.textContent ?? '').trim().length;
     const biggestText = Math.max(...items.map(i => (i.textContent ?? '').trim().length));
     if (biggestText > 0 && keptText / biggestText < FEED_MIN_KEPT_TEXT_SHARE) continue;
+    // A feed post carries PROSE; an article-card rail carries a headline and a
+    // link. The size ratio above cannot separate them — politico's winner held
+    // 498 chars against a 1908-char sibling, a ratio of 0.26 that cleared the
+    // 0.25 floor by one point and narrowed the whole article away (8 of 8
+    // captures, census: clone 1i/8a/0p — not one paragraph). Raising the ratio
+    // would only move the cliff, so require the winner to look like a post:
+    // real paragraphs, and not dominated by its own link text.
+    if (!looksLikeFeedPost(winner)) continue;
 
     log(LL.DEBUG,
       `Discerned: narrowed to visible feed post — ${items.length} siblings, ` +

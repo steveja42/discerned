@@ -25,6 +25,7 @@ import { activateExtensionOnPage } from './helpers/activateExtension';
 import { screenshotSourcePage, screenshotClipBody } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
 import { sweepArtifacts, type SweepRecord } from './helpers/sweepArtifacts';
+import { waitForBodySettled } from './helpers/waitForBodySettled';
 import { computeScores, measureInPage, CHROME_SWEEP_PHRASES, type SweepMeasurements } from './helpers/sweepScorers';
 import { refreshSweepGallery } from './helpers/sweepGallery';
 
@@ -270,21 +271,13 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
         // eslint-disable-next-line no-console
         console.log('   ✓ block cleared — capturing');
         await page.waitForTimeout(1_500);
-        // Wait for a populated article body — AP News / Reuters inject the story
-        // paragraphs lazily after first paint, so capturing too early yields a
-        // hero-only shell (near-empty once the comment widget is excluded).
-        await page.evaluate(async () => {
-          const SELS = ['[class*="RichTextStoryBody"]', '[data-testid="ArticleBody"]',
-            '[class*="article-body"]', '[data-testid^="paragraph"]', 'article'];
-          const len = () => {
-            for (const s of SELS) { const el = document.querySelector(s);
-              if (el) { const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim(); if (t.length > 600) return t.length; } }
-            return 0;
-          };
-          const deadline = Date.now() + 8000;
-          // eslint-disable-next-line no-unmodified-loop-condition
-          while (Date.now() < deadline && len() < 600) { await new Promise(r => setTimeout(r, 400)); }
-        }).catch(() => undefined);
+        // Wait for the page's text to STOP GROWING before capturing. This pass
+        // clears gates by hand, and a just-cleared page paints its header first
+        // and hydrates the body a moment later — politico captured 5% coverage
+        // that way and 87% on a re-run from identical code. Site-agnostic: the
+        // previous selector-list version matched nothing on politico and so
+        // waited its whole budget without ever measuring the body.
+        rec.bodySettle = await waitForBodySettled(page).catch(() => undefined);
         await screenshotSourcePage(page, art.source());
 
         // Bind the content script first — production injects it per tab on the
@@ -297,6 +290,15 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
           writeFileSync(art.score(), JSON.stringify(rec, null, 2));
           continue;
         }
+
+        // The pipeline census names the stage that drops content, which a score
+        // alone cannot. Cheap (dev builds log it anyway) and only kept when the
+        // capture comes out thin, so it does not bloat every sidecar.
+        const censusLines: string[] = [];
+        page.on('console', (m) => {
+          const t = m.text();
+          if (/census|layout-finder|selfCheck|narrowed/i.test(t)) censusLines.push(t.slice(0, 400));
+        });
 
         // Capture via the dev test bridge.
         let cap: Record<string, unknown>;
@@ -372,6 +374,9 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
           rec.status = 'ok';
           rec.scores = computeScores(measurements);
           rec.note = 'manual headed capture (block cleared with interaction)';
+          // Keep the census only for a THIN capture: that is when "which stage
+          // dropped it" is the question, and it keeps ordinary sidecars small.
+          if (rec.scores.textCoverage < 0.25 && censusLines.length) rec.census = censusLines;
           writeFileSync(art.score(), JSON.stringify(rec, null, 2));
           // eslint-disable-next-line no-console
           console.log(`   ✓ captured + scored — cov=${(rec.scores.textCoverage * 100).toFixed(0)}%` +

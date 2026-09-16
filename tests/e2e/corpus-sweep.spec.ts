@@ -59,6 +59,7 @@ import { activateExtensionOnPage } from './helpers/activateExtension';
 import { screenshotSourcePage, screenshotClipBody } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
 import { sweepArtifacts, type SweepRecord } from './helpers/sweepArtifacts';
+import { waitForBodySettled } from './helpers/waitForBodySettled';
 import { computeScores, measureInPage, CHROME_SWEEP_PHRASES, type SweepMeasurements } from './helpers/sweepScorers';
 import { refreshSweepGallery } from './helpers/sweepGallery';
 
@@ -549,29 +550,13 @@ async function captureDomain(
           await page.waitForTimeout(jitterMs(2_000, 1_500));
         }
       }
-      // Best-effort wait for a populated article body — some news sites (AP News,
-      // Reuters) inject the story paragraphs lazily AFTER first paint, so a fixed
-      // 3.5s wait can capture a hero-only shell (once the comment widget is
-      // excluded there's nothing else, so the clip comes out near-empty). Poll a
-      // few common article-body containers for real prose, capped at ~6s extra.
-      await page.evaluate(async () => {
-        const SELS = [
-          '[class*="RichTextStoryBody"]', '[data-testid="ArticleBody"]',
-          '[class*="article-body"]', '[data-testid^="paragraph"]', 'article',
-        ];
-        const bodyTextLen = () => {
-          for (const s of SELS) {
-            const el = document.querySelector(s);
-            if (el) { const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim(); if (t.length > 600) return t.length; }
-          }
-          return 0;
-        };
-        const deadline = Date.now() + 6000;
-        // eslint-disable-next-line no-unmodified-loop-condition
-        while (Date.now() < deadline && bodyTextLen() < 600) {
-          await new Promise(r => setTimeout(r, 400));
-        }
-      }).catch(() => undefined);
+      // Wait for the page's text to STOP GROWING — some sites (AP News, Reuters,
+      // Politico) inject the story paragraphs lazily after first paint, and
+      // capturing into that window yields a hero-only shell. Site-agnostic on
+      // purpose: the previous version polled a fixed list of body selectors and
+      // was inert on any site outside it (politico matched none, so it waited
+      // its whole budget and captured the shell anyway). See the helper.
+      rec.bodySettle = await waitForBodySettled(page).catch(() => undefined);
       await screenshotSourcePage(page, art.source());
     } catch (navErr) {
       const msg = (navErr as Error).message.split('\n')[0];

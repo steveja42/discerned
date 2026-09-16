@@ -247,3 +247,34 @@ describe('cast markdown — bsky facet separation', () => {
     expect(md).toContain('#RCMP');
   });
 });
+
+// A blob-backed video card: the poster is a canvas grab off an MSE stream, so
+// it exists ONLY as a data: URI and carries no data-dx-src. Snapchat /web and
+// Instagram reels both produce this shape.
+describe('blob-backed video card (no http poster)', () => {
+  const BLOB_VIDEO_CARD = `<div class="dx-post">
+    <a class="tweet-video" href="https://www.snapchat.com/@mkido">
+      <img src="data:image/jpeg;base64,AAAA" alt="Video thumbnail" class="tweet-video-poster">
+      <div class="tweet-video-play" aria-label="Play video"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+    </a>
+    <div class="dx-stats"><span>2.4M</span><span>32K</span></div>
+  </div>`;
+  const md = htmlToMarkdown(BLOB_VIDEO_CARD);
+
+  it('is free of markdown defects', () => {
+    assertNoMarkdownDefects(md);
+  });
+
+  // The whole card used to vanish: the poster rule required an http(s) URL and
+  // returned '' otherwise, so a Snapchat /web cast rendered as bare counts
+  // ("2.4M / M'kido / 32K") with no video while the CLIP showed it correctly.
+  it('keeps a playable link instead of dropping the card', () => {
+    expect(md).toContain('https://www.snapchat.com/@mkido');
+  });
+
+  // A cast must never carry base64 art — far too large for a relay.
+  it('never embeds the data: poster', () => {
+    expect(md).not.toContain('data:image');
+    expect(md).not.toContain('base64');
+  });
+});

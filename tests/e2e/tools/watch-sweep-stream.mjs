@@ -72,7 +72,17 @@ const target = only
   ? new Set(only.split(',').map(s => s.trim()).filter(Boolean))
   : new Set(allDomains);
 const total = target.size;
+// Domains whose CAPTURE has been announced (status ok). This is what the exit
+// condition counts — see the skip branch below for why a skip must not.
 const announced = new Set();
+// Domains already reported as skipped, so the line prints once per domain
+// without retiring it from `announced`.
+const skipAnnounced = new Set();
+// A run is only finished once every domain is accounted for AND nothing new has
+// been announced for this long — a walled domain can be retried minutes later.
+const QUIET_MS = Number(process.env.SWEEP_WATCH_QUIET_MS ?? 180_000);
+let lastAccounted = 0;
+let lastProgressAt = Date.now();
 
 /** @type {{domain:string, cov:number, chromeHits:number, hasCast:boolean}[]} */
 let sliceQueue = [];
@@ -156,18 +166,40 @@ function poll() {
         hasCast: existsSync(cast),
       });
     } else {
-      announced.add(domain);
-      console.log(`SKIP  ${domain} — ${String(rec.skipReason ?? '').slice(0, 90)}`);
+      // Announce a skip ONCE, but do not let it retire the domain: the sweep's
+      // Pass-2 retry can still capture it, and a skip that counted toward the
+      // exit condition made the watcher finish early. Measured 2026-09-15: 14
+      // walled domains skipped, announced.size hit 206 while seven domains were
+      // still being captured, and DONE fired at 00:40 on a run that ended at
+      // 08:00 — those seven landed with no watcher and were never sliced, so
+      // their review slices silently described the PREVIOUS run's images.
+      if (!skipAnnounced.has(domain)) {
+        skipAnnounced.add(domain);
+        console.log(`SKIP  ${domain} — ${String(rec.skipReason ?? '').slice(0, 90)}`);
+      }
     }
   }
 
+  // Every domain must be accounted for — captured OR skipped. A skip alone is
+  // not enough to finish, because the sweep's Pass-2 retry may still capture
+  // it; so also require a QUIET PERIOD with no new announcement, which is what
+  // actually proves the sweep has stopped. Without the quiet period a run whose
+  // last domains are walled would exit while they were still being retried.
+  const accounted = new Set([...announced, ...skipAnnounced]).size >= total;
+  if (announced.size + skipAnnounced.size > lastAccounted) {
+    lastAccounted = announced.size + skipAnnounced.size;
+    lastProgressAt = Date.now();
+  }
+  const quiet = Date.now() - lastProgressAt >= QUIET_MS;
+  const done = accounted && quiet;
+
   // Flush once a full batch is queued, OR the run just finished (so the last
   // partial batch — fewer than SLICE_BATCH domains — doesn't sit unsliced).
-  const done = announced.size >= total;
   if (sliceQueue.length >= SLICE_BATCH || (done && sliceQueue.length)) flushSliceQueue();
 
   if (done) {
-    console.log(`DONE — all ${total} corpus domains accounted for.`);
+    console.log(`DONE — all ${total} corpus domains accounted for `
+      + `(${announced.size} captured, ${skipAnnounced.size} skipped).`);
     process.exit(0);
   }
 }

@@ -150,6 +150,7 @@ for (const f of readdirSync(RUN_DIR)) {
       : 'cast-unchecked',
     changed,
     scores: rec.scores ?? null,
+    bodySettle: rec.bodySettle ?? null,
     verdict: finding?.verdict ?? null,
     clip: existsSync(clip) ? clip : null,
     cast: existsSync(cast) ? cast : null,
@@ -206,7 +207,12 @@ if (pendingRows.length) {
     const mark = r.changed ? 'CHANGED' : '  same ';
     const cov = r.scores ? ` cov=${(r.scores.textCoverage * 100).toFixed(0)}%` : '';
     const chrome = r.scores?.chromeHits ? ` chrome=${r.scores.chromeHits}` : '';
-    console.log(`  ${mark}  ${r.domain.padEnd(24)}${cov}${chrome}${tag}`);
+    // The page was STILL growing when captured, so a thin clip here is suspect
+    // TIMING, not necessarily a pipeline defect — re-capture before filing a
+    // verdict. See helpers/waitForBodySettled (politico: 5% one run, 87% the
+    // next, from identical code).
+    const unsettled = r.bodySettle && r.bodySettle.settled === false ? ' ⏳UNSETTLED' : '';
+    console.log(`  ${mark}  ${r.domain.padEnd(24)}${cov}${chrome}${unsettled}${tag}`);
     if (r.clip) console.log(`      ${r.clip}`);
     if (r.cast) console.log(`      ${r.cast}`);
   }

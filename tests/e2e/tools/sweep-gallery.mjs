@@ -330,9 +330,27 @@ function build() {
       if (pf.reviewedAt.slice(0, 10) === nf.reviewedAt.slice(0, 10)) {
         return { kind: 'verdict-coreviewed', rank: 5, delta: 0, from: pv, to: nv };
       }
-      return bothStamped
-        ? { kind: 'verdict-worse', rank: 0, delta: 0, from: pv, to: nv }
-        : { kind: 'verdict-recheck', rank: 1, delta: 0, from: pv, to: nv };
+      // A verdict diff is NOT a regression, however well-stamped both sides are.
+      // A REGRESSION IS A VISUAL JUDGMENT: it means someone opened the baseline
+      // image and confirmed the defect is absent there. Only the reviewer can
+      // say that, via `regression: "regressed"` (the stated-regression branch
+      // above). Everything here is an inference from two verdicts written to
+      // possibly-different standards, so it surfaces as "recheck" — worth
+      // opening, claiming nothing.
+      //
+      // Measured 2026-09-15: `verdict-worse` (rank 0, labelled REGRESSED)
+      // produced FOURTEEN false positives in one sweep — chicagotribune,
+      // mathoverflow, zdnet, mayoclinic, thenation, tiktok-foryou, pcmag,
+      // asahi, economist, aljazeera-ar, motherjones, rottentomatoes,
+      // goodreads-author, steam — every one a stricter re-review rather than a
+      // worse capture. mayoclinic settled it: the oversized logo flagged as the
+      // new flaw is PLAINLY PRESENT in the baseline image filed `clean`.
+      //
+      // Byte-similarity cannot rescue this. The md5 guard above catches only
+      // exactly-identical clips, and these deltas ran 0.11%..12.93% (mayoclinic
+      // 545 bytes of 475,069) — live-page noise and real article churn overlap,
+      // so no size threshold separates them.
+      return { kind: 'verdict-recheck', rank: 1, delta: 0, from: pv, to: nv, stamped: bothStamped };
     }
     if (comparable && sev[nv] < sev[pv]) {
       return { kind: 'verdict-better', rank: 5, delta: 0, from: pv, to: nv };
@@ -451,7 +469,7 @@ function build() {
   // (build it with: node sweep-gallery.mjs --run-dir <backup-folder>), and is
   // a sibling directory away, so a relative href works from either gallery.
   const baselineLink = (site) => prevLabel
-    ? ` <a class="baseline-link" href="../${escapeHtml(prevLabel)}/sweep-gallery.html#site-${escapeHtml(site)}" title="Open this site's card in the baseline gallery (${escapeHtml(prevLabel.replace('corpus-sweep-run--backup-', ''))})">before ↗</a>`
+    ? ` <a class="baseline-link" href="../${escapeHtml(prevLabel)}/sweep-gallery.html#site-${escapeHtml(site)}" target="_blank" rel="noopener" title="Open this site's card in the baseline gallery (${escapeHtml(prevLabel.replace('corpus-sweep-run--backup-', ''))})">before ↗</a>`
     : '';
   const regressionLine = (d) => d.finding?.regression === 'regressed' && d.finding?.regressedFrom
     ? `<div class="vregression">⚠ REGRESSED — ${escapeHtml(d.finding.regressedFrom)}${baselineLink(d.site)}</div>` : '';
@@ -464,8 +482,12 @@ function build() {
     if (!d.reg || d.reg === 'same' || d.reg === 'stillskip') return '';
     const label = {
       // Verdict changes lead: these are judgments about the CLIP.
+      // The ONLY label that claims a regression, and it is never inferred: it
+      // requires `regression: "regressed"` written by a reviewer who opened the
+      // baseline image. `verdict-worse` used to sit here, inferred from a
+      // verdict diff; it produced 14 false positives in one sweep and has been
+      // removed rather than retuned (see the verdict-recheck branch above).
       'stated-regression': `REGRESSION (reviewer-confirmed)`,
-      'verdict-worse': `REGRESSED ${d.regFrom}→${d.regTo}`,
       // NOT phrased as a change to the capture. Measured: 30 of 35 of these had
       // an unchanged clip — only the verdict moved, because the baseline entry
       // was never checked against the image. "recheck clean→flaw" read like a
@@ -717,7 +739,7 @@ function build() {
     <span>Sort:</span>
     <button id="sort-finding" class="active">visual finding</button>
     <button id="sort-regression" title="Ranks: verdict regressions where both runs were image-verified, then verdict differences against an unverified baseline entry (usually the OLD verdict was wrong, not a new defect), then captures whose clip image changed. Skips are not regressions and sort last.">regressions</button>
-    <button id="sort-score" title="Reviewed severity 0-10 (10 = unusable). Unreviewed domains sort last — no computed score stands in for a judgment.">worst severity</button>
+    <button id="sort-score" title="Reviewed severity 0-10 (10 = unusable). Unreviewed domains sort after the rated — no computed score stands in for a judgment — and skipped domains last of all, since a page that never loaded has nothing to rate.">worst severity</button>
     <button id="sort-date">newest run</button>
     <button id="filter-flagged">only flagged</button>
     <span class="count">${countLabel}</span>
@@ -764,7 +786,16 @@ function build() {
           if (rr !== 0) return rr;
           return Number(b.dataset.sev) - Number(a.dataset.sev);
         }
-        if (key === 'score') return Number(b.dataset.sev) - Number(a.dataset.sev);
+        if (key === 'score') {
+          // A SKIP has no capture, so it has no severity to rank — it says
+          // nothing about the pipeline (see the "a skip is not a regression"
+          // note above). Sink every skip below the rated AND the unrated, so
+          // the tail of this view is "couldn't load" rather than a mix of
+          // "couldn't load" and "not yet judged", which read alike at a glance.
+          const as = a.dataset.status === 'skip', bs = b.dataset.status === 'skip';
+          if (as !== bs) return as ? 1 : -1;
+          return Number(b.dataset.sev) - Number(a.dataset.sev);
+        }
         return Number(b.dataset.mtime) - Number(a.dataset.mtime);
       });
       els.forEach((el) => list.appendChild(el));

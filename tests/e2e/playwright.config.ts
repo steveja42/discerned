@@ -87,6 +87,11 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'flaky-capture-probe',
+      testMatch: /tools\/flaky-capture-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
       name: 'google-referral-probe',
       testMatch: /tools\/google-referral-probe\.spec\.ts$/,
       retries: 0,

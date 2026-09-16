@@ -61,6 +61,20 @@ export interface SweepRecord {
   httpStatus?: number;
   /** Free-text provenance note (e.g. "manual headed capture …"). */
   note?: string;
+  /**
+   * How the pre-capture settle wait went (see helpers/waitForBodySettled).
+   * `settled: false` means the page was STILL growing when we captured, so a
+   * thin clip is suspect timing rather than a pipeline defect — the distinction
+   * that cost a long investigation when politico captured 5% text coverage in
+   * one run and 87% in the next from identical code.
+   */
+  bodySettle?: { textLen: number; settled: boolean; waitedMs: number; initialLen: number };
+  /**
+   * Pipeline census lines, kept only for a thin capture. Names the stage that
+   * dropped the content (clone -> postClone -> removeMarked -> ...), which no
+   * score can — see project_pipeline_census_diagnostic.
+   */
+  census?: string[];
   /** The four heuristic diagnostics (present when status === 'ok'). */
   scores?: SweepScores;
 }

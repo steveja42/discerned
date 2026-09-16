@@ -100,6 +100,10 @@ const TARGETS: Record<string, string> = {
   // to one cell per line and the author renders twice ("Roald Dahl and Roal'd
   // Dal'"), with a stack of Borrow/Listen/WorldCat chrome above the title.
   openlibrary: 'https://openlibrary.org/works/OL45804W/Fantastic_Mr_Fox',
+  // REGRESSION (2026-09-15): the 09-14 baseline captured the full article; now
+  // the clip stops cleanly after the byline with the body absent from it but
+  // present in the DOM (textCoverage 86% -> 5%).
+  politico: 'https://www.politico.com/news/2026/07/21/nasa-nuclear-mars-mission-cost-01005610',
   ebay: 'https://www.ebay.com/itm/397652415204',
   target: 'https://www.target.com/p/razer-ornata-v3-tenkeyless-espeon-umbreon-edition/-/A-95017977',
   lastfm: 'https://www.last.fm/music/Radiohead',
