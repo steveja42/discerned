@@ -19,7 +19,7 @@ change lands. Mark the sub-item first, the phase second.
 |---|---|---|---|
 | 0 | Cast-side pixel baselines | — (blocking) | ☑ **Done** (gate passed 2026-09-15) |
 | 1 | Low-risk narrow fixes (1a-1e) | low | ☑ **Done** (gate passed 2026-09-16; 1a reassigned to 5c) |
-| 2 | Cast whitespace corruption | **high** | ☐ Not started |
+| 2 | Cast whitespace corruption | **high** | ☑ **Done** (gate passed 2026-09-16) |
 | 3 | Grey-pill link mangling | medium | ☐ Not started |
 | 4 | Recirculation blocks | medium | ☐ Not started |
 | 5 | Structural (5a-5c) | **highest** | ☐ Not started |
@@ -333,10 +333,106 @@ counter-guard, and a cast baseline for bsky is worth adding first.
 page). A naive "stop adding spaces" fix will not address the stripping half and
 may worsen it.
 
+### What landed (2026-09-16)
+
+**The stated cause was only half of it, and the smaller half.** Narrowing
+`separateInlineFacets` alone made the CAST match the CLIP's *already-broken*
+reality — kubernetes-docs went from `apiVersion : v1 kind : Pod` to
+`apiVersion:v1kind:Podmetadata:`, which is worse, and is exactly the "a naive
+'stop adding spaces' fix ... may worsen it" warning above. Three fixes were
+needed; the second is the one that mattered.
+
+1. **`separateInlineFacets` narrowed** (`html-to-markdown.ts`) — it inserted a
+   space between ANY two adjacent inline elements. Two guards now rule out the
+   boundaries the source never rendered as a gap: a `<pre>`/`<code>` ancestor
+   (whitespace there is authoritative), and a punctuation-only element on
+   either side (the PROSE half — wiktionary's `( nonstandard )`, where no
+   preformatted ancestor exists). The separations the pass exists for survive:
+   Bluesky facets, BBC's two-span byline, adjacent prose anchors.
+
+2. **`collapseEmpty` was deleting the whitespace** (`capture.ts`) — the real
+   cause, and a CLIP bug, not a cast one. `hasVisibleContent` TRIMMED before
+   testing, so it judged a whitespace-only element empty and removed it. A
+   syntax highlighter wraps every run of whitespace in its own element:
+   **Chroma** (kubernetes.io, every Hugo docs site) and **Pygments** (PyPI,
+   Sphinx) both emit `<span class="w"> </span>` and `<span class="w">
+</span>`
+   between tokens. So every space and newline in the block was deleted, and
+   `separateInlineFacets` had been *papering over it* by padding each boundary.
+   Whitespace inside `<pre>` is now content.
+
+   **This one fix closed BOTH directions of the bug.** The plan treated
+   "padded" and "stripped" as separate failure modes needing separate fixes;
+   they are the same mechanism seen from two surfaces — pypi's
+   `python-mpipinstallrequests` (stripped, clip) and its `r . json ( )`
+   (padded, cast) are one defect.
+
+3. **Structural line breaks restored** (`restorePreLineBreaks`) — react.dev
+   marks each line with `<div>…<br></div>`. Both the bare-`<pre>` rule and
+   turndown's own fenced-code rule read `textContent`, which ignores `<br>` and
+   block wrappers, so the block collapsed onto one line. This is the
+   `
+`-flattening half Phase 0 could not reproduce.
+
+**Diagnosis note — the probe was worth more than the reasoning.** The first two
+attempts at the newline half both targeted the wrong mechanism (a
+`PRELINE_MARKER` in `applyFlexSeparation`, built and then reverted) because the
+markup was reasoned about rather than measured. `tests/e2e/tools/pre-ws-probe.spec.ts`
+(`PREWS=1 [PREWS_URL=…]`) settled it in one run: it reports, per `<pre>`, whether
+whitespace text nodes exist and how the line wrappers compute. The answer —
+"present, but wrapped in elements" — named `collapseEmpty` immediately and was
+then reproducible offline in a unit test.
+
+**Two measurement traps hit here, both of which nearly produced a wrong report:**
+- **The default pixel tolerance hid the fix.** `highlighted-code-cast-fixture-visual`
+  PASSED against the broken baseline after the repair: 1.46% of pixels changed,
+  under `maxDiffPixelRatio`'s 0.02 default. Only the string assertions caught
+  it. Monospace text of near-identical length is what a ratio gate is worst at,
+  so that fixture now gates at 0.002.
+- **A cast image could be stale while its clip was fresh — now FIXED in the
+  harness.** `github-pr` was re-captured at 15:38 but its `--3-cast.png` was
+  still 2026-08-30's, with nothing marking it, and it read as "not fixed".
+  `castShotSafe` was right to swallow the failure (the cast is additive and
+  must not fail a clip check that already passed) but wrong to leave the
+  previous run's PNG behind. It now **deletes** the image and records
+  `cast: {ok, reason}` in `--score.json`; `review-queue.mjs` prints
+  `(no cast image — <reason>)`, and its dead `!cast` escape hatch (always false
+  — `cast` is a `resolve()` path) was replaced with a real `existsSync` test so
+  a missing cast can no longer be waved through as reviewed. Re-verified on
+  `github-pr`: `{ok: false, reason: "castShot timeout (>90000ms)"}`, no stale
+  file. The timeout is itself a finding — that page converts to **476 KB** of
+  markdown, over the 400 KB `LONGFORM_MARKDOWN_MAX_CHARS` cap, so the feed
+  RENDER is what is slow (the conversion takes 851ms). Cast-size policy for
+  such pages is out of Phase 2's scope and not yet addressed.
+
+Guards added: 10 unit tests in `discerned-ext/tests/nostr/cast-markdown.test.ts`
+(inline-boundary whitespace + structural line breaks) and 5 in
+`discerned-ext/tests/extraction/pre-whitespace.test.ts` (the Chroma/Pygments
+shapes, plus the counter-guard that a whitespace-only element OUTSIDE `<pre>`
+is still collapsed). The `knownBroken` strings in the cast fixture moved to
+`castMustNotContain`, with the repaired text asserted positively, and the
+baseline refreshed.
+
 **Gate:** cast baselines green; `SWEEP_ONLY` re-sweep of all ~20 plus the six
 clean counter-examples above, every one reviewed by eye.
 
-- [ ] **Phase 2 done** (gate passed)
+**Gate result (2026-09-16):** 32/32 fixture baselines green (29 clip + 3 cast),
+run one project at a time, re-run after EACH of the three changes — the
+`collapseEmpty` fix touches every capture in the corpus. `pnpm test` green
+(300 ext + 173 web). Re-swept 25 domains: 20 Phase 2 domains + 5 clean
+counter-examples, every one HTTP 200 except `npmjs` (Cloudflare 403, recorded
+`blocked`), each compared against a pre-change copy of its own PNG. 19 now
+verdict `clean`; the 2 remaining `flaw`s are unrelated defects the whitespace
+work does not own (`go-docs` TOC separators, `chosun` recirculation → Phase 4).
+Counter-examples byte-identical: `postgresql-docs`, `jvns`, `hackaday`,
+`seattletimes`. `stackoverflow-q` changed and was verified an IMPROVEMENT
+(`int main()` repaired, Copy label unglued). No domain regressed.
+
+**Phase 3 should be re-checked first, as planned.** These fixes changed the
+cast's inline-boundary handling substantially, so some of the 8 grey-pill sites
+may already be resolved.
+
+- [x] **Phase 2 done** (gate passed)
 
 ---
 

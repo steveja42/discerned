@@ -92,24 +92,24 @@
       "reviewedAt": "2026-09-15T06:08:02.889Z"
     },
     "python-docs": {
-      "verdict": "flaw",
-      "severity": 5,
-      "where": "cast",
-      "regression": "unknown",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cast still corrupts the REPL block (asyncio . sleep ( 10 , result = 'hello' )) while plain-text lines in the same block survive; clip is clean.",
+      "note": "REPL block renders as valid Python (await asyncio.sleep(10, result='hello')).",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:11:10.929Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "reactdev": {
-      "verdict": "flaw",
-      "severity": 5,
-      "where": "cast",
-      "regression": "unknown",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cast still collapses the JSON example to one line with spaces around every token, losing formatting and line breaks; clip is clean.",
+      "note": "JSON example renders one object per line with correct spacing instead of collapsing to one padded line.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:11:20.787Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "stackoverflow-blog": {
       "verdict": "clean",
@@ -153,23 +153,23 @@
     },
     "hackaday": {
       "verdict": "clean",
-      "severity": 1,
+      "severity": 0,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Title, byline, date, hero, body with inline code, multi-line shell code blocks and section headings all render correctly with spacing and indentation intact.",
+      "note": "Byte-identical to the previous run.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:20:25.516Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "usatoday": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Breadcrumb, headline, byline with avatar, network line, date, body with Q&A subheads and inline images all render correctly; date and Updated run together.",
+      "note": "Breadcrumb, headline, byline, body with Q&A subheads and inline images render correctly; date and Updated still run together.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:24:29.567Z"
+      "reviewedAt": "2026-09-16T16:18:46.541Z"
     },
     "businessinsider": {
       "verdict": "clean",
@@ -195,11 +195,11 @@
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Kicker, headline, publish/update line, byline with avatar, Key Points list, hero with caption and credit and full body all render correctly; dates smash together.",
+      "note": "Kicker, headline, byline, Key Points, hero and body all render correctly; dates still smash together.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:27:04.252Z"
+      "reviewedAt": "2026-09-16T16:18:46.541Z"
     },
     "foxnews": {
       "verdict": "clean",
@@ -271,34 +271,33 @@
       "reviewedAt": "2026-09-16T01:29:45.669Z"
     },
     "npmjs": {
-      "verdict": "flaw",
-      "severity": 5,
-      "where": "cast",
+      "verdict": "blocked",
+      "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "The cast pads every inline-element boundary in the highlighted code ('function Counter ( ) {'), and neither surface carries a package header.",
+      "note": "Cloudflare security-verification page, HTTP 403; nothing reached the pipeline.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T00:20:16.907Z"
+      "reviewedAt": "2026-09-16T16:18:46.541Z"
     },
     "pypi": {
-      "verdict": "flaw",
-      "severity": 5,
-      "where": "cast",
-      "regression": "unknown",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cast pads the REPL block with spaces (r . json ()) and strips them from the shell block (python-mpipinstallrequests) — whitespace wrong in both directions; clip is clean.",
+      "note": "REPL block renders valid Python with both the padding and the lost space in 'import requests' corrected.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:48:11.183Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "github-repo": {
-      "verdict": "flaw",
-      "severity": 5,
-      "where": "cast",
-      "regression": "unknown",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cast still pads the Examples block with spaces around every bracket and dot (return < div >Hello { name } </ div > ;), leaving unrunnable JSX; README prose and badges are correct.",
+      "note": "JSX example renders runnable (return <div>Hello {name}</div>;); README prose and badges correct.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:51:33.414Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "folha": {
       "verdict": "flaw",
@@ -401,14 +400,14 @@
       "reviewedAt": "2026-09-15T07:38:44.410Z"
     },
     "github-issue": {
-      "verdict": "flaw",
-      "severity": 4,
-      "where": "cast",
-      "regression": "unknown",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cast pads the highlighted code block (document . getElementsByTagName ( \"p\" ) ;) while the same call in prose below is correct; dates also duplicate (on Jan 5, 2017on Jan 5, 2017).",
+      "note": "Highlighted block renders correctly (document.getElementsByTagName(\"p\");) alongside the same call in prose.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:27:06.938Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "wikivoyage": {
       "verdict": "clean",
@@ -491,14 +490,14 @@
       "reviewedAt": "2026-09-16T00:21:14.990Z"
     },
     "crates-io": {
-      "verdict": "flaw",
-      "severity": 5,
-      "where": "cast",
-      "regression": "unknown",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cast pads the Rust example throughout (use serde :: { Deserialize , Serialize };, x : i32 ,) while string literals keep correct spacing; clip is clean.",
+      "note": "Rust example renders compilable (use serde::{Deserialize, Serialize};) with string literals intact.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T14:39:30.551445Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "lefigaro": {
       "verdict": "flaw",
@@ -532,23 +531,23 @@
     },
     "dockerhub": {
       "verdict": "clean",
-      "severity": 2,
+      "severity": 0,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Logo, title, official-image badge, stats, description, trimmed-description note, Quick reference and the full supported-tags list all render correctly; tag-list commas show slight padding.",
+      "note": "Compose YAML and inline code render correctly; supported-tags list intact.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:14:42.416Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "go-docs": {
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Breadcrumb, title, Note, headings and body with inline code render correctly, but TOC entries run together with no separators and paragraph anchors show after each heading.",
+      "note": "Breadcrumb, title, headings and inline code render correctly, but TOC entries run together with no separators and paragraph anchors show after each heading.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:20:52.880Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "mathoverflow": {
       "verdict": "flaw",
@@ -621,14 +620,14 @@
       "reviewedAt": "2026-09-16T14:39:30.551445Z"
     },
     "wiktionary": {
-      "verdict": "flaw",
-      "severity": 4,
-      "where": "cast",
-      "regression": "unknown",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cast pads parentheses and quotes throughout prose ( Received Pronunciation ), ( nonstandard ), Audio ( US ) : — same space-insertion as the code blocks but in plain text; clip is clean.",
+      "note": "Prose parentheses and quotes render tight ((Received Pronunciation), Audio (US):) instead of padded.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:10:42.295Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "courtlistener": {
       "verdict": "flaw",
@@ -882,13 +881,13 @@
     },
     "css-tricks": {
       "verdict": "clean",
-      "severity": 1,
+      "severity": 0,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Hero diagram, tags, title, byline, body with inline code, section headings and code blocks all render correctly; code block spacing and indentation intact on the cast.",
+      "note": "Prose, inline code and links render correctly; only live ad copy differs from the previous run.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:13:54.835Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "musicbrainz": {
       "verdict": "clean",
@@ -1064,11 +1063,11 @@
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Logos, forecast office, current conditions with the data table and the extended forecast with per-period icons all render correctly; lat/lon labels run together.",
+      "note": "Forecast office, current conditions table and extended forecast render correctly; lat/lon labels still run together.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:21:02.556Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "bbc-news": {
       "verdict": "flaw",
@@ -1084,11 +1083,11 @@
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, byline, hero with credit and every event entry with dates, venues, prices and emoji markers render correctly; area tags run together without separators.",
+      "note": "Byte-identical to the previous run; area tags still run together without separators.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:36:26.687Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "9to5mac": {
       "verdict": "clean",
@@ -1102,13 +1101,13 @@
     },
     "jvns": {
       "verdict": "clean",
-      "severity": 1,
+      "severity": 0,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Title, date, intro, headings, bulleted lists with links and multi-line Python code blocks with nested indentation all render correctly.",
+      "note": "Byte-identical to the previous run.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:29:19.707Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "postguam": {
       "verdict": "clean",
@@ -1322,13 +1321,13 @@
     },
     "superuser": {
       "verdict": "clean",
-      "severity": 1,
+      "severity": 0,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Question, tags, attribution lines, the 7 answers with curl code blocks (including a multi-line continuation) and comments all render correctly.",
+      "note": "curl examples render with correct spacing; answers and vote counts intact.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:24:06.402Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "tiktok-profile": {
       "verdict": "flaw",
@@ -1423,12 +1422,12 @@
     "chosun": {
       "verdict": "flaw",
       "severity": 3,
-      "where": "cast",
-      "regression": "unknown",
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Korean body renders correctly but tilde temperature ranges collapse with digits run together (21~28도 becomes 2128도) and a related-articles recirc block trails the article.",
+      "note": "Korean body, hero and caption render correctly with tilde temperature ranges intact; a related-articles block still trails the article.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:01:43.465Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "github-blog": {
       "verdict": "clean",
@@ -1671,14 +1670,14 @@
       "reviewedAt": "2026-09-15T07:17:30.614Z"
     },
     "mdn": {
-      "verdict": "flaw",
-      "severity": 5,
-      "where": "cast",
-      "regression": "unknown",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cast still corrupts fenced code blocks with spaces around dots, brackets and semicolons (console. log (years[ \"2\" ] ) ;) while inline code spans render correctly; clip is clean.",
+      "note": "Fenced JS renders as valid code (console.log(years[\"2\"] !== years[\"02\"]);); inline code spans correct.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:11:00.808Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "msnbc": {
       "verdict": "flaw",
@@ -1711,14 +1710,14 @@
       "reviewedAt": "2026-09-15T05:25:18.643Z"
     },
     "github-pr": {
-      "verdict": "flaw",
-      "severity": 5,
-      "where": "cast",
-      "regression": "unknown",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "clip",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cast still inserts spaces around every angle bracket, brace and comma, garbling the TypeScript samples (type Trim < S extends string > =); clip is clean.",
+      "note": "Clip renders TypeScript generics correctly (type Trim<S extends string> =); cast not reviewable — its render times out at 90s because the page converts to 476KB of markdown.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T05:35:38.332Z"
+      "reviewedAt": "2026-09-16T17:10:26.640Z"
     },
     "letterboxd": {
       "verdict": "clean",
@@ -1742,13 +1741,13 @@
     },
     "stackoverflow-q": {
       "verdict": "clean",
-      "severity": 2,
+      "severity": 0,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Question body and the full C++ and Java code blocks render correctly with indentation and operators intact; a stray Copy label leads each block.",
+      "note": "C++ block renders valid with int main() correct and the Copy label no longer glued to the first include.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T14:39:30.551445Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "steam": {
       "verdict": "flaw",
@@ -1764,11 +1763,11 @@
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Live-updated line, headline, byline, intro and the per-entry liveblog with timestamps, bylines, images and captions all render correctly; LIVEUpdated runs together.",
+      "note": "Headline, byline and the per-entry liveblog with timestamps and images render correctly; LIVEUpdated still runs together.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:20:51.167Z"
+      "reviewedAt": "2026-09-16T16:18:46.541Z"
     },
     "wikipedia-person": {
       "verdict": "clean",
@@ -1961,14 +1960,14 @@
       "reviewedAt": "2026-09-16T04:19:22.120Z"
     },
     "kubernetes-docs": {
-      "verdict": "flaw",
-      "severity": 6,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Both surfaces flatten the YAML to one line: clip strips spaces (apiVersion:v1kind:Podmetadata:) and cast adds them (apiVersion : v1 kind : Pod), while plain shell blocks are correct on both.",
+      "note": "Pod manifest renders as valid indented YAML on both surfaces; plain shell block still correct.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T15:21:57.561Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "hackernews": {
       "verdict": "flaw",
@@ -1981,14 +1980,14 @@
       "reviewedAt": "2026-09-15T22:54:51.790Z"
     },
     "postgresql-docs": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "The navbar elephant logo renders as a ~450px hero at the top where the site shows a small header icon; content below is correct.",
+      "note": "Byte-identical to the previous run; ASCII tables keep their pipe alignment.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T14:39:30.551445Z"
+      "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "tildes": {
       "verdict": "flaw",
