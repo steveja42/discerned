@@ -20,8 +20,8 @@ change lands. Mark the sub-item first, the phase second.
 | 0 | Cast-side pixel baselines | — (blocking) | ☑ **Done** (gate passed 2026-09-15) |
 | 1 | Low-risk narrow fixes (1a-1e) | low | ☑ **Done** (gate passed 2026-09-16; 1a reassigned to 5c) |
 | 2 | Cast whitespace corruption | **high** | ☑ **Done** (gate passed 2026-09-16) |
-| 3 | Grey-pill link mangling | medium | ☐ Not started |
-| 4 | Recirculation blocks | medium | ☐ Not started |
+| 3 | Grey-pill link mangling | medium | ☑ **Done** (gate passed 2026-09-16) |
+| 4 | Recirculation blocks | medium | ☑ **Done** (gate passed 2026-09-16) |
 | 5 | Structural (5a-5c) | **highest** | ☐ Not started |
 | 6 | Low-risk cosmetic (6a-6c) | low | ☐ Not started |
 
@@ -446,22 +446,69 @@ Link text split into two grey pill boxes with an arrow glyph slicing through it:
 links in the same paragraph render correctly, so a specific link property
 triggers it. `signalvnoise` has six on one page.
 
-**Sequence after Phase 2 deliberately:** this may share the whitespace root
-cause (both are inline-boundary damage in `htmlToMarkdown`). Re-check these 8
-*after* Phase 2 lands — some may already be fixed, and if not, the remaining
-signal is cleaner.
+**Cause — not `htmlToMarkdown` at all; the render side.** The markdown is
+correct; `DetailPanel`'s ReactMarkdown `a` renderer
+(`discerned-web/components/feed/DetailPanel.tsx`) decided a cast link was a
+click-to-play card from the **href alone**:
 
-**Ruled out in Phase 0:** the CSS pill rules `.clip-body a:has(img) + a` and
-`a:has(img) ~ a:nth-of-type(3)` (`discerned-web/app/globals.css` ~1792) look like
-an exact match for "selective, restyles a link's neighbour", but they cannot
-fire in a cast — casts drop inlined images, so `:has(img)` never matches. A
-purpose-built fixture with that anchor shape renders clean
-(`linked-prose-cast-fixture-visual`, which now guards link text staying
-unsliced). Reproducing the pill needs a capture from one of the 8 sites.
+```ts
+const playable = !!href && !!resolveVideoEmbed(href);   // before
+```
+
+So every *prose* link to YouTube / X / Vimeo / Instagram / TikTok / Facebook
+became one. `.clip-body .tweet-video` is `display: block; width: fit-content;
+border-radius: 12px; overflow: hidden`, which lifts the sentence fragment out of
+its paragraph as a rounded box, and `.clip-body .tweet-video-play` is `position:
+absolute; inset: 0; background: rgba(0,0,0,0.35)` with a 44px white `▶` centred
+on it. The "two pills with an arrow between them" is one box with the glyph
+sitting over its middle, hiding the characters underneath. That also explains
+the selectivity exactly: only links whose href `resolveVideoEmbed()` matches,
+which is why neighbours in the same paragraph are fine.
+
+The property the plan was looking for was the **href's host**, not anything
+about the surrounding markup.
+
+**Fix.** A play card needs a poster to lay the overlay over, so require both:
+
+```ts
+const playable = !!href && wrapsImage(children) && !!resolveVideoEmbed(href);
+```
+
+`wrapsImage` compares against the `MdImg` component reference. The old code's
+comment said an `img` test was impossible because react-markdown substitutes
+`MD_COMPONENTS.img` for the intrinsic tag — true, but the substitute is a known
+reference, so hoisting it to a named constant makes the comparison work. The
+real poster shape `[![](poster)](watch-url)` is unaffected.
+
+**Ruled out in Phase 0 (and still ruled out):** the CSS pill rules
+`.clip-body a:has(img) + a` and `a:has(img) ~ a:nth-of-type(3)`
+(`discerned-web/app/globals.css` ~1792) cannot fire in a cast — casts drop
+inlined images, so `:has(img)` never matches. Not the cause.
+
+**Regression guards added:**
+- `discerned-web/tests/components/CastPlayCard.test.tsx` — prose link to an
+  embeddable provider stays a plain link; the poster shape stays playable; a
+  prose link to a non-embeddable host is untouched.
+- `tests/fixtures/sites/linked-prose-article.html` now carries a prose link to
+  a YouTube watch URL, so `linked-prose-cast-fixture-visual` **reproduces** the
+  defect rather than merely watching for it. Verified by reverting the fix: the
+  cast text gains a bare `▶` line and the pixel baseline fails, rendering
+  `sat down to tal`▸`th David Senra` — pixel-identical to the signalvnoise
+  corpus slice. `castMustNotContain` now includes `▶`, so the text assertion
+  names the bug before the baseline reports "images differ".
 
 **Gate:** cast baselines green; re-sweep the 8.
 
-- [ ] **Phase 3 done** (gate passed)
+All three cast baselines green (`linked-prose`, `highlighted-code`,
+`substack-essay`), plus `medium-fixture-visual` as a clip-side control, 176 web
+unit tests and 301 extension unit tests. All 8 domains re-swept 2026-09-16, all
+`ok` / http 200 / cast rendered, and all 8 reviewed clean — every pill gone,
+including signalvnoise's six. `techcrunch` has an explicit before/after: the
+prior capture rendered `includin`▸`m Sacks`, the new one reads `including from
+Sacks` inline. A legitimate poster play card (kotaku's YouTube embed) still
+renders correctly, so the fix narrowed the rule rather than disabling it.
+
+- [x] **Phase 3 done** (gate passed 2026-09-16)
 
 ---
 
@@ -479,10 +526,93 @@ weak headings additionally require ≥60% link text) exist because an over-eager
 rule removed article bodies. See `project_recirculation_heading_gap` in memory —
 5 of 6 real headings currently unmatched.
 
+### What the images actually showed (2026-09-16)
+
+Reading the tail band of each clip (the verdicts describe only the TOP band, so
+several were wrong about the tail) narrowed the list from 12 to 5 real Phase-4
+targets, and reassigned the rest:
+
+| Domain | Actual state | Disposition |
+|---|---|---|
+| `economist` | "More from Science & technology" + 6 teaser cards | **Phase 4** |
+| `newsweek` | "Read More on News" + ribbon cards mid-article | **Phase 4** |
+| `japantimes` | large recirc tail; **its verdict said clean** (top band only) | **Phase 4** |
+| `msnbc` | `<h3>More articles</h3>` + card, then more section rails | **Phase 4** |
+| `thedailybeast` | "Top Stories" video widget | **Phase 4** (body loss is 5a) |
+| `chosun` | Korean "사회 많이 본 뉴스" | out of scope — no English vocabulary can match it |
+| `globeandmail` | house promos ("Interact with The Globe"), not article recirc | different shape |
+| `time` | clip AND cast now clean — the verdict was stale | not a defect |
+| `scmp` | no recirc block at all (stat/separator flaws) | not Phase 4 |
+| `genius` | "appears on" album list | `CROSS_SELL_HEADING_RE` path |
+| `npr`, `axios` | genuinely clean | not a defect |
+
+### Why the regex alone was never going to be enough
+
+Measured on the real captured markup, not inferred: the module sits **four**
+levels above economist's `<h2>` (513 chars, 7 anchors, 6 images) behind
+pass-through wrappers, so the 3-level climb cap could never reach it. And on
+newsweek/msnbc the teaser is a **following sibling** of the heading — the
+nearest common ancestor is the whole article body, which the prose guard
+correctly refuses to remove. So three changes, not one:
+
+1. **Vocabulary** — the measured heading forms added to both regexes.
+   `read more` stays anchored to the `on <section>` form: a bare prefix hit 26
+   corpus domains and **25 were inline expanders** inside real content
+   (allrecipes reviews, newscientist mid-article cards) that `hasLongProse`
+   would NOT have saved, since it only counts `<p>` and those bodies are bare
+   `<div>`s. That measurement is the reason the obvious widening was rejected.
+2. **Climb depth 3 → 5 for STRONG headings only.** Weak headings stay at 3 —
+   they are gated on a text ratio rather than a vocabulary match, and they are
+   the ones that have historically over-removed.
+3. **`removeSiblingRecircCards()`** — a new pass for the mid-article inject
+   shape. Consumes following siblings only while they stay card-shaped and
+   stops at the first holding real prose; **one sibling too many deletes the
+   rest of the article**, which is what the fixture's third assertion pins.
+
+A label-only box (a container whose text is just the heading) is no longer
+removed by the climb — it would strip the label and strand its cards.
+
+### Measured blast radius
+
+Replaying both passes over **all 189 saved corpus captures**: 7 domains
+affected, all genuine recirculation, **182 untouched**. Each mechanism is
+load-bearing — with the climb at 3, economist drops out entirely; with the
+sibling pass off, newsweek/msnbc/japantimes-"Latest News" do.
+
+Residue deliberately left: japantimes' second tail block is behind the
+2500-char cap, and raising that is the "eats real content" risk above.
+
 **Gate:** full 29 clip baselines; re-sweep the 12 **plus** a sample of
 long-article domains to confirm no body truncation.
 
-- [ ] **Phase 4 done** (gate passed)
+### Gate result (2026-09-16)
+
+All **33** fixture-visual baselines green (29 clip + 3 cast + 1 shared), 301
+extension and 176 web unit tests green, `pnpm type-check` clean. Re-swept 12
+domains — the 7 the simulation flagged plus 5 long-article controls — all
+captured `ok` / http 200 / cast rendered, none blocked, and all 12 reviewed on
+both surfaces.
+
+Fixed: **economist** (clip 3441→997px, cast 3895→1135px; the six-teaser module
+gone from both), **newsweek** (the "Read More on News" ribbon cards gone, prose
+now unbroken from lede to "What Is Cyclospora?"), **msnbc** (mid-body inject
+gone, prose continuous), **japantimes** (8000→6468px, the link-ribbon tail
+gone — and it no longer hits the screenshot cap), plus nature, myanimelist and
+deepmind-blog.
+
+**No body truncation on any control.** `textCoverage` moved by ≤0.015 on all
+five (wikipedia-en identical, newyorker −0.003, arstechnica +0.004), and each
+was read as an image rather than trusted from the scalar. theatlantic's inline
+prose cross-reference ("Read: Chatbots are becoming…") survived, which is the
+direct confirmation that anchoring `read more` to the `on <section>` form was
+the right call.
+
+Out of scope, recorded rather than chased: msnbc's section-name rails
+("Congress", "Supreme Court") cannot be matched by any text vocabulary;
+japantimes' KEYWORDS strip and advertorial, and nature's Careers jobs listing,
+are different shapes.
+
+- [x] **Phase 4 done** (gate passed 2026-09-16)
 
 ---
 

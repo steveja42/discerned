@@ -36,6 +36,26 @@ describe('generic chrome removal + flex separation (bodyHtml level)', () => {
     expect(html).not.toContain('More Geopolitical Stories On ExampleWire');
     expect(html).not.toContain('Ceasefire Talks Falter Again');
 
+    // Section-tail module ("More from <section>") nested four levels below its
+    // heading — guards the strong-heading climb depth, which at 3 stopped short
+    // of the module and left all six teasers in the clip.
+    expect(html).not.toContain('More from Science');
+    expect(html).not.toContain('A new device lets paralysed patients');
+    expect(html).not.toContain('Hot coffee could cause');
+
+    // Mid-article inject ("Read More on <section>"): heading + its ONE sibling
+    // teaser go, and the article prose right after it stays. The second
+    // assertion is the load-bearing one — consuming a sibling too many here
+    // deletes the rest of the body.
+    expect(html).not.toContain('Read More on');
+    expect(html).not.toContain('Map Shows Rapid Spread');
+    expect(html).toContain('only a subset of infections reported nationally');
+
+    // COUNTER-EXAMPLE: a bare inline "Read more" expander is not a heading, so
+    // the review it sits in must survive intact.
+    expect(html).toContain('The sauce never thickened');
+    expect(html).toContain('Jump to recipe');
+
     // Trailing tag/category link strip removed (short-link-dominant list).
     expect(html).not.toContain('/t/tariffs');
     expect(html).not.toMatch(/>Tariffs</);

@@ -32,14 +32,14 @@
       "reviewedAt": "2026-09-15T06:05:13.573Z"
     },
     "wikipedia-en": {
-      "verdict": "flaw",
-      "severity": 3,
-      "where": "cast",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast still renders the multiple-issues maintenance hatnote as a messy multi-cell table repeating the same warnings; article body, diagram and links are correct.",
+      "note": "Article headings, lists, prose and footnote links render continuously with no truncation.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:08:27.196Z"
+      "reviewedAt": "2026-09-16T18:48:59.781Z"
     },
     "danluu": {
       "verdict": "clean",
@@ -720,14 +720,14 @@
       "reviewedAt": "2026-09-15T06:39:17.586Z"
     },
     "noahpinion": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "A Substack subscription block with avatar, subscriber count and terms links still renders above the title; the article itself renders correctly below it.",
+      "note": "Numbered long-form sections, charts and prose render continuously with no truncation.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:32:45.581Z"
+      "reviewedAt": "2026-09-16T18:48:59.889Z"
     },
     "instagram-home": {
       "verdict": "flaw",
@@ -921,13 +921,13 @@
     },
     "arstechnica": {
       "verdict": "clean",
-      "severity": 1,
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Kicker, headline, dek, byline, hero with caption and credit, section headings, body and second inline image all render correctly.",
+      "note": "Full article through the author bio and comment count; no truncation.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:01:59.275Z"
+      "reviewedAt": "2026-09-16T18:48:26.639Z"
     },
     "imdb": {
       "verdict": "flaw",
@@ -1010,14 +1010,14 @@
       "reviewedAt": "2026-09-16T14:36:27.847Z"
     },
     "signalvnoise": {
-      "verdict": "flaw",
-      "severity": 5,
+      "verdict": "clean",
+      "severity": 0,
       "where": "cast",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast mangles six inline links into grey pill-box pairs that split sentences mid-clause, while neighbouring links in the same paragraphs render fine; clip is clean.",
+      "note": "All six grey-pill link cards gone; prose links render inline and paragraphs reflow.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:36:39.066Z"
+      "reviewedAt": "2026-09-16T17:47:28.613Z"
     },
     "gizmodo": {
       "verdict": "flaw",
@@ -1050,14 +1050,14 @@
       "reviewedAt": "2026-09-15T05:56:46.378Z"
     },
     "huffpost": {
-      "verdict": "flaw",
-      "severity": 5,
+      "verdict": "clean",
+      "severity": 0,
       "where": "cast",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast mangles one attribution link into pill boxes (Tru / said), opens with no headline or byline, and trails a long membership-solicitation block; clip is clean.",
+      "note": "Grey-pill link cards gone; prose links render inline.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:52:13.553Z"
+      "reviewedAt": "2026-09-16T17:48:45.787Z"
     },
     "weather-gov": {
       "verdict": "clean",
@@ -1070,14 +1070,14 @@
       "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "bbc-news": {
-      "verdict": "flaw",
-      "severity": 4,
+      "verdict": "clean",
+      "severity": 0,
       "where": "cast",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast still mangles three inline links into grey pill boxes with an arrow glyph slicing through the text; clip is clean.",
+      "note": "Grey-pill link cards gone; x.com prose links render inline.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:04:55.329Z"
+      "reviewedAt": "2026-09-16T17:45:05.124Z"
     },
     "seattletimes": {
       "verdict": "clean",
@@ -1120,24 +1120,24 @@
       "reviewedAt": "2026-09-15T07:40:46.571Z"
     },
     "nature": {
-      "verdict": "clean",
-      "severity": 2,
+      "verdict": "flaw",
+      "severity": 3,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Kicker, headline, dek, byline, lead, Access-options paywall boundary and References list all render correctly; social share icons leave stray bullet glyphs.",
+      "note": "The Latest-on recirculation block is gone; a Nature Careers jobs listing still trails the references.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:08:11.225Z"
+      "reviewedAt": "2026-09-16T18:48:13.083Z"
     },
     "kotaku": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 0,
       "where": "cast",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast mangles one attribution link into pill boxes (posted / studio) after a quote while neighbouring links render fine; clip is clean.",
+      "note": "Grey-pill link cards gone; prose links inline and the YouTube poster card still renders correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:37:03.756Z"
+      "reviewedAt": "2026-09-16T17:47:43.545Z"
     },
     "lobsters": {
       "verdict": "flaw",
@@ -1150,14 +1150,14 @@
       "reviewedAt": "2026-09-15T06:17:39.440Z"
     },
     "theatlantic": {
-      "verdict": "flaw",
-      "severity": 4,
-      "where": "cast",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast still mangles one inline link to two tiny pill boxes (p / ed), breaking the sentence mid-clause while neighbouring links render fine; clip is clean.",
+      "note": "Headline, dek, byline, hero, body to the paywall and author bio all intact; inline prose cross-reference links preserved.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:21:01.833Z"
+      "reviewedAt": "2026-09-16T18:48:59.705Z"
     },
     "pcmag": {
       "verdict": "flaw",
@@ -1170,14 +1170,14 @@
       "reviewedAt": "2026-09-15T06:36:18.867Z"
     },
     "theregister": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 0,
       "where": "cast",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast mangles one link into pill boxes (in a / sive), breaking the sentence after the attribution, while neighbouring links render fine; clip is clean.",
+      "note": "Grey-pill link cards gone; X-post prose links render inline.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:39:37.345Z"
+      "reviewedAt": "2026-09-16T17:48:01.758Z"
     },
     "amazon-product": {
       "verdict": "clean",
@@ -1220,14 +1220,14 @@
       "reviewedAt": "2026-09-15T07:10:55.000Z"
     },
     "techcrunch": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 0,
       "where": "cast",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast still renders one link as a grey pill box with an arrow glyph cutting through it, making the link text unreadable; clip is clean.",
+      "note": "Grey-pill link cards gone; all prose links render inline.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:02:17.951Z"
+      "reviewedAt": "2026-09-16T17:45:04.870Z"
     },
     "theintercept": {
       "verdict": "clean",
@@ -1280,14 +1280,14 @@
       "reviewedAt": "2026-09-15T07:04:55.113Z"
     },
     "economist": {
-      "verdict": "flaw",
-      "severity": 4,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Article renders correctly to the free-trial paywall, but a More-from-Science-and-technology recirculation block follows with six full-size unrelated article images on both clip and cast.",
+      "note": "Article renders correctly to the free-trial paywall and the More-from-Science-and-technology recirculation block is gone from clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T05:05:35.834Z"
+      "reviewedAt": "2026-09-16T18:48:03.421Z"
     },
     "ghost-blog": {
       "verdict": "clean",
@@ -1371,13 +1371,13 @@
     },
     "deepmind-blog": {
       "verdict": "flaw",
-      "severity": 4,
+      "severity": 3,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Headline, byline, hero and body render correctly and the first video has a poster, but a later inline video leaves a large blank gap with no poster frame.",
+      "note": "Body, headings and captions intact with the Related-posts block gone, but several inline video frames render as blank grey or black boxes.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:36:02.606Z"
+      "reviewedAt": "2026-09-16T18:48:26.567Z"
     },
     "dev-to": {
       "verdict": "clean",
@@ -1461,23 +1461,23 @@
     },
     "newsweek": {
       "verdict": "flaw",
-      "severity": 6,
+      "severity": 4,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Read More recirc cards collapse to one-character-per-line vertical columns, and the clip opens with no headline or byline before the body (as cnn and fortune).",
+      "note": "Read More recirc cards gone and the body runs unbroken, but the clip still opens with no headline or byline before the body (as cnn and fortune).",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:27:34.053Z"
+      "reviewedAt": "2026-09-16T18:48:03.498Z"
     },
     "theguardian": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 0,
       "where": "cast",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast still mangles one inline link into grey pill boxes with an arrow glyph through the text while neighbouring links render fine; clip is clean.",
+      "note": "Grey-pill link cards gone; all prose links render inline.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:05:23.193Z"
+      "reviewedAt": "2026-09-16T17:45:04.985Z"
     },
     "apnews": {
       "verdict": "flaw",
@@ -1650,14 +1650,14 @@
       "reviewedAt": "2026-09-15T05:25:41.869Z"
     },
     "japantimes": {
-      "verdict": "clean",
-      "severity": 0,
+      "verdict": "flaw",
+      "severity": 3,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Audio narration strip gone; headline, hero, byline and body intact.",
+      "note": "The recirculation link-ribbon tail is gone, but a KEYWORDS thumbnail strip and a Sustainable Japan advertorial still trail the article.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T14:36:27.847Z"
+      "reviewedAt": "2026-09-16T18:48:12.910Z"
     },
     "kaggle": {
       "verdict": "flaw",
@@ -1681,23 +1681,23 @@
     },
     "msnbc": {
       "verdict": "flaw",
-      "severity": 6,
+      "severity": 5,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "A More-articles recirc block interrupts the article mid-body with two headlines collapsed into extremely narrow one-to-three-character vertical ribbons.",
+      "note": "The mid-body More-articles inject is gone and the prose is unbroken, but section-name rails (Congress, Supreme Court) and Newsletters chrome still follow the article.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:35:52.489Z"
+      "reviewedAt": "2026-09-16T18:48:12.983Z"
     },
     "newyorker": {
-      "verdict": "flaw",
-      "severity": 4,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "A mid-article Classics-newsletter signup block with SIGN UP and terms links still interrupts the prose on both surfaces; the article itself renders correctly.",
+      "note": "Long-form body, cartoons and captions render continuously with no truncation.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:20:34.998Z"
+      "reviewedAt": "2026-09-16T18:48:26.727Z"
     },
     "etsy": {
       "verdict": "flaw",
@@ -2020,14 +2020,14 @@
       "reviewedAt": "2026-09-15T06:26:53.705Z"
     },
     "myanimelist": {
-      "verdict": "flaw",
-      "severity": 6,
-      "where": "cast",
+      "verdict": "clean",
+      "severity": 2,
+      "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast collapses the info panel and synopsis into six narrow table columns of wrapped text with the synopsis repeated and words run together; clip is clean.",
+      "note": "Information, statistics, synopsis and related entries all intact; the trailer rail is gone and only house promo cards remain.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:14:22.698Z"
+      "reviewedAt": "2026-09-16T18:48:13.191Z"
     },
     "reuters": {
       "verdict": "flaw",

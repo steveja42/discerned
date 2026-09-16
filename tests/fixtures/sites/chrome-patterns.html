@@ -90,6 +90,57 @@
         <a href="/g3">Border Standoff Enters Third Week</a>
       </div>
 
+      <!-- Section-tail recirculation module nested FOUR levels below its
+           heading (economist "More from <section>" shape). The heading is an
+           <a> inside an <h2> inside two pass-through wrappers, so the climb
+           has to reach past 3 levels to find the module. The card block is
+           over the sibling pass's 400-char cap (as on the real page, measured
+           at 483), so ONLY the deeper climb removes this one. -->
+      <div class="tail-wrap">
+        <div class="tail-inner">
+          <div class="tail-module">
+            <div><div><h2><a href="/science">More from Science &amp; technology</a></h2></div></div>
+            <div class="tail-cards">
+              <figure><img src="https://example.com/t1.jpg" alt="vr" width="320" height="180"></figure>
+              <a href="/s1">A new device lets paralysed patients communicate more effectively</a>
+              <p>Eventually they might be able to control robots or exoskeletons</p>
+              <a href="/s2">Hot coffee could cause oesophageal cancer</a>
+              <p>The cooler it is, the safer</p>
+              <a href="/s3">Top mathematicians are outraged by the new methods</a>
+              <p>Two dozen medal winners have written a letter of objection</p>
+              <a href="/s4">A transplanted kidney buys time for a human one</a>
+              <p>Surgeons say the window it opens is measured in months</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mid-article recirculation INJECT (newsweek "Read More on <section>"
+           shape): the teaser card is a FOLLOWING SIBLING of the heading, and
+           the article's own prose resumes immediately after it. The prose
+           below must survive — consuming one sibling too many eats the body. -->
+      <div class="inject-head"><h4><span>Read More on </span><a href="/news">News</a></h4></div>
+      <div class="inject-card">
+        <a href="/r1">Map Shows Rapid Spread Of Cases As Classes Are Cancelled</a>
+        <img src="https://example.com/r1.jpg" alt="map" width="120" height="80">
+        <span>4 min read</span>
+      </div>
+      <p>The agency emphasised that the illnesses included in this investigation
+      represent only a subset of infections reported nationally, as it is
+      simultaneously investigating unrelated outbreaks elsewhere in the country
+      and cannot yet say how many cases will ultimately be confirmed.</p>
+
+      <!-- COUNTER-EXAMPLE: a bare inline "Read more" expander inside real
+           content. Measured across the corpus as 25 of 26 "read more" hits, so
+           it must NOT be treated as a recirculation heading. -->
+      <div class="review-card">
+        <div class="review-body">The sauce never thickened the way the recipe
+        promised, and the crust I had worked for went soft the moment it went
+        back into the pan, so next time I would finish it on the stove.</div>
+        Read More
+        <a href="/recipe/1">Jump to recipe</a>
+      </div>
+
       <!-- Trailing tag/category link strip (Breitbart shape): a ul of short
            category links, no prose — should be removed by the tag-list pass. -->
       <ul class="tag-list">

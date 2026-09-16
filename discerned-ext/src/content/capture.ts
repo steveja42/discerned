@@ -8960,7 +8960,20 @@ const STRONG_RELATED_RE = new RegExp(
   // Video/photo playlist rails. AP News leads a story with a player plus a
   // "More Videos" rail of UNRELATED clips, burying the headline and byline.
   '|more (videos|photos|galleries)|watch more|related videos' +
-  '|more (\\w+ )?stories on \\w.*)$', 'i');
+  '|more (\\w+ )?stories on \\w.*' +
+  // Section-tail recirculation headings measured over the 206-domain corpus.
+  // Each is a module label, never prose: "More from <section>" (economist,
+  // yahoofinance), "More articles" (msnbc), "Top stories" (thedailybeast,
+  // straitstimes), "Read More on <section>" (newsweek), "What to read next"
+  // (axios), "Latest on:" (nature), "Latest news" + "In focus" (japantimes).
+  // "read more" stays ANCHORED to the "on <section>" form: a bare prefix hit
+  // 26 corpus domains, and 25 were inline "Read more" EXPANDERS inside real
+  // content (allrecipes reviews, newscientist mid-article cards) that the
+  // prose guard would not have saved — hasLongProse only counts <p>, and
+  // those bodies are bare <div>s.
+  '|more from \\w.*|more (articles|news|coverage)|top stories' +
+  '|read (next|more) on \\w.*|what to read next|latest on:?' +
+  '|latest news|in focus)$', 'i');
 
 // E-commerce cross-sell rail HEADINGS (Amazon "Frequently bought together",
 // "More items to explore", "Customers also bought or read", "Products related to
@@ -9011,7 +9024,11 @@ const RELATED_HEADING_RE = new RegExp(
   '|most (read|popular)|trending( now)?|suggested for you|up next|popular in\\b.*' +
   // Video/photo playlist rails — also in STRONG_RELATED_RE. Seeds are filtered
   // by THIS regex, so a heading missing here never reaches the strong branch.
-  '|more (videos|photos|galleries)|watch more|related videos)$', 'i');
+  '|more (videos|photos|galleries)|watch more|related videos' +
+  // Section-tail headings promoted to STRONG (above) — repeated here because
+  // seeds are filtered by THIS regex first.
+  '|more (articles|news|coverage)|top stories|read (next|more) on \\w.*' +
+  '|what to read next|latest on:?|latest news|in focus)$', 'i');
 // Newsletter signup copy.
 // The consent tail ("By signing up, you agree to…") is the strongest hook: it
 // closes every signup box and never appears in prose. Measured over the corpus
@@ -9236,7 +9253,14 @@ function removeGenericChrome(root: Element): void {
     const seedLen = seedText.length;
     let box: Element | null = null;
     let cursor: Element = seed;
-    for (let i = 0; i < 3; i++) {
+    // A STRONG heading climbs further than a weak one. Measured on the corpus:
+    // the economist's "More from Science & technology" module sits FOUR levels
+    // above its <h2> (513 chars, 7 anchors, 6 teaser images) behind three
+    // pass-through wrappers, so a cap of 3 never reached it. Weak headings stay
+    // at 3 — they are gated on a text RATIO rather than a vocabulary match, and
+    // they are the ones that have historically over-removed.
+    const maxClimb = strong ? 5 : 3;
+    for (let i = 0; i < maxClimb; i++) {
       const p: Element | null = cursor.parentElement;
       if (!p || p === root) break;
       const total = (p.textContent ?? '').replace(/\s+/g, ' ').length;
@@ -9263,6 +9287,12 @@ function removeGenericChrome(root: Element): void {
       }
       cursor = p;
     }
+    // A box holding nothing but the heading itself is the LABEL, not the
+    // module — its teasers are following siblings (newsweek's "Read More on
+    // News" <h4> sits in a 17-char <div> whose cards are the <div>'s
+    // siblings). Removing it here would strip the label and strand the cards,
+    // and would also consume the seed before (2a'') could see it.
+    if (box && (box.textContent ?? '').replace(/\s+/g, ' ').trim().length <= seedLen) box = null;
     if (box) {
       box.remove();
       log(LL.DEBUG, 'Discerned: removeGenericChrome dropped related-content box', 'url:', window.location.href);
@@ -9277,6 +9307,19 @@ function removeGenericChrome(root: Element): void {
   // wrapper up is the whole article body). Find the TIGHTEST container that
   // clusters ≥3 such sister-site links and holds no real prose, and drop it.
   removeSisterSiteRail(root, hasLongProse);
+
+  // (2a'') Recirculation cards INJECTED MID-ARTICLE, where the teaser is a
+  // FOLLOWING SIBLING of the heading rather than an ancestor's child — so (2)'s
+  // climb cannot isolate it (the nearest common ancestor is the whole article
+  // body, which the prose guard correctly refuses to remove).
+  //
+  // Measured on the corpus: newsweek's "Read More on News" <h4> is followed by
+  // exactly ONE teaser card (199 chars, 3 anchors, 3 images) and then the
+  // article's own <p> resumes; msnbc's "More articles" <h3> has the same shape.
+  // So this consumes siblings only while they stay card-shaped, and stops dead
+  // at the first one holding real prose — one sibling too many here deletes the
+  // rest of the article.
+  removeSiblingRecircCards(root);
 
   // (2b) E-commerce cross-sell rails (Amazon-style): heading is a SIBLING of its
   // product carousel, so (2)'s climb-up misses the products. Remove the heading's
@@ -9686,6 +9729,58 @@ function removeSisterSiteRail(root: Element, hasLongProse: (el: Element) => bool
         log(LL.DEBUG, 'Discerned: removeSisterSiteRail dropped cross-property shopping rail', 'url:', window.location.href);
       }
     }
+  }
+}
+
+/** Drop a STRONG recirculation heading whose teaser cards are its FOLLOWING
+ *  SIBLINGS — the mid-article inject shape that the climb in (2) cannot reach.
+ *  Consumes siblings only while they stay card-shaped and stops at the first
+ *  holding real prose, because the article's own body resumes right after. */
+function removeSiblingRecircCards(root: Element): void {
+  const norm = (s: string | null): string => (s ?? '').replace(/\s+/g, ' ').trim();
+  // A sibling is still part of the module while it is a teaser: short, and
+  // carrying a link or an image. Prose (a ≥160-char block, or any ≥200-char
+  // <p>) ends it — that is the article resuming.
+  const isCard = (el: Element): boolean => {
+    const t = norm(el.textContent);
+    if (t.length > 400) return false;
+    if (el.tagName === 'P' && t.length >= 160) return false;
+    if (Array.from(el.querySelectorAll('p')).some(p => norm(p.textContent).length >= 200)) return false;
+    // Media the reader came for is never chrome (same rule as the climb in (2)).
+    if (el.querySelector('a.tweet-video, .dx-post, video')) return false;
+    return el.querySelector('a, img') !== null || t.length === 0;
+  };
+
+  const seeds = Array.from(root.querySelectorAll('*')).filter(el => {
+    const t = norm(el.textContent);
+    return t.length > 0 && t.length <= 40 && STRONG_RELATED_RE.test(t) &&
+      !Array.from(el.children).some(c => norm(c.textContent) === t);
+  });
+
+  for (const seed of seeds) {
+    if (!root.contains(seed) || seed.closest('[class*="tweet-card"]')) continue;
+    // Promote to the outermost wrapper that still holds ONLY the heading, so
+    // the sibling walk starts beside the cards rather than inside the label.
+    let anchor: Element = seed;
+    const seedText = norm(seed.textContent);
+    while (anchor.parentElement && anchor.parentElement !== root &&
+           norm(anchor.parentElement.textContent) === seedText) {
+      anchor = anchor.parentElement;
+    }
+    const doomed: Element[] = [];
+    let sib = anchor.nextElementSibling;
+    // At most 4 cards — a mid-article inject is one or two; more than that and
+    // the shape is something else, so bail rather than guess.
+    for (let i = 0; i < 4 && sib && isCard(sib); i++) {
+      doomed.push(sib);
+      sib = sib.nextElementSibling;
+    }
+    // A heading with no cards after it is a plain subheading — leave it alone.
+    if (!doomed.some(el => el.querySelector('a, img'))) continue;
+    anchor.remove();
+    doomed.forEach(el => el.remove());
+    log(LL.DEBUG, 'Discerned: removeSiblingRecircCards dropped', doomed.length,
+      'mid-article recirculation card(s)', 'url:', window.location.href);
   }
 }
 
