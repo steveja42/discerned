@@ -18,7 +18,7 @@ change lands. Mark the sub-item first, the phase second.
 | Phase | Scope | Blast radius | Status |
 |---|---|---|---|
 | 0 | Cast-side pixel baselines | — (blocking) | ☑ **Done** (gate passed 2026-09-15) |
-| 1 | Low-risk narrow fixes (1a-1e) | low | ☐ Not started |
+| 1 | Low-risk narrow fixes (1a-1e) | low | ☑ **Done** (gate passed 2026-09-16; 1a reassigned to 5c) |
 | 2 | Cast whitespace corruption | **high** | ☐ Not started |
 | 3 | Grey-pill link mangling | medium | ☐ Not started |
 | 4 | Recirculation blocks | medium | ☐ Not started |
@@ -140,6 +140,36 @@ carries **no `width` attribute** — and the CSS cap at
 **Do:** stamp width/height on the synthesised `<img>` so the existing cap
 engages. One change, purely additive.
 
+**DONE, but it fixed nothing — the stated cause is wrong (measured 2026-09-16).**
+The stamp lands: a live tildes capture emits
+`<figure><img … width="144" height="144">`, `width` is in `ALLOWED_ATTRS_PER_TAG`
+for `img`, `inlineAllImages` preserves it, and Chromium supports
+`attr(width px)` (a stamped 144px image renders at exactly 144px in the real
+`.clip-body` stylesheet). Every link verified individually.
+
+But the cap was **already engaging**. Measured painted width of the promoted
+image, before vs after, in the re-swept clips:
+
+| domain | before | after | column |
+|---|---|---|---|
+| `tildes` | 209px | 209px | 610px |
+| `postgresql-docs` | 471px | 471px | 610px |
+| `gitlab-repo` | 429px | 429px | 610px |
+| `courtlistener` | 543px | 543px | 609px |
+
+None was ever stretched to 100%. The plan's own figures (~450px, ~350px) say the
+same thing in hindsight: these are images that are **too big to be tasteful**,
+not images that lost their cap. So the defect is *how large a promoted logo/OG
+card should render*, which is promotion **policy** — Phase 5c, not 1a.
+
+The stamp is kept: it is correct, additive, costs one probe only when
+`isDeclaredThumbnail()` holds, and makes the cap explicit rather than incidental.
+It is simply not the fix for these five domains.
+
+**Do not re-attempt 1a as a stamping change.** Measure the painted width first
+(`PIL`, widest inked row in the top 500px — and skip y=0, a full-width rule there
+reads as 609px and looks like a 100% stretch when nothing is stretched).
+
 **Do NOT** change *whether* to promote in this phase. Promotion exists for the
 MSN syndication case — see `discerned-ext/CLAUDE.md`, "A CROSS-HOST canonical is
 syndication, not staleness"; misfiring cost bodyHtml 2,265 → 177,294 chars.
@@ -155,7 +185,7 @@ stripe-docs, python-docs, overreacted, meduza) and **genuine article art**
 (fortune, folha, nature, lesswrong) where promotion is correct and only the size
 is wrong.
 
-- [ ] 1a done
+- [ ] 1a done — **moved to Phase 5c**; the stamp landed but was never the defect (above)
 
 ### 1b. Icon ligature names as text — `kaggle`, `playstore`
 Material Icons ligature text (`chevron_right`, `file_download`,
@@ -163,31 +193,96 @@ Material Icons ligature text (`chevron_right`, `file_download`,
 Store and Docker Hub use SVG icons and are unaffected. Hide/strip text for known
 icon-font class names.
 
-- [ ] 1b done
+Done via `ICON_LIGATURE_RE` + a leaf-element pass in `removeGenericChrome`.
+The shape alone is **not** safe to match: the corpus has `static_cast`,
+`serde_json`, `from_str`, `torsten_dev` and wikidata's `zh_min_nan` /
+`be_x_old` in the identical leaf form. Keyed on an affordance-word vocabulary
+plus a `code`/`pre` ancestor exclusion — 34/34 real ligatures, 0 false
+positives over 206 domains. Re-swept: `kaggle` -282px, `playstore` -190px,
+`wikidata` byte-identical.
+
+- [x] 1b done
 
 ### 1c. Audio narration widgets — `reason`, `smh`, `nbcnews`
 "Listen to this article" strips surviving. The existing pass targets
-Polly/Amplitude vendor classes; these use different markup. `lefigaro` is
-already **fixed** — use it as the working reference.
+Polly/Amplitude vendor classes; these use different markup. ~~`lefigaro` is
+already **fixed** — use it as the working reference.~~
 
-- [ ] 1c done
+**`lefigaro` is NOT fixed** (measured 2026-09-16) — its "Écouter l'article"
+player is still in the capture, so it is not a working reference. The set is
+six, not three: `cbc` and `japantimes` too.
+
+Done via `AUDIO_NARRATION_RE` (the label is the only shared hook — each site
+ships its own player) + a seed-and-climb that stops at real prose, because
+nbcnews puts its player MID-article and an unguarded climb eats the body.
+Re-swept: `reason` -87px, `cbc` -111px, `smh` -61px, `nbcnews` -25px,
+`japantimes` clean. **`lefigaro` still byte-identical — not fixed.** Its saved
+markup is removed correctly offline, so the live page differs from the 08-29
+snapshot; needs a live capture to diagnose.
+
+- [x] 1c done — 5 of 6; `lefigaro` outstanding
 
 ### 1d. Video transport strips — `cbsnews`, `zdnet`, `nypost`, `tiktok-foryou`
 Timecode/control bars (`00:00 04:15`) leaking as body text. `CLAUDE.md` already
 documents the apnews transport-bar removal; extend it.
 
-- [ ] 1d done
+`zdnet` and `tiktok-foryou` have **no transport strip at all** in their
+captures, so the real set is two.
+
+This also fixed a **pre-existing bug**: the old pass removed any group of >=2
+timecodes with no buttons — exactly the shape of bandcamp's 40 track durations
+and spotify-album's tracklist (verified failing against unmodified code). The
+two passes are now merged, with a **zeroed** current-position timecode
+(`00:00`) as the discriminator: a tracklist never shows one. The button branch
+keeps its original 40-char reach; only the timecode branch uses 120.
+Re-swept: `nypost` -29px, `cbsnews` clean, `bandcamp` keeps all 30 durations.
+
+- [x] 1d done
 
 ### 1e. Newsletter / subscription blocks — `chicagotribune`, `newyorker`, `thenation`, `noahpinion`, `straitstimes`
 Widen `NEWSLETTER_RE`. `chicagotribune` is the severe case: the block does not
 merely interrupt, it **replaces** the body (17% coverage).
 
-- [ ] 1e done
+`thenation`'s capture has no newsletter text at all (480 chars total) — its
+problem is something else. `wired` and `scientificamerican` are affected and
+were not listed.
+
+The strongest hook is the **consent tail** ("By signing up, you agree to…"):
+it closes every signup box and never appears in prose — 7 domains, 0 false
+positives. The climb gained the same prose guard as 1c (newyorker/noahpinion
+put the box mid-article). Re-swept: `chicagotribune` -104px (the severe case:
+headline, hero, byline and body now present), `substack-generic` -78px,
+`scientificamerican` -64px.
+
+Two caveats: a bare "SIGN UP" button survives on `chicagotribune` (sibling
+container, cosmetic), and `wired`'s "Get *The Big Story* in Your Inbox" block
+does not match the pattern. `wired`'s 8000→1956px drop is **not** a win — it
+is a paywall, and the shorter capture is the faithful one.
+
+- [x] 1e done — 6 of 7; `wired`'s block outstanding
 
 **Gate:** 29 clip baselines + new cast baselines green; `pnpm test` green;
 `SWEEP_ONLY=<the ~14 affected domains>` re-sweep reviewed by eye.
 
-- [ ] **Phase 1 done** (gate passed)
+**Gate result (2026-09-16):** 32/32 fixture baselines green (29 clip + 3 cast),
+`pnpm test` green (286 ext + 173 web), re-sweep of 33 domains (22 affected + 11
+counter-examples) all HTTP 200, none blocked, every one compared against a
+pre-change copy of its own PNG. 8 of 11 counter-examples byte-identical
+(`bandcamp` tracklist, `wikidata` language codes, `stackoverflow-q`,
+`crates-io`, `rust-book`, `stripe-docs`, `lesswrong`, `msn-slideshow`) — no
+collateral damage. Every affected domain's delta is a small targeted reduction
+(-25 to -282px); none shows a body collapse.
+
+**Method note — `--clip.html` dumps are OPT-IN.** `corpus-sweep.spec.ts` writes
+them only under `SWEEP_DUMP_HTML=1`; without it a run refreshes the PNGs and
+leaves whatever HTML was last dumped (here: 08-29/09-15, months stale) sitting
+beside them, with nothing marking it as belonging to an older capture. A textual
+before/after against those files therefore measures stale data — it produced two
+wrong conclusions in this phase before it was noticed. Either compare the
+images, or pass `SWEEP_DUMP_HTML=1` when the markup is what you need (it also
+feeds the offline clip-width probe).
+
+- [x] **Phase 1 done** (gate passed)
 
 ---
 
@@ -326,6 +421,14 @@ this kind of change. Diagnose offline with `tools/clip-width-probe.spec.ts`
 Should a site's own logo or a purpose-built 1200x630 OG card be promoted at all?
 Distinguishable by intrinsic aspect/size, and often by URL (brittle). Weigh
 against the MSN syndication case.
+
+**This is now ALL of 1a, not half of it** (measured 2026-09-16 — see 1a). The
+CSS cap was already engaging; the promoted images render at 209-543px in a
+610px column, so nothing is stretched. The complaint is that a site logo or an
+OG card renders that large *at all*, which is purely a promotion-policy
+judgement. `tildes` (144x144 logo painting 209px) is the clearest case;
+`courtlistener` (1200x630 OG card at 543px) the widest. A stamping fix cannot
+help either — the stamp is already there and already honoured.
 
 - [ ] 5c done
 

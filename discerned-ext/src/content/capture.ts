@@ -3395,7 +3395,7 @@ function proseText(root: Element, imageUrls?: string[]): string {
  */
 function withThumbnailFallback(
   html: string, thumbUrl: string | null, inlinedThumb: string | null, title: string,
-  decodedThumb = false,
+  decodedThumb = false, thumbSize: { w: number; h: number } | null = null,
 ): string {
   if (/<img[\s>]/i.test(html)) return html;
   if (!thumbUrl || !isSafeImageSrc(thumbUrl)) return html;
@@ -3431,7 +3431,12 @@ function withThumbnailFallback(
     if (!decodedThumb) return html;
   }
   const alt = title.replace(/"/g, '&quot;');
-  return `<figure><img src="${thumbUrl}" alt="${alt}"></figure>\n${html}`;
+  // Stamp the intrinsic size so `.clip-body img[width]`'s attr() cap engages.
+  // This <img> is synthesised, so annotateLiveImageSizes never walked it and
+  // the cap fell back to 100% — a 144px site logo filled the column.
+  const size = thumbSize && thumbSize.w > 0 && thumbSize.h > 0
+    ? ` width="${thumbSize.w}" height="${thumbSize.h}"` : '';
+  return `<figure><img src="${thumbUrl}" alt="${alt}"${size}></figure>\n${html}`;
 }
 
 /**
@@ -3657,10 +3662,14 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const thumbnailUrl = feedSafeThumbnail(getPageThumbnail());
   const inlinedThumbnail = thumbnailUrl ? await inlineImage(thumbnailUrl) : null;
   // Only needed when we may have to hotlink: no grant, and nothing inlined.
-  const decodedThumbnail = (thumbnailUrl && imageInliningGranted === false
-    && !inlinedThumbnail?.startsWith('data:'))
-    ? await canPageLoadImage(thumbnailUrl)
-    : false;
+  // One probe serves both needs: reachability (Guard 2 when ungranted) and the
+  // intrinsic size withThumbnailFallback stamps so the CSS width cap engages.
+  // Skipped unless the page nominated the thumbnail, since that is Guard 1 and
+  // nothing downstream can use the result otherwise — the probe costs up to a
+  // 4s timeout on a dead URL, on every article capture.
+  const thumbSize = thumbnailUrl && isDeclaredThumbnail()
+    ? await probeImageSize(thumbnailUrl) : null;
+  const decodedThumbnail = thumbSize !== null;
 
   // Tier 1: semantic article element — preserves images at their correct positions.
   // Skipped when a site tagger pinned an explicit capture root (Tier 1.5 below
@@ -3713,7 +3722,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     log(LL.TRACE, `Discerned: sanitised bodyHtml (first 2000 chars): ${clone.innerHTML.slice(0, 2000)}`, 'url:', base.url);
     // Recover the hero when the semantic root held no images — see
     // withThumbnailFallback (keeps the clip and the cast consistent).
-    const tier1Html = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title, decodedThumbnail);
+    const tier1Html = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title, decodedThumbnail, thumbSize);
     const { html: inlined, imageUrls } = await inlineAllImages(tier1Html);
     log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     const tier1BodyRoot = imageUrls.length > 0
@@ -3806,7 +3815,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     census.flush();
     // Before inlining, so a recovered hero is inlined + counted in imageUrls
     // (the cast's image set) exactly like an in-body image would be.
-    const layoutHtml = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title, decodedThumbnail);
+    const layoutHtml = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title, decodedThumbnail, thumbSize);
     const { html: inlined, imageUrls } = await inlineAllImages(layoutHtml);
     log(LL.DEBUG, `Discerned: layout-finder imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     // proseText walks the CLONE, which has no <figure> we just prepended — pass
@@ -3831,7 +3840,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     log(LL.DEBUG, 'Discerned: article captured via Readability', 'url:', base.url);
     const sanitized = withThumbnailFallback(
       sanitizeHtmlString(parsed.content), thumbnailUrl, inlinedThumbnail, parsed.title || base.title,
-      decodedThumbnail,
+      decodedThumbnail, thumbSize,
     );
     const { html: inlined, imageUrls } = await inlineAllImages(sanitized);
     log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
@@ -5609,18 +5618,24 @@ function resetFeedNarrowing(): void { narrowedFromFeed = false; }
 let imageInliningGranted: boolean | null = null;
 
 /**
- * Can the PAGE load this image? An <img> may fetch cross-origin with no host
- * permission, so this proves a URL resolves when the privileged fetch is not
- * available. Used only in the ungranted branch of withThumbnailFallback's
- * Guard 2, where the alternative is hotlinking a URL that may be dead.
+ * Intrinsic size of an image URL, via a throwaway Image() (no host permission
+ * needed — an <img> may fetch cross-origin). Returns null if it never decodes,
+ * which is also withThumbnailFallback's Guard-2 reachability proof.
  */
-function canPageLoadImage(url: string, timeoutMs = 4000): Promise<boolean> {
+function probeImageSize(
+  url: string, timeoutMs = 4000,
+): Promise<{ w: number; h: number } | null> {
   return new Promise((res) => {
     const img = new Image();
-    const done = (ok: boolean) => { img.onload = img.onerror = null; res(ok); };
-    const timer = setTimeout(() => done(false), timeoutMs);
-    img.onload = () => { clearTimeout(timer); done(img.naturalWidth > 0); };
-    img.onerror = () => { clearTimeout(timer); done(false); };
+    const done = (v: { w: number; h: number } | null) => {
+      img.onload = img.onerror = null; res(v);
+    };
+    const timer = setTimeout(() => done(null), timeoutMs);
+    img.onload = () => {
+      clearTimeout(timer);
+      done(img.naturalWidth > 0 ? { w: img.naturalWidth, h: img.naturalHeight } : null);
+    };
+    img.onerror = () => { clearTimeout(timer); done(null); };
     img.src = url;
   });
 }
@@ -7526,21 +7541,50 @@ function tagSemanticStructure(root: Element): void {
   // plus "00:00"/"00:42" timecodes above the story). The buttons sanitise down
   // to empty glyphs and the timecodes to a bare digit strip — a row of chrome
   // that reads as content. The poster frame itself is left alone; only the
-  // control bar goes. Identified by its own shape — ≥2 transport buttons or a
-  // timecode pair, and no prose — so it needs no per-site selector.
+  // control bar goes. Identified by its own shape, so it needs no per-site
+  // selector: either >=2 transport buttons, or a ZEROED current-position
+  // timecode ("00:00") beside at least one other.
+  //
+  // The zeroed-position test is what separates a control bar from a TRACKLIST.
+  // An earlier version removed any group of >=2 timecodes with no buttons, which
+  // is exactly the shape of bandcamp's 40 track durations and spotify-album's
+  // tracklist. A tracklist never shows 00:00.
+  //
+  // Counting <div> and <p> as well as <span> is what reaches cbsnews and nypost,
+  // which build the bar from divs and bare <svg> glyphs; the old span/button-only
+  // count never saw them, and the old 40-char cap also missed bars carrying
+  // quality labels ("180p 270p ... Auto(360p)").
   const TRANSPORT_RE = /^(replay|play|pause|next|previous|mute|unmute|fullscreen|captions|settings|volume)$/i;
   const TIMECODE_RE = /^\d{1,2}:\d{2}(:\d{2})?$/;
+  const ZEROED_TC_RE = /^0?0:0\d$/;
+  const timecodesIn = (el: Element): string[] =>
+    Array.from(el.querySelectorAll('div, span, p'))
+      .map(n => (n.textContent ?? '').trim())
+      .filter(t => TIMECODE_RE.test(t));
+  const isControlBar = (el: Element): boolean => {
+    const tcs = timecodesIn(el);
+    return tcs.length >= 2 && tcs.some(t => ZEROED_TC_RE.test(t));
+  };
   root.querySelectorAll('div, span, section, footer').forEach(el => {
     if (!root.contains(el)) return;
     const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
-    if (text.length > 40) return; // a control bar is glyphs + timecodes, never prose
-    if (el.querySelector('img, video, picture, a[href]')) return;
+    // 120 only for the timecode branch, which has to reach a bar carrying
+    // quality labels; the button branch keeps its original 40 so its reach is
+    // unchanged.
+    if (text.length > 120) return;
+    if (el.querySelector('img, video, picture, a[href], li, h1, h2, h3')) return;
+    // Exclude PROSE paragraphs, not any <p> — Readability rewrites a bare <div>
+    // control bar into <p>s, so a blanket `p` test would never match one.
+    if (Array.from(el.querySelectorAll('p')).some(n => (n.textContent ?? '').trim().length >= 60)) return;
     const buttons = Array.from(el.querySelectorAll('button'));
     const transport = buttons.filter(b =>
       TRANSPORT_RE.test((b.getAttribute('aria-label') ?? b.textContent ?? '').trim())).length;
-    const timecodes = Array.from(el.querySelectorAll('span'))
-      .filter(s => TIMECODE_RE.test((s.textContent ?? '').trim())).length;
-    if (transport >= 2 || (timecodes >= 2 && buttons.length === transport)) el.remove();
+    if (transport < 2 || text.length > 40) {
+      if (!isControlBar(el)) return;
+      // Tightest wrapper wins — leave it to the descendant that also qualifies.
+      if (Array.from(el.querySelectorAll('div, span, p')).some(isControlBar)) return;
+    }
+    el.remove();
   });
 
   // Avatar-less bylines (news sites: Breitbart, NYT, WaPo, etc.) — these
@@ -8960,8 +9004,27 @@ const RELATED_HEADING_RE = new RegExp(
   // by THIS regex, so a heading missing here never reaches the strong branch.
   '|more (videos|photos|galleries)|watch more|related videos)$', 'i');
 // Newsletter signup copy.
+// The consent tail ("By signing up, you agree to…") is the strongest hook: it
+// closes every signup box and never appears in prose. Measured over the corpus
+// as 7 domains hit, 0 false positives.
 const NEWSLETTER_RE =
-  /(subscribe to (our|the) newsletter|sign up for (our|the) |never miss the news|directly to your inbox|daily recap of|get our (free )?newsletter)/i;
+  /(subscribe to (our|the) newsletter|sign up for (our|the) |never miss the news|directly to your inbox|daily recap of|get our (free )?newsletter|by (signing up|subscribing), you agree|delivered to your inbox|to your inbox each|sign up now: get)/i;
+// Text-to-speech "listen to this article" players. The existing removal pass
+// keys off Polly/Amplitude vendor markup; these six (cbc, japantimes, lefigaro,
+// nbcnews, reason, smh) each ship their own, so the LABEL is the only shared
+// hook. Always followed by a duration ("5 min", "00:00 08:27"), never by prose.
+const AUDIO_NARRATION_RE =
+  /(listen to this (article|story)|listen to (the )?article|écouter l|escuchar (el|este) (artículo|articulo)|artikel anh[öo]ren|audio version of this)/i;
+// Material-Icons ligature names (the element's text IS the glyph). First token
+// is a UI-affordance word — that is what separates an icon from a code
+// identifier or a username of the same snake_case shape.
+const ICON_LIGATURE_RE = new RegExp(
+  '^(arrow|chevron|keyboard|expand|unfold|more|file|get|download|upload|open' +
+  '|close|play|pause|skip|volume|star|favorite|check|radio|toggle|menu|format' +
+  '|text|table|data|calendar|trending|phone|tablet|laptop|desktop|navigate' +
+  '|first|last|fullscreen|zoom|filter|sort|view|grid|list|account|shopping' +
+  '|local)(_[a-z0-9]+){1,3}$',
+);
 // "Make us your preferred source" promos (Google preferred-source pitch) that
 // render as plain text next to an icon link rather than as a labelled link.
 const PREFERRED_SOURCE_RE = /(preferred source of news|add us on google|make .{0,40} your preferred source)/i;
@@ -9122,6 +9185,27 @@ function removeGenericChrome(root: Element): void {
     if (CHROME_LINK_TEXT_RE.test(text)) el.remove();
   });
 
+  // (1a) Icon-FONT ligature names rendered as literal text. Material Icons draws
+  // its glyph from the element's own text ("chevron_right"), so once the icon
+  // font is gone the name shows as words (kaggle, playstore — both Google).
+  // Matched on a leaf whose ENTIRE text is one snake_case token from the
+  // affordance vocabulary; code identifiers (`static_cast`, `serde_json`) and
+  // usernames (`torsten_dev`) share the shape, so <code>/<pre> is excluded and
+  // the vocabulary is the discriminator — measured over the 206-domain corpus
+  // as 34/34 real ligatures, 0 false positives.
+  root.querySelectorAll('span, i, div, a, button').forEach(el => {
+    if (!root.contains(el) || el.children.length > 0) return;
+    if (el.closest('code, pre')) return;
+    const t = (el.textContent ?? '').trim();
+    if (!ICON_LIGATURE_RE.test(t)) return;
+    const parent = el.parentElement;
+    el.remove();
+    // Drop a wrapper left holding nothing but the glyph.
+    if (parent && parent !== root && root.contains(parent) &&
+        (parent.textContent ?? '').trim().length === 0 &&
+        parent.querySelector('img, svg') === null) parent.remove();
+  });
+
   // (2) Related-content boxes: a short heading matching RELATED_HEADING_RE
   // whose container is link-dominant (a list of story/category links). Climb
   // conservatively so an article section that merely SAYS "Related:" in prose
@@ -9203,14 +9287,41 @@ function removeGenericChrome(root: Element): void {
     !Array.from(el.children).some(c => NEWSLETTER_RE.test(c.textContent ?? '')));
   for (const seed of newsletterSeeds) {
     if (!root.contains(seed) || seed === root) continue;
+    // A signup box sits mid-article on newyorker/noahpinion, so the climb must
+    // stop at real prose as well as at the size cap.
+    const hasProse = (el: Element): boolean =>
+      Array.from(el.querySelectorAll('p, li')).some(n => (n.textContent ?? '').trim().length >= 80);
     let box: Element = seed;
     for (let i = 0; i < 3; i++) {
       const p = box.parentElement;
-      if (!p || p === root || (p.textContent ?? '').length > 500) break;
+      if (!p || p === root || (p.textContent ?? '').length > 500 || hasProse(p)) break;
       box = p;
     }
+    if (hasProse(box)) continue;
     box.remove();
     log(LL.DEBUG, 'Discerned: removeGenericChrome dropped newsletter block', 'url:', window.location.href);
+  }
+
+  // (3b) Text-to-speech narration players ("Listen to this article — 5 min").
+  // Same seed-and-climb shape as the newsletter pass, but the climb additionally
+  // refuses a container holding real prose: nbcnews puts its player MID-article,
+  // directly after a paragraph, so an unguarded climb eats the body.
+  const audioSeeds = Array.from(root.querySelectorAll('*')).filter(el =>
+    AUDIO_NARRATION_RE.test(el.textContent ?? '') &&
+    !Array.from(el.children).some(c => AUDIO_NARRATION_RE.test(c.textContent ?? '')));
+  for (const seed of audioSeeds) {
+    if (!root.contains(seed) || seed === root) continue;
+    const hasProse = (el: Element): boolean =>
+      Array.from(el.querySelectorAll('p, li')).some(n => (n.textContent ?? '').trim().length >= 80);
+    let box: Element = seed;
+    for (let i = 0; i < 3; i++) {
+      const p = box.parentElement;
+      if (!p || p === root || (p.textContent ?? '').replace(/\s+/g, ' ').length > 300 || hasProse(p)) break;
+      box = p;
+    }
+    if (hasProse(box)) continue;
+    box.remove();
+    log(LL.DEBUG, 'Discerned: removeGenericChrome dropped audio narration player', 'url:', window.location.href);
   }
 
   // (3a) E-commerce buy-box / shipping / Prime promo blocks: plain-text pitches
