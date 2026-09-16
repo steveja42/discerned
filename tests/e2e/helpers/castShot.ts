@@ -12,6 +12,7 @@
 // (brace spills, giant avatars, smashed digits) that the clip render hides.
 
 import type { Page } from '@playwright/test';
+import { rmSync } from 'node:fs';
 import { buildLongFormCast } from './castFromCapture';
 import { renderCastAndScreenshot } from './renderCast';
 
@@ -22,6 +23,13 @@ export interface CastShotOptions {
   evaluation?: unknown;
   /** Cap for very tall cast bodies. */
   maxHeight?: number;
+  /**
+   * castShotSafe only: called with this run's cast outcome, so a caller that
+   * keeps a per-domain record (the corpus sweep) can PERSIST the failure
+   * instead of leaving "no cast image" to be guessed at. Optional — the 13
+   * live-visual specs that just want the artifact ignore it.
+   */
+  onOutcome?: (outcome: { ok: boolean; reason?: string }) => void;
 }
 
 /**
@@ -71,14 +79,47 @@ export async function castShotSafe(
   // giving up on it must cost the run nothing.
   const CAST_BUDGET_MS = Number(process.env.SWEEP_CAST_TIMEOUT_MS ?? 90_000);
   try {
-    return await Promise.race([
+    const text = await Promise.race([
       castShot(capturePage, capture, screenshotPath, opts),
       new Promise<null>((_, rej) =>
         setTimeout(() => rej(new Error(`castShot timeout (>${CAST_BUDGET_MS}ms)`)), CAST_BUDGET_MS)),
     ]);
+    // Not castable (bookmark / empty body): castShot wrote nothing, so any file
+    // at this path belongs to an EARLIER run and must go — same reason as below.
+    if (text === null) {
+      discardStale(screenshotPath, 'not castable');
+      opts.onOutcome?.({ ok: false, reason: 'not castable (no long-form body)' });
+    } else {
+      opts.onOutcome?.({ ok: true });
+    }
+    return text;
   } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
     // eslint-disable-next-line no-console
-    console.log(`[castShot] cast render skipped: ${err instanceof Error ? err.message : String(err)}`);
+    console.log(`[castShot] cast render skipped: ${reason}`);
+    discardStale(screenshotPath, reason);
+    opts.onOutcome?.({ ok: false, reason });
     return null;
+  }
+}
+
+/**
+ * Delete the cast image at `path` when this run did not produce one.
+ *
+ * Swallowing the failure is right — the cast is additive and must never fail a
+ * clip check that already passed — but LEAVING the previous run's PNG is not:
+ * it sits beside a fresh clip and a fresh score.json with nothing marking it,
+ * so it reads as this run's output. Measured 2026-09-16: github-pr captured ok
+ * at 15:38 while its --3-cast.png was still 2026-08-30's, and a Phase 2 fix was
+ * nearly reported as not working because that stale image was reviewed as
+ * current. An ABSENT image is unambiguous; a stale one is a wrong answer.
+ */
+function discardStale(path: string, why: string): void {
+  try {
+    rmSync(path, { force: true });
+    // eslint-disable-next-line no-console
+    console.log(`[castShot] removed stale cast image (${why}): ${path}`);
+  } catch {
+    /* best effort — never let cleanup fail the caller */
   }
 }

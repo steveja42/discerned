@@ -77,6 +77,18 @@ export interface SweepRecord {
   census?: string[];
   /** The four heuristic diagnostics (present when status === 'ok'). */
   scores?: SweepScores;
+  /**
+   * Whether this run produced the cast image (--3-cast.png).
+   *
+   * The cast render is ADDITIVE — a failure there must never fail a clip check
+   * that already passed — but silence about it is what made a failed cast
+   * indistinguishable from a successful one: the previous run's PNG stayed on
+   * disk beside a fresh clip and a fresh `ranAt`, and was reviewed as current
+   * (measured 2026-09-16 on github-pr, three weeks stale). The image is now
+   * DELETED when the cast doesn't render, and this field says why, so "no cast
+   * image" reads as a recorded outcome rather than a missing file.
+   */
+  cast?: { ok: boolean; reason?: string };
 }
 
 /** Recorded context for a reviewer already looking at the image — NOT a quality

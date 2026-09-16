@@ -858,7 +858,13 @@ async function captureDomain(
       (cap as Record<string, unknown>).title =
         String((cap as { title?: unknown }).title ?? '').replace(/\s*​?dxsweep-\S+$/, '');
       phase('cast');
-      await castShotSafe(page, cap as { title?: string }, art.cast());
+      // Persist the cast OUTCOME, not just the clip's. rec was written above,
+      // before the cast ran, so without this a failed cast left no trace at all
+      // — and its stale PNG (now deleted by castShotSafe) read as current.
+      await castShotSafe(page, cap as { title?: string }, art.cast(), {
+        onOutcome: (outcome) => { rec.cast = outcome; },
+      });
+      persist(rec);
       return rec;
     } catch (renderErr) {
       rec.status = 'skip';

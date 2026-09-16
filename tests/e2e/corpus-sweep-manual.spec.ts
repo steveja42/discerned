@@ -387,9 +387,16 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
         }
 
         // CAST (the whole reason this is a spec): build + render the real cast.
-        const castText = await castShotSafe(page, cap as { title?: string }, art.cast());
+        // Record the outcome and re-write the score file: rec was written above,
+        // before the cast ran, so a failed cast would otherwise leave no trace
+        // — and its stale PNG (now deleted by castShotSafe) would read as this
+        // run's output.
+        const castText = await castShotSafe(page, cap as { title?: string }, art.cast(), {
+          onOutcome: (outcome) => { rec.cast = outcome; },
+        });
+        writeFileSync(art.score(), JSON.stringify(rec, null, 2));
         // eslint-disable-next-line no-console
-        console.log(castText ? '   ✓ cast rendered' : '   – no castable body (cast skipped)');
+        console.log(castText ? '   ✓ cast rendered' : `   – cast skipped (${rec.cast?.reason ?? 'unknown'})`);
       } finally {
         await page.close().catch(() => undefined);
       }

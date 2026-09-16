@@ -132,7 +132,15 @@ for (const f of readdirSync(RUN_DIR)) {
   // hides. bbc-news is the proof: clip clean, cast missing its headline with
   // links rendered as truncated grey pills. So `where: "clip"` still counts as
   // pending until the cast has been looked at too.
-  const castChecked = !cast || ['both', 'clip+cast', 'cast'].includes(finding?.where);
+  // `cast` is a path built by resolve(), so it is ALWAYS truthy — the old
+  // `!cast` escape hatch never fired. Test the FILE, and only excuse the cast
+  // check when this run recorded that it produced no cast image (rec.cast.ok
+  // === false, e.g. a bookmark with no long-form body). An absent image with no
+  // such record is a harness problem, flagged below rather than waved through.
+  const castOnDisk = existsSync(cast);
+  const castReported = rec.cast && rec.cast.ok === false;
+  const castChecked = (!castOnDisk && castReported)
+    || ['both', 'clip+cast', 'cast'].includes(finding?.where);
   const pending = !finding || stale || !finding.reviewedAt || !castChecked;
 
   if (!pending && !includeReviewed) continue;
@@ -153,8 +161,12 @@ for (const f of readdirSync(RUN_DIR)) {
     bodySettle: rec.bodySettle ?? null,
     verdict: finding?.verdict ?? null,
     clip: existsSync(clip) ? clip : null,
-    cast: existsSync(cast) ? cast : null,
+    cast: castOnDisk ? cast : null,
     source: existsSync(source) ? source : null,
+    // Why there is no cast image, when there isn't one. A recorded reason is a
+    // known outcome (not castable / render failed); no record at all means the
+    // file went missing outside the sweep's knowledge.
+    castMissing: castOnDisk ? null : (rec.cast?.reason ?? 'no cast recorded for this run'),
   });
 }
 
@@ -215,6 +227,10 @@ if (pendingRows.length) {
     console.log(`  ${mark}  ${r.domain.padEnd(24)}${cov}${chrome}${unsettled}${tag}`);
     if (r.clip) console.log(`      ${r.clip}`);
     if (r.cast) console.log(`      ${r.cast}`);
+    // Say so explicitly. A silently absent cast image used to be indistinguish-
+    // able from one that simply wasn't listed, and before it was deleted it was
+    // worse: the PREVIOUS run's cast sat there and got reviewed as current.
+    else console.log(`      (no cast image — ${r.castMissing})`);
   }
 }
 
