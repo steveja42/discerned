@@ -92,6 +92,11 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'pre-ws-probe',
+      testMatch: /tools\/pre-ws-probe\.spec\.ts$/,
+      retries: 0,
+    },
+    {
       name: 'google-referral-probe',
       testMatch: /tools\/google-referral-probe\.spec\.ts$/,
       retries: 0,

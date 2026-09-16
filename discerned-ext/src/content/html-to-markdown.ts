@@ -379,6 +379,27 @@ function facetKey(el: Element): string {
   return /^[#@]\S+$/.test(t) ? t.toLowerCase() : '';
 }
 
+// Preformatted context: <pre> and <code> declare their own whitespace to be
+// authoritative, so a boundary there was never a visual gap. A syntax
+// highlighter emits one <span> per token with no whitespace between them, and
+// separating those produced "apiVersion : v1", "r . json ( )",
+// "use serde :: { Deserialize , Serialize } ;" across ~14 sites.
+function inPreformatted(el: Element): boolean {
+  return !!el.closest?.('pre, code');
+}
+
+// Punctuation-only glue: an element whose entire text is punctuation was
+// painted flush against its neighbour, never visually separated — a facet wall
+// is "#TRCMP" next to "#RCMP", never "(" next to "nonstandard". This is the
+// PROSE half of the same defect (wiktionary's "( nonstandard )", "Audio ( US ) :"),
+// where no preformatted ancestor exists to rule the boundary out.
+const PUNCT_ONLY_RE = /^[\p{P}\p{S}]+$/u;
+function isPunctuationGlue(a: Element, b: Element): boolean {
+  const at = (a.textContent ?? '').trim();
+  const bt = (b.textContent ?? '').trim();
+  return PUNCT_ONLY_RE.test(at) || PUNCT_ONLY_RE.test(bt);
+}
+
 // DOM pre-pass mirroring applyFlexSeparation for the markdown path: insert a
 // space between adjacent inline facet siblings that the source rendered with no
 // whitespace between them, and collapse consecutive duplicate hashtag/mention
@@ -406,7 +427,32 @@ function separateInlineFacets(root: Element): void {
       const bt = eb.textContent ?? '';
       if (at.length === 0 || bt.length === 0) continue;
       if (/\s$/.test(at) || /^\s/.test(bt)) continue;
+      // Boundaries the source never rendered as a gap — see the two helpers.
+      if (inPreformatted(ea) || inPreformatted(eb)) continue;
+      if (isPunctuationGlue(ea, eb)) continue;
       el.insertBefore(el.ownerDocument!.createTextNode(' '), b);
+    }
+  }
+}
+
+// Restore the line breaks a <pre> expresses STRUCTURALLY rather than as text.
+// Both the bare-<pre> rule below and turndown's own fenced-code rule read
+// `textContent`, which ignores <br> and block-level line wrappers — so a code
+// block that marks each line with `<div>…<br></div>` (react.dev's shape, and
+// any Shiki/Sandpack-style renderer) collapsed into ONE line. Only <pre> is
+// touched: elsewhere turndown's own block handling already emits the breaks.
+function restorePreLineBreaks(root: Element): void {
+  for (const pre of Array.from(root.querySelectorAll('pre'))) {
+    const doc = pre.ownerDocument!;
+    for (const br of Array.from(pre.querySelectorAll('br'))) {
+      br.replaceWith(doc.createTextNode('\n'));
+    }
+    // A line wrapper is a DIV/P whose own text does not already end in a
+    // newline — append one so consecutive lines cannot run together.
+    for (const el of Array.from(pre.querySelectorAll('div, p'))) {
+      const t = el.textContent ?? '';
+      if (t.length === 0 || /\n\s*$/.test(t)) continue;
+      el.appendChild(doc.createTextNode('\n'));
     }
   }
 }
@@ -426,6 +472,7 @@ export function htmlToMarkdown(html: string): string {
     const doc = new DOMParser().parseFromString(`<div id="__dx_md_root">${trimmed}</div>`, 'text/html');
     const container = doc.getElementById('__dx_md_root');
     if (container) {
+      restorePreLineBreaks(container);
       separateInlineFacets(container);
       source = container.innerHTML;
     }

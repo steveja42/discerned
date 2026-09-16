@@ -698,6 +698,44 @@ For each match: extract tweet ID, look up `harvested.get(id)`, `replaceWith()` a
 
 `sanitiseTreeInPlace()` whitelists tags (`ALLOWED_TAGS` — includes `div, span, img, table, svg` glyphs, etc.) and per-tag attributes (`ALLOWED_ATTRS_PER_TAG`). The `class` attribute is allowed but **only tokens with `dx-` or `tweet-` prefixes survive** (`TRUSTED_CLASS_PREFIXES`); source-page hashed classes are stripped. This is how the `dx-*` markers reach the rendered clip while the page's own CSS classes don't.
 
+**Whitespace inside `<pre>` is CONTENT, and `collapseEmpty` must not trim it
+away.** A syntax highlighter wraps every run of whitespace in its own element —
+**Chroma** (kubernetes.io, and every Hugo-built docs site) and **Pygments**
+(PyPI, Sphinx) both emit `<span class="w"> </span>` and
+`<span class="w">
+</span>` between tokens. `hasVisibleContent` trimmed before
+testing, judged those spans empty and deleted them, so every space and newline
+in the block vanished: kubernetes.io's Pod manifest captured as
+`apiVersion:v1kind:Podmetadata:name:nginx`, PyPI's as `importrequests`. The
+PLAIN block on the same page was perfect throughout, because its newlines sit in
+one un-wrapped text node — that pairing is what proves the cause is element
+wrapping rather than "code". Outside `<pre>` a whitespace-only element really is
+empty chrome (a font-awesome `<i>` left after its class was stripped) and is
+still collapsed.
+
+Two consequences worth knowing before touching this:
+
+- **It masked itself in the CAST.** `separateInlineFacets`
+  (`html-to-markdown.ts`) inserted a space at every inline boundary, so the cast
+  showed `apiVersion : v1` — padding — while the clip showed the same block
+  stripped. Fixing the padding alone made the cast match the clip's already
+  broken reality (measured: kubernetes-docs got *worse*). The two are ONE
+  defect; the sweep's "padded" and "stripped" domains needed one fix, not two.
+- **Reason about the markup only after measuring it.** Two fixes were built
+  against the wrong mechanism (`applyFlexSeparation`, via a `PRELINE_MARKER`
+  since reverted) before `tests/e2e/tools/pre-ws-probe.spec.ts` (`PREWS=1`)
+  reported that the whitespace was present in the live DOM but element-wrapped.
+
+Guarded by `tests/extraction/pre-whitespace.test.ts` (both highlighter shapes,
+the plain-block counter-example, and the outside-`<pre>` collapse).
+
+A third, unrelated shape is handled in the converter: a `<pre>` whose line
+breaks are **structural** (`<div>…<br></div>` per line — react.dev, and any
+Shiki/Sandpack-style renderer). Both the bare-`<pre>` rule and turndown's own
+fenced-code rule read `textContent`, which ignores `<br>` and block wrappers, so
+the block collapsed onto one line; `restorePreLineBreaks` normalises them to
+real newlines before turndown runs.
+
 ### Shadow DOM support
 
 Some sites (Stansberry's Angular app is the reference case) ship article content via declarative open Shadow DOM (`<template shadowrootmode="open">`). `document.querySelector` and `window.getSelection` don't pierce shadow boundaries, and `cloneNode(true)` doesn't clone a host's shadow root — so the capture pipeline must descend manually wherever it touches the live DOM.

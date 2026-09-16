@@ -8570,7 +8570,16 @@ const VISIBLE_LEAF_TAGS = new Set(['img', 'picture', 'video', 'svg', 'canvas', '
 
 function hasVisibleContent(node: Node): boolean {
   if (node.nodeType === Node.TEXT_NODE) {
-    return (node.textContent ?? '').trim().length > 0;
+    // Inside <pre> whitespace IS content. Syntax highlighters wrap each run of
+    // it in its own element — Chroma (kubernetes.io, Hugo) emits
+    // `<span class="w"> </span>` and `<span class="w">\n</span>` between every
+    // token — so trimming here judged those spans empty and deleted every
+    // space and newline in the block, captured as
+    // "apiVersion:v1kind:Podmetadata:". The plain block on the same page
+    // survived only because its newlines sat in one un-wrapped text node.
+    const text = node.textContent ?? '';
+    if (text.length > 0 && node.parentElement?.closest('pre')) return true;
+    return text.trim().length > 0;
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return false;
   if (VISIBLE_LEAF_TAGS.has((node as Element).tagName.toLowerCase())) return true;

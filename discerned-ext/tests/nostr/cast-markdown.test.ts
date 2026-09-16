@@ -278,3 +278,107 @@ describe('blob-backed video card (no http poster)', () => {
     expect(md).not.toContain('base64');
   });
 });
+
+// ── Phase 2: whitespace corruption at inline-element boundaries ─────────────
+// separateInlineFacets inserted a space between ANY two adjacent inline
+// elements. A syntax highlighter emits one <span> per token with no whitespace
+// between them, so every token boundary was padded across ~14 sweep domains
+// ("apiVersion : v1", "r . json ( )", "type Trim < S extends string > ="). The
+// same happened in PROSE wherever a punctuation span sat flush against a word
+// (wiktionary's "( nonstandard )"). Two guards now rule those boundaries out:
+// a <pre>/<code> ancestor, and a punctuation-only element on either side.
+describe('cast markdown — inline-boundary whitespace (Phase 2)', () => {
+  // One <span> per token, no whitespace between them: what Prism/Rouge/
+  // highlight.js emit, and the shape that broke kubernetes-docs/pypi/crates-io.
+  const tok = (t: string) => `<span class="tok">${t}</span>`;
+
+  it('leaves highlighted YAML token boundaries alone', () => {
+    const md = htmlToMarkdown(
+      `<pre class="highlight"><code class="language-yaml">${tok('apiVersion')}${tok(':')} ${tok('v1')}
+${tok('kind')}${tok(':')} ${tok('Pod')}</code></pre>`,
+    );
+    expect(md).toContain('apiVersion: v1');
+    expect(md).toContain('kind: Pod');
+    expect(md).not.toContain('apiVersion :');
+  });
+
+  it('leaves highlighted Python call syntax alone', () => {
+    const md = htmlToMarkdown(
+      `<pre><code>${tok('data')} ${tok('=')} ${tok('r')}${tok('.')}${tok('json')}${tok('(')}${tok(')')}</code></pre>`,
+    );
+    expect(md).toContain('data = r.json()');
+    expect(md).not.toContain('r . json');
+  });
+
+  it('leaves highlighted TypeScript generics alone', () => {
+    const md = htmlToMarkdown(
+      `<pre><code>${tok('type')} ${tok('Trim')}${tok('<')}${tok('S')} ${tok('extends')} ${tok('string')}${tok('>')}</code></pre>`,
+    );
+    expect(md).toContain('Trim<S extends string>');
+    expect(md).not.toContain('< S extends');
+  });
+
+  it('leaves an INLINE <code> span alone', () => {
+    const md = htmlToMarkdown(
+      `<p>Call <code>${tok('r')}${tok('.')}${tok('json')}${tok('(')}${tok(')')}</code> to decode.</p>`,
+    );
+    expect(md).toContain('`r.json()`');
+  });
+
+  // The prose half — no preformatted ancestor, so the punctuation-only guard
+  // is what rules it out (wiktionary: "( nonstandard )", "Audio ( US ) :").
+  it('leaves punctuation flush against prose words', () => {
+    const md = htmlToMarkdown(
+      `<p>required ${tok('(')}${tok('nonstandard')}${tok(')')} on older clusters.</p>`,
+    );
+    expect(md).toContain('required (nonstandard) on older clusters.');
+  });
+
+  // Counter-guards: the separations the pass exists for must SURVIVE. A
+  // blanket "stop inserting spaces" fix would reglue these.
+  it('still separates a BBC-style two-span byline', () => {
+    const md = htmlToMarkdown('<div><span>Imran Rahman-Jones</span><span>Technology reporter</span></div>');
+    expect(md).toContain('Imran Rahman-Jones Technology reporter');
+  });
+
+  it('still separates adjacent prose anchors', () => {
+    const md = htmlToMarkdown('<p>See <a href="/a">the docs</a><a href="/b">and the guide</a> now.</p>');
+    expect(md).not.toContain('the docsand the guide');
+  });
+
+  // A plain (unhighlighted) block is a single text node — it was always
+  // correct, and is the on-page counter-example that proved the cause was
+  // element boundaries rather than "code".
+  it('leaves a plain shell block untouched', () => {
+    const md = htmlToMarkdown('<pre><code>kubectl apply -f pod.yaml\nkubectl get pods --namespace default</code></pre>');
+    expect(md).toContain('kubectl apply -f pod.yaml');
+    expect(md).toContain('kubectl get pods --namespace default');
+  });
+});
+
+// A <pre> whose line breaks are STRUCTURAL, not textual: each line is a block
+// wrapper ending in <br> (react.dev's shape, and any Shiki/Sandpack-style
+// renderer). Both the bare-<pre> rule and turndown's own fenced-code rule read
+// textContent, which ignores both — so the whole block collapsed onto one line.
+describe('cast markdown — structural line breaks inside <pre>', () => {
+  it('restores one line per <div>…<br> wrapper', () => {
+    const md = htmlToMarkdown(
+      '<pre><code>' +
+      '<div><span>[</span><br></div>' +
+      '<div>  <span>{</span> <span>name</span><span>:</span> <span>"Apple"</span> <span>}</span><span>,</span><br></div>' +
+      '<div><span>]</span><br></div>' +
+      '</code></pre>',
+    );
+    expect(md).toContain('[\n');
+    expect(md).toContain('{ name: "Apple" },');
+    expect(md).not.toContain('[  { name');
+  });
+
+  // Only <pre> is touched — elsewhere turndown's own block handling emits the
+  // breaks, and appending newlines would disturb ordinary prose.
+  it('leaves a <br> in prose to turndown', () => {
+    const md = htmlToMarkdown('<p>First line<br>Second line</p>');
+    expect(md).toContain('First line');
+    expect(md).toContain('Second line');
+  });
+});

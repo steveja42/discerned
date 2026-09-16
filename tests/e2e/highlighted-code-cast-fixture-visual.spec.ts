@@ -27,6 +27,13 @@ test('highlighted-code-cast-fixture-visual', async () => {
   test.setTimeout(180_000);
   await runCastFixtureVisual({
     site: 'highlighted-code-docs',
+    // Tighter than the 0.02 default ON PURPOSE. The Phase 2 repair changed
+    // 1.46% of pixels — real, visible, and SILENT at the default tolerance,
+    // which passed while the baseline still recorded the broken render. Only
+    // the string assertions caught it. Monospace text of near-identical length
+    // is exactly the content a ratio gate is worst at, so this fixture gates
+    // tighter than the photo-bearing clip baselines need to.
+    maxDiffPixelRatio: 0.002,
     castMustContain: [
       // The PLAIN block — the counter-example that renders correctly TODAY and
       // must keep doing so. A Phase 2 fix that narrows the spacing pass must
@@ -34,17 +41,22 @@ test('highlighted-code-cast-fixture-visual', async () => {
       // boundaries rather than "code".
       'kubectl apply -f pod.yaml',
       'kubectl get pods --namespace default',
+      // The repaired text, asserted positively so the spec says what RIGHT
+      // looks like rather than only what wrong looked like.
+      'apiVersion: v1',
+      'data = r.json()',
+      'use serde::{Deserialize, Serialize};',
+      'required (nonstandard) on older clusters',
     ],
-    // The baseline deliberately records the BROKEN render — measured
-    // 2026-09-15, before any Phase 2 work. Each of these is a padded token
-    // boundary reproducing a specific site from the sweep. When Phase 2 lands,
-    // this spec fails saying they are gone: move them to castMustNotContain and
-    // refresh the baseline in the same commit.
-    knownBroken: {
-      'apiVersion : v1': 'Phase 2 — kubernetes-docs (highlighted YAML)',
-      'r . json ( )': 'Phase 2 — python-docs / pypi',
-      'use serde :: { Deserialize , Serialize }': 'Phase 2 — crates-io',
-      '( nonstandard )': 'Phase 2 — wiktionary (padding in PROSE, not code)',
-    },
+    // Phase 2 FIXED these (2026-09-16) — each was a padded token boundary
+    // reproducing a specific sweep site, and each was `knownBroken` until
+    // separateInlineFacets gained its preformatted + punctuation-glue guards.
+    // The baseline was refreshed in the same commit.
+    castMustNotContain: [
+      'apiVersion : v1',                          // kubernetes-docs (highlighted YAML)
+      'r . json ( )',                             // python-docs / pypi
+      'use serde :: { Deserialize , Serialize }', // crates-io
+      '( nonstandard )',                          // wiktionary (padding in PROSE, not code)
+    ],
   });
 });
