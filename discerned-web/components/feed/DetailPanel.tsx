@@ -177,22 +177,35 @@ const ClipHtmlBody = React.memo(function ClipHtmlBody({
   );
 });
 
+const MdImg = (props: React.ImgHTMLAttributes<HTMLImageElement>) =>
+  // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
+  <img {...props} referrerPolicy="no-referrer" />;
+
+// Does this anchor's markdown content contain an image, i.e. is it the
+// [![](poster)](watch-url) thumbnail shape? react-markdown substitutes
+// MD_COMPONENTS.img for the intrinsic tag, so the element type to compare
+// against is MdImg itself — testing `type === 'img'` is always false.
+function wrapsImage(children: React.ReactNode): boolean {
+  return React.Children.toArray(children).some(
+    (c) => React.isValidElement(c) && c.type === MdImg,
+  );
+}
+
 const MD_COMPONENTS = {
-  img: (props: React.ImgHTMLAttributes<HTMLImageElement>) =>
-    // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
-    <img {...props} referrerPolicy="no-referrer" />,
+  img: MdImg,
   // A cast body is markdown, so its video appears as a linked thumbnail:
   // [![](poster)](watch-url). When that href is a provider we can embed, mark
   // the anchor as a play card so the same click-to-play handler that serves
   // rich clip bodies also serves casts — otherwise a cast could only ever
   // bounce the reader out to the source site.
   a: ({ href, children, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
-    // Don't test `c.type === 'img'`: MD_COMPONENTS overrides `img`, so
-    // react-markdown hands us the CUSTOM component, never the intrinsic tag —
-    // that comparison was always false, so no cast link was ever marked
-    // playable and every one opened the source in a new tab. The href is the
-    // real signal: only a provider we can embed resolves at all.
-    const playable = !!href && !!resolveVideoEmbed(href);
+    // A play card needs BOTH an embeddable href and a poster to lay the
+    // overlay over. An embeddable href alone turned every PROSE link to
+    // YouTube/X/Vimeo into a card: .tweet-video is block + fit-content +
+    // overflow:hidden, so the sentence fragment became a rounded box, and
+    // .tweet-video-play (absolute, inset:0, dark panel, 44px ▶) covered its
+    // middle — the "grey pill sliced by an arrow" on 8 corpus sites.
+    const playable = !!href && wrapsImage(children) && !!resolveVideoEmbed(href);
     return (
       <a
         {...rest}
