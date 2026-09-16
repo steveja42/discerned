@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Configuring a Pod — Platform Docs</title>
+<style>
+  /* Approximates a real docs site: highlighted blocks are token spans, the
+     plain block beside them is a single text node. */
+  pre { background: #f6f8fa; padding: 12px; overflow-x: auto; }
+  code { font-family: ui-monospace, monospace; }
+  .tok-key { color: #005cc5; }
+  .tok-str { color: #032f62; }
+  .tok-punc { color: #24292e; }
+  .tok-name { color: #6f42c1; }
+  .tok-kw { color: #d73a49; }
+</style>
+</head>
+<body>
+<header><nav><a href="/">Docs</a> <a href="/guides">Guides</a></nav></header>
+<main>
+  <article>
+    <h1>Configuring a Pod</h1>
+    <p>This page shows how to declare a Pod manifest and apply it to a cluster.
+    The manifest below is the minimum viable definition.</p>
+
+    <h2>The manifest</h2>
+    <!-- HIGHLIGHTED: every token is its own <span>, with NO whitespace text
+         nodes between the spans on a line. This is the shape that produces
+         "apiVersion : v1 kind : Pod" in the cast. -->
+    <pre class="highlight"><code class="language-yaml"><span class="tok-key">apiVersion</span><span class="tok-punc">:</span> <span class="tok-str">v1</span>
+<span class="tok-key">kind</span><span class="tok-punc">:</span> <span class="tok-str">Pod</span>
+<span class="tok-key">metadata</span><span class="tok-punc">:</span>
+  <span class="tok-key">name</span><span class="tok-punc">:</span> <span class="tok-str">nginx</span>
+<span class="tok-key">spec</span><span class="tok-punc">:</span>
+  <span class="tok-key">containers</span><span class="tok-punc">:</span>
+  <span class="tok-punc">-</span> <span class="tok-key">name</span><span class="tok-punc">:</span> <span class="tok-str">nginx</span>
+    <span class="tok-key">image</span><span class="tok-punc">:</span> <span class="tok-str">nginx:1.29</span>
+    <span class="tok-key">ports</span><span class="tok-punc">:</span>
+    <span class="tok-punc">-</span> <span class="tok-key">containerPort</span><span class="tok-punc">:</span> <span class="tok-str">80</span>
+</code></pre>
+
+    <h2>Applying it</h2>
+    <!-- PLAIN: one text node, no spans. The counter-example that renders
+         correctly today and must KEEP rendering correctly. -->
+    <pre><code class="language-shell">kubectl apply -f pod.yaml
+kubectl get pods --namespace default
+</code></pre>
+
+    <h2>Reading it back</h2>
+    <!-- Highlighted Python, the r.json() shape from the sweep notes. -->
+    <pre class="highlight"><code class="language-python"><span class="tok-kw">import</span> <span class="tok-name">requests</span>
+
+<span class="tok-name">r</span> <span class="tok-punc">=</span> <span class="tok-name">requests</span><span class="tok-punc">.</span><span class="tok-name">get</span><span class="tok-punc">(</span><span class="tok-str">'https://example.test/api/pods'</span><span class="tok-punc">)</span>
+<span class="tok-name">data</span> <span class="tok-punc">=</span> <span class="tok-name">r</span><span class="tok-punc">.</span><span class="tok-name">json</span><span class="tok-punc">(</span><span class="tok-punc">)</span>
+<span class="tok-kw">print</span><span class="tok-punc">(</span><span class="tok-name">data</span><span class="tok-punc">[</span><span class="tok-str">'items'</span><span class="tok-punc">]</span><span class="tok-punc">)</span>
+</code></pre>
+
+    <h2>Rust client</h2>
+    <!-- The "use serde :: { Deserialize , Serialize };" shape. -->
+    <pre class="highlight"><code class="language-rust"><span class="tok-kw">use</span> <span class="tok-name">serde</span><span class="tok-punc">::</span><span class="tok-punc">{</span><span class="tok-name">Deserialize</span><span class="tok-punc">,</span> <span class="tok-name">Serialize</span><span class="tok-punc">}</span><span class="tok-punc">;</span>
+
+<span class="tok-punc">#[</span><span class="tok-name">derive</span><span class="tok-punc">(</span><span class="tok-name">Serialize</span><span class="tok-punc">)</span><span class="tok-punc">]</span>
+<span class="tok-kw">struct</span> <span class="tok-name">Pod</span> <span class="tok-punc">{</span>
+    <span class="tok-name">name</span><span class="tok-punc">:</span> <span class="tok-name">String</span><span class="tok-punc">,</span>
+<span class="tok-punc">}</span>
+</code></pre>
+
+    <h2>Inline code in prose</h2>
+    <!-- Inline <code> adjacent to text, and two inline spans with no space
+         between them — the wiktionary "( nonstandard )" padding shape. -->
+    <p>Call <code><span class="tok-name">r</span><span class="tok-punc">.</span><span class="tok-name">json</span><span class="tok-punc">(</span><span class="tok-punc">)</span></code> to decode the response body.
+    The field <code>metadata.name</code> is required
+    <span class="tok-punc">(</span><span class="tok-name">nonstandard</span><span class="tok-punc">)</span> on older clusters.</p>
+
+    <h2>Notes</h2>
+    <ul>
+      <li>Set <code>imagePullPolicy</code> explicitly in production.</li>
+      <li>The namespace defaults to <code>default</code> when omitted.</li>
+    </ul>
+  </article>
+</main>
+</body>
+</html>

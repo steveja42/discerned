@@ -1,6 +1,6 @@
 # Capture flaw remediation plan
 
-Derived from the 2026-09-15 corpus sweep (206 domains, 185 captured, all reviewed).
+Derived from the 2026-09-15 corpus sweep (206 domains, 206 captured, all reviewed).
 Source data: `test-output/corpus-sweep-run/visual-findings.json`,
 gallery at `test-output/corpus-sweep-run/sweep-gallery.html`.
 
@@ -17,7 +17,7 @@ change lands. Mark the sub-item first, the phase second.
 
 | Phase | Scope | Blast radius | Status |
 |---|---|---|---|
-| 0 | Cast-side pixel baselines | — (blocking) | ☐ Not started |
+| 0 | Cast-side pixel baselines | — (blocking) | ☑ **Done** (gate passed 2026-09-15) |
 | 1 | Low-risk narrow fixes (1a-1e) | low | ☐ Not started |
 | 2 | Cast whitespace corruption | **high** | ☐ Not started |
 | 3 | Grey-pill link mangling | medium | ☐ Not started |
@@ -62,10 +62,62 @@ reusing one over snapshotting a new site. None of the whitespace-affected docs
 sites (mdn, pypi, crates-io, kubernetes-docs) currently has a fixture, so at
 least one new snapshot is likely needed.
 
-**Gate:** new cast baselines committed and green; existing 29 clip baselines
-still green.
+### What landed (2026-09-15)
 
-- [ ] **Phase 0 done** (gate passed)
+`tests/e2e/helpers/castFixtureVisual.ts` — the cast-side twin of
+`fixtureVisual.ts`. Production path end to end: fixture →
+`__DISCERNED_TEST_CAPTURE` → `__DISCERNED_TEST_CAST` (real
+`deriveLongFormMarkdown` + `buildCastTemplates`) → sign with a throwaway key →
+`/discerns` via a mocked relay. Only the key and the relay are fakes.
+`renderCast.ts` gained `withRenderedCast` (yields the settled page + locator, so
+`toHaveScreenshot` can drive it); `renderCastAndScreenshot` now shares that same
+`openCast` path, so the live artifacts and the baselines cannot drift.
+
+Three projects, all gated on `CAST_FIX=1`:
+
+| Spec | Fixture | Covers |
+|---|---|---|
+| `highlighted-code-cast-fixture-visual` | `highlighted-code-docs.html` (new) | whitespace padding (Phase 2) |
+| `linked-prose-cast-fixture-visual` | `linked-prose-article.html` (new) | inline links, `**bold**`, paragraph separation |
+| `substack-essay-cast-fixture-visual` | `substack-essay.html` (reused) | plain-prose control |
+
+**`knownBroken`.** A fixture may reproduce a defect deliberately, and its
+baseline then records the BROKEN render — otherwise the fix has nothing to be
+compared against. Strings listed there are reported, not failed; a string that
+DISAPPEARS fails the spec, telling you to move it to `castMustNotContain` and
+refresh the baseline. Without this a known-broken fixture is either permanently
+red (and ignored) or silent about its own fix.
+
+### Findings that change later phases
+
+1. **Phase 2's cause is identified.** `separateInlineFacets`
+   (`discerned-ext/src/content/html-to-markdown.ts` ~387) has `SPAN` and `CODE`
+   in `INLINE_FACET_TAGS`, so it inserts a space at EVERY token boundary of a
+   syntax-highlighted block. The new fixture reproduces all four sweep shapes
+   verbatim — `apiVersion : v1`, `r . json ( )`,
+   `use serde :: { Deserialize , Serialize } ;`, and `( nonstandard )` in PROSE —
+   while the plain shell block beside them (`kubectl apply -f pod.yaml`) is
+   untouched. That pairing is the kubernetes-docs evidence, now offline and
+   reproducible in ~7s. It exists to unglue Bluesky facets, so narrowing it must
+   keep `bsky-thread` working.
+2. **The `\n`-flattening half is NOT reproduced.** Newlines survive in this
+   fixture, so "flattened to one line" is a separate mechanism still needing a
+   live case.
+3. **Phase 3's CSS suspect is ruled out for casts.** `.clip-body a:has(img) + a`
+   / `~ a:nth-of-type(3)` (`globals.css` ~1792) cannot be the grey pill in a
+   cast: casts drop inlined images, so `:has(img)` never matches. Reproducing
+   the pill still needs one of the 8 affected sites.
+
+**Gate:** PASSED. 3 cast baselines green; all 29 clip baselines green
+(run one project at a time — see below); `pnpm test` green (34 ext + 17 web).
+
+> **Run fixture-visuals ONE AT A TIME.** They share the single Next dev server
+> on :3000 (`reuseExistingServer`), so a batched run's pass/fail mix measures
+> contention, not the code. Measured here: `breitbart-fixture-visual` produced
+> 4/4, then 1/3, then 5/8 across interleaved batches and passed cleanly every
+> time it was run alone. Do not read a batch failure as a regression.
+
+- [x] **Phase 0 done** (gate passed)
 
 ---
 
@@ -165,10 +217,22 @@ where separators should be:
 - Clean counter-examples: `postgresql-docs` (ASCII tables with pipe alignment
   intact), `stackoverflow-q`, `superuser`, `jvns`, `hackaday`, `css-tricks`.
 
-**Prime suspect:** `applyFlexSeparation` inserting a space between element
-children (`FLEXSEP_MARKER`, stamped by `annotateLiveImageSizes`). It exists to
-fix run-together text — "399M views21 years ago" — so **narrowing it risks
-reintroducing that**. Add a guard for that case before touching it.
+**Cause (identified in Phase 0, reproduced offline):** NOT `applyFlexSeparation`
+— that is the CLIP's pass and its marker never reaches the converter. It is
+`separateInlineFacets` in `discerned-ext/src/content/html-to-markdown.ts` (~387),
+a cast-only re-derivation of the same idea, whose `INLINE_FACET_TAGS` includes
+`SPAN` and `CODE`. A syntax highlighter emits one `<span>` per token with no
+whitespace between them, so it inserts a space at every boundary.
+
+Iterate against `highlighted-code-cast-fixture-visual` (~7s, offline) rather
+than re-sweeping: it carries all four shapes plus the clean plain-block
+counter-example in one document. Its four `knownBroken` strings are the
+definition of done — when they go, the spec fails telling you to promote them to
+`castMustNotContain` and refresh the baseline in the same commit.
+
+`separateInlineFacets` exists to unglue Bluesky facets ("#TRCMP RCMP#TRCMP"), so
+**narrowing it risks reintroducing that** — `bsky-thread-fixture-visual` is the
+counter-guard, and a cast baseline for bsky is worth adding first.
 
 **Warning:** the bug runs in BOTH directions (`pypi` shows add and strip on one
 page). A naive "stop adding spaces" fix will not address the stripping half and
@@ -195,6 +259,14 @@ triggers it. `signalvnoise` has six on one page.
 cause (both are inline-boundary damage in `htmlToMarkdown`). Re-check these 8
 *after* Phase 2 lands — some may already be fixed, and if not, the remaining
 signal is cleaner.
+
+**Ruled out in Phase 0:** the CSS pill rules `.clip-body a:has(img) + a` and
+`a:has(img) ~ a:nth-of-type(3)` (`discerned-web/app/globals.css` ~1792) look like
+an exact match for "selective, restyles a link's neighbour", but they cannot
+fire in a cast — casts drop inlined images, so `:has(img)` never matches. A
+purpose-built fixture with that anchor shape renders clean
+(`linked-prose-cast-fixture-visual`, which now guards link text staying
+unsliced). Reproducing the pill needs a capture from one of the 8 sites.
 
 **Gate:** cast baselines green; re-sweep the 8.
 
@@ -358,7 +430,14 @@ un-inlined logo is a genuine durability gap, and it is one image on one site.
 6. **Check the source screenshot** (`<domain>--1-source.png`) before claiming
    something is missing. `hackernews` was marked down for an absent post header;
    the URL was a comment permalink that never had one.
-7. **Review for PROPORTION, not just presence.** Two independent model reviews
+7. **Run fixture-visual baselines ONE PROJECT AT A TIME.** They all render
+   through the single shared Next dev server on :3000, so a batched run's
+   pass/fail mix measures contention rather than the code. A failure seen during
+   a batch is not evidence until reproduced alone. Measured 2026-09-15 on
+   `breitbart-fixture-visual`: 4/4, then 1/3, then 5/8 across interleaved
+   batches; green every time it ran by itself.
+   (`feedback_dont_run_fixtures_concurrently`)
+8. **Review for PROPORTION, not just presence.** Two independent model reviews
    both rated `postgresql-docs` and `tildes` clean because the content was all
    there — neither asked whether an element was the right *size*. A human caught
    it by eye.

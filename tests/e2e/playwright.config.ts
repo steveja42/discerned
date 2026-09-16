@@ -493,5 +493,24 @@ export default defineConfig({
       testMatch: /stackoverflow-question-fixture-visual\.spec\.ts/,
       retries: 0,
     },
+    // Cast-side pixel baselines (CAST_FIX=1). Every other *-fixture-visual
+    // project screenshots the private CLIP; these screenshot the PUBLIC cast
+    // (kind-30023 markdown → ReactMarkdown), which had no automated guard at
+    // all. See helpers/castFixtureVisual.ts.
+    {
+      name: 'highlighted-code-cast-fixture-visual',
+      testMatch: /highlighted-code-cast-fixture-visual\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'linked-prose-cast-fixture-visual',
+      testMatch: /linked-prose-cast-fixture-visual\.spec\.ts$/,
+      retries: 0,
+    },
+    {
+      name: 'substack-essay-cast-fixture-visual',
+      testMatch: /substack-essay-cast-fixture-visual\.spec\.ts$/,
+      retries: 0,
+    },
   ],
 });

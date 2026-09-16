@@ -42,6 +42,78 @@ export interface RenderCastOptions {
   maxHeight?: number;
 }
 
+/**
+ * Open a cast in a fresh, extension-free browser and hand the settled page +
+ * .clip-body locator to `fn`. The browser is closed when `fn` resolves.
+ *
+ * renderCastAndScreenshot takes its own screenshot and returns a string, which
+ * is right for the live specs (an artifact for a human to look at) but cannot
+ * drive toHaveScreenshot — a pixel baseline needs the LOCATOR, inside the
+ * running test. This is the same setup, with the screenshot step left to the
+ * caller, so the cast fixture baselines and the live artifacts share one render
+ * path and cannot drift.
+ */
+export async function withRenderedCast<T>(
+  event: NostrEvent,
+  opts: { rowText?: string },
+  fn: (page: Page, clipBody: ReturnType<Page['locator']>) => Promise<T>,
+): Promise<T> {
+  const browser = await chromium.launch();
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  try {
+    const clipBody = await openCast(page, event, opts.rowText);
+    return await fn(page, clipBody);
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+}
+
+/**
+ * Shared readiness path: mock the relay with this one event, open /discerns,
+ * select the row, and wait for the cast body + its images to settle.
+ */
+async function openCast(
+  page: Page,
+  event: NostrEvent,
+  rowTextOpt?: string,
+): Promise<ReturnType<Page['locator']>> {
+  await mockRelayWith(page, event);
+  // NOT networkidle: the feed is served by a MOCKED relay socket
+  // (page.routeWebSocket) that stays open by design, so the network never goes
+  // idle and this goto hangs forever. castShotSafe only catches THROWS, so a
+  // hang here burned the whole 240s per-domain deadline (github-pr, whose clip
+  // and web-app render had both already succeeded). 'domcontentloaded' + the
+  // explicit row/clip-body waits below are the real readiness signal.
+  await page.goto('http://localhost:3000/discerns', {
+    waitUntil: 'domcontentloaded', timeout: 30_000,
+  });
+
+  const rowText = rowTextOpt ?? titleOf(event);
+  const row = rowText
+    ? page.locator('article.clip', { hasText: rowText }).first()
+    : page.locator('article.clip').first();
+  await row.waitFor({ state: 'visible', timeout: 15_000 });
+  await row.click();
+
+  const clipBody = page.locator('.clip-body');
+  await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
+
+  // Wait for every rendered image to finish decoding so the screenshot is not
+  // taken mid-reflow (same guard the fixture-visual driver uses).
+  await clipBody.evaluate(async (root) => {
+    const imgs = Array.from(root.querySelectorAll('img'));
+    await Promise.all(imgs.map((img) =>
+      (img.complete && img.naturalWidth > 0)
+        ? Promise.resolve()
+        : img.decode().catch(() => undefined),
+    ));
+  });
+  await page.waitForTimeout(500);
+  return clipBody;
+}
+
 function titleOf(event: NostrEvent): string {
   const t = event.tags.find((tag) => tag[0] === 'title');
   return t?.[1] ?? '';
@@ -67,41 +139,8 @@ export async function renderCastAndScreenshot(
   const context = await browser.newContext();
   const page = await context.newPage();
   try {
-    await mockRelayWith(page, event);
-    // NOT networkidle: the feed is served by a MOCKED relay socket
-    // (page.routeWebSocket) that stays open by design, so the network never goes
-    // idle and this goto hangs forever. castShotSafe only catches THROWS, so a
-    // hang here burned the whole 240s per-domain deadline (github-pr, whose clip
-    // and web-app render had both already succeeded). 'domcontentloaded' + the
-    // explicit row/clip-body waits below are the real readiness signal.
-    await page.goto('http://localhost:3000/discerns', {
-      waitUntil: 'domcontentloaded', timeout: 30_000,
-    });
-
-    const rowText = opts.rowText ?? titleOf(event);
-    const row = rowText
-      ? page.locator('article.clip', { hasText: rowText }).first()
-      : page.locator('article.clip').first();
-    await row.waitFor({ state: 'visible', timeout: 15_000 });
-    await row.click();
-
-    const clipBody = page.locator('.clip-body');
-    await clipBody.waitFor({ state: 'visible', timeout: 10_000 });
-
-    // Wait for every rendered image to finish decoding so the screenshot is not
-    // taken mid-reflow (same guard the fixture-visual driver uses).
-    await clipBody.evaluate(async (root) => {
-      const imgs = Array.from(root.querySelectorAll('img'));
-      await Promise.all(imgs.map((img) =>
-        (img.complete && img.naturalWidth > 0)
-          ? Promise.resolve()
-          : img.decode().catch(() => undefined),
-      ));
-    });
-    await page.waitForTimeout(500);
-
+    const clipBody = await openCast(page, event, opts.rowText);
     await screenshotClipBody(page, clipBody, opts.screenshotPath, opts.maxHeight ?? 8000);
-
     return (await clipBody.innerText().catch(() => '')) ?? '';
   } finally {
     await context.close();
