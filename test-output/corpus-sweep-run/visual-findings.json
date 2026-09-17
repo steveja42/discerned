@@ -12,14 +12,14 @@
       "reviewedAt": "2026-09-15T05:05:19.975Z"
     },
     "cnn": {
-      "verdict": "flaw",
-      "severity": 5,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Clip and cast still open straight into the hero image with no headline or byline before the body; article prose itself is complete.",
+      "note": "Headline now leads the clip above the hero; body, byline and links all correct.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:05:04.688Z"
+      "reviewedAt": "2026-09-16T23:02:11.592Z"
     },
     "aljazeera": {
       "verdict": "clean",
@@ -37,9 +37,9 @@
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Article headings, lists, prose and footnote links render continuously with no truncation.",
+      "note": "Byte-identical to the previous run; headline recovery is a no-op here.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T18:48:59.781Z"
+      "reviewedAt": "2026-09-16T23:02:48.279Z"
     },
     "danluu": {
       "verdict": "clean",
@@ -95,11 +95,11 @@
       "verdict": "clean",
       "severity": 0,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "REPL block renders as valid Python (await asyncio.sleep(10, result='hello')).",
+      "note": "Unchanged: the 1146x600 social-preview card is still promoted.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T16:18:35.054Z"
+      "reviewedAt": "2026-09-16T23:59:28.405Z"
     },
     "reactdev": {
       "verdict": "clean",
@@ -142,14 +142,14 @@
       "reviewedAt": "2026-09-15T06:14:04.674Z"
     },
     "overreacted": {
-      "verdict": "flaw",
-      "severity": 3,
-      "where": "cast",
-      "regression": "none",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "both",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast preserves the hero, prose and emphasis but prefixes every heading with a literal '#' and runs diagram labels together as 'alice'sblogcat'sblog...'.",
+      "note": "Unchanged: wide OG card still promoted as the hero.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T00:21:14.990Z"
+      "reviewedAt": "2026-09-16T23:59:28.293Z"
     },
     "hackaday": {
       "verdict": "clean",
@@ -245,11 +245,11 @@
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast is complete through the author bio, but carries an unlabelled '3 - 24' stat pair, a Google preferred-source link, and a missing separator in '26 Jul 2026Updated:'.",
+      "note": "Body complete through the author bio; an unlabelled stat pair and a missing date separator remain.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T00:21:14.990Z"
+      "reviewedAt": "2026-09-16T23:28:17.050Z"
     },
     "macrumors": {
       "verdict": "clean",
@@ -300,14 +300,14 @@
       "reviewedAt": "2026-09-16T16:18:35.054Z"
     },
     "folha": {
-      "verdict": "flaw",
-      "severity": 5,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Hero, kicker, headline and two-bullet dek render, then the article stops at the paywall; a CMS placeholder bullet (de um conteudo) shows before the share row.",
+      "note": "Unchanged: the 2400x1600 article photo still heroes both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:04:28.007Z"
+      "reviewedAt": "2026-09-17T01:00:01.897Z"
     },
     "rfc-editor": {
       "verdict": "clean",
@@ -440,14 +440,14 @@
       "reviewedAt": "2026-09-15T07:24:24.166Z"
     },
     "gitlab-repo": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "The navbar fox logo renders as a ~350px hero at the top where the site shows a small header mark; README content below is correct.",
+      "note": "Fox logo gone from clip and cast; both open on the README content.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T14:39:30.551445Z"
+      "reviewedAt": "2026-09-17T01:00:01.696Z"
     },
     "sec-edgar": {
       "verdict": "clean",
@@ -471,33 +471,32 @@
     },
     "meduza": {
       "verdict": "clean",
-      "severity": 1,
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Hero card with baked title, headline, date, source and full body with inline links all render correctly.",
+      "note": "Unchanged: wide OG card still promoted as the hero.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:01:30.721Z"
+      "reviewedAt": "2026-09-16T23:59:28.185Z"
     },
     "zenodo": {
-      "verdict": "flaw",
-      "severity": 5,
+      "verdict": "blocked",
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast has the full record metadata but the citations table collapses year and source into one-character columns, and separators are lost in 'pandas-v3.0.5.zipmd5:'.",
+      "note": "Zenodo returned 504 Gateway Time-out; the capture is the error page, not the record.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T00:21:14.990Z"
+      "reviewedAt": "2026-09-16T23:12:06.945Z"
     },
     "crates-io": {
       "verdict": "clean",
       "severity": 0,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Rust example renders compilable (use serde::{Deserialize, Serialize};) with string literals intact.",
+      "note": "Unchanged: the 1200x630 OG card still heroes both surfaces, so no legitimate hero was affected.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T16:18:35.054Z"
+      "reviewedAt": "2026-09-17T01:00:01.805Z"
     },
     "lefigaro": {
       "verdict": "flaw",
@@ -601,13 +600,13 @@
     },
     "stripe-docs": {
       "verdict": "clean",
-      "severity": 2,
+      "severity": 1,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Hero card, title, intro, step markers, headings, shell command and inline code spans all render correctly; a space precedes punctuation after some inline code.",
+      "note": "Unchanged: wide OG card still promoted; step markers and code spans render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T14:39:30.551445Z"
+      "reviewedAt": "2026-09-16T23:59:28.510Z"
     },
     "wikidata": {
       "verdict": "clean",
@@ -635,19 +634,19 @@
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "The site logo renders ~280px tall at the top where the site shows a small header mark; Headmatter and opinion below are correct.",
+      "note": "Site logo still renders as a wide hero: its og:image is a 1200x630 card, so the square-logo rule cannot see it; Headmatter and opinion below are correct.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T14:39:30.551445Z"
+      "reviewedAt": "2026-09-16T23:51:35.771Z"
     },
     "ndtv": {
       "verdict": "flaw",
-      "severity": 4,
+      "severity": 3,
       "where": "cast",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast still opens into the dek with no headline and renders two broken image alt-texts as plain text mid-body; clip is clean.",
+      "note": "Clip is clean; cast still renders two broken image alt-texts as plain text mid-body.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T05:39:16.114Z"
+      "reviewedAt": "2026-09-16T23:02:20.800Z"
     },
     "xda-forums": {
       "verdict": "flaw",
@@ -701,13 +700,13 @@
     },
     "substack-generic": {
       "verdict": "clean",
-      "severity": 1,
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Title, byline with avatar, date, section markers and the full essay with proper paragraphs and inline links all render correctly.",
+      "note": "Single headline above byline and body; unchanged by headline recovery.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:18:07.684Z"
+      "reviewedAt": "2026-09-16T23:02:48.071Z"
     },
     "metacritic": {
       "verdict": "flaw",
@@ -741,13 +740,13 @@
     },
     "zdnet": {
       "verdict": "flaw",
-      "severity": 4,
+      "severity": 3,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "No headline before the hero (as cnn, fortune, newsweek, gizmodo); key takeaways, body, section headings and captioned screenshots render correctly, plus a leaked video transport strip.",
+      "note": "Headline recovered and section subheads intact, but a video transport strip still leaks mid-body.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:33:10.167Z"
+      "reviewedAt": "2026-09-16T23:02:20.273Z"
     },
     "espn": {
       "verdict": "clean",
@@ -813,11 +812,11 @@
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "The Mayo Clinic logo renders as a ~260px blue block at the top where the site shows a small header mark; Overview and Symptoms below are correct.",
+      "note": "Mayo Clinic logo still renders as a wide blue hero: its og:image is 600x315, so the square-logo rule cannot see it; Overview and Symptoms below are correct.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T22:55:26.449Z"
+      "reviewedAt": "2026-09-16T23:51:58.218Z"
     },
     "time": {
       "verdict": "flaw",
@@ -925,9 +924,9 @@
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Full article through the author bio and comment count; no truncation.",
+      "note": "Headline, byline, hero and body all correct; pixel-identical height to the previous run.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T18:48:26.639Z"
+      "reviewedAt": "2026-09-16T23:02:48.181Z"
     },
     "imdb": {
       "verdict": "flaw",
@@ -1012,22 +1011,22 @@
     "signalvnoise": {
       "verdict": "clean",
       "severity": 0,
-      "where": "cast",
-      "regression": "unknown",
-      "regressedFrom": "",
-      "note": "All six grey-pill link cards gone; prose links render inline and paragraphs reflow.",
-      "by": "ai",
-      "reviewedAt": "2026-09-16T17:47:28.613Z"
-    },
-    "gizmodo": {
-      "verdict": "flaw",
-      "severity": 5,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Clip opens mid-body with no headline, byline or hero (as cnn, fortune, newsweek); body prose, links and the video play card render correctly.",
+      "note": "Author avatar no longer heroes either surface; clip and cast both open on the prose with links inline.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:32:59.805Z"
+      "reviewedAt": "2026-09-17T00:58:23.434Z"
+    },
+    "gizmodo": {
+      "verdict": "clean",
+      "severity": 0,
+      "where": "both",
+      "regression": "unknown",
+      "regressedFrom": "",
+      "note": "Headline recovered; body prose, links and the video play card all correct.",
+      "by": "ai",
+      "reviewedAt": "2026-09-16T23:02:11.792Z"
     },
     "ytmusic-album": {
       "verdict": "critical",
@@ -1052,12 +1051,12 @@
     "huffpost": {
       "verdict": "clean",
       "severity": 0,
-      "where": "cast",
+      "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Grey-pill link cards gone; prose links render inline.",
+      "note": "Byte-identical to the previous run; prose links render inline.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T17:48:45.787Z"
+      "reviewedAt": "2026-09-16T23:02:48.385Z"
     },
     "weather-gov": {
       "verdict": "clean",
@@ -1155,19 +1154,19 @@
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Headline, dek, byline, hero, body to the paywall and author bio all intact; inline prose cross-reference links preserved.",
+      "note": "Headline, dek, byline and body all intact; no duplicate heading added.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T18:48:59.705Z"
+      "reviewedAt": "2026-09-16T23:02:47.868Z"
     },
     "pcmag": {
-      "verdict": "flaw",
-      "severity": 5,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Clip opens mid-body with no headline, byline or hero (as cnn, fortune, newsweek, gizmodo, zdnet); a You-May-Also-Like stub and Recommended-by-Editors block also leak in.",
+      "note": "Headline recovered above the body; prose, images and captions render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:36:18.867Z"
+      "reviewedAt": "2026-09-16T23:02:11.906Z"
     },
     "theregister": {
       "verdict": "clean",
@@ -1191,13 +1190,13 @@
     },
     "lastfm": {
       "verdict": "flaw",
-      "severity": 4,
+      "severity": 3,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cast carries the artist, labelled stats, bio and similar artists, but the Play album button glyphs overlap and a signup block and Amazon ad row survive.",
+      "note": "Similar-To names no longer squeeze to one word per line, but a green overlay block and overlapping Play glyphs remain.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T00:21:14.990Z"
+      "reviewedAt": "2026-09-16T23:28:16.487Z"
     },
     "offguardian": {
       "verdict": "clean",
@@ -1285,9 +1284,9 @@
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Article renders correctly to the free-trial paywall and the More-from-Science-and-technology recirculation block is gone from clip and cast.",
+      "note": "Headline, dek and hero intact; Phase 4 recirculation module still absent. Short body is the paywall, faithfully captured.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T18:48:03.421Z"
+      "reviewedAt": "2026-09-16T23:03:06.649Z"
     },
     "ghost-blog": {
       "verdict": "clean",
@@ -1460,14 +1459,14 @@
       "reviewedAt": "2026-09-16T01:29:22.650Z"
     },
     "newsweek": {
-      "verdict": "flaw",
-      "severity": 4,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Read More recirc cards gone and the body runs unbroken, but the clip still opens with no headline or byline before the body (as cnn and fortune).",
+      "note": "Headline and byline now lead the clip; body runs unbroken.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T18:48:03.498Z"
+      "reviewedAt": "2026-09-16T23:02:20.368Z"
     },
     "theguardian": {
       "verdict": "clean",
@@ -1591,13 +1590,13 @@
     },
     "motherjones": {
       "verdict": "flaw",
-      "severity": 5,
+      "severity": 3,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Full investigative narrative renders, but the clip opens with no headline, byline or hero and a TOP STORIES video strip plus two Advertise-with lines interrupt the prose.",
+      "note": "Headline recovered, but a TOP STORIES strip and two Advertise-with lines still interrupt the prose.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:55:25.934Z"
+      "reviewedAt": "2026-09-16T23:02:20.474Z"
     },
     "quantamagazine": {
       "verdict": "clean",
@@ -1613,11 +1612,11 @@
       "verdict": "flaw",
       "severity": 4,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Poster, Tomatometer/Popcornmeter scores, synopsis, Where to Watch, What to Know and per-critic reviews all render, but the film title never appears as a heading and a stray Content-collapsed line shows.",
+      "note": "Film title still never renders as a heading (entity hero, not an h1 outside the root) and a stray Content-collapsed line shows.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:39:27.637Z"
+      "reviewedAt": "2026-09-16T23:02:28.533Z"
     },
     "tripadvisor": {
       "verdict": "clean",
@@ -1633,11 +1632,11 @@
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Author photo, ratings, Followers, trailer poster, Bookshelves and Friends all render, but the author name never appears as a heading and the clip opens with Join-Goodreads promo text.",
+      "note": "Author name still never renders as a heading and the clip opens with Join-Goodreads promo text.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T05:25:29.190Z"
+      "reviewedAt": "2026-09-16T23:02:28.631Z"
     },
     "imdb-name": {
       "verdict": "flaw",
@@ -1681,13 +1680,13 @@
     },
     "msnbc": {
       "verdict": "flaw",
-      "severity": 5,
+      "severity": 4,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "The mid-body More-articles inject is gone and the prose is unbroken, but section-name rails (Congress, Supreme Court) and Newsletters chrome still follow the article.",
+      "note": "Prose unbroken, but section-name rails and Newsletters chrome still follow the article.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T18:48:12.983Z"
+      "reviewedAt": "2026-09-16T23:28:16.835Z"
     },
     "newyorker": {
       "verdict": "clean",
@@ -1695,9 +1694,9 @@
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Long-form body, cartoons and captions render continuously with no truncation.",
+      "note": "Headline, dek and byline intact; leading section label did not trigger a duplicate heading.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T18:48:26.727Z"
+      "reviewedAt": "2026-09-16T23:02:47.962Z"
     },
     "etsy": {
       "verdict": "flaw",
@@ -1753,11 +1752,11 @@
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Hero, breadcrumb, title, description, review summaries and release info all render, but the screenshot carousel collapses to a narrow column of small thumbnails and a not-signed-in banner survives.",
+      "note": "Screenshot rail renders at its true 116px source size (Steam lazy-loads the large carousel image, so no full-size copy is captured); not-signed-in banner survives.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:46:04.939Z"
+      "reviewedAt": "2026-09-16T23:28:16.644Z"
     },
     "vox": {
       "verdict": "clean",
@@ -1860,14 +1859,14 @@
       "reviewedAt": "2026-09-16T01:59:38.678Z"
     },
     "msn-slideshow": {
-      "verdict": "flaw",
-      "severity": 4,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Hero image with credit and the full body render correctly (syndicated-hero fix holding), but no headline appears above the hero.",
+      "note": "Headline now leads above the syndicated hero; body and credit render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T14:39:30.551445Z"
+      "reviewedAt": "2026-09-16T23:02:20.584Z"
     },
     "librarything-author": {
       "verdict": "clean",
@@ -1910,14 +1909,13 @@
       "reviewedAt": "2026-09-16T00:45:39.433Z"
     },
     "sciencemag": {
-      "verdict": "flaw",
-      "severity": 5,
+      "verdict": "blocked",
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Full article body is captured but it opens with the issue cover and Table of contents, with no headline or byline on either surface.",
+      "note": "Cloudflare 403 — the site served a security-verification page, nothing captured.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T00:44:58.788Z"
+      "reviewedAt": "2026-09-16T23:02:28.736Z"
     },
     "rateyourmusic": {
       "verdict": "flaw",
@@ -1983,51 +1981,51 @@
       "verdict": "clean",
       "severity": 0,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Byte-identical to the previous run; ASCII tables keep their pipe alignment.",
+      "note": "Elephant logo gone from clip and cast; both open on the docs content with ASCII table alignment intact.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T16:18:35.054Z"
+      "reviewedAt": "2026-09-17T00:58:23.534Z"
     },
     "tildes": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "The site favicon renders as a ~150px block at the top where the site shows a small header icon; comments and metadata below are correct.",
+      "note": "Site favicon no longer heroes either surface; clip and cast open on the post title and comment thread.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T14:39:30.551445Z"
+      "reviewedAt": "2026-09-17T01:00:01.595Z"
     },
     "thedailybeast": {
       "verdict": "flaw",
-      "severity": 7,
+      "severity": 6,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Clip is two paragraphs then a collapsed Top-Stories label over a grey circle, video glyphs and READ MORE; no headline, byline or article body at 10% coverage.",
+      "note": "Headline recovered, but the body is still only two paragraphs before a Top-Stories stub and READ MORE.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:54:46.045Z"
+      "reviewedAt": "2026-09-16T23:02:20.693Z"
     },
     "fortune": {
-      "verdict": "flaw",
-      "severity": 5,
+      "verdict": "clean",
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Clip opens straight into the hero with no headline or byline before the body (same pattern as cnn); body prose, quotes and links render correctly.",
+      "note": "Headline recovered above the body; hero, prose and pull quotes all render.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:26:53.705Z"
+      "reviewedAt": "2026-09-16T23:02:11.676Z"
     },
     "myanimelist": {
       "verdict": "clean",
-      "severity": 2,
+      "severity": 1,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Information, statistics, synopsis and related entries all intact; the trailer rail is gone and only house promo cards remain.",
+      "note": "Information, statistics, synopsis and related entries all render at full column width.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T18:48:13.191Z"
+      "reviewedAt": "2026-09-16T23:28:17.231Z"
     },
     "reuters": {
       "verdict": "flaw",

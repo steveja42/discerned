@@ -202,6 +202,76 @@ must use a path sharing NO segment: `idSegs` keeps the locale, so two `en-us`
 MSN URLs "match" on that alone. This affects every syndicated article (MSN,
 Yahoo, AOL, aggregators), not just MSN.
 
+**A SQUARE og:image is the site's logo, and is not promoted (Guard 3).** A site
+with no per-page art declares its brand mark as `og:image`, so promotion put a
+large logo above a page that has no hero at all. Measured across the corpus on
+the intrinsic size `probeImageSize` already fetches, the two kinds separate
+cleanly by **aspect**, with nothing in between: logos are **0.97–1.00**
+(`tildes` 144x144, `gitlab-repo` 512x512, `signalvnoise` 300x300,
+`postgresql-docs` 540x557); real OG cards are **1.50–1.91** (`crates-io`,
+`meduza`, `overreacted`, `python-docs`, `stripe-docs` 1200x630, `folha`
+2400x1600). A brand mark is square because that is what a logo is; an OG card is
+~1.91:1 by spec. The rule only fires when the size is KNOWN — an unmeasurable
+image keeps the previous behaviour — and is **hero-only**: `capture.thumbnail`
+(the library row's preview) still uses the logo, which is a fine visual key.
+
+**The CAST needs its own half of this, via `thumbnailIsLogo`.** `pickImageUrl`
+(`shared/nostr/events.ts`) falls through `thumbnailUrl` → `thumbnail` →
+`imageUrls`, so nulling `thumbnailUrl` (which `declaredIsLogo` does) is NOT
+enough: an ungranted capture stores a plain http URL in `thumbnail` — the grant
+is what would make it a `data:` URI, which pickImageUrl already skips — so the
+search just moved to the next field and found the same logo. Measured: four
+casts byte-identical after the clip was fixed.
+
+Do **not** fix it by skipping the `thumbnail` field for non-bookmarks: an
+article can carry its only hero URL there (`tests/fixtures/clips/article.json`),
+and that silently drops REAL heroes from casts — tried, caught by
+`events.test.ts`, reverted. Nulling `thumbnail` itself is also wrong; it removes
+the library-row preview. The field was carrying two meanings ("the page's hero"
+and "a usable preview"), so the flag is what separates them: set from the same
+`declaredIsLogo`, read by one line in `pickImageUrl`. Guarded by
+`tests/nostr/logo-cast.test.ts`.
+
+Two shapes it deliberately does NOT catch: `mayoclinic` (600x315) and
+`courtlistener` (1200x630) serve their logo *inside a wide OG card*, so they are
+shape-identical to a legitimate one. A URL vocabulary (`logo|avatar|brand`)
+catches mayoclinic but not courtlistener's generic `og-image-1200x630.png`, and
+flat-colour dominance was measured and does **not** separate them (`python-docs`
+0.88 is legitimate, `mayoclinic` 0.53 is a logo). Left unfixed rather than risk
+false positives on real article art — promotion is load-bearing for the
+syndication case above. Guarded by `tests/extraction/og-logo-promotion.test.ts`
+(the square case plus two counter-cases: a 1200x630 card and a 4:3 photo).
+
+**The HEADLINE can sit outside the capture root — `withHeadlineFallback`
+prepends it.** Most news CMSs render `<header><h1>…</h1></header>` as a SIBLING
+of the `<article>` holding the body, so Tier 1 wins a root with the whole story
+and no title and the clip opens straight into the hero or the first paragraph.
+Measured with `tools/finder-diag-probe.spec.ts` (which now reports where the h1
+sits relative to both the layout-finder winner and the tier-1 root): 7 of 7
+affected domains reported `holdsHeadline=false` with `headlinePrecedes=true`.
+
+This is **not** a change to root selection, deliberately: widening to the nearest
+common ancestor would drag in 3.5x the content on cnn (20,886 chars against the
+article's 5,910). Prepending one heading adds the title and nothing else.
+Guards: the capture must not already **LEAD** with a heading; the headline must
+sit outside the root, be visible, be of title-like length, not already appear in
+the body, and share ≥60% of its words with the page `<title>` (which is what
+stops a "Related stories" rail heading being promoted).
+
+**"Leads with a heading" is the load-bearing part of that, not "has one".** An
+any-heading test fixed only the two domains that happen to have no subheads: 5 of
+the 7 carry ordinary `<h2>`/`<h3>` **section subheads** (zdnet has 10), so the
+recovery no-op'd on exactly the pages it was written for. Guarded by
+`tests/extraction/headline-fallback.test.ts` + the
+`article-headline-outside-root.html` fixture, whose body carries a section
+subhead for that reason.
+
+Note the CAST is unaffected either way: it carries the headline in the NIP-23
+`title` tag and `stripLeadingArticleChrome` removes a duplicate `# heading` on
+purpose. A sweep "no headline in the cast" reading is a **screenshot artifact** —
+both surfaces screenshot `.clip-body`, while `DetailPanel` renders the title in
+`.detail-title` outside it.
+
 **On a FEED, the og:image is not this post's picture — and the clip and the cast
 need separate fixes.** Where every post shares one page URL (snapchat.com/web and
 instagram.com/?hl=en are the measured cases), `og:image` is the site's own
@@ -565,6 +635,24 @@ Site taggers depend on live-DOM selectors that a site can redesign away with no 
 | `dx-excl` | element to remove during capture. Promoted to `EXCL_MARKER` by the pipeline, dropped by `removeMarked` before sanitisation. |
 
 The matching layout CSS lives in `discerned-web/app/globals.css` under `.clip-body .dx-*`. **To add a site**: copy `tagPrimal`, swap the selectors, register it in `SITE_TAGGERS`. No web-app change needed unless the site has a new layout quirk.
+
+**A `dx-header` is a `flex-wrap: nowrap` row, so a HEADING inside one can be
+crushed to a sliver.** The generic tagger stamps `dx-header` on rows whose
+heading comes FIRST and whose image comes second; the image holds its intrinsic
+width and the heading gets what is left. Measured on last.fm's "Similar To" list
+(`tools/clip-width-probe.spec.ts`, `CLIPW_WIDTH=610`): the `<h3>` rendered at
+**44px inside a 522px header** and "Thom Yorke" came out one word per line.
+`.clip-body .dx-header > :is(h1…h6)` therefore gets `flex: 1 1 auto;
+min-width: 8em`, scoped to a **direct-child** heading so none of the tuned
+avatar/reel/bsky header rules are affected.
+
+Two things about that probe are worth knowing before using it, because both made
+it report "nothing is narrow" for visibly broken clips: it renders at the 1280px
+viewport unless `CLIPW_WIDTH` constrains it (the sweep's column is ~610px, and a
+ribbon only collapses when the column is too narrow), and its text filter used to
+require `textLen > 60`, which is blind to a squeezed short LABEL. It now also
+reports a table/cell census, since a collapsed table's *cells* are narrow while
+the table itself is not.
 
 **Engine taggers (match on markup, not hostname).** Most entries match a hostname. A forum/CMS *engine* that ships stock, unhashed classes across thousands of independent deployments can't be covered that way — `tagPhpBB` therefore ignores the `host` argument and sniffs the live DOM (`#page-body dl.postprofile`). Rules for this kind of entry:
 - **Register it LAST** in `SITE_TAGGERS` so any host-specific tagger claims its page first.

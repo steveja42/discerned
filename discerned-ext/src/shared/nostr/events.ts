@@ -108,7 +108,12 @@ function appendImageUrls(tags: string[][], _contentLines: string[], capture: Cap
 // `thumbnail` that is itself an http(s) URL (the bookmark path stores one there),
 // then the first content image. Shared by the resource and long-form factories.
 function pickImageUrl(capture: Capture): string | undefined {
-  return [capture.thumbnailUrl, capture.thumbnail, ...(capture.imageUrls ?? [])]
+  // Skip `thumbnail` when it is the site's LOGO (thumbnailIsLogo): it is fine as
+  // the library row's small preview but must not hero a cast. Skipping the FIELD
+  // outright is wrong — an article can carry its only hero URL there
+  // (tests/fixtures/clips/article.json) — so the flag is what distinguishes them.
+  const thumb = capture.thumbnailIsLogo ? null : capture.thumbnail;
+  return [capture.thumbnailUrl, thumb, ...(capture.imageUrls ?? [])]
     .find((u): u is string => !!u && /^https?:/i.test(u));
 }
 

@@ -119,6 +119,22 @@ const TARGETS: Record<string, string> = {
   // renders the full article — no paywall, no gate. Worse than hero-only: not
   // one paragraph survives, so text coverage scores a flat 0.0%.
   fortune: 'https://fortune.com/2026/07/27/greenhouse-ceo-daniel-chait-ai-doom-loop-job-seekers-spam-interview-applications-unemployment/',
+  // Phase 5a (sweep 2026-09-15): the body captures correctly but the clip opens
+  // with NO headline or byline — the h1 is above the block the finder wins with.
+  // URLs all resolve from the corpus (resolveTargets); the values here are only
+  // fallbacks. Probe reports the headline/winner relationship for each.
+  cnn: 'https://www.cnn.com/2026/07/21/middleeast/iran-war-israel-sidelines-preparations-intl/index.html',
+  newsweek: 'https://www.newsweek.com/is-cyclospora-outbreak-the-largest-in-history-how-different-years-compare-12244037',
+  gizmodo: 'https://gizmodo.com/',
+  zdnet: 'https://www.zdnet.com/',
+  pcmag: 'https://www.pcmag.com/news/starships-13th-test-flight-ends-with-a-lucky-splashdown',
+  motherjones: 'https://www.motherjones.com/',
+  ndtv: 'https://www.ndtv.com/',
+  thedailybeast: 'https://www.thedailybeast.com/peter-thiel-and-bombshell-private-jet-lawsuit-revealed/',
+  sciencemag: 'https://www.science.org/',
+  rottentomatoes: 'https://www.rottentomatoes.com/m/the_odyssey_2026',
+  'goodreads-author': 'https://www.goodreads.com/author/show/3389.Stephen_King',
+  huffpost: 'https://www.huffpost.com/',
 };
 
 /**
@@ -358,7 +374,90 @@ test('live-page diagnostics (finder / picker)', async () => {
             const onScreen = rc.bottom > 0 && rc.top < (window.innerHeight * 3) && rc.right > 0 && rc.left < window.innerWidth;
             return `${(r.cls||'(no-cls)').slice(0,24)}: box=${Math.round(rc.width)}x${Math.round(rc.height)} top=${Math.round(rc.top)} vis=${cs.visibility} disp=${cs.display} opacity=${cs.opacity} onScreen=${onScreen}`;
           });
-          return { top: rows.slice(0, 12), vis, proseParagraphs: bodyProse.length, proseChars: bodyProse.join(' ').length, totalBodyText: (document.body.innerText ?? '').replace(/\s+/g, ' ').trim().length };
+          // HEADLINE RELATIONSHIP (Phase 5a). "No headline in the clip" has two
+          // very different causes and the clip image cannot tell them apart:
+          // the finder picked a block that EXCLUDES the h1 (a fixable selection
+          // problem), or the h1 is inside the winner and something downstream
+          // dropped it (a pipeline problem). Report, for the top-scoring block,
+          // whether it contains the page headline and — when it does not —
+          // where the h1 sits relative to it: the depth from their nearest
+          // common ancestor, and what that ancestor would score.
+          const winner = rows.length
+            ? Array.from(document.body.querySelectorAll('*')).find(e =>
+                (e.className || '').toString().slice(0, 40) === rows[0].cls
+                && (e.textContent ?? '').trim().length === rows[0].textLen)
+            : undefined;
+          // The page headline, not merely the first <h1>: a masthead logo is
+          // often marked up as one. Prefer the longest visible h1, then h2.
+          const headingCands = Array.from(document.querySelectorAll('h1, h2'))
+            .map(h => ({ el: h, text: (h.textContent ?? '').trim(), r: h.getBoundingClientRect() }))
+            .filter(h => h.text.length >= 12 && h.r.width > 0 && h.r.height > 0);
+          headingCands.sort((a, b) => (a.el.tagName === b.el.tagName)
+            ? b.text.length - a.text.length
+            : (a.el.tagName === 'H1' ? -1 : 1));
+          const head = headingCands[0];
+          let headline: Record<string, unknown> = { found: false };
+          if (head) {
+            const inWinner = !!winner && winner.contains(head.el);
+            let commonDepth = -1; let commonTag = ''; let commonTextLen = -1; let climb = 0;
+            if (winner && !inWinner) {
+              let a: Element | null = winner;
+              while (a && !a.contains(head.el)) { a = a.parentElement; climb++; }
+              if (a) {
+                commonTag = a.tagName.toLowerCase() + '.' + (a.className || '').toString().slice(0, 30);
+                commonTextLen = (a.textContent ?? '').trim().length;
+                let d = 0; let n: Element | null = head.el;
+                while (n && n !== a) { n = n.parentElement; d++; }
+                commonDepth = d;
+              }
+            }
+            // TIER 1's root, which is what actually gets captured on most news
+            // pages (the finder never runs). Mirrors ARTICLE_SELECTORS order.
+            let t1: Element | null = null;
+            for (const sel of ['article', 'main', '[role="main"]', '[role="article"]']) {
+              const cand = Array.from(document.querySelectorAll(sel))
+                .find(e => (e.textContent ?? '').trim().length >= 250);
+              if (cand) { t1 = cand; break; }
+            }
+            let tier1: Record<string, unknown> = { none: true };
+            if (t1) {
+              const holds = t1.contains(head.el);
+              // When the headline is OUTSIDE the tier-1 root, describe the gap:
+              // how far up to a common ancestor, and what else that ancestor
+              // drags in. That is what decides whether reaching UP for the
+              // headline is safe or would swallow page chrome.
+              let anc: Element | null = t1; let up = 0;
+              while (anc && !anc.contains(head.el)) { anc = anc.parentElement; up++; }
+              tier1 = {
+                tag: t1.tagName.toLowerCase() + '.' + (t1.className || '').toString().slice(0, 30),
+                textLen: (t1.textContent ?? '').trim().length,
+                holdsHeadline: holds,
+                climbToHeadline: holds ? 0 : up,
+                ancestor: anc ? anc.tagName.toLowerCase() + '.' + (anc.className || '').toString().slice(0, 30) : '(none)',
+                ancestorTextLen: anc ? (anc.textContent ?? '').trim().length : -1,
+                // Is the headline a PRECEDING sibling subtree of the tier-1 root
+                // (the common news-CMS shape: <header><h1></header><article>)?
+                headlinePrecedes: !holds && !!(t1.compareDocumentPosition(head.el)
+                  & Node.DOCUMENT_POSITION_PRECEDING),
+              };
+            }
+            headline = {
+              found: true,
+              tag: head.el.tagName.toLowerCase(),
+              text: head.text.slice(0, 80),
+              top: Math.round(head.r.top),
+              inWinner,
+              tier1,
+              // How far the finder would have to widen to include the headline,
+              // and how much extra text that widening drags in — the number
+              // that decides whether widening is safe.
+              climbFromWinner: climb,
+              commonAncestor: commonTag,
+              commonAncestorTextLen: commonTextLen,
+              winnerTextLen: rows.length ? rows[0].textLen : -1,
+            };
+          }
+          return { top: rows.slice(0, 12), vis, headline, proseParagraphs: bodyProse.length, proseChars: bodyProse.join(' ').length, totalBodyText: (document.body.innerText ?? '').replace(/\s+/g, ' ').trim().length };
         });
 
         // TOI "Latest Mobiles" widget structural dump — walk up from the heading
@@ -575,6 +674,22 @@ test('live-page diagnostics (finder / picker)', async () => {
         }
 
         out.push(`prose <p>(>40ch): ${diag.proseParagraphs}  proseChars: ${diag.proseChars}  totalBodyText: ${diag.totalBodyText}`);
+        const hl = diag.headline as Record<string, unknown>;
+        if (hl && hl.found) {
+          out.push(`headline: <${hl.tag}> "${hl.text}" top=${hl.top} inWinner=${hl.inWinner}`);
+          if (!hl.inWinner) {
+            out.push(`  OUTSIDE the winning block — climb ${hl.climbFromWinner} to <${hl.commonAncestor}>, `
+              + `which holds ${hl.commonAncestorTextLen} chars vs the winner's ${hl.winnerTextLen}`);
+          }
+          const t1 = hl.tier1 as Record<string, unknown> | undefined;
+          if (t1 && !t1.none) {
+            out.push(`  tier1 root <${t1.tag}> textLen=${t1.textLen} holdsHeadline=${t1.holdsHeadline}`
+              + (t1.holdsHeadline ? '' : ` climb=${t1.climbToHeadline} to <${t1.ancestor}>`
+                + ` (${t1.ancestorTextLen} chars) headlinePrecedes=${t1.headlinePrecedes}`));
+          }
+        } else {
+          out.push('headline: NONE found (no visible h1/h2 >= 12 chars)');
+        }
         if (diag.vis) { out.push('visibility of top blocks:'); for (const v of diag.vis) out.push('  ' + v); }
         out.push('top blocks (score | tag.cls | textLen | visLen | area | linkRatio | #p | #img):');
         for (const b of diag.top) {
@@ -587,7 +702,11 @@ test('live-page diagnostics (finder / picker)', async () => {
         const censusLines: string[] = [];
         page.on('console', (m) => {
           const t = m.text();
-          if (/census|layout-finder|selfCheck|narrowed|expand|handoff|prose-wrap/i.test(t)) censusLines.push(t);
+          // `captured via` / `skipping <` name the TIER that won, which decides
+          // whether a missing headline is a layout-finder problem at all: Tier 1
+          // takes <article>/<main> before the finder runs, and that root often
+          // starts below the h1 (Phase 5a).
+          if (/census|layout-finder|selfCheck|narrowed|expand|handoff|prose-wrap|captured via|skipping </i.test(t)) censusLines.push(t);
         });
 
         // Bind the content script FIRST. Production ships no broad host
@@ -656,6 +775,26 @@ test('live-page diagnostics (finder / picker)', async () => {
           const bodyText = (cap.bodyText as string) ?? '';
           out.push(`CAPTURED: bodyHtml ${body.length} chars, bodyText ${bodyText.length} chars, title="${(cap.title as string ?? '').slice(0,60)}"`);
           out.push(`  bodyText head: ${bodyText.replace(/\s+/g,' ').slice(0, 240)}`);
+          // Did the HEADLINE survive into the capture (Phase 5a)? This is the
+          // tier-independent answer: the block table above reports the LAYOUT
+          // finder's winner, but Tier 1 (<article>/<main>) runs first and often
+          // wins with a tighter root, so "inWinner=true" does not imply the
+          // headline was captured. Measured on fortune: inWinner=true, yet the
+          // captured body starts below the h1 because Tier 1 took
+          // <article class="article-content">.
+          const hlText = (hl && hl.found) ? String(hl.text) : '';
+          if (hlText) {
+            const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+            const probeStr = norm(hlText).slice(0, 40);
+            const inBody = probeStr.length > 0 && norm(bodyText).includes(probeStr);
+            // A heading ELEMENT, not merely the words: the headline can arrive
+            // as plain text (an og:image alt, a stray caption) and still not
+            // render as a headline, which is what the sweep verdicts describe.
+            const asHeading = new RegExp(`<h[1-3][^>]*>[^<]{0,40}${
+              probeStr.slice(0, 24).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(body.replace(/\s+/g, ' '));
+            out.push(`  HEADLINE IN CAPTURE: text=${inBody} asHeadingTag=${asHeading}`
+              + `  (finder-winner contained it: ${hl.inWinner})`);
+          }
           const diagLines = res.diag ?? [];
           out.push('  pipeline stages: ' + (diagLines.length ? '' : '(none captured)'));
           for (const d of diagLines) out.push('    ' + d);

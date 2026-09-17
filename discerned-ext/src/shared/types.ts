@@ -77,6 +77,10 @@ export interface Capture {
   // bookmark / article
   thumbnail?: string | null;      // may be an inlined data: URI (private clip render)
   thumbnailUrl?: string | null;   // original http(s) URL of the thumbnail — cast as the `image` tag (data: URIs are too large for relays)
+  // True when `thumbnail` is the SITE'S LOGO (a square og:image) rather than
+  // this page's own art. Good enough for the library row's small preview, but
+  // it must not become a cast's hero — see pickImageUrl.
+  thumbnailIsLogo?: boolean;
   // Original http(s) URLs of the capture's content images (any site), in
   // document order. Generic captures are collected by inlineAllImages' pre-pass
   // (avatars/icons filtered, capped at MAX_CAST_IMAGE_URLS); Tier-0 tweet

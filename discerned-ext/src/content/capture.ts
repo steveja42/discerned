@@ -3364,6 +3364,13 @@ function proseText(root: Element, imageUrls?: string[]): string {
   return parts.join('\n\n');
 }
 
+// A promoted og:image whose intrinsic aspect falls in this band is the site's
+// own brand mark, not article art — see Guard 3. The band is deliberately tight
+// around 1:1: the widest measured logo is 0.97 and the narrowest real card 1.50,
+// so there is a wide margin on both sides.
+const LOGO_MIN_ASPECT = 0.8;
+const LOGO_MAX_ASPECT = 1.25;
+
 /**
  * Prepend the page's og:image to a captured body that ended up with no images.
  *
@@ -3430,6 +3437,17 @@ function withThumbnailFallback(
     if (imageInliningGranted !== false) return html;
     if (!decodedThumb) return html;
   }
+  // Guard 3 — a SQUARE og:image is the site's brand mark, not article art, and
+  // promoting it puts a large logo above a page that has no hero at all.
+  // Measured corpus-wide: logos are 0.97-1.00, real OG cards 1.50-1.91.
+  // HERO-only — capture.thumbnail still uses the logo. See CLAUDE.md.
+  if (thumbSize && thumbSize.w > 0 && thumbSize.h > 0) {
+    const aspect = thumbSize.w / thumbSize.h;
+    if (aspect >= LOGO_MIN_ASPECT && aspect <= LOGO_MAX_ASPECT) {
+      log(LL.DEBUG, `Discerned: not promoting square og:image (${thumbSize.w}x${thumbSize.h}) — looks like a site logo`, 'url:', window.location.href);
+      return html;
+    }
+  }
   const alt = title.replace(/"/g, '&quot;');
   // Stamp the intrinsic size so `.clip-body img[width]`'s attr() cap engages.
   // This <img> is synthesised, so annotateLiveImageSizes never walked it and
@@ -3437,6 +3455,74 @@ function withThumbnailFallback(
   const size = thumbSize && thumbSize.w > 0 && thumbSize.h > 0
     ? ` width="${thumbSize.w}" height="${thumbSize.h}"` : '';
   return `<figure><img src="${thumbUrl}" alt="${alt}"${size}></figure>\n${html}`;
+}
+
+// A headline shorter than this is a label ("News", "Opinion"), not a title.
+const HEADLINE_MIN_CHARS = 12;
+// Longer than this it is a paragraph marked up as a heading, not a title.
+const HEADLINE_MAX_CHARS = 250;
+// Word overlap with the page <title> required to call it THIS page's headline.
+// Loose enough for a site suffix ("… | PCMag") and a publisher's rewording;
+// tight enough that a "Related stories" rail heading fails.
+const HEADLINE_TITLE_OVERLAP = 0.6;
+
+/**
+ * Recover the page HEADLINE when the captured root starts below it.
+ *
+ * Most news CMSs render `<header><h1></header>` as a SIBLING of the `<article>`
+ * holding the body, so Tier 1 wins a root with the whole story and no title.
+ * Prepends one heading rather than widening the root — widening would drag in
+ * 3.5x the content on cnn. Guards below; see CLAUDE.md for the measurements.
+ */
+function withHeadlineFallback(html: string, root: Element | null, title: string): string {
+  // LEADS with a heading, not "has one anywhere": 5 of the 7 measured domains
+  // carry ordinary <h2>/<h3> section subheads, which an any-heading test read
+  // as "already titled". A title is the first thing in the body or it is not one.
+  const leading = /^\s*(?:<(?:div|figure|section|header|p)[^>]*>\s*)*<h[1-3][\s>]/i;
+  if (leading.test(html)) return html;
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
+  const words = (s: string) => new Set(
+    norm(s).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(w => w.length > 2),
+  );
+  const titleWords = words(title);
+  if (titleWords.size === 0) return html;
+
+  const bodyText = norm(html.replace(/<[^>]+>/g, ' ')).toLowerCase();
+  let best: { el: Element; text: string } | null = null;
+  for (const h of querySelectorAllDeep(document.body, 'h1, h2')) {
+    // Must be OUTSIDE the root: inside means something downstream dropped it,
+    // which is a different bug this must not paper over.
+    if (root && root.contains(h)) continue;
+    const text = norm(h.textContent ?? '');
+    if (text.length < HEADLINE_MIN_CHARS || text.length > HEADLINE_MAX_CHARS) continue;
+    const r = h.getBoundingClientRect();
+    // Skip invisible headings (SEO-only/off-screen). jsdom reports 0x0 for
+    // everything, so only test this where there IS layout.
+    if (hasRealLayout() && (r.width <= 0 || r.height <= 0)) continue;
+    if (bodyText.includes(text.toLowerCase())) continue;
+    // Must be THIS page's headline, not a rail/section heading.
+    const hw = words(text);
+    if (hw.size === 0) continue;
+    let shared = 0;
+    for (const w of hw) if (titleWords.has(w)) shared++;
+    if (shared / hw.size < HEADLINE_TITLE_OVERLAP) continue;
+    // Prefer an <h1>; the loop is in document order, so a later one is only
+    // taken to upgrade h2 → h1.
+    if (!best) best = { el: h, text };
+    else if (best.el.tagName !== 'H1' && h.tagName === 'H1') best = { el: h, text };
+    // An <h1> past every guard is the headline; nothing later beats it.
+    if (best.el.tagName === 'H1') break;
+  }
+  if (!best) return html;
+  const escaped = best.text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `<h1>${escaped}</h1>\n${html}`;
+}
+
+/** True when the document has real layout (jsdom reports 0x0 for everything). */
+function hasRealLayout(): boolean {
+  const r = document.body?.getBoundingClientRect();
+  return !!r && r.width > 0 && r.height > 0;
 }
 
 /**
@@ -3670,6 +3756,13 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const thumbSize = thumbnailUrl && isDeclaredThumbnail()
     ? await probeImageSize(thumbnailUrl) : null;
   const decodedThumbnail = thumbSize !== null;
+  // Same square-logo policy as Guard 3, applied to the CAST's hero. The cast
+  // reads thumbnailUrl, not the body, so without this the logo the clip just
+  // stopped promoting still heroes the published kind-30023.
+  const declaredIsLogo = !!thumbSize && thumbSize.w > 0 && thumbSize.h > 0
+    && thumbSize.w / thumbSize.h >= LOGO_MIN_ASPECT
+    && thumbSize.w / thumbSize.h <= LOGO_MAX_ASPECT;
+  const castThumbUrl = declaredIsLogo ? null : thumbnailUrl;
 
   // Tier 1: semantic article element — preserves images at their correct positions.
   // Skipped when a site tagger pinned an explicit capture root (Tier 1.5 below
@@ -3722,7 +3815,13 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     log(LL.TRACE, `Discerned: sanitised bodyHtml (first 2000 chars): ${clone.innerHTML.slice(0, 2000)}`, 'url:', base.url);
     // Recover the hero when the semantic root held no images — see
     // withThumbnailFallback (keeps the clip and the cast consistent).
-    const tier1Html = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title, decodedThumbnail, thumbSize);
+    // Recover the headline when the semantic root starts below it (the common
+    // <header><h1></header> + <article> news-CMS shape) — see
+    // withHeadlineFallback. Runs BEFORE the thumbnail fallback so the title
+    // ends up above the recovered hero, as on the source page.
+    const tier1Html = withThumbnailFallback(
+      withHeadlineFallback(clone.innerHTML.trim(), articleEl, base.title),
+      thumbnailUrl, inlinedThumbnail, base.title, decodedThumbnail, thumbSize);
     const { html: inlined, imageUrls } = await inlineAllImages(tier1Html);
     log(LL.DEBUG, `Discerned: article imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     const tier1BodyRoot = imageUrls.length > 0
@@ -3734,7 +3833,8 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       bodyHtml: inlined,
       bodyText: proseText(tier1BodyRoot, imageUrls),
       thumbnail: posterFromBody(inlined, inlinedThumbnail),
-      thumbnailUrl: castImageUrlFromBody(inlined, thumbnailUrl),
+      thumbnailIsLogo: declaredIsLogo || undefined,
+      thumbnailUrl: castImageUrlFromBody(inlined, castThumbUrl),
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
   }
@@ -3815,7 +3915,15 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     census.flush();
     // Before inlining, so a recovered hero is inlined + counted in imageUrls
     // (the cast's image set) exactly like an in-body image would be.
-    const layoutHtml = withThumbnailFallback(clone.innerHTML.trim(), thumbnailUrl, inlinedThumbnail, base.title, decodedThumbnail, thumbSize);
+    // Headline recovery, as in Tier 1 — but NOT when a site tagger scoped the
+    // root or a feed was narrowed to one post: there the root is authoritative
+    // about what the post is, and the page <title> describes the feed rather
+    // than the captured item, so a prepended "headline" would be the wrong text.
+    const layoutHtml = withThumbnailFallback(
+      (siteTaggerRoot || narrowed !== layoutEl)
+        ? clone.innerHTML.trim()
+        : withHeadlineFallback(clone.innerHTML.trim(), expanded, base.title),
+      thumbnailUrl, inlinedThumbnail, base.title, decodedThumbnail, thumbSize);
     const { html: inlined, imageUrls } = await inlineAllImages(layoutHtml);
     log(LL.DEBUG, `Discerned: layout-finder imgs after inlining — ${(inlined.match(/<img[^>]*>/gi) ?? []).length} total`, 'url:', base.url);
     // proseText walks the CLONE, which has no <figure> we just prepended — pass
@@ -3829,7 +3937,8 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       bodyHtml: inlined,
       bodyText: proseText(layoutBodyRoot, imageUrls),
       thumbnail: posterFromBody(inlined, inlinedThumbnail),
-      thumbnailUrl: castImageUrlFromBody(inlined, thumbnailUrl),
+      thumbnailIsLogo: declaredIsLogo || undefined,
+      thumbnailUrl: castImageUrlFromBody(inlined, castThumbUrl),
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
   }
@@ -3838,8 +3947,13 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   const parsed = parseReadability();
   if (parsed) {
     log(LL.DEBUG, 'Discerned: article captured via Readability', 'url:', base.url);
+    // Readability strips the headline from `content` (it returns it separately
+    // as `title`), so this tier has the same gap as Tier 1. Pass no root: its
+    // output is a string with no live element to test containment against, and
+    // the "already in the body" and title-overlap guards are what keep it safe.
     const sanitized = withThumbnailFallback(
-      sanitizeHtmlString(parsed.content), thumbnailUrl, inlinedThumbnail, parsed.title || base.title,
+      withHeadlineFallback(sanitizeHtmlString(parsed.content), null, parsed.title || base.title),
+      thumbnailUrl, inlinedThumbnail, parsed.title || base.title,
       decodedThumbnail, thumbSize,
     );
     const { html: inlined, imageUrls } = await inlineAllImages(sanitized);
@@ -3861,7 +3975,8 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
       bodyHtml: inlined,
       bodyText,
       thumbnail: posterFromBody(inlined, inlinedThumbnail),
-      thumbnailUrl: castImageUrlFromBody(inlined, thumbnailUrl),
+      thumbnailIsLogo: declaredIsLogo || undefined,
+      thumbnailUrl: castImageUrlFromBody(inlined, castThumbUrl),
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     };
   }

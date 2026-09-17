@@ -22,7 +22,7 @@ change lands. Mark the sub-item first, the phase second.
 | 2 | Cast whitespace corruption | **high** | ☑ **Done** (gate passed 2026-09-16) |
 | 3 | Grey-pill link mangling | medium | ☑ **Done** (gate passed 2026-09-16) |
 | 4 | Recirculation blocks | medium | ☑ **Done** (gate passed 2026-09-16) |
-| 5 | Structural (5a-5c) | **highest** | ☐ Not started |
+| 5 | Structural (5a-5c) | **highest** | ☑ **Done** (each sub-item gated separately, 2026-09-16) |
 | 6 | Low-risk cosmetic (6a-6c) | low | ☐ Not started |
 
 Phase 6 is independent of 0-5 and may be done at any time. Everything else
@@ -631,7 +631,74 @@ of every "hero-only capture" and "wrong block picked" defect in memory. Use
 `tools/finder-diag-probe.spec.ts` to establish *why* the headline is excluded
 before changing selection logic.
 
-- [ ] 5a done
+### What the probe measured (2026-09-16) — it is NOT the layout finder
+
+`finder-diag-probe.spec.ts` gained a generic headline section (where the page
+`<h1>` sits relative to the winning block AND to the tier-1 root, plus whether
+the headline survived into the capture). Run over the set, it overturned the
+premise above: **the layout finder never runs on these pages.** Tier 1
+(`findArticleElement`) wins first with an `<article>` that holds the whole body
+and no title, because the CMS renders `<header><h1></header>` as its SIBLING.
+7 of 7 reported `holdsHeadline=false` **and** `headlinePrecedes=true`.
+
+So no change to root selection was needed — and the plan was right to fear one.
+Widening to the nearest common ancestor is what that would take, and the cost is
+measured: on cnn that ancestor holds **20,886 chars against the article's 5,910**
+(3.5x), which is precisely the "wrong block picked" failure this phase warned
+about. Prepending one heading adds the title and nothing else, whatever sits in
+the gap.
+
+**Fix:** `withHeadlineFallback` (capture.ts), a guarded additive prepend modelled
+on `withThumbnailFallback` and wired into the same three tier call sites. Guards:
+the capture must not already LEAD with a heading; the headline must sit outside
+the captured root, be visible, be of title-like length, not already appear in the
+body, and share ≥60% of its words with the page `<title>` (which is what stops a
+"Related stories" rail heading being promoted).
+
+**The guard that mattered was "leads with a heading", not "has one".** The first
+version asked whether the body contained any `<h[1-3]>` and fixed only cnn and
+gizmodo. 5 of the 7 carry ordinary `<h2>`/`<h3>` **section subheads** (zdnet has
+10), so an any-heading test made the recovery a no-op on exactly the pages it was
+written for. A title is the first thing in the body or it is not the title.
+
+**Two of the 14 are a different shape and are NOT fixed:** `rottentomatoes` and
+`goodreads-author` are **entity** pages whose name sits in a structured hero
+handled by a site tagger, not in an `<h1>` outside the root. They need tagger
+work, not the generic fallback.
+
+**And the CAST half of these verdicts was never a defect.** Both the clip and the
+cast sweep screenshots capture `.clip-body`, while `DetailPanel` renders the
+title in `<h2 className="detail-title">` **outside** it — so a cast title cannot
+appear in a sweep image by construction. The cast carries the headline in the
+NIP-23 `title` tag and `stripLeadingArticleChrome` deliberately removes the
+duplicate `# heading`. Every "no headline" recorded on the cast surface was
+measuring the screenshot boundary.
+
+### Gate result (2026-09-16)
+
+All **32** fixture baselines green (29 clip + 3 cast), run one project at a time,
+re-run after the guard change. 306 extension + 176 web unit tests green,
+`pnpm type-check` clean. Re-swept 20 domains — the 14 Phase 5a domains plus 6
+long-article controls — 19 captured `ok` / http 200 / cast rendered; only
+`sciencemag` was blocked (Cloudflare 403, recorded `blocked`).
+
+Fixed, verified by reading each image: **cnn**, **fortune**, **gizmodo**,
+**pcmag**, **zdnet**, **newsweek**, **motherjones**, **msn-slideshow** and
+**thedailybeast** all now lead with the headline. `zdnet` keeps its own `<h2>`
+subheads, which is the leading-heading guard working.
+
+**No regression on any control.** arstechnica, newyorker, theatlantic and
+substack-generic are **pixel-identical in height** to their pre-change captures,
+wikipedia-en and huffpost byte-identical, and newyorker is the direct
+confirmation that the guard holds: its capture leads with a "New Yorker
+Favorites" section label and no duplicate headline was added.
+
+Residue, recorded rather than chased: `zdnet` video transport strip,
+`motherjones` TOP STORIES strip, `thedailybeast` body loss (a paywall, severity
+6), `ndtv` cast alt-texts — all pre-existing defects other phases own.
+
+- [x] 5a done (gate passed 2026-09-16) — 9 fixed, 2 reassigned (entity pages),
+      1 blocked, and the cast half found to be a screenshot artifact
 
 ### 5b. Column / ribbon collapse — 7 sites
 `msnbc` `myanimelist` `newsweek` `scmp` `steam` `zenodo` `lastfm`
@@ -641,7 +708,51 @@ records `.dx-stats` flex collapsing comment threads — a regression from exactl
 this kind of change. Diagnose offline with `tools/clip-width-probe.spec.ts`
 (works from a saved HTML file, no live site needed).
 
-- [ ] 5b done
+### What the probe measured (2026-09-16) — one CSS case, not seven
+
+Two gaps in the probe had to be closed before it could see anything, and both
+had been silently reporting "nothing is narrow" for visibly broken clips:
+
+- **It rendered at the 1280px viewport**, while the sweep renders `.clip-body`
+  in a **~610px** detail panel. A ribbon or table only collapses when the column
+  is too narrow for it. `CLIPW_WIDTH` now constrains the host.
+- **Its text filter required `textLen > 60`**, right for Lemmy's paragraphs but
+  blind to the squeezed-LABEL shape that is actually in this list: last.fm's
+  "Thom Yorke" is 10 chars. The filter now catches any box narrower than its own
+  longest word. A table/cell census was added for the same reason — a collapsed
+  table's cells are narrow while the table itself is not.
+
+Re-measured at 610px against **fresh** captures (the `--clip.html` dumps were
+2.5 weeks stale — `SWEEP_DUMP_HTML=1` is opt-in), the list resolves to:
+
+| Domain | Measured | Disposition |
+|---|---|---|
+| `lastfm` | `<h3>` at **44px inside a 522px `.dx-header`** | **Phase 5b — fixed** |
+| `steam` | **not CSS.** 34 images at a true 116x65, **zero** full-size screenshot URLs in the capture — Steam lazy-loads the large carousel image, so only the thumbnail rail is in the DOM | capture timing, not width |
+| `zenodo` | site returned **504** on re-capture; the clip is the error page | can't diagnose; `blocked` |
+| `msnbc` `scmp` `myanimelist` | no narrow text, no squeezed cells, lists at 562/610px | not a collapse — their real flaws are rails/stats, other phases |
+| `newsweek` | fixed by 5a | not a defect |
+
+**Fix (the one real case).** `.clip-body .dx-header > :is(h1…h6)` gets
+`flex: 1 1 auto; min-width: 8em`. The generic tagger stamps `dx-header` on rows
+whose heading comes FIRST and whose image comes second; in a `flex-wrap: nowrap`
+row the 103px image holds its intrinsic width and the heading is handed
+whatever is left. Scoped to a **direct-child heading**, which none of the tuned
+avatar/reel/bsky header rules use, so they are untouched.
+
+### Gate result (2026-09-16)
+
+Probe: 2 crushed elements → **0**, measured offline against the real captured
+markup. All **32** fixture baselines green — including every header-sensitive
+one (bsky, primal, reddit, facebook-reel, youtube), which is the point of the
+gate for a shared-CSS change. 176 web unit tests green, `tsc` clean on the web
+app. Re-swept the five reachable domains, all `ok` / http 200: `lastfm` now
+renders "Thom Yorke" on one line (was "Tho m Yor ke"); `steam`, `msnbc`, `scmp`
+and `myanimelist` are unchanged, which is correct — the rule found nothing to do
+on them.
+
+- [x] 5b done (gate passed 2026-09-16) — 1 real CSS case fixed; 4 of the 7
+      re-diagnosed as other shapes, 1 blocked, 1 already fixed by 5a
 
 ### 5c. og:image promotion *policy* (the judgement half of 1a)
 Should a site's own logo or a purpose-built 1200x630 OG card be promoted at all?
@@ -656,14 +767,120 @@ judgement. `tildes` (144x144 logo painting 209px) is the clearest case;
 `courtlistener` (1200x630 OG card at 543px) the widest. A stamping fix cannot
 help either — the stamp is already there and already honoured.
 
-- [ ] 5c done
+### What the measurement found (2026-09-16): aspect separates them cleanly
+
+Measured on the **intrinsic** size `probeImageSize` already fetches (so the
+signal costs nothing new), across every corpus domain that currently leads with
+a promoted figure — re-swept with `SWEEP_DUMP_HTML=1` first, because the saved
+dumps predated 1a's width stamp:
+
+| Kind | Aspect | Domains |
+|---|---|---|
+| site logo / avatar | **0.97 – 1.00** | `tildes` 144x144, `gitlab-repo` 512x512, `signalvnoise` 300x300, `postgresql-docs` 540x557 |
+| OG card / real art | **1.50 – 1.91** | `crates-io`, `meduza`, `overreacted`, `python-docs`, `stripe-docs` 1200x630, `folha` 2400x1600 |
+
+A brand mark is square because that is what a logo is; an OG card is ~1.91:1 by
+the spec every site follows. Nothing in the corpus sits between 1.00 and 1.50,
+so the band is wide on both sides.
+
+**The refused clip has NO other image — that is the actual trade.** Promotion
+only fires when the body has zero images (Guard 0), so by construction every
+promoted image is the clip's only one: measured, all 12 domains have **0**
+images remaining once the promoted figure is removed, and 15 of 189 corpus
+captures (~8%) are in that state. So this rule does not pick a better image, it
+chooses an image-LESS clip over a logo one. That is right at hero size — a
+300-500px brand mark above a text thread displaces the content and says nothing
+about the page — and the decision is made per SURFACE rather than per image:
+
+| Surface | Field | Logo shown | Why |
+|---|---|---|---|
+| clip body (hero) | `bodyHtml` | **no** | at 450px it displaces the content |
+| library row | `capture.thumbnail` | **yes** | at 32px it is a useful "this is a tildes clip" key |
+| cast hero | `thumbnailUrl` → `thumbnail` | yes (leak) | not deliberate — see below |
+
+**Fix:** Guard 3 in `withThumbnailFallback` refuses to promote a declared
+og:image whose intrinsic aspect is 0.8–1.25. It applies only when the size is
+KNOWN (an unmeasurable image keeps the previous behaviour rather than being
+guessed at), and it is a **hero-only** rule — `capture.thumbnail`, the library
+row's preview, still uses the logo, which is a perfectly good visual key.
+
+**Two of the six are NOT fixed, and cannot be by this rule.** `mayoclinic`
+(600x315) and `courtlistener` (1200x630) serve their logo *inside a wide OG
+card*, so they are shape-identical to a legitimate one. Rejected alternatives:
+a URL vocabulary (`logo|avatar|brand|…`) catches mayoclinic but not
+courtlistener's generic `og-image-1200x630.png`, and the plan already calls URL
+matching brittle; flat-colour dominance was measured and does **not** separate
+them (`python-docs` 0.88 is legitimate, `mayoclinic` 0.53 is a logo). Left as
+recorded flaws at severity 3 rather than fixed with a rule that would cost false
+positives on real article art — promotion is load-bearing for the MSN
+syndication case.
+
+**Also confirmed:** the tried-and-rejected finding from 1a still holds — nothing
+was ever stretched, so this was correctly a policy change and not a CSS one.
+
+**The CAST needed a second fix — nulling `thumbnailUrl` was not enough.**
+Measured after the clip fix: all four casts byte-identical, still heroing the
+logo. `pickImageUrl` (events.ts) falls through `thumbnailUrl` → `thumbnail` →
+`imageUrls`, and an UNGRANTED capture stores a plain http URL in `thumbnail`
+(the optional `<all_urls>` grant is what would make it a `data:` URI, which
+pickImageUrl already skips) — so nulling the first field just moved the search
+to the second, which held the same logo.
+
+Two fixes were tried and reverted first, each caught by an existing guard:
+skipping the `thumbnail` FIELD for non-bookmarks broke
+`tests/fixtures/clips/article.json` (an article can carry its only hero URL
+there, so real heroes would vanish from casts), and nulling `thumbnail` itself
+removes the library-row preview.
+
+What works is distinguishing the two meanings the field was carrying:
+`thumbnailIsLogo`, one optional boolean set from the same `declaredIsLogo` the
+clip guard uses, and one line in `pickImageUrl` that skips a FLAGGED thumbnail
+rather than the field. Guarded by `tests/nostr/logo-cast.test.ts` (flagged ⇒ no
+`image` tag; unflagged ⇒ still cast) plus a flag counter-case in
+`og-logo-promotion.test.ts`.
+
+### Gate result (2026-09-16)
+
+All **32** fixture baselines green, 309 extension unit tests green (including the
+syndication and feed-og-image guards that protect the promotion path), `tsc`
+clean. Re-swept all 12 domains, every one `ok` / http 200:
+
+| | Result |
+|---|---|
+| 4 square logos, CLIP | **shrank**: `gitlab-repo` −450px, `postgresql-docs` −450px, `signalvnoise` −315px, `tildes` −174px — stable across two runs |
+| 4 square logos, CAST | **shrank** once `thumbnailIsLogo` landed: `gitlab-repo` −444px, `postgresql-docs` −444px, `signalvnoise` −324px, `tildes` −168px |
+| 8 wide images | **pixel-identical** height on both surfaces: `crates-io`, `meduza`, `overreacted`, `python-docs`, `stripe-docs`, `folha`, plus `courtlistener` and `mayoclinic` (the two the rule cannot see) |
+
+Every one of the eight clip/cast pairs was read as an image, not inferred from
+the height delta.
+
+Zero false positives, which is the whole risk of this change.
+
+- [x] 5c done (gate passed 2026-09-16) — 4 of 6 fixed on **both** surfaces;
+      `mayoclinic` and `courtlistener` outstanding (logo inside a wide OG card,
+      shape-identical to a legitimate one)
 
 **Gate:** each sub-item separately — full 29 clip baselines + cast baselines
 green, `pnpm test` green, and a re-sweep of the affected domains **plus** a
 sample of unaffected ones (these touch shared code, so the unaffected sample is
 the point).
 
-- [ ] **Phase 5 done** (all sub-items, each gated separately)
+- [x] **Phase 5 done** (2026-09-16 — all three sub-items gated separately)
+
+**Phase 5's premise was wrong on all three counts, and measuring first is what
+found that.** 5a was filed against the layout finder, which never runs on those
+pages (Tier 1 wins). 5b was filed as a CSS column collapse; one of the seven was,
+and the probe could not see even that one until its own viewport and text-length
+assumptions were fixed. 5c was the one item whose stated cause held — and it had
+already been re-diagnosed once, in Phase 1a. In each case the fix that shipped is
+smaller and lower-risk than the one the plan anticipated, because the plan's
+feared change (widen the finder, restyle every clip) was not what the evidence
+called for.
+
+Common residue, recorded not chased: entity pages (`rottentomatoes`,
+`goodreads-author`) need tagger work for their titles; `mayoclinic` and
+`courtlistener` serve a logo inside a wide OG card; `steam` lazy-loads its
+carousel so only thumbnails are ever in the DOM.
 
 ---
 

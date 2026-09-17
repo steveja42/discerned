@@ -2172,6 +2172,19 @@ a { color: inherit; }
 .clip-body .dx-header > * {
   margin: 0;
 }
+/* A HEADING inside a dx-header must never be crushed to a sliver.
+   MEASURED (tools/clip-width-probe, CLIPW_WIDTH=610) on last.fm's "Similar To"
+   list: the generic tagger stamps dx-header on rows whose heading comes FIRST
+   and whose 103px image comes second. In a `flex-wrap: nowrap` row the image
+   holds its intrinsic width, so the <h3> was handed 44px of a 522px header and
+   "Thom Yorke" rendered one word per line. Give the heading room to breathe and
+   let the image be what shrinks.
+   Scoped to a direct-child heading so none of the tuned avatar/reel/bsky header
+   rules below (which never put a bare heading first) are affected. */
+.clip-body .dx-header > :is(h1, h2, h3, h4, h5, h6) {
+  flex: 1 1 auto;
+  min-width: 8em;
+}
 /* Deeply-nested-avatar case (bsky): the header's first child is a wrapper that
    holds BOTH the avatar and the name several levels down, so the flex-row
    avatar/name split above does nothing and the name wraps under the avatar.

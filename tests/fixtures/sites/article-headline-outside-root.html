@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<!--
+  An article whose HEADLINE lives OUTSIDE the capture root.
+
+  This is the shape measured across every Phase 5a domain (2026-09-16, via
+  tests/e2e/tools/finder-diag-probe.spec.ts): the CMS renders
+
+      <header><h1>…headline…</h1><address>…byline…</address></header>
+      <article>…the whole story…</article>
+
+  as SIBLINGS, so Tier 1's findArticleElement wins the <article>, which holds
+  the complete body and no title. The clip then opens straight into the hero or
+  the first paragraph — "no headline or byline before the body", the verdict
+  recorded for cnn, fortune, gizmodo, pcmag, zdnet, newsweek and motherjones.
+  All 7 reported holdsHeadline=false with headlinePrecedes=true.
+
+  Four things here are deliberate and load-bearing:
+
+   - The <article> must be a clearly better content block than <header>, so the
+     tier genuinely picks it (this is why the body is long).
+   - The page carries a "Related stories" <h2> INSIDE a rail, which shares no
+     words with the <title>. It exists so the test can prove the recovery picks
+     the real headline rather than merely "the nearest heading outside the root".
+   - The body carries an ordinary <h2> SECTION subhead. 5 of the 7 measured
+     domains do (zdnet has 10), and an early version of the guard asked "does
+     the body contain any heading?", which those subheads answered yes to — so
+     the recovery no-op'd on exactly the pages it was written for. The subhead
+     here keeps that mistake from being made again.
+   - The <title> carries a site suffix (" | Example Post"), as real pages do, so
+     the word-overlap guard is exercised against a realistic title rather than an
+     exact match.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Hospital slashed costs, then a patient froze to death on its roof | Example Post</title>
+</head>
+<body>
+  <div class="page-wrap">
+    <header class="article-header">
+      <h1>Hospital slashed costs, then a patient froze to death on its roof</h1>
+      <address class="byline">By A Reporter</address>
+      <time datetime="2026-09-01">September 1, 2026</time>
+    </header>
+
+    <article class="article-content">
+      <p>The hospital had been cutting costs for three years when the night shift found
+      the roof access door propped open with a fire extinguisher, a detail that would
+      later appear in four separate investigations and a wrongful-death suit filed by
+      the family in the spring.</p>
+
+      <p>Staffing records reviewed for this story show the overnight census had been
+      reduced from eleven nurses to six across the same period, while the number of
+      admitted patients held roughly steady. Administrators described the change as a
+      realignment and said it followed industry benchmarks that they declined to name.</p>
+
+      <p>Three former employees, each of whom left the hospital in the year before the
+      death and none of whom was authorised to speak publicly, described a building in
+      which alarms were routinely silenced because so many of them were faulty that
+      responding to each one had become impossible on a six-nurse floor.</p>
+
+      <p>The patient was admitted on a Tuesday with confusion and a low-grade fever. By
+      the following morning the room was empty, the bed was made, and no one had logged
+      a discharge. The body was found eleven hours later by a contractor replacing a
+      condenser unit on the north side of the roof.</p>
+
+      <h2>What the records show</h2>
+
+      <p>In a statement, the hospital said it had since installed door alarms on all
+      roof accesses and retrained staff on elopement protocol. It declined to say
+      whether overnight staffing had been restored to its previous level, citing the
+      pending litigation.</p>
+    </article>
+
+    <aside class="rail">
+      <h2>Related stories</h2>
+      <ul>
+        <li><a href="/a">A different investigation entirely</a></li>
+        <li><a href="/b">Another unrelated report</a></li>
+      </ul>
+    </aside>
+  </div>
+</body>
+</html>
