@@ -87,6 +87,31 @@ function leafTexts(el: HTMLElement): string[] {
 const CHROME_IMG_RE =
   /\b(avatar|logo|icon|favicon|badge|profile[\s_-]?(pic|picture|photo)|user[\s_-]?(pic|image)|emoji|sprite)\b/i;
 
+// An <img> that IS an emoji, returning the character to emit in its place.
+//
+// Every major site that substitutes emoji images puts the character itself in
+// the alt — X/Twemoji (`<img alt="🇺🇸" src=".../emoji/v2/svg/1f1fa-1f1f8.svg">`),
+// GitHub, Slack, Discourse. So the recovery is just the alt, and the guard is
+// that the alt must be ONLY emoji (plus optional variation selectors / ZWJ, so
+// flags 🇺🇸, skin tones 👏🏾 and ZWJ sequences 👨‍👩‍👧 all pass), and short — an
+// `alt="😀 Team photo"` on a real picture must not collapse to a glyph.
+//
+// Deliberately alt-driven rather than URL-driven: keying on
+// `abs.twimg.com/emoji/` would fix X alone and miss every other host, and an
+// emoji alt is the one signal they share.
+const EMOJI_ONLY_RE =
+  /^(?:[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Component}‍️]|\s)+$/u;
+
+function emojiFromImage(el: HTMLElement): string | null {
+  const alt = (el.getAttribute('alt') ?? '').trim();
+  if (!alt || alt.length > 16) return null;
+  if (!EMOJI_ONLY_RE.test(alt)) return null;
+  // A bare digit/#/* is Emoji_Component too ("1", "#"), which would turn a
+  // numeric alt into stray text — require at least one real pictograph.
+  if (!/[\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(alt)) return null;
+  return alt;
+}
+
 // Is this <img> layout chrome (avatar/logo/icon) that must NOT become a
 // full-width markdown image? Drops:
 //  - alt="avatar" (legacy explicit marker) and any alt/filename chrome token;
@@ -201,6 +226,19 @@ function getService(): TurndownService {
     filter: 'img',
     replacement: (_content, node) => {
       const el = node as HTMLElement;
+      // An EMOJI image is content, not chrome — X (and Slack/GitHub/Discourse)
+      // renders emoji as <img> with the character itself in the alt:
+      //   <img alt="🇺🇸" src="https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1f8.svg">
+      // Emit the CHARACTER, not the image. Publishing `![🇺🇸](…)` would look
+      // right here — MdImg can size it — but a cast is a public Nostr event,
+      // and Twemoji assets are SVG (no intrinsic size), so a client without
+      // our CSS scales one to the container width: a flag as wide as the post.
+      // The alt already holds the real emoji, so the character costs no bytes,
+      // needs no renderer support, and displays correctly in every client.
+      // Checked BEFORE isChromeImage, which would otherwise drop it silently
+      // on the ≤72px rule and lose the emoji from the sentence entirely.
+      const emojiAlt = emojiFromImage(el);
+      if (emojiAlt) return emojiAlt;
       // Avatars, logos, and icon-chrome are layout, not content — in markdown
       // they carry no class/size, so the web renderer draws them full-width (a
       // giant face/logo above every post). Drop them; keep real content images.
@@ -214,6 +252,14 @@ function getService(): TurndownService {
           : '';
       if (!url) return '';
       const alt = (el.getAttribute('alt') ?? '').replace(/\n+/g, ' ');
+      // A poster whose only publishable URL is the VIDEO it came from (a bsky
+      // GIF: the frame is a canvas grab with no address of its own, so
+      // data-dx-src carries the .mp4). `![](…mp4)` is a broken image in every
+      // client, so publish it as a LINK instead — the clip still shows the
+      // real frame, and the cast points at something that plays.
+      if (/\.(mp4|webm|m4v|mov)($|\?)/i.test(url)) {
+        return `[${alt && alt !== 'Video' ? alt : '▶ Video'}](${url})`;
+      }
       return `![${alt}](${url})`;
     },
   });
@@ -351,9 +397,29 @@ function getService(): TurndownService {
       const el = node as HTMLElement;
       const name = (el.querySelector('.tweet-name')?.textContent ?? '').replace(/\s+/g, ' ').replace(/\*/g, '').trim();
       const handle = (el.querySelector('.tweet-handle')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+      // The avatar is deliberately NOT published. A cast is a public Nostr
+      // event read by clients that have none of our CSS, and markdown cannot
+      // express an image size — so `![](face.jpg)` is drawn full-width in
+      // Damus/Amethyst/Primal, putting a portrait above every post (and one
+      // per reply on a thread). A byline renders as text everywhere; that is
+      // worth more than an avatar that only looks right in one client.
       const line = [name && `**${name}**`, handle].filter(Boolean).join(' ');
       return line ? `\n\n${line}\n\n` : '';
     },
+  });
+
+  // Tweet reply: a conversation capture stacks the focused tweet and each
+  // reply as sibling cards. In the CLIP the indent + rule make the boundary
+  // obvious; the cast has no such CSS, so without an explicit separator the
+  // replies run together and read as one long post by the original author.
+  // Emit a horizontal rule before each reply. Inline inside an <li> — a
+  // block-emitting rule there falls out of the list and parses as an indented
+  // CODE block (see the dx-quote-block / dx-header-line cases above).
+  td.addRule('tweet-reply-separator', {
+    filter: (node) =>
+      (node.getAttribute?.('class') ?? '').split(/\s+/).includes('tweet-reply'),
+    replacement: (content, node) =>
+      inListItem(node) ? content : `\n\n---\n${content}\n\n`,
   });
 
   // Tweet video: the <a class="tweet-video"> anchor wraps BLOCK children (the
@@ -459,6 +525,52 @@ function isPunctuationGlue(a: Element, b: Element): boolean {
 // whitespace between them, and collapse consecutive duplicate hashtag/mention
 // facets (Bluesky repeats the same "#tag" <a> back-to-back). Runs on the parsed
 // clone before turndown so the converter sees properly separated text.
+/**
+ * Pull a byline's TIMESTAMP up beside the name it belongs to.
+ *
+ * A post's author link and its "· 3h" permalink are SIBLINGS separated by
+ * wrapper <div>s (bsky's shape, and the same on other feed sites). Turndown
+ * treats those block boundaries as paragraph breaks, so the cast rendered
+ *
+ *     [rissa](…) [@chalissa.bsky.social](…)
+ *
+ *     [· 3h](…)
+ *
+ *     that looks immaculate
+ *
+ * — the timestamp stranded on its own line between the name and the comment.
+ * Moving the anchor to sit directly after the name anchor puts both in one
+ * paragraph, so the byline reads "name @handle · 3h" as it does in the clip.
+ *
+ * Identified by SHAPE, not by site: a short (<= 12 char) link to a
+ * `/post/`-style permalink whose text has no letters beyond a unit suffix, in
+ * the same post as an author link. That keeps it away from prose links, which
+ * are long and word-bearing.
+ */
+function joinBylineTimestamp(root: Element): void {
+  const TIME_TEXT = /^[·•\s]*\d+\s*[smhdwy]$|^[·•\s]*\d+\s*(sec|min|hour|day|week|mo|yr)s?$/i;
+  root.querySelectorAll('a[href*="/post/"], a[href*="/status/"]').forEach((timeLink) => {
+    const text = (timeLink.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (text.length > 12 || !TIME_TEXT.test(text)) return;
+    // The post this timestamp belongs to, and the author link within it.
+    const post = timeLink.closest('.dx-post, .dx-reply, article') ?? root;
+    // The LAST author link before the timestamp — the byline is usually two
+    // anchors (display name, then @handle), and anchoring to the first put the
+    // timestamp between them ("rissa · 3h @chalissa"). It belongs after both.
+    const authorLinks = Array.from(post.querySelectorAll('a')).filter(a =>
+      a !== timeLink
+      && /\/profile\/|\/user\/|\/@/.test(a.getAttribute('href') ?? '')
+      && (a.textContent ?? '').trim().length > 0
+      && !a.querySelector('img')
+      && (a.compareDocumentPosition(timeLink) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0);
+    const nameLink = authorLinks[authorLinks.length - 1];
+    if (!nameLink || nameLink.parentElement === timeLink.parentElement) return;
+    nameLink.parentElement?.insertBefore(timeLink, nameLink.nextSibling);
+    nameLink.parentElement?.insertBefore(
+      (timeLink.ownerDocument ?? document).createTextNode(' '), timeLink);
+  });
+}
+
 function separateInlineFacets(root: Element): void {
   const all = [root, ...Array.from(root.querySelectorAll('*'))];
   for (const el of all) {
@@ -550,6 +662,7 @@ export function htmlToMarkdown(html: string): string {
     if (container) {
       restorePreLineBreaks(container);
       liftTrailingBreaks(container);
+      joinBylineTimestamp(container);
       separateInlineFacets(container);
       source = container.innerHTML;
     }

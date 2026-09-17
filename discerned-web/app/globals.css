@@ -1436,7 +1436,7 @@ a { color: inherit; }
    rendered 24 wide x 44 tall (a narrow oval) despite the 44px rule below,
    whose `!important` cannot win against a smaller max-width. Snapchat stamps
    width="24" on a 640x640 square source, so the crop was never the cause. */
-.clip-body img[width]:not(.tweet-avatar):not(.tweet-badge-emoji):not(.dx-avatar) {
+.clip-body img[width]:not(.tweet-avatar):not(.tweet-badge-emoji):not(.dx-avatar):not(.dx-emoji):not(.cast-emoji) {
   width: auto;
   max-width: min(100%, attr(width px, 100%)) !important;
 }
@@ -1449,6 +1449,21 @@ a { color: inherit; }
 .clip-body .tweet-header { display: flex; align-items: center; gap: 10px; }
 .clip-body .tweet-avatar { width: 48px !important; height: 48px !important; border-radius: 50% !important; flex-shrink: 0; margin: 0 !important; }
 .clip-body .tweet-avatar--sm { width: 24px !important; height: 24px !important; }
+/* Conversation capture: the focused tweet followed by its replies. Cards
+   already carry their own border, so the thread only collapses the doubled
+   edge between stacked cards and indents each reply enough to read as a
+   response without nesting it so far that a long thread walks off the column.
+   A reply's avatar is stepped down to 36px so the focused tweet stays the
+   visual anchor. */
+.clip-body .tweet-thread { display: flex; flex-direction: column; }
+.clip-body .tweet-thread .tweet-card { margin: 0; }
+.clip-body .tweet-thread .tweet-card + .tweet-card,
+.clip-body .tweet-thread .tweet-reply .tweet-card { border-top: none; }
+.clip-body .tweet-reply { margin-left: 24px; border-left: 2px solid var(--rule-soft); }
+.clip-body .tweet-reply .tweet-avatar { width: 36px !important; height: 36px !important; }
+.clip-body .tweet-reply .tweet-name { font-size: 14px; }
+.clip-body .tweet-reply .tweet-handle { font-size: 13px; }
+.clip-body .tweet-reply .tweet-text { font-size: 14px; }
 .clip-body .tweet-quote { border: 1px solid var(--rule-soft); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .clip-body .tweet-quote .tweet-name { font-size: 14px; }
 .clip-body .tweet-quote .tweet-handle { font-size: 13px; }
@@ -1456,6 +1471,24 @@ a { color: inherit; }
 .clip-body .tweet-author { display: flex; flex-direction: column; gap: 1px; }
 .clip-body .tweet-name { font-weight: 700; font-size: 15px; color: var(--ink); font-family: var(--sans); display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .clip-body .tweet-badge-emoji { width: 16px !important; height: 16px !important; display: inline !important; vertical-align: middle; margin: 0 !important; border-radius: 0 !important; }
+/* An emoji served as an IMAGE (X/Twemoji, GitHub, Slack all do this) must sit
+   in the sentence at text scale. In a CAST the markdown carries no size or
+   class, so the size is decided here and the class comes from MdImg, which
+   detects an emoji-only alt; `em` units keep it proportional to the text it
+   sits in rather than pinned to 16px. Without this the generic
+   `.clip-body img { display: block; max-height: 420px }` rule draws a 1em flag
+   the size of a paragraph. */
+.clip-body img.cast-emoji,
+.clip-body img.dx-emoji {
+  display: inline-block !important;
+  width: 1.15em !important;
+  height: 1.15em !important;
+  max-height: 1.15em !important;
+  margin: 0 0.05em !important;
+  vertical-align: -0.15em;
+  border-radius: 0 !important;
+  object-fit: contain !important;
+}
 .clip-body .tweet-badge-verified { display: inline; vertical-align: middle; fill: #1d9bf0; flex-shrink: 0; }
 .clip-body .tweet-handle { font-size: 14px; color: var(--ink-3); font-family: var(--sans); }
 .clip-body .tweet-text { font-family: var(--sans); font-size: 15px; line-height: 1.55; color: var(--ink); white-space: pre-wrap; }
@@ -1820,6 +1853,23 @@ a { color: inherit; }
   border: none;
   background: var(--rule);
   margin: 0 6px;
+}
+/* ...but an <hr> that SEPARATES BLOCKS is a real thematic break, not a
+   divider between icons — a conversation cast puts one before each reply
+   (see the tweet-reply-separator rule in html-to-markdown.ts), and the
+   inline-bar treatment above rendered it as a stray 1px tick at the left
+   margin. A break whose neighbour is a paragraph or heading is restored to a
+   full-width rule; one sitting among inline icon content keeps the bar. */
+.clip-body > hr:has(+ p),
+.clip-body > hr:has(+ h1, + h2, + h3, + h4, + h5, + h6),
+.clip-body > p + hr,
+.clip-body > :is(h1, h2, h3, h4, h5, h6) + hr {
+  display: block;
+  width: auto;
+  height: 0;
+  margin: 20px 0;
+  border-top: 1px solid var(--rule-soft);
+  background: none;
 }
 /* A <div> whose immediate content includes an inline SVG is almost always
    an action button row, badge row, or icon group from a modern UI. Render
@@ -2307,6 +2357,38 @@ a { color: inherit; }
   max-width: none !important;
   min-width: 0 !important;
   flex-shrink: 1 !important;
+}
+/* The float above works for a bsky REPLY, whose name is inline and flows
+   beside it (measured deltaY 25 — one line). The thread's ROOT post is a
+   different shape: MEASURED (tools/bsky-layout-probe) its header has exactly
+   two children — a 44px box holding the avatar, then the name <a> as a
+   SIBLING BLOCK — so the name cleared the float and sat underneath (avatar
+   bottom 496, name top 517, deltaY 65).
+   `display: inline-block` on an avatar-box child that is followed by a name
+   anchor puts the two on one line without disturbing the reply shape, where
+   the name is not a direct-child anchor and this never matches. (Two earlier
+   attempts failed: `:has(a[href*="/profile/"])` matched the AVATAR box, which
+   also contains a profile link, and a flex row on the header was overridden
+   by the more specific `display: block` rule above.) */
+.clip-body .dx-header:has(img.dx-avatar) > *:has(img.dx-avatar):has(+ a) {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+/* The name anchor measured the FULL header width (207px of a 207px header), so
+   avatar + name could never fit and it wrapped whatever its display was.
+   Capping it to the space the avatar leaves is what actually puts them on one
+   line. */
+.clip-body .dx-header:has(img.dx-avatar) > *:has(img.dx-avatar):has(+ a) + a {
+  display: inline-block;
+  vertical-align: middle;
+  /* `!important` is required, not stylistic: the `.dx-header:has(img.dx-avatar)
+     > *` rule above sets `max-width: none !important` (to stop the live page's
+     inline widths squeezing the byline), and without matching it this cap was
+     silently ignored — the anchor kept measuring the FULL header width (207px
+     of a 207px header), so avatar + name could never share a line whatever
+     their `display` was. */
+  max-width: calc(100% - 56px) !important;
 }
 .clip-body .dx-header:has(img.dx-avatar) > * * {
   display: inline;

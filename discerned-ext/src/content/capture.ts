@@ -868,7 +868,52 @@ async function extractTweetBlock(root: Element) {
   const tweetTextEl = root.querySelector<HTMLElement>('[data-testid="tweetText"]')
     ?? Array.from(root.querySelectorAll<HTMLElement>('div[dir="auto"]'))
         .find(el => !el.closest('a[href^="https://x.com/"], a[href^="/"]')) ?? null;
-  const sanitisedText = sanitizeHtmlString(tweetTextEl?.innerHTML ?? '');
+  // X renders some emoji in the BODY as <img> (Twemoji) rather than as Unicode
+  // text. Those carry no width/height, so they miss both the 16px
+  // .tweet-badge-emoji rule and the `img[width="16"]` inline rule, and fall
+  // through to the generic `.clip-body img { display: block; margin: 12px 0 }`
+  // — a 1em glyph rendered as a full block image mid-sentence. Stamp them as
+  // badge emoji (on a CLONE, so the live page is untouched) before sanitising;
+  // the class and the width attribute are both load-bearing, since the CSS
+  // keys on the class and `img[width]` sizing keys on the attribute.
+  let bodyHtmlSource = tweetTextEl?.innerHTML ?? '';
+  if (tweetTextEl && tweetTextEl.querySelector('img')) {
+    // Measure on the LIVE images (a clone has no layout, so every rect there
+    // is 0x0), then apply the marks to the clone by index.
+    const liveImgs = Array.from(tweetTextEl.querySelectorAll('img'));
+    const isSmall = liveImgs.map((im) => {
+      const r = im.getBoundingClientRect();
+      // Emoji are ~1em; anything genuinely large is real media, left alone.
+      // An unmeasurable image (0x0 — jsdom, or not yet laid out) is treated as
+      // small only when its natural size is emoji-scale, so a real photo that
+      // simply has not loaded is never shrunk.
+      if (r.width === 0 && r.height === 0) {
+        const nw = (im as HTMLImageElement).naturalWidth;
+        const nh = (im as HTMLImageElement).naturalHeight;
+        return nw > 0 && nh > 0 && nw <= 72 && nh <= 72;
+      }
+      return r.width <= 32 && r.height <= 32;
+    });
+    const textClone = tweetTextEl.cloneNode(true) as HTMLElement;
+    Array.from(textClone.querySelectorAll('img')).forEach((im, i) => {
+      if (!isSmall[i]) return;
+      // An emoji-only alt gets dx-emoji, sized in `em` so the glyph scales
+      // with the text around it (the cast gets the same treatment via
+      // MdImg/.cast-emoji, so an emoji looks the same on both surfaces). The
+      // `dx-` prefix is required: TRUSTED_CLASS_PREFIXES keeps only dx-/tweet-
+      // tokens through sanitisation, so any other name is silently stripped.
+      // Anything else small is a badge and keeps the fixed 16px treatment.
+      const alt = (im.getAttribute('alt') ?? '').trim();
+      const isEmoji = alt.length > 0 && alt.length <= 16
+        && /^(?:[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Component}‍️]|\s)+$/u.test(alt)
+        && /[\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(alt);
+      im.classList.add(isEmoji ? 'dx-emoji' : 'tweet-badge-emoji');
+      im.setAttribute('width', '16');
+      im.setAttribute('height', '16');
+    });
+    bodyHtmlSource = textClone.innerHTML;
+  }
+  const sanitisedText = sanitizeHtmlString(bodyHtmlSource);
   const plainText = tweetTextEl?.textContent?.trim() ?? '';
   // Videos: collect ALL video players — tweets can have 2 side-by-side videos.
   // For each tweetPhoto container with a videoPlayer, capture poster, duration, and aspect ratio.
@@ -1009,6 +1054,92 @@ function buildPhotosHtml(photos: Array<{ src: string; dxSrc?: string }>): string
   return `<div class="tweet-photo-grid tweet-photo-grid-${n}">${items.join('')}</div>`;
 }
 
+// Max reply cards appended to a conversation capture. A popular thread can
+// carry hundreds once the user has scrolled, and each card inlines its avatar
+// and photos as base64 — the cap keeps a clip from ballooning past what the
+// 64 MiB sendMessage limit and the cast's markdown budget can carry.
+const MAX_TWEET_REPLIES = 25;
+
+/**
+ * Collect the reply <article>s of an x.com conversation, in page order.
+ *
+ * Measured against the live new-shape DOM (tests/e2e/tools/x-thread-probe.spec.ts,
+ * 2026-09-16): a status page renders the focused tweet and every reply as
+ * sibling <article>s inside ONE shared <ul>, one <li> per post, with no
+ * data-testid hooks at all. Three things about that shape drive this function:
+ *
+ *  - The container is DERIVED by climbing from the focused tweet, not selected.
+ *    The testids this would have keyed on ([aria-label^="Timeline"],
+ *    cellInnerDiv) are gone in the new shape — the probe found them absent.
+ *  - Articles NEST: the focused tweet's <li> held 2 articles, the inner one
+ *    being its quoted tweet. So we walk the container's CHILDREN and take each
+ *    one's OUTERMOST article — a flat querySelectorAll('article') would emit a
+ *    quoted tweet as though it were a reply.
+ *  - The focused tweet is the article whose own /handle/status/<id> link
+ *    matches the address bar, which is also how a reply is told apart from it.
+ *
+ * Returns [] when the page isn't a conversation (a single-tweet page, or a
+ * shape this can't read), so the caller degrades to the existing one-card
+ * capture rather than failing.
+ */
+function collectTweetReplyArticles(focused: Element): Element[] {
+  if (document.querySelectorAll('article').length < 2) return [];
+
+  // Climb from the FOCUSED tweet to the timeline container, rather than taking
+  // the lowest common ancestor of every article on the page: a page also
+  // carries articles OUTSIDE the conversation (the sidebar's "Relevant people"
+  // card), and including those in the ancestor search widens the container to
+  // a page-level wrapper whose children are whole regions — at which point the
+  // focused tweet and its replies collapse into ONE child and no replies are
+  // found at all. The container is the lowest ancestor holding another tweet
+  // article in a SEPARATE child from the focused one.
+  let container: Element | null = null;
+  let focusedChild: Element | null = null;
+  for (let cur = focused.parentElement; cur; cur = cur.parentElement) {
+    const child = Array.from(cur.children).find(c => c.contains(focused));
+    if (!child) break;
+    const hasSiblingTweet = Array.from(cur.children)
+      .some(c => c !== child && c.querySelector('article'));
+    if (hasSiblingTweet) { container = cur; focusedChild = child; break; }
+  }
+  if (!container || !focusedChild) return [];
+
+  const replies: Element[] = [];
+  const seenStatus = new Set<string>();
+  for (const child of Array.from(container.children)) {
+    // Replies follow the focused tweet; anything above it is thread context
+    // we deliberately leave out of the "replies" set.
+    if (!(focusedChild.compareDocumentPosition(child) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+    // EVERY outermost article in the cell, not just the first: X packs a run of
+    // consecutive replies — typically the author's own self-thread — into ONE
+    // cell. Measured on x.com/NoLimitGains/status/2100262310560280811: 16
+    // articles in 3 cells, with a single cell holding 14 SIBLING articles
+    // (outermost=14, nested=0), so taking one per cell captured the 1st, 2nd
+    // and last and silently dropped 13. Nesting is still what's excluded here —
+    // a NESTED article is that post's quoted tweet, which extractTweet already
+    // renders as an inner .tweet-quote card.
+    const inCell = Array.from(child.querySelectorAll('article'));
+    const outermost = inCell.filter(a => !inCell.some(o => o !== a && o.contains(a)));
+    for (const art of outermost) {
+      if (art === focused) continue;
+      // A reply must carry its own status link; the sidebar's "Relevant people"
+      // card and any promoted cell do not.
+      const ownStatus = Array.from(art.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
+        .map(a => a.getAttribute('href') ?? '')
+        .find(h => /^\/[A-Za-z0-9_]+\/status\/\d+/.test(h));
+      if (!ownStatus) continue;
+      // One card per post. X re-renders the same reply in more than one cell
+      // while virtualising a long thread, and the status id is its identity.
+      const id = ownStatus.split('?')[0];
+      if (seenStatus.has(id)) continue;
+      seenStatus.add(id);
+      replies.push(art);
+      if (replies.length >= MAX_TWEET_REPLIES) return replies;
+    }
+  }
+  return replies;
+}
+
 /**
  * Build a tweet-card capture from the primary <article data-testid="tweet">
  * on the current twitter.com / x.com page. `format` controls how the rendered
@@ -1018,17 +1149,37 @@ function buildPhotosHtml(photos: Array<{ src: string; dxSrc?: string }>): string
  * `articleOverride` lets selection callers pin a specific tweet article
  * (the one the user's selection lives in), instead of letting the function
  * pick the first one on the page.
+ *
+ * On a conversation page an article/full-page capture also appends the
+ * replies below the focused tweet as their own cards (see
+ * collectTweetReplyArticles). `withReplies: false` builds the one card alone —
+ * used for the per-reply calls themselves, so a reply can't recurse into
+ * collecting replies of its own.
  */
 async function extractTweet(
   base: Pick<Capture, 'id' | 'url' | 'title' | 'timestamp'>,
   format: 'article' | 'full-page' | 'selection' = 'article',
   articleOverride?: Element,
+  withReplies = true,
 ): Promise<Capture | null> {
   const article = articleOverride
     ?? document.querySelector('article[data-testid="tweet"]')
     ?? document.querySelector('article[data-tweet-id]')
     ?? document.querySelector('article');
   if (!article) return null;
+
+  // The canonical URL of THIS post, which is not base.url once replies are
+  // captured: every card was built with the focused tweet's URL, so a reply's
+  // play card linked to the focused tweet and video-embed.ts — which resolves
+  // the embed by the /status/<id> in the href — played the WRONG post (or
+  // nothing, when the focused tweet has no video). Falls back to base.url for
+  // the focused tweet itself and for any article with no own status link.
+  const ownStatusHref = Array.from(article.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
+    .map(a => a.getAttribute('href') ?? '')
+    .find(h => /^\/[A-Za-z0-9_]+\/status\/\d+/.test(h));
+  const postUrl = ownStatusHref
+    ? `https://x.com${ownStatusHref.split('?')[0].replace(/\/(photo|video)\/\d+$/, '')}`
+    : base.url;
 
   // Reposter header — [data-testid="socialContext"] lives inside the article's first
   // column (above the tweet body). It contains the reposter's name and a repost SVG.
@@ -1092,7 +1243,16 @@ async function extractTweet(
     const qInlinedVideoInfos = qb.videoInfos
       .map((v, i) => ({ poster: qInlinedVideoPosters[i] || v.poster, rawPoster: v.poster, duration: v.duration, aspectPct: v.aspectPct }))
       .filter(v => v.poster);
-    const qVideoHtml = buildVideoHtml(qInlinedVideoInfos, base.url);
+    // The QUOTED tweet's own URL — a video inside a quote card belongs to the
+    // quoted post, so linking it to the containing post would embed the wrong
+    // one, the same way every reply did before postUrl existed.
+    const qOwnHref = Array.from(quoteContainer.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
+      .map(a => a.getAttribute('href') ?? '')
+      .find(h => /^\/[A-Za-z0-9_]+\/status\/\d+/.test(h));
+    const qPostUrl = qOwnHref
+      ? `https://x.com${qOwnHref.split('?')[0].replace(/\/(photo|video)\/\d+$/, '')}`
+      : postUrl;
+    const qVideoHtml = buildVideoHtml(qInlinedVideoInfos, qPostUrl);
     quotedHtml = `<div class="tweet-quote">
   <div class="tweet-header">
     ${qAvatarHtml}
@@ -1259,7 +1419,7 @@ async function extractTweet(
   const inlinedVideoInfos = outerBlock.videoInfos
     .map((v, i) => ({ poster: inlinedVideoPosters[i] || v.poster, rawPoster: v.poster, duration: v.duration, aspectPct: v.aspectPct }))
     .filter(v => v.poster);
-  const videoHtml = buildVideoHtml(inlinedVideoInfos, base.url);
+  const videoHtml = buildVideoHtml(inlinedVideoInfos, postUrl);
 
   const photosHtml = buildPhotosHtml(inlinedPhotos.map((src, i) => ({ src, dxSrc: tweetPhotoSrcs[i] })));
 
@@ -1280,7 +1440,7 @@ async function extractTweet(
     ? `<div class="tweet-footer">${dateHtml}${viewsHtml}${statsHtml ? `<span class="tweet-stats">${statsHtml}</span>` : ''}</div>`
     : '';
 
-  const bodyHtml = `<div class="tweet-card tweet-card--native">
+  const cardHtml = `<div class="tweet-card tweet-card--native">
   ${reposterHtml}
   <div class="tweet-header">
     ${avatarHtml}
@@ -1297,6 +1457,35 @@ async function extractTweet(
 </div>`;
 
   log(LL.DEBUG, `Discerned: tweet captured — name="${displayName}" handle="@${handle}" photos=${inlinedPhotos.filter(Boolean).length} videos=${inlinedVideoInfos.length} repost=${!!reposterHtml} quoted=${!!quotedHtml} stats=${statItems.length}`, 'url:', base.url);
+
+  // Replies — each built by this same function (withReplies:false, so a reply
+  // can't collect replies of its own) and appended as its own card below the
+  // focused tweet. A reply that yields nothing is skipped rather than failing
+  // the capture: the focused tweet is the part the user asked for, and a
+  // partial conversation beats no clip at all.
+  let repliesHtml = '';
+  const replyTexts: string[] = [];
+  const replyImageUrls: string[] = [];
+  if (withReplies && format !== 'selection') {
+    const replyArticles = collectTweetReplyArticles(article);
+    for (const replyArticle of replyArticles) {
+      const reply = await extractTweet(base, 'article', replyArticle, false);
+      if (!reply?.bodyHtml) continue;
+      repliesHtml += `\n<div class="tweet-reply">${reply.bodyHtml}</div>`;
+      // extractTweet already leads bodyText with "Name @handle", so the cast
+      // can reuse it verbatim rather than re-deriving the author.
+      const text = (reply.bodyText ?? '').trim();
+      if (text) replyTexts.push(text);
+      for (const u of reply.imageUrls ?? []) if (!replyImageUrls.includes(u)) replyImageUrls.push(u);
+    }
+    if (replyArticles.length > 0) {
+      log(LL.NORMAL, `Discerned: x conversation — ${replyTexts.length}/${replyArticles.length} replies captured`, 'url:', base.url);
+    }
+  }
+
+  const bodyHtml = repliesHtml
+    ? `<div class="tweet-thread">${cardHtml}${repliesHtml}\n</div>`
+    : cardHtml;
 
   // X appends ` https://t.co/… " / X` or just `" / X` to the page title.
   const tweetTitle = base.title
@@ -1336,27 +1525,45 @@ async function extractTweet(
   const videoPosterUrls = outerBlock.videoInfos
     .map(v => v.poster)
     .filter(p => /^https?:/i.test(p));
+  // Reply media go LAST so imageUrls[0] — which becomes thumbnailUrl — stays
+  // the focused tweet's own image; a reply's photo must never become the
+  // clip's hero.
   const imageUrls = [
     ...videoPosterUrls,
     ...tweetPhotoSrcs.filter(src => /^https?:/i.test(src)),
     ...(quotedCastMeta?.photoUrls ?? []),
+    ...replyImageUrls,
   ].filter((src, i, arr) => arr.indexOf(src) === i);
   // Only the outer tweet's media go inline before the quote block; the quoted
   // tweet's photos stay in imeta (its blockquote is compact — top-of-quote is
   // close enough) so they don't break the outer tweet's inline flow.
-  const outerMediaUrls = imageUrls.filter(u => !(quotedCastMeta?.photoUrls ?? []).includes(u));
+  // Reply media are excluded here too — each reply's own text already carries
+  // its URLs as paragraphs, so repeating them inline would render them twice.
+  const outerMediaUrls = imageUrls.filter(u =>
+    !(quotedCastMeta?.photoUrls ?? []).includes(u) && !replyImageUrls.includes(u));
 
   // Assemble the body as blank-line-separated PARAGRAPHS. The web app's inline
   // image rule (renderTextWithBreaks) only swaps a paragraph for its <img> when
   // the whole paragraph is exactly a known image URL — so each media URL must be
   // its own paragraph (blank line above and below), using the SAME string that
   // went into imageUrls so bodyText.includes(url) matches.
+  // Replies follow the focused tweet's meta line. This is PLAIN TEXT, not
+  // markdown: bodyText feeds the kind-1 note teaser and the library's search
+  // index, so a "---" rule or "**Replies**" would show as literal characters
+  // there. The cast's long-form markdown is derived from bodyHtml instead (see
+  // the tweet-reply-separator rule in html-to-markdown.ts), which is where the
+  // real horizontal rules come from.
+  const replyBlock = replyTexts.length > 0
+    ? [`Replies (${replyTexts.length}):`, ...replyTexts].join('\n\n')
+    : '';
+
   const paragraphs = [
     `${displayName} @${handle}`,
     outerBlock.plainText,
     ...outerMediaUrls,          // one URL per paragraph
     quotedBlock,
     metaLine,
+    replyBlock,
   ].filter(s => s.trim() !== '');
   const plainText = paragraphs.join('\n\n').trim();
 
@@ -4510,6 +4717,31 @@ function tagBsky(root: Document | Element): Element | void {
   for (const post of posts) {
     appendClass(post, 'dx-post');
 
+    // GIF player chrome. A bsky GIF is a <video autoplay loop> with a
+    // Play/Pause GIF button over it and a small "GIF" badge pinned in the
+    // corner, both absolutely positioned. substituteVideosWithPosters replaces
+    // the VIDEO, but these siblings outlive it — and once their inline
+    // positioning is sanitised they collapse onto the post text as dark bars
+    // with the label overlapping the prose. Drop them with the video.
+    // Mark ONLY the overlay elements themselves — never a wrapper. The
+    // Play/Pause button is a SIBLING that covers the video (inset: 0), so
+    // excluding any ancestor of it takes the <video> down too: that dropped 3
+    // of 4 GIFs, leaving the label but losing the media.
+    post.querySelectorAll('[aria-label*="GIF" i]').forEach(btn => {
+      if (!btn.querySelector('video')) appendClass(btn, 'dx-excl');
+    });
+    post.querySelectorAll('div').forEach(d => {
+      if ((d.textContent ?? '').trim() !== 'GIF') return;
+      if (d.querySelector('video')) return;
+      // The badge chip: a tiny absolutely-positioned label, never a caption.
+      const st = d.getAttribute('style') ?? '';
+      const parentSt = d.parentElement?.getAttribute('style') ?? '';
+      if (/position:\s*absolute/i.test(st)) appendClass(d, 'dx-excl');
+      else if (/position:\s*absolute/i.test(parentSt) && !d.parentElement?.querySelector('video')) {
+        appendClass(d.parentElement as Element, 'dx-excl');
+      }
+    });
+
     const avatarImg = post.querySelector('[data-testid="userAvatarImage"] img, [data-testid="userAvatarImage"]');
     const avatarAnchor = post.querySelector('[data-testid="userAvatarImage"]')?.closest('a') ?? null;
     // Mark the avatar image directly so its round-pin CSS doesn't leak onto body
@@ -4527,7 +4759,18 @@ function tagBsky(root: Document | Element): Element | void {
     }
     if (avatarAnchor && nameAnchor) {
       const headerRow = commonWrapper(avatarAnchor, nameAnchor, post);
-      if (headerRow) appendClass(headerRow, 'dx-header');
+      // A REPLY nests the avatar, the name AND the comment text in one
+      // wrapper, so their common ancestor is the whole post. Tagging that
+      // dx-header made the entire reply a byline: measured in the rendered
+      // clip, a reply had ONE child holding "rissa @chalissa.bsky.social · 2h
+      // that looks immaculate", with the avatar floated left and the comment
+      // wrapping around it on the same line. Only tag a wrapper that is a
+      // genuine header — not the post itself, and not one that also contains
+      // the post's body (the stats row is the tell: a header never holds it).
+      const holdsBody = !!headerRow
+        && (headerRow === post
+          || !!headerRow.querySelector('[data-testid="replyBtn"], [data-testid="likeBtn"]'));
+      if (headerRow && !holdsBody) appendClass(headerRow, 'dx-header');
     }
 
     // Stats row: the wrapper holding the reply/repost/like/share buttons.
@@ -8328,6 +8571,56 @@ async function captureVideoFrameViaBackground(
 }
 
 /**
+ * Grab a frame from a CORS-permissive video without any extension permission.
+ *
+ * A cross-origin <video> taints the canvas, but that is a property of how the
+ * element was LOADED, not of the server: an element created with
+ * `crossOrigin="anonymous"` is untainted when the host sends
+ * `Access-Control-Allow-Origin`. Bluesky's GIF CDN sends `*`, and its own
+ * player sets no crossOrigin — which is why grabbing the page's element throws
+ * while re-loading the same URL here succeeds (measured, tools/gif-frame-probe).
+ *
+ * Returns null on a host without CORS, where the caller falls back to the
+ * privileged background fetch.
+ */
+async function captureVideoFrameViaCors(
+  srcUrl: string,
+  currentTime: number,
+  width: number,
+  height: number,
+): Promise<string | null> {
+  return new Promise<string | null>((resolve) => {
+    const v = document.createElement('video');
+    v.crossOrigin = 'anonymous';
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = 'auto';
+    const done = (out: string | null) => { v.removeAttribute('src'); resolve(out); };
+    const abort = setTimeout(() => done(null), 6_000);
+    v.onerror = () => { clearTimeout(abort); done(null); };
+    v.onseeked = () => {
+      clearTimeout(abort);
+      try {
+        const c = document.createElement('canvas');
+        c.width = width || v.videoWidth;
+        c.height = height || v.videoHeight;
+        c.getContext('2d')?.drawImage(v, 0, 0, c.width, c.height);
+        const uri = c.toDataURL('image/jpeg', 0.85);
+        done(uri && uri !== 'data:,' ? uri : null);
+      } catch {
+        done(null); // tainted after all — caller falls back
+      }
+    };
+    v.addEventListener('loadeddata', () => {
+      // Seek slightly in: a GIF's first frame is often blank.
+      v.currentTime = currentTime > 0 ? currentTime : Math.min(0.1, (v.duration || 1) / 2);
+    }, { once: true });
+    v.src = srcUrl;
+    v.load();
+  });
+}
+
+/**
  * Capture the current frame of every playing <video> in the live DOM as a
  * canvas data URI. Stamps a temporary `data-uuid` on each video so the result
  * survives cloning (the clone carries the attribute; the live element is the key
@@ -8364,8 +8657,30 @@ async function captureVideoFrames(root: Element | Document): Promise<Map<string,
     // For cross-origin videos, fetch through background worker then canvas-capture
     // the blob URL (same-origin, no SecurityError).
     if (!dataUri) {
-      const srcUrl = video.getAttribute('src') ?? video.querySelector('source')?.getAttribute('src') ?? '';
+      // Prefer the MP4 alternate when the element lists several sources: it is
+      // the portable one, and bsky lists webm first.
+      const sourceEls = Array.from(video.querySelectorAll('source'));
+      const srcUrl = video.getAttribute('src')
+        ?? sourceEls.find(s => /mp4/i.test(s.getAttribute('type') ?? '')
+            || /\.mp4($|\?)/i.test(s.getAttribute('src') ?? ''))?.getAttribute('src')
+        ?? sourceEls[0]?.getAttribute('src') ?? '';
       if (srcUrl && /^https:/i.test(srcUrl)) {
+        // A CORS-permissive host can be grabbed with NO extension permission:
+        // the page's own <video> taints the canvas only because the site never
+        // set crossOrigin, so re-loading the same URL with
+        // crossOrigin="anonymous" lifts the taint. MEASURED against
+        // k.gifs.bsky.app (tools/gif-frame-probe), from an unrelated origin:
+        // crossOrigin="anonymous" grabbed a 640x360 frame, the same URL with
+        // no crossOrigin threw SecurityError. This is what makes bsky GIFs
+        // (posterless <video autoplay loop>, the shape a reply's "image"
+        // actually is) recoverable as real images rather than dropped.
+        dataUri = await captureVideoFrameViaCors(
+          srcUrl, video.currentTime, video.videoWidth, video.videoHeight,
+        );
+      }
+      // Still nothing: fall back to the privileged fetch, which works for
+      // hosts that send no CORS header but needs the optional grant.
+      if (!dataUri && srcUrl && /^https:/i.test(srcUrl)) {
         dataUri = await captureVideoFrameViaBackground(
           srcUrl, video.currentTime, video.videoWidth, video.videoHeight,
         );
@@ -8548,7 +8863,25 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
     // "Unmute" text nodes from its button shadow roots) don't leak into the
     // captured clip as visible text.
     const mediaController = video.closest('media-controller');
-    const wrapper = tweetPhoto ?? mediaController ?? null;
+    // A GIF player's own wrapper. Replacing only the <video> leaves Bluesky's
+    // styled ancestors behind — measured: `background-color: rgb(0,0,0)` plus
+    // `position:absolute; inset:0` overlays — which render as a BLACK BAR with
+    // the label unreadable on top of it and the box overflowing the column.
+    // Climb to the outermost ancestor that still holds nothing but this video
+    // (its aspect-ratio/background box), so the whole player goes at once.
+    let gifBox: Element | null = null;
+    if (video.hasAttribute('loop') && !video.getAttribute('poster')) {
+      let cur: Element | null = video.parentElement;
+      for (let i = 0; i < 6 && cur; i++) {
+        // Stop before a node that holds sibling content (the post's text), so
+        // only the player subtree is ever replaced.
+        if (cur.querySelectorAll('video').length !== 1) break;
+        if ((cur.textContent ?? '').replace(/\s+/g, '').replace(/GIF/gi, '').length > 0) break;
+        gifBox = cur;
+        cur = cur.parentElement;
+      }
+    }
+    const wrapper = tweetPhoto ?? mediaController ?? gifBox ?? null;
     // A site tagger has already built a play card around this post's poster
     // (TikTok, Instagram), so adding another <img> here ships the SAME frame
     // twice — the reported duplicate image below the player. Drop the video
@@ -8564,6 +8897,21 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
       const img = document.createElement('img');
       img.src = poster;
       img.alt = 'Video';
+      // A CANVAS-GRABBED poster is a data: URI with no http address of its
+      // own, and htmlToMarkdown DROPS an image whose only source is a data:
+      // URI (base64 is far too large for a relay) — so a bsky GIF appeared in
+      // the clip and vanished from the cast. Carry the video's own https URL
+      // in data-dx-src, which is the real address the cast publishes. Only
+      // when the poster is base64: a poster that already has an http URL
+      // publishes itself.
+      if (/^data:/i.test(poster)) {
+        const sourceEls = Array.from(video.querySelectorAll('source'));
+        const realUrl = video.getAttribute('src')
+          ?? sourceEls.find(s => /mp4/i.test(s.getAttribute('type') ?? '')
+              || /\.mp4($|\?)/i.test(s.getAttribute('src') ?? ''))?.getAttribute('src')
+          ?? sourceEls[0]?.getAttribute('src') ?? '';
+        if (/^https:/i.test(realUrl)) img.setAttribute('data-dx-src', realUrl);
+      }
       // A site tagger can stamp `data-dx-link` on a video whose poster only
       // materialises HERE (a blob: stream, where the poster is the canvas
       // frame grabbed before cloning). Wrapping the replacement gives that
@@ -8674,6 +9022,30 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
         (wrapper ?? video).replaceWith(img);
         return;
       }
+    }
+    // An autoplaying, looping, muted, POSTERLESS <video> is a GIF, whatever the
+    // container calls it. Bluesky is the measured case: a reply's "image" is a
+    // <video autoplay loop muted> of a .webm/.mp4 from k.gifs.bsky.app with NO
+    // poster and NO src attribute (the URLs live only in <source> children), so
+    // every branch above fails by construction and it degraded to a dead
+    // "▶ Video" link — which is why reply images looked missing on bsky.
+    //
+    // A GIF is an autoplaying, looping, muted, POSTERLESS <video> — whatever
+    // the container calls it. Bluesky is the measured case: a reply's "image"
+    // is a <video autoplay loop muted> of a .webm/.mp4 from k.gifs.bsky.app
+    // with NO poster and NO src attribute (the URLs live only in <source>
+    // children), which is why reply GIFs looked like missing images.
+    //
+    // A GIF with no frame available is DROPPED rather than linked. The frame
+    // normally arrives via captureVideoFrames' CORS grab above (which handles
+    // bsky), so reaching here means the host allows no CORS and the optional
+    // grant is absent. A text link was tried instead and removed: the anchor
+    // lands inline in the middle of the post's prose as a flex ITEM of the
+    // site's surviving row, so the parent controls the line break and no
+    // styling on the anchor could fix it. Showing nothing beats showing that.
+    if (video.hasAttribute('loop') && !video.getAttribute('poster')) {
+      if (wrapper) { wrapper.remove(); } else { video.remove(); }
+      return;
     }
     // No usable poster. Try to produce a "▶ Video" link from the first <source>.
     const srcUrl = video.getAttribute('src') ??

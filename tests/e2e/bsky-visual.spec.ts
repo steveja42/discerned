@@ -9,6 +9,7 @@
 import { test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
+import { activateExtensionOnTab } from './helpers/activateExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
 import { screenshotClipBody, screenshotSourcePage } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
@@ -44,6 +45,10 @@ test('bsky: capture clip, render in web app, screenshot card', async () => {
     // Bluesky hydrates client-side; give the feed/thread time to render.
     await page.waitForTimeout(5_000);
     await screenshotSourcePage(page, live.source());
+    // No broad host permission ships, so nothing is injected until the
+    // activation gesture — without this the test bridge never answers and the
+    // capture below fails as "capture timeout".
+    await activateExtensionOnTab(ctx, BSKY_URL);
 
     // Generic structural describer: print tag + a few stable attributes so we
     // can discover Bluesky's selectors (data-testid, role, aria-label).

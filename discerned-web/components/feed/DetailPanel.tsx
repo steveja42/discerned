@@ -177,9 +177,39 @@ const ClipHtmlBody = React.memo(function ClipHtmlBody({
   );
 });
 
+// An emoji image: the alt is ONLY emoji (flags, skin tones and ZWJ sequences
+// included) and short. X/Twemoji, GitHub, Slack and Discourse all substitute
+// emoji as <img> with the character in the alt, which is the one signal they
+// share — keying on the CDN host would cover X alone.
+const EMOJI_ALT_RE =
+  /^(?:[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Component}‍️]|\s)+$/u;
+
+function isEmojiAlt(alt: string | undefined): boolean {
+  const a = (alt ?? '').trim();
+  if (!a || a.length > 16) return false;
+  if (!EMOJI_ALT_RE.test(a)) return false;
+  // "1" and "#" are Emoji_Component; require a real pictograph so an alt of
+  // "1" on a genuine image is never treated as an emoji.
+  return /[\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(a);
+}
+
+// Markdown cannot express an image's size, so `![🇺🇸](flag.svg)` inherits
+// `.clip-body img { display: block; max-height: 420px }` and a 1em flag is
+// drawn the size of a paragraph. The emoji artwork is worth keeping, so the
+// SIZE is applied here instead: an emoji-alt image renders inline at text
+// scale. `alt` keeps the character, so a broken/blocked image still reads
+// correctly and screen readers announce the emoji.
+// Casts publish emoji as the CHARACTER, not as an image, so nothing here needs
+// to size them (see the image-real-url rule in html-to-markdown.ts for why:
+// other Nostr clients have none of our CSS). This stays because a cast can
+// still carry an emoji-alt image from a source that inlines one some other
+// way, and an unsized emoji image is the one case worth catching.
 const MdImg = (props: React.ImgHTMLAttributes<HTMLImageElement>) =>
-  // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
-  <img {...props} referrerPolicy="no-referrer" />;
+  isEmojiAlt(props.alt)
+    // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
+    ? <img {...props} className="cast-emoji" referrerPolicy="no-referrer" />
+    // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
+    : <img {...props} referrerPolicy="no-referrer" />;
 
 // Does this anchor's markdown content contain an image, i.e. is it the
 // [![](poster)](watch-url) thumbnail shape? react-markdown substitutes

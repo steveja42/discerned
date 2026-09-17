@@ -844,6 +844,16 @@
       "note": "Lightning-paid bitcoin link aggregator; tagStackerNews target (post + 24-comment thread). Next.js with CSS-module hashed class names, so the tagger matches on stable PREFIXES. Server-rendered and unwalled — loads headless with no warm profile. Two things here are only visible LIVE: the related-items rail ships as empty `clouds` skeletons and appears only once hydrated, and the post image is a <span class='sn-media'> that becomes an <img> client-side — so a fixture built from raw HTML would miss both."
     },
     {
+      "name": "bsky-thread",
+      "url": "https://bsky.app/profile/tiredsleepyzzz.bsky.social/post/3mvpot4yxlc2o",
+      "note": "Bluesky THREAD (root post + ~50 replies); tagBsky target for the `postThreadItem-by-` shape. Loads headless, unwalled, no warm profile. Three things here are only decidable LIVE: the whole page is div soup with ZERO <article> elements (so the X conversation path does not apply and the tagger is what finds the posts); a reply's byline nests avatar+name+body in ONE wrapper, which is what made commonWrapper resolve to the whole post and tag it dx-header; and a reply's 'image' is usually a GIF — a posterless <video autoplay loop> from k.gifs.bsky.app whose URLs live only in <source> children, recovered as a frame via the CORS canvas grab."
+    },
+    {
+      "name": "bsky-profile",
+      "url": "https://bsky.app/profile/bsky.app",
+      "note": "Bluesky PROFILE FEED; tagBsky target for the `feedItem-by-` shape (the thread entry covers `postThreadItem-by-`). The two shapes share a tagger but not their selectors, so a redesign can break one while the other still passes — the same reason the tagger canary splits primal into feed + thread targets."
+    },
+    {
       "name": "simonwillison",
       "url": "https://simonwillison.net/2026/Jul/29/mcp-in-claude-and-chatgpt/",
       "note": "personal blog (dense link prose)"

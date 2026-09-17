@@ -9,6 +9,7 @@ import { test, expect } from '@playwright/test';
 import { resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
+import { activateExtensionOnTab } from './helpers/activateExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
 import { screenshotClipBody } from './helpers/clipShot';
 
@@ -39,6 +40,10 @@ test('twitter: full-page capture produces readable bodyHtml', async () => {
     await page.goto(TWEET_URL, { waitUntil: 'load', timeout: 60_000 });
     // x.com hydrates client-side; give it a moment.
     await page.waitForTimeout(5_000);
+    // The extension ships no broad host permission, so nothing is injected
+    // until the activation gesture — without this the test bridge below never
+    // answers and the capture fails as "capture timeout".
+    await activateExtensionOnTab(ctx, TWEET_URL);
 
     const cap = (await page.evaluate(async () => {
       return new Promise((resolveCap, rejectCap) => {
@@ -115,6 +120,7 @@ test('twitter: selection capture across the tweet text produces readable selecti
     });
     await page.goto(TWEET_URL, { waitUntil: 'load', timeout: 60_000 });
     await page.waitForTimeout(5_000);
+    await activateExtensionOnTab(ctx, TWEET_URL);
 
     // Select the tweet text. Legacy x.com DOM puts the tweet body at
     // [data-testid="tweetText"]; the redesigned DOM (mid-2026) dropped that

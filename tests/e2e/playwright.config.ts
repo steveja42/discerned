@@ -317,6 +317,56 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'x-thread-visual',
+      testMatch: /x-thread-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'emoji-render-probe',
+      testMatch: /emoji-render-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'x-play-probe',
+      testMatch: /x-play-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'x-video-probe',
+      testMatch: /x-video-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'gif-frame-probe',
+      testMatch: /gif-frame-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'bsky-layout-probe',
+      testMatch: /bsky-layout-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'bsky-gifthumb-probe',
+      testMatch: /bsky-gifthumb-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'bsky-gif-probe',
+      testMatch: /bsky-gif-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'bsky-thread-probe',
+      testMatch: /bsky-thread-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'x-thread-probe',
+      testMatch: /x-thread-probe\.spec\.ts/,
+      retries: 0,
+    },
+    {
       name: 'tweet-video-probe',
       testMatch: /tweet-video-probe\.spec\.ts/,
       retries: 0,
