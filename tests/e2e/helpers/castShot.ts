@@ -24,6 +24,11 @@ export interface CastShotOptions {
   /** Cap for very tall cast bodies. */
   maxHeight?: number;
   /**
+   * Override the context the cast renders in. Defaults to the capture page's own
+   * context, which is what you want — pass this only to force a different one.
+   */
+  context?: import('@playwright/test').BrowserContext;
+  /**
    * castShotSafe only: called with this run's cast outcome, so a caller that
    * keeps a per-domain record (the corpus sweep) can PERSIST the failure
    * instead of leaving "no cast image" to be guessed at. Optional — the 13
@@ -56,6 +61,11 @@ export async function castShot(
     rowText: opts.rowText ?? capture.title,
     screenshotPath,
     maxHeight: opts.maxHeight,
+    // Render in the SAME (warm, extension-loaded) context the capture came from.
+    // A cold automation browser has no standing with bot-defended CDNs, which
+    // 403 its image requests — so the cast screenshot showed broken glyphs for
+    // images the clip rendered fine. See the renderCast module header.
+    context: opts.context ?? capturePage.context(),
   });
 }
 

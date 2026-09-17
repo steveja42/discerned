@@ -16,7 +16,7 @@
 // htmlToMarkdown conversion the clip render never touches.
 
 import type { Page } from '@playwright/test';
-import { generateSecretKey, finalizeEvent } from 'nostr-tools/pure';
+import { finalizeEvent } from 'nostr-tools/pure';
 import type { EventTemplate, NostrEvent } from 'nostr-tools/core';
 
 export interface CastTemplates {
@@ -65,6 +65,28 @@ export async function buildCastTemplates(
 }
 
 /**
+ * The ONE key every test cast is signed with.
+ *
+ * Fixed, not random. Test casts go to the local relay (helpers/localRelay.ts),
+ * which is a persistent SQLite store — nothing expires, so they pile up run
+ * after run. A per-cast throwaway key made them unidentifiable and permanently
+ * undeletable: NIP-09 deletion requires the author's key, and it had already
+ * been discarded. One fixed key makes every test cast trivially identifiable by
+ * author, and deletable by signing a kind-5 with the same key.
+ *
+ * It is a literal, so anything signed with it is self-evidently test data and
+ * can never be confused with a real user's cast. Never use it outside tests.
+ *
+ * Because every test cast shares this author, the npub cannot tell two of them
+ * apart — `openCast` in renderCast.ts matches the row by TITLE instead.
+ *
+ * Cleanup: `node tests/e2e/tools/purge-test-casts.mjs` (--dry-run to preview).
+ */
+export const TEST_CAST_SECRET_KEY: Uint8Array = new Uint8Array(
+  Array.from({ length: 32 }, (_, i) => (i * 7 + 13) & 0xff),
+);
+
+/**
  * Build + sign the kind-30023 (NIP-23 long-form) cast the extension would
  * publish for this capture — the public render path. Returns null when the
  * capture is not long-form-eligible (bookmark / plain selection / empty body),
@@ -77,7 +99,7 @@ export async function buildLongFormCast(
 ): Promise<NostrEvent | null> {
   const { longFormTemplate } = await buildCastTemplates(page, capture, evaluation);
   if (!longFormTemplate) return null;
-  return finalizeEvent(longFormTemplate, generateSecretKey());
+  return finalizeEvent(longFormTemplate, TEST_CAST_SECRET_KEY);
 }
 
 /**
@@ -91,5 +113,5 @@ export async function buildNoteCast(
   evaluation?: unknown,
 ): Promise<NostrEvent> {
   const { noteTemplate } = await buildCastTemplates(page, capture, evaluation);
-  return finalizeEvent(noteTemplate, generateSecretKey());
+  return finalizeEvent(noteTemplate, TEST_CAST_SECRET_KEY);
 }
