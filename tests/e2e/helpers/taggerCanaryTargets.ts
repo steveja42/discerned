@@ -134,6 +134,17 @@ export const TAGGER_CANARY_TARGETS: TaggerCanaryTarget[] = [
     renderWait: 'td.msgcl1, div.post',
     urlEnv: 'BITCOINTALK_URL',
   },
+  {
+    name: 'stackernews',
+    // A commented item so item_item__ / item_other__ / comment_comment__ all
+    // render. Class names are CSS-module hashes that change on every deploy,
+    // so the anchors match on prefix and this canary is what catches a rename
+    // of the prefix itself.
+    url: 'https://stacker.news/items/1573535',
+    hostOverride: 'stacker.news',
+    renderWait: '[class*="item_item__"]',
+    urlEnv: 'STACKERNEWS_URL',
+  },
 ];
 
 /** Shape returned by the __DISCERNED_TEST_ANCHORS bridge (mirrors capture.ts). */

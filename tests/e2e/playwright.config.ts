@@ -247,6 +247,11 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'stackernews-visual',
+      testMatch: /stackernews-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
       name: 'bsky-visual',
       testMatch: /bsky-visual\.spec\.ts/,
       retries: 0,

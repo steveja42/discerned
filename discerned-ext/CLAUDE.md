@@ -572,6 +572,7 @@ The clip should approximate the **content** column of the source site (title, by
 | **Hacker News** (`ycombinator.com`) | `tagHackerNews` | — | Post header (title link + `dx-stats` "N points · author · N comments" meta row) + threaded comments, each a `dx-post`/`dx-reply` card with a `dx-byline` (author + date) + body prose. Nested replies indented by `td.ind[indent]` depth. Vote arrows, `[–]` collapse toggles, per-comment nav links (parent/next/prev/root), orange masthead, and the reply form dropped. HN is nested `<table>` soup with no `<article>` — a tagger, not the generic path. | `hackernews-thread-fixture-visual` (fixture, **pixel baseline** — runs `tagHackerNews` via `hostOverride`; real snapshotted item page). Note: the older `hn-thread-fixture-visual` uses an idealized `<article>`-based fixture (generic Tier-1 path) and is kept as a shared-CSS guard. |
 | **phpBB forums** (any host) | `tagPhpBB` | `postClonePhpBB` | Each post a `dx-post`: one-line `dx-byline` (author · rank — Posts · Joined) + body prose + inline images. Per-post `div.signature` blocks and repeated "Re: &lt;topic&gt;" headings dropped. **Engine tagger, not a site tagger** — matches on stock phpBB MARKUP (`#page-body dl.postprofile`) instead of a hostname, so it covers every phpBB forum at once; registered LAST in `SITE_TAGGERS` so host-specific entries win. | `phpbb-thread-fixture-visual` (fixture, **pixel baseline**; no `hostOverride` needed — the markup match fires on its own) |
 | **bitcointalk.org** (SMF forum) | `tagBitcointalk` | `postCloneBitcointalk` | Each post a `dx-post`: one-line `dx-byline` (author · rank — Activity · Merit) + subject + date + body prose. Per-post signature ad blocks, rank-star/online/IP gifs, "#N" permalink chrome and repeated "Re: <topic>" subject lines dropped. | `bitcointalk-thread-fixture-visual` (fixture, **pixel baseline** — runs the tagger via `hostOverride`) |
+| **stacker.news** | `tagStackerNews` | — | Post header (`dx-author` title + `dx-byline` "N sats \ N comments \ @author · age" + territory badges) then body, then every comment as a `dx-reply` with its own byline. The site has **no avatars** — a byline is text only, and its timestamp is a plain `<a>` carrying an ISO `title`, never a `<time>`, so the generic `dx-byline` pass (which needs an `<address>` or author-link **plus** a `<time>`) could not see the strip and the layout finder dropped the whole header. Class names are Next.js CSS-module hashes, so every selector matches on the stable PREFIX (`[class*="item_item__"]`). Three pieces of chrome are excluded by name: the related-items rail, the comment-sort `<nav>`, and the reply composer — see below. | `stackernews-visual` (live, `SN=1`; asserts **both** `article` and `full-page`), corpus sweep (`SWEEP_ONLY=stackernews`) |
 | **tiktok.com** | `tagTikTok` | `postCloneTikTok` | The visible feed item / permalink post: avatar + author + caption + a `tweet-video` play card built from the item's largest image. The `<video>` is a `blob:` MSE stream, so the poster comes from the item's own image. Video id for the embed comes from the URL on a `/@user/video/<id>` permalink, else from a 19-digit id inside the visible item's markup — the HOME feed carries no `/video/` anchor and never rewrites the address bar. | `tiktok-probe` (live, `TT=1`) |
 | **snapchat.com** | `tagSnapchat` | `postCloneSnapchat` | Two shapes with NO shared hooks. **Spotlight** has stable `data-testid`s (`eachFeedItem`, `desktopSpotlightPlayer`, `storyWebPlayer`, `playerContentVideo`, `profilePicture`); its `<video>` carries a real `poster` AND an `https:` src. The byline/counts sit ABOVE the player, so the tagger climbs until `profilePicture` is in scope. **`/web`** has no testids at all (plain divs) and no per-post permalink, so the poster links to the author's profile; scope by climbing from the visible `<video>` while only one video is in scope. **`/web` refuses HEADLESS Chrome** ("Browser not supported") — probe it headed. | (live only; needs the warm logged-in profile) |
 | **Substack** (generic) | (none — `<article>` Tier 1) | — | Title + body + thumbnail. | `substack-essay-fixture-visual` (fixture, **pixel baseline**) |
@@ -653,6 +654,35 @@ ribbon only collapses when the column is too narrow), and its text filter used t
 require `textLen > 60`, which is blind to a squeezed short LABEL. It now also
 reports a table/cell census, since a collapsed table's *cells* are narrow while
 the table itself is not.
+
+**Some chrome is invisible to any offline fixture — stacker.news is the case
+that proves it.** Three things there are only decidable against a hydrated
+page, so this tagger deliberately has **no** fixture-visual spec; its guard is
+the live `stackernews-visual` spec plus the corpus sweep:
+
+- The **related-items rail** below the thread (five teasers for unrelated
+  posts) is server-rendered as empty `clouds`-classed skeletons and only
+  becomes content once hydrated. A fixture built from `curl`'d HTML shows
+  `clouds: 30` and zero teasers; the live page shows `clouds: 0` and five real
+  rows. It is excluded by its hydrated wrapper (`item_grid__`) — the rail's
+  rows are otherwise byte-identical `item_item__` containers to the post's own.
+- The post's **image** is a `<span class="sn-media">` that becomes an `<img>`
+  client-side, so a raw-HTML fixture has no images at all (`<img>` count 0).
+- The **comment-sort nav** ("1132 sats | lit | new | top") is a `<nav>`, which
+  `stripPageChrome`'s landmark pass would normally take — but this tagger
+  RETURNS a root, and Tier 1.5 clears every `EXCL_MARKER` inside a
+  tagger-returned root before re-promoting only surviving `dx-excl` **classes**
+  (see "When a tagger RETURNS a root"). So the landmark stripper's work is
+  undone and the strip must be named explicitly. It is nearly invisible in the
+  clip and reads as four stray one-word lines in the **cast**, where no CSS
+  makes it look like a control — check the cast image, not just the clip.
+
+The `full-page` format matters here as much as `article`: it clones the whole
+body and **ignores** the tagger's returned root, so it reaches the comment
+thread by a different path and a scoping change can fix one while truncating
+the other. `stackernews-visual` asserts both, and asserts the thread by
+**author handle** rather than a `.dx-reply` count — a count cannot distinguish
+"the tail was truncated" from "the tagger stopped marking replies".
 
 **Engine taggers (match on markup, not hostname).** Most entries match a hostname. A forum/CMS *engine* that ships stock, unhashed classes across thousands of independent deployments can't be covered that way — `tagPhpBB` therefore ignores the `host` argument and sniffs the live DOM (`#page-body dl.postprofile`). Rules for this kind of entry:
 - **Register it LAST** in `SITE_TAGGERS` so any host-specific tagger claims its page first.

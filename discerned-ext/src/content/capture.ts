@@ -5129,6 +5129,84 @@ function tagBitcointalk(root: Document | Element): Element | void {
 }
 
 /**
+ * Tag stacker.news item pages (a Lightning-paid Bitcoin link aggregator).
+ *
+ * Stacker.news is a Next.js app whose class names are CSS-module hashes
+ * (`item_item__Q_HbW`), so every selector here matches on the stable PREFIX —
+ * the same idiom as tagPrimal's `[class*="_primaryNote_"]`.
+ *
+ * Stable anchors:
+ *   - `[class*="item_item__"]`     one row: the post, each comment, each
+ *                                  related-item teaser
+ *   - `[class*="item_other__"]`    the meta strip (sats \ N comments \ @author
+ *                                  \ age \ territory badges)
+ *   - `[class*="item_children__"]` the post body wrapper (item pages only)
+ *   - `[class*="comment_comment__"]` one comment subtree, nested for replies
+ *
+ * The HEADER is the defect this exists for. The site has no avatars, so a
+ * byline is text only and sits in `item_other__`, a SIBLING of the title; and
+ * its timestamp is a plain <a> with an ISO `title`, never a <time>. The
+ * generic dx-byline pass needs an <address>/author-link PLUS a <time>, so it
+ * saw prose, and the layout finder dropped the whole header with the title.
+ * See CLAUDE.md -> Optimized sites for the chrome no fixture can catch.
+ */
+function tagStackerNews(root: Document | Element): Element | void {
+  const rows = Array.from(root.querySelectorAll('[class*="item_item__"]'));
+  if (!rows.length) return undefined;
+
+  // Three things reuse item_item__ and only two are content: comments add
+  // comment_item__, and the related-items rail's rows are parented by
+  // item_grid__ (it hydrates in, so an offline fixture never sees it).
+  const isComment = (el: Element) => /comment_item__/.test(el.getAttribute('class') ?? '');
+  const isRelated = (el: Element) => /item_grid__/.test(el.parentElement?.getAttribute('class') ?? '');
+
+  rows.forEach(row => {
+    if (isRelated(row)) { appendClass(row, 'dx-excl'); return; }
+    const comment = isComment(row);
+    appendClass(row, comment ? 'dx-reply' : 'dx-post');
+
+    // dx-byline, not dx-stats: this strip carries the AUTHOR, and dx-stats is
+    // display:flex, which on a strip this long collapses the thread.
+    const meta = row.querySelector('[class*="item_other__"]');
+    if (meta) appendClass(meta, 'dx-byline');
+
+    // The title line. Comments have none.
+    if (!comment) {
+      const title = row.querySelector('[class*="item_title__"]');
+      if (title) appendClass(title, 'dx-author');
+    }
+  });
+
+  // Whatever wrapper holds the related rail, so its heading goes with it.
+  root.querySelectorAll('[class*="item_grid__"]').forEach(el => appendClass(el, 'dx-excl'));
+
+  // Per-row chrome — upvote rocket, "..." dropdown, comment collapser, the
+  // share glyph, reply stubs, pull-to-refresh — all stray glyphs or bare verbs.
+  root.querySelectorAll(
+    '.upvoteParent, [class*="upvote_upvoteWrapper__"], [class*="item_dropdown__"], '
+    + '[class*="comment_collapser__"], [class*="reply_replyButtons__"], '
+    + '[class*="comment_commentNavigator__"], [class*="pull-to-refresh_"], '
+    + '[class*="item_item__"] > .ms-auto.pointer',
+  ).forEach(el => appendClass(el, 'dx-excl'));
+
+  // The reply composer at the foot of the thread: a lexical editor whose
+  // toolbar sanitises into bare verbs and ~10 stray glyphs.
+  root.querySelectorAll('[class*="reply_reply__"], [class*="editor_editorContainer__"], form')
+    .forEach(el => appendClass(el, 'dx-excl'));
+
+  // The comment-sort nav ("1132 sats | lit | new | top"). A <nav>, but a
+  // tagger-returned root discards stripPageChrome's EXCL_MARKERs, so it must
+  // be named by class. Reads as four stray one-word lines in the CAST.
+  root.querySelectorAll('[class*="item_comments__"] nav, [class*="header_navSort__"]')
+    .forEach(el => appendClass(el, 'dx-excl'));
+
+  // <main> is the tightest wrapper holding BOTH the post row and the comment
+  // thread; item_children__ holds only the body, so returning it would lose
+  // the very header this tagger exists to keep.
+  return root.querySelector('main') ?? undefined;
+}
+
+/**
  * Tag phpBB topic pages. phpBB is the most widely deployed self-hosted forum
  * engine after Discourse, and its prosilver-derived themes ship STOCK, unhashed
  * classes — so this one tagger covers thousands of independent forums rather
@@ -6809,6 +6887,17 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     match: h => /(^|\.)ycombinator\.com$/i.test(h),
     tag: tagHackerNews,
     anchors: ['#hnmain', 'table.fatitem', 'tr.athing.comtr'],
+  },
+  {
+    name: 'stackernews',
+    match: h => /(^|\.)stacker\.news$/i.test(h),
+    tag: tagStackerNews,
+    // Class names are CSS-module hashes, so these match on the stable prefix.
+    // item_other__ is grouped with item_item__ rather than required on its
+    // own: both are present on every page shape that matters, but a future
+    // rename of the meta strip alone should not skip the tagger entirely —
+    // the row markers still carry the thread structure.
+    anchors: ['[class*="item_item__"]', '[class*="item_other__"], [class*="comment_comment__"]'],
   },
   {
     name: 'bitcointalk',

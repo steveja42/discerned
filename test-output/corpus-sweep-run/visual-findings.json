@@ -2056,6 +2056,16 @@
       "note": "Buy-box and Key item features render, but About this item, Product details, Specifications, Directions, Warranty, Warnings and About the brand are all empty headings; no product image on either surface.",
       "by": "ai",
       "reviewedAt": "2026-09-15T05:23:33.826Z"
+    },
+    "stackernews": {
+      "verdict": "clean",
+      "severity": 0,
+      "where": "clip",
+      "regression": "unknown",
+      "regressedFrom": "",
+      "note": "Header, body and all 24 comments captured; no chrome leaks.",
+      "by": "ai",
+      "reviewedAt": "2026-09-17T05:39:02.914Z"
     }
   }
 }

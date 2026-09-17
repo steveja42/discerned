@@ -839,6 +839,11 @@
       "note": "minimal-markup aggregator thread"
     },
     {
+      "name": "stackernews",
+      "url": "https://stacker.news/items/1573535",
+      "note": "Lightning-paid bitcoin link aggregator; tagStackerNews target (post + 24-comment thread). Next.js with CSS-module hashed class names, so the tagger matches on stable PREFIXES. Server-rendered and unwalled — loads headless with no warm profile. Two things here are only visible LIVE: the related-items rail ships as empty `clouds` skeletons and appears only once hydrated, and the post image is a <span class='sn-media'> that becomes an <img> client-side — so a fixture built from raw HTML would miss both."
+    },
+    {
       "name": "simonwillison",
       "url": "https://simonwillison.net/2026/Jul/29/mcp-in-claude-and-chatgpt/",
       "note": "personal blog (dense link prose)"
