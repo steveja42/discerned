@@ -510,13 +510,13 @@
     },
     "biorxiv": {
       "verdict": "clean",
-      "severity": 2,
+      "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Title, authors, doi, preprint notice, Abstract, Teaser, competing-interest and funder statements all render correctly; the logo is a broken image and a nav/tools link list trails.",
+      "note": "Title, authors, doi, abstract and statements all render; both logos load.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T07:07:21.269Z"
+      "reviewedAt": "2026-09-17T01:58:21.031Z"
     },
     "discourse-meta": {
       "verdict": "clean",
@@ -639,14 +639,14 @@
       "reviewedAt": "2026-09-16T23:51:35.771Z"
     },
     "ndtv": {
-      "verdict": "flaw",
-      "severity": 3,
-      "where": "cast",
+      "verdict": "clean",
+      "severity": 1,
+      "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Clip is clean; cast still renders two broken image alt-texts as plain text mid-body.",
+      "note": "Hero and inline images now render on both surfaces; cast render moved to the warm profile via the local relay.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T23:02:20.800Z"
+      "reviewedAt": "2026-09-17T04:34:43.687Z"
     },
     "xda-forums": {
       "verdict": "flaw",
@@ -730,13 +730,13 @@
     },
     "instagram-home": {
       "verdict": "flaw",
-      "severity": 4,
-      "where": "both",
-      "regression": "unknown",
+      "severity": 3,
+      "where": "clip",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Clip shows a broken-image avatar; cast drops the avatar and renders the engagement row as a vertical Like/220/Comment/18/Share/Save list. Post image, tags and caption correct on both.",
+      "note": "Two profile avatars blocked by CORP (same-origin) so they show as broken glyphs; post photo, caption and tags render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T06:46:58.904Z"
+      "reviewedAt": "2026-09-17T01:58:21.031Z"
     },
     "zdnet": {
       "verdict": "flaw",
@@ -829,14 +829,14 @@
       "reviewedAt": "2026-09-15T06:27:22.001Z"
     },
     "instagram-reels": {
-      "verdict": "flaw",
-      "severity": 3,
-      "where": "both",
+      "verdict": "clean",
+      "severity": 2,
+      "where": "clip",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Cast renders the play card, caption and hashtags cleanly but leaves the stat pair unlabelled as '32.1K - 1,511'; the clip's avatar defect stands.",
+      "note": "Reel poster, caption and hashtags render well; only the small profile avatar is CORP-blocked.",
       "by": "ai",
-      "reviewedAt": "2026-09-16T00:21:14.990Z"
+      "reviewedAt": "2026-09-17T01:58:21.031Z"
     },
     "pubmed": {
       "verdict": "clean",
@@ -1804,9 +1804,9 @@
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cover, title, author, description, genres, page info, reading stats and full author bio all render correctly; author avatar is a broken-image placeholder on the clip.",
+      "note": "Cover, title, author, description, genres, stats and full bio all render; only the small author avatar is CORP-blocked.",
       "by": "ai",
-      "reviewedAt": "2026-09-15T05:20:18.594Z"
+      "reviewedAt": "2026-09-17T01:58:30.046Z"
     },
     "discogs": {
       "verdict": "clean",

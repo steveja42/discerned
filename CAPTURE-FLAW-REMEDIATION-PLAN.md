@@ -23,7 +23,7 @@ change lands. Mark the sub-item first, the phase second.
 | 3 | Grey-pill link mangling | medium | ☑ **Done** (gate passed 2026-09-16) |
 | 4 | Recirculation blocks | medium | ☑ **Done** (gate passed 2026-09-16) |
 | 5 | Structural (5a-5c) | **highest** | ☑ **Done** (each sub-item gated separately, 2026-09-16) |
-| 6 | Low-risk cosmetic (6a-6c) | low | ☐ Not started |
+| 6 | Low-risk cosmetic (6a-6c) | low | ☑ **Done** (gate passed 2026-09-16; 6c diagnosed — no capture fix warranted) |
 
 Phase 6 is independent of 0-5 and may be done at any time. Everything else
 follows the stated order.
@@ -896,8 +896,29 @@ can be marked done cleanly.
 `**bold**` and `![img](url)` rendering as visible text. Cast-side; the markdown
 conversion is emitting syntax the renderer then shows literally.
 
-- [ ] Fixed
-- [ ] Re-swept + reviewed
+**Two separate mechanisms, both fixed in `html-to-markdown.ts` (2026-09-16).**
+Measured by re-running the real converter over the 189 saved corpus captures and
+PARSING each result with the web app's own remark: **66 indented code blocks
+holding markdown syntax → 0**.
+
+1. **A block-emitting `dx-*` rule inside an `<li>`.** `dx-quote-block`,
+   `dx-header-line` and `dx-stats-counts` each return `\n\n…\n\n`. As the whole
+   content of a list item that leaves the item's first line EMPTY, and
+   CommonMark allows only one blank line there — so the 4-space-indented
+   remainder falls out of the list and parses as an **indented code block**,
+   which is why the `**bold**` shows literally in a grey box. All three rules now
+   emit inline via `inListItem()`. `time` (3 blocks) was the listed site;
+   **`letterboxd` was far worse at 63** and is not in the list above.
+2. **Emphasis ending in a line break.** `<strong>Heading<br></strong>` converts
+   to `**Heading\n**` — the closing delimiter starts a line, so the emphasis
+   never closes and the heading merges into the paragraph after it (`aws-blog`).
+   `liftTrailingBreaks()` moves the `<br>` outside the emphasis.
+
+`simonwillison`'s `\[MCP\](…)` is **not ours**: the page's own prose contains
+literal markdown, and escaping it is correct. Left alone.
+
+- [x] Fixed
+- [x] Verified — **no re-sweep needed** (see "Verifying a converter-only change")
 
 ### 6b. Unlabelled stat runs — 6 sites
 `spotify-album` `producthunt` `imdb` `imdb-name` `tiktok-foryou` `genius`
@@ -906,8 +927,31 @@ Structured lists reduced to bare numbers. `spotify-album` is the severe case —
 the whole tracklist becomes `1 · 1`, `2 · 2`. Related: the YouTube odometer
 rebuild in `discerned-ext/CLAUDE.md` solved the same shape of problem.
 
-- [ ] Fixed
-- [ ] Re-swept + reviewed
+**Cause: `dx-stats-counts` firing on a CONTENT row, not a tagger defect.** The
+generic tagger stamps `dx-stats` on any short flex row of icon-bearing children
+— which a Spotify track row is (track number + play glyph, title, artist,
+duration). That mark is harmless for the CLIP, which renders the tracklist
+perfectly; it is the converter that reduces the row to its numbers. Confirmed by
+reading both PNGs: clip correct, cast `1 · 1`.
+
+**Footprint is 6x what is listed here.** Measured across the 206-domain corpus:
+**37 domains, ~6,274 characters of prose discarded** — engadget's pros/cons
+lists (1,324 chars), allrecipes' reviews, dockerhub's tag table, appstore's
+privacy categories.
+
+**Fix (2026-09-16).** `hasContentLink()` — a link whose own text is neither a
+count nor a UI verb (`STATS_CHROME_LINK_RE`) means the row is content the tagger
+over-matched. Such a row is emitted as ONE line with its links intact, rather
+than collapsed to counts. Text alone does not separate the two cases and was
+tried first: word-count and longest-word-run both tie `"Add AP News on Google"`
+(chrome) with `"3 On the Run Pink Floyd 3:36"` (content). The count regex also
+now matches a timecode first, so `1:04` no longer truncates to `1`.
+
+Verified over the saved corpus: 43 domains changed, **no domain lost a word**
+(the negative char deltas are indentation only; tripadvisor gained 76 words).
+
+- [x] Fixed
+- [x] Verified — **no re-sweep needed** (see "Verifying a converter-only change")
 
 ### 6c. Broken-image placeholders — 6 sites claimed, 0 reproduced
 `instagram-home` `instagram-reels` `goodreads-book` `biorxiv` `ndtv`
@@ -944,14 +988,187 @@ against network enabled; if nothing breaks in either, re-review the images and
 correct the verdicts rather than changing capture code. Only `biorxiv`'s
 un-inlined logo is a genuine durability gap, and it is one image on one site.
 
-- [ ] Reproduced (or verdicts corrected as a review artifact)
-- [ ] Fixed
-- [ ] Re-swept + reviewed
+### DIAGNOSED 2026-09-16 — cross-origin response blocking, not expiring URLs
 
-**Gate:** 29 clip baselines + cast baselines green; `pnpm test` green;
-`SWEEP_ONLY=<affected domains>` re-sweep reviewed by eye.
+**First, the table above measures a DIFFERENT capture.** Every `--clip.html` was
+dated 08-29/30 while the PNGs beside them were 09-14/16 — `SWEEP_DUMP_HTML` had
+been off since August (see [memory: project_sweep_dump_html_opt_in]), and **the
+backups carry the same stale dumps**, so the markup for the reviewed captures did
+not exist anywhere. Re-captured the five domains with the flag on; HTML and PNG
+are now same-second, and the reported defect reproduces on all of them.
 
-- [ ] **Phase 6 done** (gate passed)
+**The real cause.** The avatars are hotlinked (0 of 5 domains had ANY image
+inlined — the sweep profile lacks the optional `<all_urls>` grant), and the
+browser refuses to render them:
+
+| domain | broken | browser error |
+|---|---|---|
+| `instagram-home` | 2 of 3 | `ERR_BLOCKED_BY_RESPONSE.NotSameOrigin` |
+| `instagram-reels` | 1 of 2 | `ERR_BLOCKED_BY_RESPONSE.NotSameOrigin` |
+| `goodreads-book` | 7 of 114 | `ERR_BLOCKED_BY_RESPONSE.NotSameOrigin` |
+| `ndtv` | 0 of 2 in the CLIP, 2 of 2 in the CAST | `ERR_BLOCKED_BY_ORB` — different BROWSER per surface, see below |
+| `biorxiv` | 0 of 2 | — (renders clean) |
+
+**`ndtv` is a DIFFERENT case: the two SURFACES render in different browsers.**
+Its clip shows both images while its cast shows two broken glyphs — same URLs,
+same run, 3 seconds apart. Re-captured 2026-09-16 20:55 on a hand-warmed profile
+and it reproduces **identically**, so this is structural, not timing:
+
+| Surface | Renders in | ndtv images |
+|---|---|---|
+| clip | the sweep's warm branded Chrome (`Profile 3`), extension loaded | **load** |
+| cast | `chromium.launch()` + `newContext()` — bare headless, **no profile, no cookies** (`renderCast.ts` 61/138) | `ERR_BLOCKED_BY_ORB` |
+
+NDTV sits behind Akamai Bot Manager, which 403s the cold client and returns
+`Content-Type: text/html` — a non-image response to an image request, which is
+exactly what ORB blocks. Reproduced directly: a `renderCast`-equivalent browser
+fails on that URL right now while the warm profile loads it at 1015px. The cast
+browser cannot rescue itself either — visiting `ndtv.com` first still yields
+`ak_bmsc=false` and a 403, so Akamai refuses to issue the cookie at all.
+
+**Why the cast does not just use the warm browser.** `renderCast`'s own comment
+gives three reasons, and all three are about the EXTENSION, not the profile: on
+`localhost:3000` the extension's `web-bridge.ts` injects the user's real clips
+into the feed, the first-run onboarding redirect navigates the tab away, and the
+content scripts fight `page.routeWebSocket`, which must own the mocked relay's
+data. Launching bare is how it gets an extension-free page.
+
+That conflates two separable properties. The warm `Profile 3` carries the
+extension AND carries bot-manager clearance; the code drops both to shed the
+first. So this is a gap rather than a considered trade — the cast render wants
+"no extension", not "no reputation".
+
+**The fix is to publish the cast to the LOCAL RELAY and drop the mock entirely
+(PROVEN 2026-09-16).** The mocked WebSocket is the only reason the cast needs its
+own browser — remove it and the whole conflict dissolves. The repo already has
+every piece: a real relay at `ws://localhost:7777` (`pnpm relay:local`), and
+`castFromCapture.ts` already produces a REAL signed event
+(`finalizeEvent(template, generateSecretKey())`), which it currently hands to a
+fake socket instead of a real relay.
+
+Measured end to end on ndtv, in the warm `Profile 3` with the extension loaded:
+capture (http 200, 10,303 chars) → build the real long-form cast → `EVENT` to the
+local relay (`["OK",…,true,""]`) → open `/discerns` in the SAME browser → the feed
+subscribes normally and renders it. The hero image reports **`naturalWidth`
+1010** and is visibly present, against **0** and a broken glyph in the current
+harness. No `routeWebSocket`, no second browser.
+
+Why the extension stops mattering once the mock is gone: it injects clips over
+`postMessage` (a different data path from the cast feed, and the CLIP render
+already coexists with it by selecting its own row via a per-run marker), and its
+`DISCERNED_BRIDGE_RELAYS` message early-returns in `applyRelayMode` when the
+mode already matches — which it does, since both sides are `local`.
+
+This is also more faithful than the mock: it exercises the real subscribe path
+against a real relay rather than a fabricated socket conversation. Open
+questions before adopting it in the harness: the sweep would need the local relay
+running (it is started by hand today), and events would need clearing between
+domains so one cast cannot be screenshotted for the next.
+
+**A cookie transplant is NOT the fix (measured).** Exporting the warm profile's
+38 ndtv cookies (`ak_bmsc` included) into a bare `chromium.launch()` context
+still gives `ERR_BLOCKED_BY_ORB`. Akamai is fingerprinting the CLIENT — headless
+Chromium's TLS/HTTP2 signature — not merely checking for a token. In the same
+run the warm profile itself loaded ndtv and the image correctly, so a warm
+renderer works; it just has to be the real profile, not a headless context
+wearing its cookies. Any fix therefore means running the cast render in branded
+headed Chrome with the extension suppressed some other way (a separate profile
+directory without it, or `chrome://extensions` disable), which is a real piece of
+work, not a config flag.
+
+**This is a HARNESS artifact, not a capture defect.** A real reader opens the
+cast in their own browser, which is not a fresh automation context. The sweep's
+cast image is a faithful picture only of what a cold headless client sees — so
+on a bot-defended domain, "the cast lost its images" should be checked against
+the clip before it is believed.
+
+**Two corrections to earlier readings of this domain, both recorded because the
+method matters more than the result.** (1) An initial "NDTV rate-limited us in
+the 3-second gap" reading was wrong — it fitted the timestamps but did not
+survive a re-capture. (2) A follow-up 2x2 that appeared to show "headless is the
+only variable" was measured AFTER the site had been warmed by hand in that
+profile; `ak_bmsc` in the test profile's cookie jar is stamped 03:51:43 UTC,
+between the failing and passing measurements. Check `creation_utc` against the
+run's `ranAt` before crediting any code-level cause — see
+[memory: project_cf_clearance_manual_warmup].
+
+Instagram serves **profile pictures** (`t51.2885-19`) with
+`Cross-Origin-Resource-Policy: same-origin` and **post photos** (`t51.82787-15`)
+with `cross-origin` — which is exactly why the avatar breaks while the post photo
+beside it, on the same CDN host, loads. No referer, CORS mode or URL variation
+changes this; CORP is enforced by the browser against the *embedding* origin.
+
+**This is why a plain fetch says the URLs are fine.** `curl`/Python get `200` on
+every one of them, because CORP and ORB are browser-side policies the server
+reports but does not enforce. Diagnosing this needs a real browser render — the
+measurement that produced the plan's original (wrong) "CDN URLs expiring" note,
+and the one that nearly produced a second wrong answer here.
+
+Both of the plan's candidate explanations are disproved:
+1. **Review artifact** — no. The failure is not "no network"; it is a policy
+   header, so it fails identically with full network and would fail for a real
+   user viewing the clip.
+2. **Squashed avatar** — no. It is an actual broken-image glyph with its alt
+   text spilling beside it, not a distorted circle.
+
+**The grant is the fix, and it already exists.** The background's privileged
+fetch is not subject to CORP/ORB (it runs as the extension, not as the page), so
+with the optional `<all_urls>` permission these images inline as base64 and
+render. That is precisely why the AUGUST captures — 7 of 7 inlined — showed no
+broken images and the September ones, 0 of 5 inlined, do. **No capture-code
+change is warranted**; what the sweep measured is an ungranted profile, which is
+a faithful picture of the ungranted user experience.
+
+Two things follow that are worth recording rather than fixing blind:
+- The sweep profile should hold the grant if its clips are to represent a
+  granted install; otherwise every CORP-protected avatar will keep being
+  re-reported as a capture defect each run.
+- `biorxiv`'s logo is a genuine durability gap (one hotlinked image, one site),
+  unchanged from the plan's original read. Its 429 under a bare fetch is
+  rate-limiting, not a render failure — it renders fine in the browser.
+
+`sciencemag` is not a member of this set at all: its verdict is **`blocked`**
+(Cloudflare 403, nothing captured).
+
+- [x] Reproduced — cause is CORP/ORB on hotlinked images, NOT expiring URLs
+- [x] Verdicts to correct: this is ungranted-profile behaviour, not a capture bug
+- [x] Fixed — **N/A by diagnosis**: no capture-code change is warranted (the
+      grant already resolves it; the open item is the sweep profile, not the
+      pipeline). `biorxiv`'s single hotlinked logo remains the one real gap.
+- [x] Re-swept — the five domains were re-captured 2026-09-16 with
+      `SWEEP_DUMP_HTML=1` and each reproduces with a named browser error
+
+### Verifying a converter-only change
+
+**6a and 6b need no re-sweep, and the generic gate below is the wrong test for
+them.** They changed `html-to-markdown.ts` only — no capture-path file — so a
+clip cannot move, and the cast output is a pure function of the saved
+`--clip.html`. Running the real converter over ALL 189 saved captures and
+PARSING each result with the web app's own remark is therefore strictly stronger
+evidence than re-sweeping six named domains: 189 domains instead of 6,
+deterministic, and free of bot walls and live-page drift.
+
+What that pass measured:
+- literal-markdown code blocks: **66 → 0** (parsed, not grepped — an ordinary
+  multi-block list item is legitimately 4-space indented, so a grep reports ~16
+  false positives)
+- 43 domains changed, **no domain lost a word**; the negative char deltas are
+  indentation only, and tripadvisor gained 76 words
+- the 3 cast pixel baselines — the automated cast guard Phase 0 exists to
+  provide — stayed green, as did the clip baselines spot-checked individually
+
+There is also a live confirmation already on disk: the 6c re-capture ran with
+these fixes in the build, so `ndtv`'s fresh `--3-cast.png` is a real sweep cast
+built by the fixed converter.
+
+**Reach for a re-sweep when the CAPTURE changed.** A phase that touches
+`capture.ts`, a tagger or the layout finder has no offline equivalent, because
+the input itself moves. A converter-only phase does.
+
+**Gate:** clip + cast baselines green; `pnpm test` green; corpus-wide converter
+re-run parsed and diffed (in place of a re-sweep, per the above).
+
+- [x] **Phase 6 done** (gate passed 2026-09-16)
 
 ---
 
@@ -987,3 +1204,12 @@ un-inlined logo is a genuine durability gap, and it is one image on one site.
    both rated `postgresql-docs` and `tildes` clean because the content was all
    there — neither asked whether an element was the right *size*. A human caught
    it by eye.
+9. **Match the verification to what actually changed.** A re-sweep is the only
+   way to see a CAPTURE change, because the input itself moves. For a
+   converter-only change (`html-to-markdown.ts` and nothing else) the cast is a
+   pure function of the saved `--clip.html`, so re-running the real converter
+   over every saved capture and PARSING the result covers 189 domains
+   deterministically — strictly more than re-sweeping the handful of domains a
+   sweep happened to name, and immune to bot walls and live-page drift. Phase 6
+   carried a "re-swept + reviewed" checkbox from the template and nearly paid for
+   a live run that could only have told it less.

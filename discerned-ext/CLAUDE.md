@@ -824,6 +824,46 @@ fenced-code rule read `textContent`, which ignores `<br>` and block wrappers, so
 the block collapsed onto one line; `restorePreLineBreaks` normalises them to
 real newlines before turndown runs.
 
+### Cast markdown: three cast-only defects the clip cannot show
+
+All three live in `html-to-markdown.ts`, are invisible in `bodyHtml`, and so no
+clip pixel baseline could catch them. Guarded by
+`tests/nostr/cast-literal-markdown.test.ts`.
+
+**A block-emitting `dx-*` rule inside an `<li>` becomes a CODE BLOCK.**
+`dx-quote-block`, `dx-header-line` and `dx-stats-counts` each return
+`\n\n…\n\n`. As the entire content of a list item that leaves the item's first
+line empty — and CommonMark permits only one blank line there, so the
+4-space-indented remainder falls OUT of the list and parses as an **indented
+code block**. The result is `**Headline**` rendered as literal source in a grey
+box. All three call `inListItem()` and emit inline there. Measured across the
+206-domain corpus: 66 such blocks → 0, of which **63 were `letterboxd`** (its
+whole release-dates list) and only 3 the `time` case that was actually reported.
+Reason about this by PARSING the markdown (remark), never by eye: an ordinary
+multi-block list item is legitimately indented 4 spaces too, so a grep for
+indentation reports ~16 false positives.
+
+**`<strong>Heading<br></strong>` never closes its emphasis.** It converts to
+`**Heading\n**`, and a closing delimiter that begins a line does not close in
+CommonMark — so the heading merges into the paragraph after it (aws-blog's
+section titles). `liftTrailingBreaks` moves the trailing `<br>` outside the
+emphasis element before turndown runs.
+
+**`dx-stats` is stamped on CONTENT rows, and reducing them to counts loses the
+content.** The generic tagger only needs a short flex row of icon-bearing
+children, which a Spotify/Apple Music track row is (number + play glyph, title,
+artist, duration). The CLIP renders such a row perfectly — this is purely a
+converter defect. `dx-stats-counts` therefore checks `hasContentLink()` first: a
+link whose own text is neither a count nor a UI verb (`STATS_CHROME_LINK_RE`)
+means the row is content, which is emitted as ONE line with its links intact.
+Measured: **37 domains, ~6,274 chars of prose** were being discarded —
+engadget's pros/cons lists, allrecipes' reviews, dockerhub's tag table — against
+the 6 sites the sweep named. Text alone does NOT separate the two cases; word
+count and longest-word-run were both tried and both tie `"Add AP News on
+Google"` (chrome) with `"3 On the Run Pink Floyd 3:36"` (content). The count
+regex also matches a timecode first, so a `1:04` duration no longer truncates
+to `1`.
+
 ### Shadow DOM support
 
 Some sites (Stansberry's Angular app is the reference case) ship article content via declarative open Shadow DOM (`<template shadowrootmode="open">`). `document.querySelector` and `window.getSelection` don't pierce shadow boundaries, and `cloneNode(true)` doesn't clone a host's shadow root — so the capture pipeline must descend manually wherever it touches the live DOM.

@@ -22,6 +22,34 @@ import { strikethrough } from 'turndown-plugin-gfm';
 // clean "8 · 528 · 62" row by the dx-stats-counts rule below.
 const CHROME_MARKER_CLASSES = ['dx-zaps-row'];
 
+// Link text that is a UI verb, not content — a stats row legitimately holds
+// these ("Notifications", "Fork", "Add to Google"), so they must not make the
+// row look like a content list. Kept narrow: only whole-text matches.
+const STATS_CHROME_LINK_RE =
+  /^(share|save|saved|follow|following|unfollow|notifications?|fork|star|watch|login|log ?in|sign ?in|sign ?up|register|subscribe|report|reply|replies|comments?|like|likes|edit|delete|copy link|permalink|add to google|add .{0,30} on google|more|see more|show more|view more|load more|next|previous|prev|home|menu|search|settings|help|download|install|deploy|preview|cancel|submit|send|done|close|back|top|new|newest|oldest|popular|latest|sort|filter|print|rate|contribute|suggest an edit)$/i;
+
+// Inside a list item, a dx-* rule must emit INLINE. A block construct
+// (blockquote, or a `**line**` wrapped in blank lines) leaves the <li> empty
+// and its content indented after a blank line — which CommonMark parses as an
+// indented CODE BLOCK, so `**Headline**` renders literally in a code box
+// (time.com's "Recommended Stories" cards, smashingmagazine's workshop cards).
+function inListItem(node: Node): boolean {
+  return !!(node as Element).parentElement?.closest('li');
+}
+
+// A link whose own text is real content (a track title, a product name, a
+// tag) rather than a count or a UI verb. Its presence is what separates a
+// content row the tagger over-matched from a genuine engagement strip.
+function hasContentLink(el: HTMLElement): boolean {
+  return Array.from(el.querySelectorAll('a')).some((a) => {
+    const t = (a.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (t.length < 4 || !/[A-Za-zÀ-ɏ]{3,}/.test(t)) return false;
+    if (STATS_CHROME_LINK_RE.test(t)) return false;
+    // A bare count ("3.2M", "13.8k") is a stat, however it is linked.
+    return !/^\d[\d,.]*[KMB]?$/i.test(t);
+  });
+}
+
 // Collect the visible text of each LEAF (an element with no child elements, or
 // a bare text node) under `el`, in document order. Whitespace-collapsed, empties
 // dropped, and adjacent duplicates removed. Used to separate byline/header leaf
@@ -221,9 +249,10 @@ function getService(): TurndownService {
       const cls = (node.getAttribute?.('class') ?? '').split(/\s+/);
       return cls.includes('dx-quote') || cls.includes('dx-quote-frag');
     },
-    replacement: (content) => {
+    replacement: (content, node) => {
       const inner = content.trim();
       if (!inner) return '';
+      if (inListItem(node)) return inner.replace(/\s*\n+\s*/g, ' ');
       const quoted = inner.split('\n').map((l) => (l.trim() ? `> ${l}` : '>')).join('\n');
       return `\n\n${quoted}\n\n`;
     },
@@ -245,7 +274,8 @@ function getService(): TurndownService {
     replacement: (_content, node) => {
       const parts = leafTexts(node as HTMLElement).map((t) => t.replace(/\*/g, ''));
       const joined = parts.join(' · ');
-      return joined ? `\n\n**${joined}**\n\n` : '';
+      if (!joined) return '';
+      return inListItem(node) ? `**${joined}**` : `\n\n**${joined}**\n\n`;
     },
   });
 
@@ -254,11 +284,33 @@ function getService(): TurndownService {
   // it into glued digits. The counts sit in separate leaf nodes with no
   // whitespace between them (primal: <div><div>8</div></div><div><div>528</div>…),
   // so textContent alone reads "852862" — collect each leaf's own text instead.
+  // A row carrying a content link is a CONTENT row the tagger over-matched (a
+  // Spotify/Apple Music track, a ProductHunt launch, an IMDb genre list), not
+  // an engagement strip — the tagger only needs it to be a short flex row of
+  // icon-bearing children, which a track row is. Reducing it to counts turned
+  // a 10-track album into "1 · 1, 2 · 2" while the CLIP rendered it perfectly.
+  // Measured across the 206-domain corpus: 37 domains, ~6.3k chars of prose.
   td.addRule('dx-stats-counts', {
     filter: (node) => (node.getAttribute?.('class') ?? '').split(/\s+/).includes('dx-stats'),
-    replacement: (_content, node) => {
+    replacement: (content, node) => {
       const el = node as HTMLElement;
-      const COUNT_RE = /\b\d[\d,.]*[KMB]?\b/i;
+      // Content row: keep everything, but flatten to ONE line. The tagger
+      // matched it because it IS a single visual row, and turndown would
+      // otherwise emit each wrapper div as its own paragraph — a 10-track album
+      // sprayed over 30 blocks. Links survive, so titles stay clickable.
+      if (hasContentLink(el)) {
+        const line = content
+          .replace(/\s*\n+\s*/g, ' · ')
+          .replace(/\]\(([^)\s]+)\)(?=\[)/g, ']($1) ') // adjacent links glue otherwise
+          .replace(/(?:\s*·\s*)+/g, ' · ')
+          .replace(/^\s*·\s*|\s*·\s*$/g, '')
+          .trim();
+        if (!line) return '';
+        return inListItem(node) ? line : `\n\n${line}\n\n`;
+      }
+      // A timecode is one value, not a number: "1:04" must not truncate to "1"
+      // (a track duration), so the m:ss / h:mm:ss form is matched first.
+      const COUNT_RE = /\b\d{1,2}(?::\d{2}){1,2}\b|\b\d[\d,.]*[KMB]?\b/i;
       const counts: string[] = [];
       // Every element with no child elements is a leaf; pull the numeric count
       // out of its text (which may carry a leading icon glyph, e.g. "❤ 12").
@@ -272,7 +324,9 @@ function getService(): TurndownService {
         const all = (el.textContent ?? '').match(new RegExp(COUNT_RE, 'gi'));
         if (all) counts.push(...all);
       }
-      return counts.length > 0 ? `\n\n${counts.join(' · ')}\n\n` : '';
+      if (counts.length === 0) return '';
+      const row = counts.join(' · ');
+      return inListItem(node) ? row : `\n\n${row}\n\n`;
     },
   });
 
@@ -457,6 +511,28 @@ function restorePreLineBreaks(root: Element): void {
   }
 }
 
+// Move a trailing <br> out of an emphasis element. `<strong>Heading<br></strong>`
+// converts to "**Heading\n**", where the closing delimiter starts a new line and
+// CommonMark therefore never closes the emphasis — the heading and the paragraph
+// after it merge into one run of bold-looking text (aws-blog's section titles).
+// The break is a separator between the two, so it belongs after the </strong>.
+function liftTrailingBreaks(root: Element): void {
+  for (const em of Array.from(root.querySelectorAll('strong, b, em, i'))) {
+    let last = em.lastChild;
+    // Skip whitespace-only text nodes sitting after the break.
+    while (last && last.nodeType === 3 && !(last.textContent ?? '').trim()) {
+      const prev = last.previousSibling;
+      last.remove();
+      last = prev;
+    }
+    while (last && last.nodeName === 'BR') {
+      const prev = last.previousSibling;
+      em.after(last);
+      last = prev;
+    }
+  }
+}
+
 /**
  * Convert sanitised capture HTML to CommonMark for a kind-30023 body.
  * Returns an empty string for empty/whitespace input.
@@ -473,6 +549,7 @@ export function htmlToMarkdown(html: string): string {
     const container = doc.getElementById('__dx_md_root');
     if (container) {
       restorePreLineBreaks(container);
+      liftTrailingBreaks(container);
       separateInlineFacets(container);
       source = container.innerHTML;
     }
