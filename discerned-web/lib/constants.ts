@@ -235,3 +235,40 @@ export function initRelayModeFromStorage(): void {
 // Back-compat: the initial active set (env-var resolution). New code should call
 // getActiveRelays() so a runtime toggle is honoured.
 export const ACTIVE_RELAYS: readonly string[] = relaysForMode(DEFAULT_RELAY_MODE);
+
+// ── Test casts (local relay only) ──────────────────────────────────────────
+// The corpus sweep and e2e visual specs publish real casts to the local relay so
+// screenshots can be taken through the actual feed render — see
+// tests/e2e/helpers/castFromCapture.ts. They're signed with one fixed, well-known
+// key so they're identifiable (lib/nostr/test-cast-author.ts) and, unlike a real
+// user's casts, deletable on demand (tests/e2e/tools/purge-test-casts.mjs).
+//
+// They're kept around deliberately (not auto-purged) to compare against future
+// sweeps for regressions, so the feed needs a way to hide them without deleting
+// them. Defaults to HIDDEN — a corpus sweep can add hundreds in one run and
+// bury real casts in the `limit: 50` feed window (see subscribeFeed in
+// lib/nostr/feed.ts), so opt-in is the only default that doesn't surprise
+// someone who forgot the sweep ran recently.
+let showTestCasts = false;
+
+export function getShowTestCasts(): boolean {
+  return showTestCasts;
+}
+
+// Idempotent, like applyRelayMode — a no-op when unchanged avoids a redundant
+// feed re-subscribe.
+export function applyShowTestCasts(show: boolean): void {
+  if (show === showTestCasts) return;
+  showTestCasts = show;
+  log(LL.NORMAL, `[nostr] show test casts → ${show}`);
+  try { localStorage.setItem('discerned.showTestCasts', show ? '1' : '0'); } catch { /* SSR / blocked storage */ }
+  listeners.forEach((fn) => fn());
+}
+
+// Restore the persisted choice on boot, mirroring initRelayModeFromStorage.
+export function initShowTestCastsFromStorage(): void {
+  try {
+    const v = localStorage.getItem('discerned.showTestCasts');
+    if (v === '1' || v === '0') applyShowTestCasts(v === '1');
+  } catch { /* SSR / blocked storage */ }
+}

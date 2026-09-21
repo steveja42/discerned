@@ -13,6 +13,7 @@ import { JsonImportDialog } from '@/components/clips/JsonImportDialog';
 import {
   applyRelayMode, applyRelayList, getCurrentRelayMode, getRelayRows,
   normaliseRelayUrl, DEFAULT_RELAYS,
+  applyShowTestCasts, getShowTestCasts,
   type RelayMode, type RelayRow,
 } from '@/lib/constants';
 import {
@@ -40,6 +41,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const [importOpen, setImportOpen] = useState(false);
   const [jsonImportOpen, setJsonImportOpen] = useState(false);
   const [relayMode, setRelayMode] = useState<RelayMode>(() => getCurrentRelayMode());
+  const [showTestCasts, setShowTestCasts] = useState<boolean>(() => getShowTestCasts());
 
   // Relay rows. Seeded from the current list, or the built-in defaults when the
   // extension hasn't pushed one yet (a first-run web-only visitor).
@@ -120,6 +122,12 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     setRelayMode(next);
     applyRelayMode(next);            // local override + re-subscribe immediately
     sendRelayModeToExtension(next);  // make the extension (source of truth) persist + re-broadcast
+  };
+
+  const toggleShowTestCasts = () => {
+    const next = !showTestCasts;
+    setShowTestCasts(next);
+    applyShowTestCasts(next);
   };
 
   // When an import dialog is open, hide the settings modal behind it rather than
@@ -242,6 +250,16 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               <span className="label">Use local relay</span>
               <span className="sub">{relayMode === 'local' ? 'ON · ws://localhost:7777' : 'OFF · public relays'}</span>
             </button>
+            {relayMode === 'local' && (
+              <button className="settings-action" onClick={toggleShowTestCasts}>
+                <span className="label">Show test casts</span>
+                <span className="sub">
+                  {showTestCasts
+                    ? 'ON · includes corpus-sweep / e2e casts'
+                    : 'OFF · hides corpus-sweep / e2e casts'}
+                </span>
+              </button>
+            )}
           </div>
         )}
       </div>

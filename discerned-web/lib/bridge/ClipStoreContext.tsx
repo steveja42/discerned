@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { ClipData } from '@/lib/types';
 import { sendDeleteClips, sendUpdateNote, sendUpdateCategories } from '@/lib/bridge/extension-bridge';
-import { initRelayModeFromStorage, initRelayListFromStorage } from '@/lib/constants';
+import { initRelayModeFromStorage, initRelayListFromStorage, initShowTestCastsFromStorage } from '@/lib/constants';
 
 export interface ClipBody {
   bodyHtml?: string;
@@ -53,6 +53,7 @@ export function ClipStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     initRelayModeFromStorage();
     initRelayListFromStorage();
+    initShowTestCastsFromStorage();
   }, []);
 
   const setClips = useCallback((clips: ClipData[]) => {
