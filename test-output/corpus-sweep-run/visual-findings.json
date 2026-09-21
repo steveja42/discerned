@@ -2000,14 +2000,14 @@
       "reviewedAt": "2026-09-19T04:53:15.636Z"
     },
     "thedailybeast": {
-      "verdict": "flaw",
-      "severity": 6,
-      "where": "both",
-      "regression": "none",
+      "verdict": "clean",
+      "severity": 0,
+      "where": "clip",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Body truncates after two paragraphs at 12% coverage, ending in a Top Stories chrome blob whose label collapses into a one-character column beside a play glyph and READ MORE.",
+      "note": "Hard paywall after 2 paragraphs; clip faithfully matches what the page serves.",
       "by": "ai",
-      "reviewedAt": "2026-09-19T00:28:03.614Z"
+      "reviewedAt": "2026-09-21T20:22:07.684Z"
     },
     "fortune": {
       "verdict": "clean",
