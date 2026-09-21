@@ -6915,14 +6915,18 @@ function tagSnapchat(root: Document | Element): Element | void {
  * feed that reports the bare "/spotlight" URL rather than the current post
  * (measured), the same SPA hazard as Instagram and YouTube.
  */
+function toAbsoluteSnapchatUrl(href: string | null): string | null {
+  if (!href) return null;
+  try { return new URL(href, 'https://www.snapchat.com').toString(); } catch { return null; }
+}
+
 function snapchatVideoUrl(item: Element | null): string | null {
   const path = testPathOverride ?? window.location.pathname;
   const fromUrl = path.match(/^\/(@[^/]+)\/spotlight\/([A-Za-z0-9_-]{10,})/);
   if (fromUrl) return `https://www.snapchat.com/${fromUrl[1]}/spotlight/${fromUrl[2]}`;
   const href = item?.querySelector<HTMLAnchorElement>('a[href*="/spotlight/"]')?.getAttribute('href')
     ?? document.querySelector<HTMLAnchorElement>('a[data-testid="feedItemLink"]')?.getAttribute('href');
-  if (!href) return null;
-  try { return new URL(href, 'https://www.snapchat.com').toString(); } catch { return null; }
+  return toAbsoluteSnapchatUrl(href ?? null);
 }
 
 /**
@@ -6955,9 +6959,8 @@ function postCloneSnapchat(clone: Element): void {
   // the post carries no post-scoped anchor and the address bar never changes —
   // so the author's profile is the only destination. Without this the poster
   // was a dead image with no link at all.
-  const href = snapchatVideoUrl(clone)
-    ?? clone.querySelector<HTMLAnchorElement>('a[href*="/@"]')?.getAttribute('href')
-    ?? null;
+  const profileHref = clone.querySelector<HTMLAnchorElement>('a[href*="/@"]')?.getAttribute('href') ?? null;
+  const href = snapchatVideoUrl(clone) ?? toAbsoluteSnapchatUrl(profileHref);
   const video = clone.querySelector<HTMLVideoElement>('video, [data-testid="playerContentVideo"]');
   const poster = video?.getAttribute('poster') ?? null;
   if (!href) return;
