@@ -3415,9 +3415,20 @@ function looksLikeFeedPost(el: Element): boolean {
   return !!el.querySelector('img, video, picture');
 }
 
-function maybeNarrowToVisiblePost(el: Element): Element {
+function maybeNarrowToVisiblePost(el: Element, title: string): Element {
   const vw = window.innerWidth, vh = window.innerHeight;
   if (vw <= 0 || vh <= 0) return el; // jsdom / no layout — can't judge visibility
+  // `el` already holds ONE story's own headline — it cannot be a feed of
+  // several posts, whatever its internal markup looks like. Politico chunks
+  // an article into per-paragraph rows sharing one class
+  // (`article-row-with-three-columns`); those rows pass every signature/size/
+  // prose gate below because each genuinely holds real sentence fragments, so
+  // narrowing "won" by keeping the headline row and discarding the article's
+  // own body paragraphs as if they were other posts. Measured: 6 "siblings" —
+  // headline+dek, three body paragraphs, a tags footer, a newsletter promo —
+  // for ONE story (textCoverage 0.868 → 0.046). A real feed's `el` has no
+  // single headline of its own to find here.
+  if (containsPageHeadline(el, title)) return el;
 
   // Where the feed track sits depends on which tier chose `el`:
   //   • Tier 1.5 (layout finder) picks the track itself or one card → el / parent.
@@ -3673,6 +3684,32 @@ const HEADLINE_MAX_CHARS = 250;
 // tight enough that a "Related stories" rail heading fails.
 const HEADLINE_TITLE_OVERLAP = 0.6;
 
+const collapseWhitespace = (s: string) => s.replace(/\s+/g, ' ').trim();
+const significantWords = (s: string) => new Set(
+  collapseWhitespace(s).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(w => w.length > 2),
+);
+
+/**
+ * True when `el` already contains a heading matching the page <title> — i.e.
+ * `el` is already scoped to ONE story, not a feed of several. Shares the word-
+ * overlap rule `withHeadlineFallback` uses to find a headline in the first
+ * place, so "this is the same story" is judged identically in both places.
+ */
+function containsPageHeadline(el: Element, title: string): boolean {
+  const titleWords = significantWords(title);
+  if (titleWords.size === 0) return false;
+  for (const heading of querySelectorAllDeep(el, 'h1, h2')) {
+    const headingText = collapseWhitespace(heading.textContent ?? '');
+    if (headingText.length < HEADLINE_MIN_CHARS || headingText.length > HEADLINE_MAX_CHARS) continue;
+    const headingWords = significantWords(headingText);
+    if (headingWords.size === 0) continue;
+    let sharedWordCount = 0;
+    for (const word of headingWords) if (titleWords.has(word)) sharedWordCount++;
+    if (sharedWordCount / headingWords.size >= HEADLINE_TITLE_OVERLAP) return true;
+  }
+  return false;
+}
+
 /**
  * Recover the page HEADLINE when the captured root starts below it.
  *
@@ -3687,36 +3724,32 @@ function withHeadlineFallback(html: string, root: Element | null, title: string)
   // as "already titled". A title is the first thing in the body or it is not one.
   const leading = /^\s*(?:<(?:div|figure|section|header|p)[^>]*>\s*)*<h[1-3][\s>]/i;
   if (leading.test(html)) return html;
-  const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
-  const words = (s: string) => new Set(
-    norm(s).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(w => w.length > 2),
-  );
-  const titleWords = words(title);
+  const titleWords = significantWords(title);
   if (titleWords.size === 0) return html;
 
-  const bodyText = norm(html.replace(/<[^>]+>/g, ' ')).toLowerCase();
+  const bodyText = collapseWhitespace(html.replace(/<[^>]+>/g, ' ')).toLowerCase();
   let best: { el: Element; text: string } | null = null;
-  for (const h of querySelectorAllDeep(document.body, 'h1, h2')) {
+  for (const heading of querySelectorAllDeep(document.body, 'h1, h2')) {
     // Must be OUTSIDE the root: inside means something downstream dropped it,
     // which is a different bug this must not paper over.
-    if (root && root.contains(h)) continue;
-    const text = norm(h.textContent ?? '');
-    if (text.length < HEADLINE_MIN_CHARS || text.length > HEADLINE_MAX_CHARS) continue;
-    const r = h.getBoundingClientRect();
+    if (root && root.contains(heading)) continue;
+    const headingText = collapseWhitespace(heading.textContent ?? '');
+    if (headingText.length < HEADLINE_MIN_CHARS || headingText.length > HEADLINE_MAX_CHARS) continue;
+    const rect = heading.getBoundingClientRect();
     // Skip invisible headings (SEO-only/off-screen). jsdom reports 0x0 for
     // everything, so only test this where there IS layout.
-    if (hasRealLayout() && (r.width <= 0 || r.height <= 0)) continue;
-    if (bodyText.includes(text.toLowerCase())) continue;
+    if (hasRealLayout() && (rect.width <= 0 || rect.height <= 0)) continue;
+    if (bodyText.includes(headingText.toLowerCase())) continue;
     // Must be THIS page's headline, not a rail/section heading.
-    const hw = words(text);
-    if (hw.size === 0) continue;
-    let shared = 0;
-    for (const w of hw) if (titleWords.has(w)) shared++;
-    if (shared / hw.size < HEADLINE_TITLE_OVERLAP) continue;
+    const headingWords = significantWords(headingText);
+    if (headingWords.size === 0) continue;
+    let sharedWordCount = 0;
+    for (const word of headingWords) if (titleWords.has(word)) sharedWordCount++;
+    if (sharedWordCount / headingWords.size < HEADLINE_TITLE_OVERLAP) continue;
     // Prefer an <h1>; the loop is in document order, so a later one is only
     // taken to upgrade h2 → h1.
-    if (!best) best = { el: h, text };
-    else if (best.el.tagName !== 'H1' && h.tagName === 'H1') best = { el: h, text };
+    if (!best) best = { el: heading, text: headingText };
+    else if (best.el.tagName !== 'H1' && heading.tagName === 'H1') best = { el: heading, text: headingText };
     // An <h1> past every guard is the headline; nothing later beats it.
     if (best.el.tagName === 'H1') break;
   }
@@ -3979,7 +4012,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   // [role=main]) holding every loaded post, so Tier 1 wins and the clip carries
   // the whole feed. Narrow to the post on screen when the feed signature holds;
   // otherwise this returns the element unchanged and Tier 1 behaves as before.
-  const articleEl = semanticEl ? maybeNarrowToVisiblePost(semanticEl) : null;
+  const articleEl = semanticEl ? maybeNarrowToVisiblePost(semanticEl, base.title) : null;
   if (articleEl) {
     log(LL.DEBUG, `Discerned: article captured via semantic element <${articleEl.tagName.toLowerCase()}>`, 'url:', base.url);
     const cleanup = markExcluded(document.body);
@@ -4061,7 +4094,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     // Otherwise: on an ENDLESS FEED narrow to the post actually on screen; on a
     // thread (or anything else) fall through to the usual widen-to-feed. The two
     // are opposites, so narrowing wins when its signature holds.
-    const narrowed = siteTaggerRoot ? layoutEl : maybeNarrowToVisiblePost(layoutEl);
+    const narrowed = siteTaggerRoot ? layoutEl : maybeNarrowToVisiblePost(layoutEl, base.title);
     const expanded = siteTaggerRoot ? layoutEl
       : (narrowed !== layoutEl ? narrowed : maybeExpandToFeed(layoutEl));
     // When a site tagger has scoped the capture root, clear EXCL markers on

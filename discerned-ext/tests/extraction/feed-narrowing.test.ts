@@ -163,4 +163,37 @@ describe('maybeNarrowToVisiblePost — THREADS and GRIDS are left alone', () => 
     const text = await capture();
     expect(text).toContain('PANEL_0');
   });
+
+  it('leaves a paragraph-chunked ARTICLE alone (politico: one story split into per-row siblings)', async () => {
+    // Politico renders each paragraph of ONE story as its own
+    // `article-row-with-three-columns` sibling: headline+dek, then three body
+    // paragraphs, then footer chrome (tags, newsletter promo) — six
+    // same-signature rows for a single article, not six posts. Every existing
+    // narrowing gate (signature, size, prose) passes on this shape, so only the
+    // headline row survived (textCoverage 0.868 → 0.046, measured live
+    // 2026-09-20). The page's own <h1> sits inside the track, which is what
+    // must stop narrowing here.
+    const origTitle = document.title;
+    document.title = 'NASA’s nuclear Mars mission to cost over $2 billion - POLITICO';
+    buildTrack({
+      count: 6, height: 80, startTop: 0, cls: 'article-row-with-three-columns',
+      body: i => ([
+        '<h1>NASA’s nuclear Mars mission to cost over $2 billion</h1><p>DEK_TEXT the price tag does not include the cost.</p>',
+        '<p>BODY_1 NASA administrator plans to build a base with real prose content here.</p>',
+        '<p>BODY_2 the agency plans to spend six hundred forty million dollars in this fiscal year on the mission.</p>',
+        '<p>BODY_3 it is unclear how funding already allocated to other programs will be shuffled around.</p>',
+        '<p>Related Tags Defense NASA Mars Space</p>',
+        '<p>National Security Daily from the sitroom to the ering newsletter promo text.</p>',
+      ][i]),
+    });
+    try {
+      const text = await capture();
+      expect(text, 'headline row must still be captured').toContain('DEK_TEXT');
+      expect(text, 'body paragraphs must not be dropped as "other posts"').toContain('BODY_1');
+      expect(text).toContain('BODY_2');
+      expect(text).toContain('BODY_3');
+    } finally {
+      document.title = origTitle;
+    }
+  });
 });
