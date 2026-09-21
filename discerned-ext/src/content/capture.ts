@@ -682,12 +682,22 @@ async function extractSelection(): Promise<Capture> {
   // three formats produce the same site-tagger-aware structure.
   applyTaggerToClone(fragment);
   stripSizeMarkers(fragment);
+  // Same landmark strip extractArticle/extractFullPage run — a nav/aside/
+  // role=complementary widget inside the selected range (e.g. a recipe-card
+  // scaler's error state) would otherwise unwrap into stray prose text once
+  // sanitisation drops the wrapping tag.
+  stripPageChrome(fragment as unknown as Element);
   // Twitter GIFs and videos are <video poster="..."> — convert to <img> so they
   // survive sanitisation (which drops <video> as a non-allowed tag).
   substituteVideosWithPosters(fragment);
   substituteStarRatings(fragment);
   await substituteEmbeddedTweets(fragment, harvestedTweets);
   substituteVideoEmbeds(fragment);
+  // Generic semantic tagging (skipped automatically when a site tagger was
+  // active) — stamps dx-byline / dx-stats / dx-quote on news + blog markup so
+  // a selection spanning a byline or engagement row gets the same layout
+  // treatment article/full-page captures do, instead of raw run-together text.
+  tagSemanticStructure(fragment as unknown as Element);
   const sanitized = sanitizeFragment(fragment);
   log(LL.DEBUG, `Discerned: extractSelection — after sanitize: html=${sanitized.length} chars`, 'url:', url);
   const context = extractContext(range);
@@ -4341,12 +4351,23 @@ async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
   tagSemanticStructure(bodyClone);
   sanitiseTreeInPlace(bodyClone, opts.stripInlineStyles);
   const { html: inlined, imageUrls } = await inlineAllImages(bodyClone.innerHTML.trim());
+  // Same square-logo guard as extractArticle's Guard 3: a site with no
+  // per-page art declares its own brand mark as og:image, and without this
+  // a full-page cast heroes with the site logo instead of nothing.
+  const fpThumbnailUrl = getPageThumbnail();
+  const fpThumbSize = fpThumbnailUrl && isDeclaredThumbnail()
+    ? await probeImageSize(fpThumbnailUrl) : null;
+  const fpDeclaredIsLogo = !!fpThumbSize && fpThumbSize.w > 0 && fpThumbSize.h > 0
+    && fpThumbSize.w / fpThumbSize.h >= LOGO_MIN_ASPECT
+    && fpThumbSize.w / fpThumbSize.h <= LOGO_MAX_ASPECT;
   return {
     ...baseFields(),
     format: 'full-page',
     bodyHtml: inlined,
     bodyText: bodyClone.textContent?.trim() ?? '',
-    thumbnail: getPageThumbnail(),
+    thumbnail: fpThumbnailUrl,
+    thumbnailIsLogo: fpDeclaredIsLogo || undefined,
+    thumbnailUrl: castImageUrlFromBody(inlined, fpDeclaredIsLogo ? null : fpThumbnailUrl),
     imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
   };
 }
