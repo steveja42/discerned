@@ -10973,8 +10973,11 @@ async function inlineImage(src: string): Promise<string> {
     if (res?.success && res.data && typeof (res.data as { dataUri?: string }).dataUri === 'string') {
       return (res.data as { dataUri: string }).dataUri;
     }
-  } catch {
-    // Fall through to original URL.
+    log(LL.WARN, 'inlineImage: background reported failure, hotlinking instead',
+      'error:', res?.error, 'src:', src, 'url:', window.location.href);
+  } catch (err) {
+    log(LL.WARN, 'inlineImage: sendMessage failed or timed out, hotlinking instead',
+      'error:', err instanceof Error ? err.message : err, 'src:', src, 'url:', window.location.href);
   }
   return src;
 }
