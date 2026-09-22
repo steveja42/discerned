@@ -28,9 +28,13 @@ test('capture a live reel and render its header', async () => {
     headed: !!process.env.IG_HEADED,
   });
   const page = await ctx.newPage();
+  page.on('console', msg => {
+    const t = msg.text();
+    if (/inlineImage|Discerned/i.test(t)) console.log('[PAGE] ' + t);
+  });
   try {
     await page.goto(URL_, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-    await page.waitForTimeout(9_000);
+    await page.waitForTimeout(Number(process.env.IG_WAIT ?? 9_000));
     await activateExtensionOnTab(ctx, URL_);
 
     const cap = await page.evaluate(async () => {
@@ -54,6 +58,10 @@ test('capture a live reel and render its header', async () => {
       Object.fromEntries(markers.map(m => [m, body.split(m).length - 1]))));
     console.log('IGLIVE bodyLen ' + body.length);
     console.log('IGLIVE thumbnailUrl ' + String((cap as Record<string, unknown>).thumbnailUrl));
+    const avatarMatch = body.match(/class="dx-avatar"[^>]*src="([^"]*)"/)
+      ?? body.match(/src="([^"]*)"[^>]*class="dx-avatar"/);
+    const avatarSrc = avatarMatch?.[1] ?? '(no dx-avatar img found)';
+    console.log('IGLIVE avatarSrcKind ' + (avatarSrc.startsWith('data:') ? 'INLINED' : avatarSrc.startsWith('http') ? 'HOTLINKED' : 'MISSING'));
   } finally {
     await ctx.close();
   }
