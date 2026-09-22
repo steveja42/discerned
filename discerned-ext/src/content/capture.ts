@@ -608,6 +608,27 @@ function fragSummary(frag: DocumentFragment): string {
   return `text=${text} html=${html} elems=${elems}`;
 }
 
+// A media/embed element (<video>, <shreddit-player>, <iframe>, …) has no
+// text caret, so a drag that stops ANYWHERE inside its box resolves to
+// offset 0 of that element — cloneContents() then clones nothing from
+// inside it, silently dropping its poster. Measured on reddit.com: ending a
+// drag 20px above <shreddit-player>'s bottom edge gave endOffset=0 and zero
+// images; landing at/past the edge worked. Push the boundary past the
+// element in the stuck-at-zero case. Generic (keyed on boundary math, not a
+// Reddit-specific tag) so it covers any such embed.
+function extendRangePastEmptyMediaBoundary(range: Range): void {
+  const end = range.endContainer;
+  if (end.nodeType !== Node.ELEMENT_NODE || range.endOffset !== 0) return;
+  const el = end as Element;
+  if (el.childNodes.length === 0) return; // nothing to gain by moving the boundary
+  try {
+    range.setEndAfter(el);
+  } catch {
+    // Leave the original (empty) boundary — better to keep whatever the
+    // browser gave us than throw on an edge case we didn't anticipate.
+  }
+}
+
 async function extractSelection(): Promise<Capture> {
   const url = window.location.href;
   logShadowPresence(url);
@@ -641,6 +662,7 @@ async function extractSelection(): Promise<Capture> {
   }
 
   const range = resolved.range;
+  extendRangePastEmptyMediaBoundary(range);
   // Annotate <img>s under the range's common ancestor before cloneContents
   // runs inside wrapFragmentBoundaries, so the cloned fragment carries
   // rendered width/height attributes. Over-annotating outside the range is
@@ -744,10 +766,24 @@ function wrapFragmentBoundaries(range: Range): DocumentFragment {
   const endBlock = nearestBlock(range.endContainer);
 
   // Wrap the first child of the fragment if it is a bare text/inline node.
+  //
+  // When start/end sit at very different tree depths, cloneContents() can
+  // hand back a CONTAINER as the fragment's first child that already holds
+  // startBlock nested inside it (a site-tagger's whole post <div>, not the
+  // <h1> itself) rather than the block as a flat sibling. The old check only
+  // excluded nodes whose OWN tag was in BLOCK_TAGS, so that container (a
+  // <div>) got wrongly re-wrapped, producing invalid nesting:
+  // <h1><div>…<h1>real title</h1>…</div></h1>. Skip the wrap when the first
+  // child already CONTAINS an element of startBlock's tag.
   if (startBlock && fragment.firstChild) {
     const first = fragment.firstChild;
-    if (first.nodeType === Node.TEXT_NODE ||
-        (first.nodeType === Node.ELEMENT_NODE && !BLOCK_TAGS.has((first as Element).tagName.toLowerCase()))) {
+    const alreadyHolds = first.nodeType === Node.ELEMENT_NODE &&
+      (first as Element).tagName.toLowerCase() === startBlock.tagName.toLowerCase()
+        ? true
+        : first.nodeType === Node.ELEMENT_NODE &&
+          !!(first as Element).querySelector(startBlock.tagName.toLowerCase());
+    if (!alreadyHolds && (first.nodeType === Node.TEXT_NODE ||
+        (first.nodeType === Node.ELEMENT_NODE && !BLOCK_TAGS.has((first as Element).tagName.toLowerCase())))) {
       const wrapper = document.createElement(startBlock.tagName.toLowerCase());
       // Copy class/id so heading levels etc. carry over.
       if (startBlock.className) wrapper.className = startBlock.className;
@@ -757,11 +793,16 @@ function wrapFragmentBoundaries(range: Range): DocumentFragment {
   }
 
   // Wrap the last child of the fragment if it is a bare text/inline node and
-  // belongs to a different block than the start.
+  // belongs to a different block than the start. Same over-wrap guard as above.
   if (endBlock && endBlock !== startBlock && fragment.lastChild) {
     const last = fragment.lastChild;
-    if (last.nodeType === Node.TEXT_NODE ||
-        (last.nodeType === Node.ELEMENT_NODE && !BLOCK_TAGS.has((last as Element).tagName.toLowerCase()))) {
+    const alreadyHolds = last.nodeType === Node.ELEMENT_NODE &&
+      (last as Element).tagName.toLowerCase() === endBlock.tagName.toLowerCase()
+        ? true
+        : last.nodeType === Node.ELEMENT_NODE &&
+          !!(last as Element).querySelector(endBlock.tagName.toLowerCase());
+    if (!alreadyHolds && (last.nodeType === Node.TEXT_NODE ||
+        (last.nodeType === Node.ELEMENT_NODE && !BLOCK_TAGS.has((last as Element).tagName.toLowerCase())))) {
       const wrapper = document.createElement(endBlock.tagName.toLowerCase());
       if (endBlock.className) wrapper.className = endBlock.className;
       wrapper.appendChild(last);
@@ -5169,6 +5210,36 @@ function tagReddit(root: Document | Element): Element | void {
     post.querySelectorAll('post-media-image img[alt=""], shreddit-aspect-ratio img[alt=""], picture img[alt=""]').forEach(img => {
       appendClass(img, 'dx-excl');
     });
+
+    // A video post's real <video> lives inside <shreddit-player>'s OPEN
+    // shadow root, src is a blob: stream with no address of its own, so
+    // substituteVideosWithPosters would otherwise swap it for a linkless
+    // poster <img>. Stamp data-dx-link with the permalink so that swap
+    // builds a clickable tweet-video card; video-embed.ts resolves it to
+    // Reddit's embed.reddit.com player at click time.
+    const permalink = post.getAttribute('permalink');
+    // 'video', not 'shreddit-player video' — querySelectorAllDeep re-runs the
+    // WHOLE selector inside each shadow root it descends into, where the
+    // <shreddit-player> host is out of scope, so a selector spanning the
+    // shadow boundary can never match. `[0]`, not "the only video": a video
+    // post also carries a second, poster-less <video> several shadow levels
+    // deeper (the progress-bar hover-scrub preview). The depth-first walk
+    // visits shreddit-player's OWN shadow root first, so index 0 is reliably
+    // the real video — measured live, not assumed.
+    const shredditVideo = querySelectorAllDeep(post, 'video')[0];
+    if (permalink && shredditVideo) {
+      shredditVideo.setAttribute('data-dx-link', new URL(permalink, window.location.origin).href);
+    }
+    // A SELECTION capture's fragment comes from native Range.cloneContents(),
+    // which — unlike deepCloneWithShadow — never pierces shadow roots, so it
+    // never sees the shadow <video> stamped above. The poster's <img
+    // slot="poster"> IS light DOM (just assigned into the shadow tree via
+    // <slot>), so mark it too; postCloneReddit builds the card from whichever
+    // one survived into the clone.
+    const posterImg = post.querySelector('[slot="post-media-container"] img[slot="poster"]');
+    if (permalink && posterImg) {
+      posterImg.setAttribute('data-dx-link', new URL(permalink, window.location.origin).href);
+    }
   }
 
   // Each comment. Avatar lives in its own [slot="commentAvatar"] sibling, not
@@ -7436,6 +7507,49 @@ let siteTaggerPostClone: SitePostClone | null = null;
  * the framework. The clone is detached and safe to mutate freely.
  */
 function postCloneReddit(clone: Element): void {
+  // Avatars render as either a plain <img> (uploaded avatar) or an inline
+  // <svg><image> ("snoovatar", most accounts' default). The live tagger only
+  // marks the <img> shape as dx-avatar, so a snoovatar loses its avatar.
+  // <shreddit-comment> always carries the resolved URL in a plain
+  // `avatar="..."` attribute regardless of shape — build one canonical <img>
+  // from that instead of chasing each rendering shape.
+  clone.querySelectorAll('shreddit-comment').forEach(cmt => {
+    const avatarUrl = cmt.getAttribute('avatar');
+    const slot = cmt.querySelector('[slot="commentAvatar"]');
+    if (!avatarUrl || !slot) return;
+    if (slot.querySelector('img.dx-avatar')) return; // plain <img> shape already tagged
+    const author = cmt.getAttribute('author') ?? '';
+    const img = clone.ownerDocument!.createElement('img');
+    img.src = avatarUrl;
+    img.alt = author ? `u/${author} avatar` : 'avatar';
+    img.className = 'dx-avatar';
+    slot.replaceChildren(img);
+  });
+
+  // Selection's fragment never sees the shadow <video> (see tagReddit), only
+  // its light-DOM poster — stamped with data-dx-link there for this reason.
+  // Build the same tweet-video card substituteVideosWithPosters would have,
+  // skipping any poster that already has one (article/full-page built theirs
+  // from the shadow <video>).
+  clone.querySelectorAll('img[slot="poster"][data-dx-link]').forEach(poster => {
+    if (poster.closest('a.tweet-video')) return;
+    const dxLink = poster.getAttribute('data-dx-link')!;
+    const doc = clone.ownerDocument!;
+    const a = doc.createElement('a');
+    a.className = 'tweet-video';
+    a.setAttribute('href', dxLink);
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener noreferrer');
+    poster.replaceWith(a);
+    poster.removeAttribute('slot');
+    poster.classList.add('tweet-video-poster');
+    a.appendChild(poster);
+    const play = doc.createElement('div');
+    play.className = 'tweet-video-play';
+    play.textContent = '▶';
+    a.appendChild(play);
+  });
+
   const credit = clone.querySelector('.dx-byline');
   if (!credit) return;
 
@@ -9360,11 +9474,23 @@ function dedupAdjacentImages(root: Element): void {
       if (cluster.length < 2) return;
       const isData = (img: Element) => (img.getAttribute('src') ?? '').startsWith('data:');
       const hasAlt = (img: Element) => (img.getAttribute('alt') ?? '').trim().length > 0;
-      // Keeper preference, best first: inlined (data:) AND descriptive alt, then
-      // any inlined, then any with an alt, then whatever's first. This keeps the
-      // copy that carries a real alt when duplicates differ only by alt text
-      // (Reddit's alt="" vs alt="r/... - <title>" pair — drop the alt-less one).
-      const keeper = cluster.find(img => isData(img) && hasAlt(img))
+      // A poster inside a built tweet-video play card is deliberate
+      // structure, not incidental duplication — it shares its URL with the
+      // source page's own raw <img> (left untouched since only the <video>
+      // got replaced) purely because they depict the same frame. Losing it
+      // silently empties the card down to a bare play glyph, breaking
+      // click-to-play. Measured on reddit.com. Checked before isData: this
+      // stage runs before inlineAllImages, so neither copy is a data: URI
+      // yet, and the old tie-break fell through to document order — which
+      // favoured the untouched raw image over the card's.
+      const inPlayCard = (img: Element) => !!img.closest('a.tweet-video');
+      // Keeper preference, best first: in a play card, then inlined (data:)
+      // AND descriptive alt, then any inlined, then any with an alt, then
+      // whatever's first. The data:/alt tiers keep the copy that carries a
+      // real alt when duplicates differ only by alt text (Reddit's alt="" vs
+      // alt="r/... - <title>" pair — drop the alt-less one).
+      const keeper = cluster.find(inPlayCard)
+        ?? cluster.find(img => isData(img) && hasAlt(img))
         ?? cluster.find(isData)
         ?? cluster.find(hasAlt)
         ?? cluster[0];

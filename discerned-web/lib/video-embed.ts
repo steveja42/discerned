@@ -126,6 +126,24 @@ export function resolveVideoEmbed(rawUrl: string): VideoEmbed | null {
     }
   }
 
+  // Reddit — a post's own video plays through Reddit's own oEmbed-style embed
+  // page (embed.reddit.com), which renders the post's <shreddit-player>
+  // directly — no API key, and it is the same official mechanism Reddit's own
+  // oEmbed endpoint returns for outside embedding. v.redd.it itself has no
+  // standalone player page: its HLS manifest is only playable inside a
+  // <shreddit-player>, so a bare link to the .m3u8 is not embeddable.
+  if (host === 'reddit.com') {
+    const m = u.pathname.match(/^(\/r\/[^/]+\/comments\/[a-z0-9]+\/[^/]*\/?)/i);
+    if (m) {
+      const canonical = `https://www.reddit.com${m[1]}`;
+      return {
+        embedUrl: `https://embed.reddit.com${m[1]}?embed=true`,
+        provider: 'Reddit',
+        href: canonical,
+      };
+    }
+  }
+
   // Rumble / Odysee / Twitch / Dailymotion — already-embeddable player URLs are
   // passed through; their watch-page forms carry no derivable player path.
   if (host === 'rumble.com' && u.pathname.startsWith('/embed/')) {

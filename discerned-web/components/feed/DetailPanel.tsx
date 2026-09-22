@@ -69,6 +69,25 @@ function markdownHasImage(markdown: string, imageUrl: string): boolean {
   return false;
 }
 
+// Same idea as markdownHasImage, for a SELECTION clip's raw HTML excerpt
+// instead of cast markdown. A selection capture has no bodyText mirror of its
+// bodyHtml-shaped content — its markup lives in selectionText (rendered below
+// via the detail-excerpt blockquote) — so the plain `bodyText.includes(u)`
+// inline check below never matches it, and every one of that image's URLs
+// fell into the top gallery AS WELL AS rendering again inline inside the
+// excerpt HTML. Checks both `src` and `data-dx-src` (the real URL an inlined
+// base64 image carries) since either can hold the address being compared.
+function htmlHasImage(html: string, imageUrl: string): boolean {
+  if (html.includes(imageUrl)) return true;
+  const target = urlBase(imageUrl);
+  const re = /<img[^>]*\b(?:src|data-dx-src)="([^"]+)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    if (urlBase(m[1]) === target) return true;
+  }
+  return false;
+}
+
 function NoteEditor({
   note,
   clipId,
@@ -486,7 +505,9 @@ export default function DetailPanel({ clip, author, onDelete, onUpdateNote, bodi
         // first imeta URL, so it only shows when there are no imeta images.
         const photoUrls = capture.imageUrls ?? [];
         const bodyText = capture.bodyText ?? '';
-        const inlineUrls = new Set(photoUrls.filter((u) => bodyText.includes(u)));
+        const selectionHtml = capture.selectionText ?? '';
+        const inlineUrls = new Set(photoUrls.filter((u) =>
+          bodyText.includes(u) || (!!selectionHtml && htmlHasImage(selectionHtml, u))));
         const galleryUrls = photoUrls.filter((u) => !inlineUrls.has(u));
         if (capture.selectionText || capture.bodyText || thumbnail || photoUrls.length > 0) {
           return (

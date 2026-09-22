@@ -237,8 +237,8 @@
     },
     {
       "name": "reddit-thread",
-      "url": "https://www.reddit.com/r/programming/comments/1v1mpxw/zig_proposes_introducing_an_actually_memory_safe/",
-      "note": "single reddit THREAD (post + comments — real content, not the subreddit feed listing); tagReddit target. CF-walled: loads HEADED, may skip headless",
+      "url": "https://www.reddit.com/r/MadeMeSmile/comments/1wae00g/turtles_when_a_job_requires_exactly_0_turtles_lol/",
+      "note": "single reddit THREAD (post + comments — real content, not the subreddit feed listing); tagReddit target. Video post (play-in-place + reply avatars under investigation). CF-walled: loads HEADED, may skip headless",
       "headed": true
     },
     {
