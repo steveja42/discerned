@@ -9,9 +9,11 @@
 
   Four things it does that a bare `playwright test` invocation does not:
 
-  1. PREFLIGHT. Chrome holding the Profile 3 lock, a missing dist-test, or a
-     dead dev server each fail the run — but only after it has been going long
-     enough to matter. All three are checked in seconds up front.
+  1. PREFLIGHT. Chrome holding the Profile 3 lock, a stale-or-missing dist-test,
+     or a dead dev server each fail the run — but only after it has been going
+     long enough to matter. All three are checked in seconds up front, and
+     dist-test is REBUILT when any build input is newer than it (rather than
+     warning and continuing, which let a whole sweep measure superseded code).
 
   2. BACKUP. corpus-sweep-run/ is overwritten in place, so without a snapshot a
      regression is invisible: the new PNG silently replaces the old one and
@@ -106,8 +108,10 @@
   powershell -ExecutionPolicy Bypass -File scripts/corpus-sweep-run.ps1 -Attended -Only discogs,producthunt
 
 .NOTES
-  Uses `powershell` (Windows PowerShell 5.1), not `pwsh` — PowerShell 7 is not
-  installed on this machine, so a pwsh invocation fails with CommandNotFound.
+  Runs under either host. PowerShell 7 (`pwsh`, 7.6.6) is now installed and this
+  script parses and runs clean under it; `powershell -ExecutionPolicy Bypass`
+  (Windows PowerShell 5.1) remains supported. The examples above use the 5.1
+  form because it predates the pwsh install — both work.
 #>
 [CmdletBinding()]
 param(
@@ -169,15 +173,51 @@ if ($chrome) {
 Ok 'Chrome is closed (Profile 3 lock free)'
 
 # The sweep loads dist-test/, never dist/ or dist-pack/.
-$distTest = Join-Path $repo 'discerned-ext\dist-test\manifest.json'
+#
+# Rebuild whenever a BUILD INPUT is newer than the build, rather than warning on
+# wall-clock age. Age is the wrong question: a 30h-old build with no source
+# changes is fine, while one from 20 minutes ago is stale if capture.ts was
+# edited 5 minutes later. The old version only WARNED and continued, so a sweep
+# could capture all 209 domains with superseded code — hours of wall-clock plus
+# the IP-reputation budget against walled sites, spent measuring the wrong
+# pipeline, and a set of verdicts describing code that no longer exists.
+$ext = Join-Path $repo 'discerned-ext'
+$distTest = Join-Path $ext 'dist-test\manifest.json'
+
+function newestBuildInput {
+  $files = @()
+  $files += Get-ChildItem -Path (Join-Path $ext 'src') -Recurse -File -ErrorAction SilentlyContinue
+  # Config that changes the OUTPUT, not just the toolchain. build-injected.mjs is
+  # chained from vite.config.ts and emits the injected IIFEs, so it counts.
+  foreach ($p in 'manifest.json','vite.config.ts','tsconfig.json','scripts\build-injected.mjs') {
+    $f = Get-Item (Join-Path $ext $p) -ErrorAction SilentlyContinue
+    if ($f) { $files += $f }
+  }
+  return ($files | Sort-Object LastWriteTime -Descending | Select-Object -First 1)
+}
+
+$needsBuild = $false
+$reason = ''
 if (-not (Test-Path $distTest)) {
-  Warn 'discerned-ext/dist-test/ missing — building it now (pnpm build:test)...'
+  $needsBuild = $true
+  $reason = 'dist-test/ missing'
+} else {
+  $newest = newestBuildInput
+  if ($newest -and $newest.LastWriteTime -gt (Get-Item $distTest).LastWriteTime) {
+    $needsBuild = $true
+    $reason = "$($newest.Name) is newer than the build"
+  }
+}
+
+if ($needsBuild) {
+  Warn "Rebuilding dist-test ($reason)..."
   pnpm --filter=./discerned-ext build:test
   if ($LASTEXITCODE -ne 0) { Warn 'build:test failed'; exit 1 }
+  Ok 'dist-test rebuilt from current source'
+} else {
+  $age = [math]::Round(((Get-Date) - (Get-Item $distTest).LastWriteTime).TotalHours, 1)
+  Ok "dist-test is current (built ${age}h ago, no newer source)"
 }
-$age = [math]::Round(((Get-Date) - (Get-Item $distTest).LastWriteTime).TotalHours, 1)
-Ok "dist-test present (built ${age}h ago)"
-if ($age -gt 24) { Warn 'dist-test is over a day old — rebuild if you changed capture code since.' }
 
 # The clip render step drives the web app at :3000.
 try {
@@ -260,6 +300,10 @@ if ($Attended) {
   } else {
     Warn 'No clips captured - every domain was gated or skipped.'
   }
+  # Catch up any domain re-captured outside this pass whose bands are older
+  # than its PNG - see the --stale-only note in the -Foreground path below.
+  python3 tests/e2e/tools/slice-clip.py --all --stale-only | Out-Null
+  python3 tests/e2e/tools/slice-clip.py --all --stale-only --cast | Out-Null
   node tests/e2e/tools/review-queue.mjs --stats
   exit 0
 }
@@ -323,17 +367,16 @@ if ($Foreground) {
   # Exclude 'blocked' rows: those never captured a clip/cast at all, so there is
   # nothing for slice-clip.py to slice (it would just print a harmless SKIP,
   # but filtering here keeps the domain list meaningful).
-  node tests/e2e/tools/review-queue.mjs --json 2>$null |
-    ConvertFrom-Json |
-    Select-Object -ExpandProperty rows |
-    Where-Object { $_.domain -and $_.kind -ne 'blocked' } |
-    Select-Object -ExpandProperty domain -Unique |
-    Set-Variable -Name pendingDomains
-  if ($pendingDomains) {
-    $domainArg = ($pendingDomains -join ',')
-    python3 tests/e2e/tools/slice-clip.py $domainArg | Out-Null
-    python3 tests/e2e/tools/slice-clip.py $domainArg --cast | Out-Null
-  }
+  # --all --stale-only rather than "the pending domains": it re-slices every
+  # domain whose PNG is newer than its bands, which is a superset and closes
+  # the hole that leaving it to the pending list opened. A domain re-captured
+  # but NOT pending (its verdict is still current) was never re-sliced, so its
+  # bands silently aged out beside a fresh clip - measured 2026-09-23,
+  # politico's slices were 92h older than its PNG while its sidecar and verdict
+  # both read as current, i.e. nothing anywhere flagged it. Skipping the
+  # up-to-date ones is an mtime compare, so this stays cheap over all 209.
+  python3 tests/e2e/tools/slice-clip.py --all --stale-only | Out-Null
+  python3 tests/e2e/tools/slice-clip.py --all --stale-only --cast | Out-Null
   node tests/e2e/tools/review-queue.mjs --stats
   Write-Host ''
   Write-Host '  Capture + slicing are done. VISUAL REVIEW ITSELF IS NOT SCRIPTABLE —' -ForegroundColor Yellow
@@ -341,8 +384,9 @@ if ($Foreground) {
   Write-Host '  it, which needs a model in the loop, not a script. Hand this to Claude:' -ForegroundColor Yellow
   Write-Host ''
   Write-Host '    Review the corpus sweep: go through the review queue' -ForegroundColor Cyan
-  Write-Host '    (node tests/e2e/tools/review-queue.mjs), read ALL of each pending' -ForegroundColor Cyan
-  Write-Host '    domain''s clip AND cast slices (there are up to 3 bands each — a' -ForegroundColor Cyan
+  Write-Host '    (node tests/e2e/tools/review-queue.mjs) — it lists ONLY the domains' -ForegroundColor Cyan
+  Write-Host '    needing review, so do not walk the whole corpus. For each domain it' -ForegroundColor Cyan
+  Write-Host '    lists, read EVERY band of its clip AND cast slices (up to 3 each — a' -ForegroundColor Cyan
   Write-Host '    verdict from band 1 alone cannot tell MISSING from BURIED), and' -ForegroundColor Cyan
   Write-Host '    record a verdict for each via record-verdict.mjs.' -ForegroundColor Cyan
   Write-Host '    Where you can compare against the previous backup, call out any' -ForegroundColor Cyan
@@ -409,14 +453,17 @@ if ($Foreground) {
   Write-Host '  while the sweep runs, so review overlaps with capture rather than following it:' -ForegroundColor Yellow
   Write-Host ''
   Write-Host '    A corpus sweep is running in the background. Tail' -ForegroundColor Cyan
-  Write-Host '    test-output/sweep-slices.log (or use Monitor on it) and, as each domain' -ForegroundColor Cyan
-  Write-Host '    is announced, read EVERY clip and cast band it lists (up to 3 each —' -ForegroundColor Cyan
-  Write-Host '    content buried under a video rail or carousel does not reach band 1)' -ForegroundColor Cyan
-  Write-Host '    and record a verdict via record-verdict.mjs. If a band line says some' -ForegroundColor Cyan
-  Write-Host '    were NOT written and the verdict turns on what is below, re-slice with' -ForegroundColor Cyan
-  Write-Host '    --max. Where you can compare against the previous backup,' -ForegroundColor Cyan
-  Write-Host '    call out real regressions explicitly (regression:"regressed" +' -ForegroundColor Cyan
-  Write-Host '    regressedFrom). Keep going until the log prints DONE.' -ForegroundColor Cyan
+  Write-Host '    test-output/sweep-slices.log (or use Monitor on it) for TIMING only —' -ForegroundColor Cyan
+  Write-Host '    it announces every captured domain, not just ones needing review. Run' -ForegroundColor Cyan
+  Write-Host '    node tests/e2e/tools/review-queue.mjs to see which newly-landed domains' -ForegroundColor Cyan
+  Write-Host '    actually need a look (it skips ones whose verdict already covers the' -ForegroundColor Cyan
+  Write-Host '    current image). For each domain the queue lists, read EVERY clip and' -ForegroundColor Cyan
+  Write-Host '    cast band (up to 3 each — content buried under a video rail or carousel' -ForegroundColor Cyan
+  Write-Host '    does not reach band 1) and record a verdict via record-verdict.mjs. If a' -ForegroundColor Cyan
+  Write-Host '    band line says some were NOT written and the verdict turns on what is' -ForegroundColor Cyan
+  Write-Host '    below, re-slice with --max. Where you can compare against the previous' -ForegroundColor Cyan
+  Write-Host '    backup, call out real regressions explicitly (regression:"regressed" +' -ForegroundColor Cyan
+  Write-Host '    regressedFrom). Keep going until the log prints DONE and the queue is empty.' -ForegroundColor Cyan
   Write-Host ''
   Write-Host '  When it finishes, recover blocked domains with:'
   Write-Host '    powershell -ExecutionPolicy Bypass -File scripts/corpus-sweep-run.ps1 -Resume -Gap 45 -Foreground'

@@ -8,6 +8,24 @@
 // notification is an actionable "this one is ready to eyeball" with the paths
 // already resolved.
 //
+// Each line also says whether the domain NEEDS review, via the shared rule in
+// lib/review-state.mjs:
+//
+//   READY <domain> … [NOT REVIEWED — clip and cast]   <- open these, verdict it
+//     clip 1: …/slices/<domain>--slice-1.png
+//   OK    <domain> … — verdict current                 <- sliced, nothing to do
+//
+// Without that tag this stream is only a TIMING signal — it announces every
+// captured domain — so a reviewer working straight from the log re-reviews the
+// whole corpus, which is exactly what the staleness rule exists to prevent.
+// Everything is sliced either way: slices must stay current whether or not
+// anyone opens them, since a stale band beside a fresh PNG reads as current.
+//
+// The tag is a SNAPSHOT from when the domain landed. If Pass-2 re-captures it
+// later, an earlier line in the scrollback is stale text — review-queue.mjs
+// remains the authoritative "what is outstanding right now", and is what you
+// use to resume review in a later session (this watcher exits at DONE).
+//
 // Waits for the CAST png too, not just the clip: the cast is written after the
 // clip, and a clip-only trigger produces a notification for a domain whose cast
 // image does not exist yet — which is precisely how a review ends up
@@ -23,12 +41,21 @@ import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+// The staleness rule is SHARED with review-queue.mjs — see that module's header
+// for why the two must never carry separate copies of it.
+import { findBaselineDir, domainReviewState, KINDS } from './lib/review-state.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const RUN_DIR = resolve(__dirname, '..', '..', '..', 'test-output', 'corpus-sweep-run');
+const OUT_ROOT = resolve(__dirname, '..', '..', '..', 'test-output');
+const RUN_DIR = resolve(OUT_ROOT, 'corpus-sweep-run');
 const CORPUS = resolve(__dirname, '..', '..', 'fixtures', 'corpus-domains.json');
 const SLICER = resolve(__dirname, 'slice-clip.py');
+const QUEUE = resolve(__dirname, 'review-queue.mjs');
 const PYTHON = process.env.PYTHON ?? 'python3';
+
+// Resolved once: a sweep does not create backups mid-run, so re-scanning the
+// folder per domain would buy nothing.
+const baselineDir = findBaselineDir(OUT_ROOT);
 
 /**
  * Slice a BATCH of domains' clip + cast top bands in one call — this is what
@@ -84,23 +111,54 @@ const QUIET_MS = Number(process.env.SWEEP_WATCH_QUIET_MS ?? 180_000);
 let lastAccounted = 0;
 let lastProgressAt = Date.now();
 
-/** @type {{domain:string, cov:number, chromeHits:number, hasCast:boolean}[]} */
+/** @type {{domain:string, cov:number, chromeHits:number, hasCast:boolean, rec:object}[]} */
 let sliceQueue = [];
 
+/** Current verdicts. Re-read per flush, not cached: the reviewer is recording
+ *  verdicts WHILE this runs, so a cached copy would announce a domain as
+ *  needing review seconds after it was reviewed. */
+function loadFindings() {
+  try {
+    return JSON.parse(readFileSync(resolve(RUN_DIR, 'visual-findings.json'), 'utf8')).findings ?? {};
+  } catch {
+    return {};
+  }
+}
+
 /** Slice everything queued, then announce each with its SLICED paths — the
- *  paths a reviewer (or Claude, via Read) can open and actually see text in. */
+ *  paths a reviewer (or Claude, via Read) can open and actually see text in.
+ *
+ *  Each line also says whether the domain actually NEEDS review, using the same
+ *  rule review-queue.mjs applies. Without it this stream is only a timing
+ *  signal: it announces every captured domain, so a reviewer working straight
+ *  from the log re-reviews the whole corpus — exactly what the staleness rule
+ *  exists to prevent. Everything is still sliced either way, because slices
+ *  must stay current regardless of whether anyone opens them (a stale band
+ *  beside a fresh PNG is the politico-92h failure). */
 function flushSliceQueue() {
   if (!sliceQueue.length) return;
   const batch = sliceQueue;
   sliceQueue = [];
   sliceBatch(batch.map(b => b.domain));
+  const findings = loadFindings();
   for (const b of batch) {
     // Diagnostics only — there is no quality score to print. Ranking by the old
     // composite was measured anti-predictive, so a number here would just tell
     // the reviewer which image to prejudge.
     const diag = `cov=${(b.cov * 100).toFixed(0)}%` + (b.chromeHits ? ` chrome=${b.chromeHits}` : '');
     const castNote = b.hasCast ? '' : ' (no cast image)';
-    console.log(`READY ${b.domain} ${diag}${castNote}`);
+    const { pending, kind } = domainReviewState({
+      runDir: RUN_DIR, domain: b.domain, finding: findings[b.domain], rec: b.rec, baselineDir,
+    });
+
+    if (!pending) {
+      // Sliced and current — say so on one line and print no paths, so the log
+      // stays a complete record of the run without inviting a needless read.
+      console.log(`OK    ${b.domain} ${diag}${castNote} — verdict current`);
+      continue;
+    }
+
+    console.log(`READY ${b.domain} ${diag}${castNote}${KINDS[kind]?.tag ?? ''}`);
     // Announce EVERY band the slicer wrote, not just band 1. slice-clip.py
     // defaults to 3 bands because content buried under prepended chrome (a
     // video rail, an expanded carousel) does not reach band 1 — announcing
@@ -164,6 +222,7 @@ function poll() {
         cov: rec.scores?.textCoverage ?? 0,
         chromeHits: rec.scores?.chromeHits ?? 0,
         hasCast: existsSync(cast),
+        rec,   // the staleness rule needs this capture's own ranAt
       });
     } else {
       // Announce a skip ONCE, but do not let it retire the domain: the sweep's
@@ -198,10 +257,40 @@ function poll() {
   if (sliceQueue.length >= SLICE_BATCH || (done && sliceQueue.length)) flushSliceQueue();
 
   if (done) {
+    finishRun();
     console.log(`DONE — all ${total} corpus domains accounted for `
       + `(${announced.size} captured, ${skipAnnounced.size} skipped).`);
     process.exit(0);
   }
+}
+
+/**
+ * End-of-run housekeeping. This watcher is the only thing that knows when a
+ * BACKGROUND sweep has actually finished — corpus-sweep-run.ps1 detaches and
+ * exits immediately, so it cannot do this itself (the -Foreground and -Attended
+ * paths run the same two steps inline).
+ *
+ * 1. Catch up any stale slices. Domains are sliced as they land, but a Pass-2
+ *    retry that lands after this watcher last flushed — or a domain captured
+ *    while the watcher was down — keeps bands older than its PNG, which review
+ *    then reads as current (measured: 92h stale beside a fresh clip).
+ * 2. Run review-queue.mjs once, which PRUNES stale review stamps. That is the
+ *    only writer; this watcher stays read-only so it can never race a
+ *    record-verdict.mjs write happening in the review session.
+ *
+ * Best-effort throughout: a failure here must not lose the DONE line, which is
+ * what the review session is waiting on.
+ */
+function finishRun() {
+  try {
+    for (const args of [['--all', '--stale-only'], ['--all', '--stale-only', '--cast']]) {
+      spawnSync(PYTHON, [SLICER, ...args], { stdio: 'ignore' });
+    }
+  } catch { /* best effort */ }
+  try {
+    const r = spawnSync(process.execPath, [QUEUE, '--stats'], { encoding: 'utf8' });
+    if (r.stdout) process.stdout.write(r.stdout);
+  } catch { /* best effort */ }
 }
 
 poll();

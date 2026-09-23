@@ -22,6 +22,11 @@ Usage:
   python tests/e2e/tools/slice-clip.py <domain[,domain,...]> [--band 1800] [--max N]
   python tests/e2e/tools/slice-clip.py <domains> --cast   # slice the CAST image
   python tests/e2e/tools/slice-clip.py --list             # clips needing this
+  python tests/e2e/tools/slice-clip.py --all --stale-only [--cast]
+                                                          # catch-up: re-slice
+                                                          # every domain whose
+                                                          # PNG is newer than
+                                                          # its bands
 
 Writes test-output/corpus-sweep-run/slices/<domain>--slice-N.png (or
 --castslice-N.png with --cast) and prints the paths, one per line.
@@ -103,6 +108,12 @@ def main() -> None:
     parser.add_argument("--cast", action="store_true")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--run-dir", dest="run_dir")
+    # Slice only domains whose source image is NEWER than its existing band 1,
+    # i.e. re-captured since it was last sliced. Cheap enough to run over the
+    # whole corpus, which is what makes it safe to call after any re-capture.
+    parser.add_argument("--stale-only", action="store_true")
+    # Every domain that has a source image, for use with --stale-only.
+    parser.add_argument("--all", action="store_true")
     args = parser.parse_args()
 
     run_dir = resolve_run_dir(args.run_dir)
@@ -112,14 +123,20 @@ def main() -> None:
         list_tall_clips(run_dir)
         return
 
-    if not args.domains:
+    if not args.domains and not args.all:
         print(
-            "usage: slice-clip.py <domain[,domain...]> [--cast] [--band N] [--max N] [--run-dir DIR] | --list",
+            "usage: slice-clip.py <domain[,domain...]> [--cast] [--band N] [--max N] "
+            "[--run-dir DIR] [--stale-only] | --all --stale-only | --list",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    domains = [d.strip() for d in args.domains.split(",") if d.strip()]
+    if args.all:
+        domains = sorted(
+            p.name[: -len("--score.json")] for p in run_dir.glob("*--score.json")
+        )
+    else:
+        domains = [d.strip() for d in args.domains.split(",") if d.strip()]
     # --cast slices the CAST image instead of the clip. The cast is a separate
     # render (kind-30023 markdown through /discerns) with its own failure modes
     # -- dropped headline, link-pill spills -- that a clean clip does not reveal.
@@ -149,6 +166,19 @@ def main() -> None:
                     continue
             except Exception:
                 pass  # sidecar unreadable -- fall through and slice what's there
+
+        # --stale-only: skip a domain whose bands are already cut from THIS
+        # image. The inverse case is the dangerous one and the reason this
+        # exists: a domain re-captured outside the sweep's own slicing path (a
+        # -Resume pass, a SWEEP_ONLY re-run, or the watcher not being up) keeps
+        # its OLD bands beside a fresh PNG, and nothing marks them -- measured
+        # 2026-09-23, politico's slices were 92h older than its clip while its
+        # sidecar and verdict both read as current. Same failure as the two
+        # guards below: a legible image that is legible about the wrong thing.
+        if args.stale_only:
+            band1 = out_dir / f"{domain}--{suffix}-1.png"
+            if band1.exists() and band1.stat().st_mtime >= src.stat().st_mtime:
+                continue
 
         # Clear this domain's previous bands first. A run with a smaller --max
         # (or a shorter re-captured clip) otherwise leaves higher-numbered

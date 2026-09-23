@@ -7,8 +7,19 @@
 // reads and writes UTF-8 explicitly, preserves `_comment`, and merges rather
 // than replacing, so a partial update can't drop the other 200 verdicts.
 //
-// It also stamps `reviewedAt` (and `by`), which is what lets review-queue.mjs
-// tell a CURRENT verdict from one describing a since-re-captured image.
+// It also stamps `reviewedAt` (and `by`), plus a PER-SURFACE review stamp:
+// `clipReviewedAt` / `castReviewedAt`, set for whichever surfaces this pass
+// actually looked at. review-queue.mjs compares those against the capture's
+// own `ranAt` to tell a current review from one predating a re-capture.
+//
+// TWO INDEPENDENT FIELDS, easily confused:
+//   where    — where the DEFECT is (clip | cast | both). A reviewer routinely
+//              reads both images and names the one with the problem, so this
+//              says nothing about what was examined.
+//   reviewed — which surfaces were EXAMINED (clip | cast | both, default both).
+//              This is what drives the stamps.
+// Reading `where` as coverage wrongly re-queues every domain whose defect was
+// on one surface, and produced a bogus "[cast re-captured...]" note prefix.
 //
 // Usage — one domain:
 //   node tests/e2e/tools/record-verdict.mjs bbc clean clip "Headline, hero and body captured cleanly."
@@ -22,6 +33,11 @@
 //   node tests/e2e/tools/record-verdict.mjs --batch-file verdicts.json
 //
 // verdict: clean | flaw | critical | blocked      where: clip | cast | both
+//
+// reviewed: clip | cast | both (default both) — which surfaces you LOOKED AT,
+//   as opposed to `where`, which says where the defect is. Only needed when
+//   re-checking one surface: `--reviewed cast` stamps the cast and leaves the
+//   clip's existing review stamp alone.
 //
 // severity: 0-10, HOW BAD the capture is. The verdict is a coarse bucket; this
 //   is the number to sort and trend on. Required for flaw/critical (a defect
@@ -121,12 +137,22 @@ if (batchIdx >= 0) {
   if (!p) fail('--batch-file needs a path');
   entries = JSON.parse(readFileSync(p, 'utf8'));
 } else {
-  const sevIdx = rest.indexOf('--severity');
-  const sevArg = sevIdx >= 0 ? rest[sevIdx + 1] : undefined;
-  const positional = sevIdx >= 0 ? rest.filter((a, i) => i !== sevIdx && i !== sevIdx + 1) : rest;
+  // Pull out every --flag VALUE pair first, so the note can't swallow one and
+  // a flag's value can't be mistaken for a positional.
+  const flagVal = {};
+  const positional = [];
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === '--severity' || rest[i] === '--reviewed') { flagVal[rest[i].slice(2)] = rest[++i]; }
+    else positional.push(rest[i]);
+  }
   const [domain, verdict, where, ...noteParts] = positional;
-  if (!domain || !verdict) fail('usage: record-verdict.mjs <domain> <verdict> [where] [note] [--severity N]');
-  entries = [{ domain, verdict, where: where || 'clip', note: noteParts.join(' '), severity: sevArg }];
+  if (!domain || !verdict) {
+    fail('usage: record-verdict.mjs <domain> <verdict> [where] [note] [--severity N] [--reviewed clip|cast|both]');
+  }
+  entries = [{
+    domain, verdict, where: where || 'clip', note: noteParts.join(' '),
+    severity: flagVal.severity, reviewed: flagVal.reviewed,
+  }];
 }
 
 if (!Array.isArray(entries) || entries.length === 0) fail('no verdict entries given');
@@ -149,6 +175,10 @@ for (const e of entries) {
   if (!VERDICTS.has(e.verdict)) fail(`bad verdict "${e.verdict}" for ${e.domain} (use ${[...VERDICTS].join('|')})`);
   severityFor(e);   // validate now so a bad batch fails before anything is written
   if (e.where && !WHERES.has(e.where)) fail(`bad where "${e.where}" for ${e.domain} (use ${[...WHERES].join('|')})`);
+  if (e.reviewed && !WHERES.has(e.reviewed)) {
+    fail(`bad reviewed "${e.reviewed}" for ${e.domain} (use ${[...WHERES].join('|')}) `
+      + `— 'reviewed' is which surfaces you looked at, 'where' is where the defect is`);
+  }
   if (e.regression && !REGRESSIONS.has(e.regression)) {
     fail(`bad regression "${e.regression}" for ${e.domain} (use ${[...REGRESSIONS].join('|')})`);
   }
@@ -177,13 +207,50 @@ if (existsSync(FINDINGS)) {
 }
 doc.findings ??= {};
 
-const now = new Date().toISOString();
+// Which surfaces this pass examined. Defaults to 'both', which is how review
+// actually happens: read the clip and cast slices, then name the one with the
+// defect in `where`. Pass reviewed:'cast' when re-checking a single surface.
+function examined(e, surface) {
+  const r = e.reviewed || 'both';
+  return r === surface || r === 'both' || r === 'clip+cast';
+}
+
+// A single-surface re-review must not erase the other surface's stamp, which
+// would read downstream as "never reviewed" and re-queue a surface verified
+// minutes earlier. Carry the untouched one forward verbatim.
+function keepStamp(domain, surface) {
+  const prev = doc.findings[domain];
+  const t = `${surface}ReviewedAt`;
+  return prev && prev[t] !== undefined ? { [t]: prev[t] } : {};
+}
+
+// Local time WITH its UTC offset, e.g. 2026-09-17T12:04:01.816-07:00.
+//
+// A bare .toISOString() is UTC, and reading a UTC stamp beside a local file
+// mtime inverts the comparison that decides staleness: cbc was reviewed at
+// 12:04 local and re-captured at 15:27 local, but its UTC stamps (19:04 and
+// 22:27) read as though the review came later. The offset makes the wall-clock
+// time the reviewer remembers legible without losing the instant — Date.parse
+// still yields the same moment, so comparisons against the sidecar's UTC
+// `ranAt` are unaffected, and slice(0,10) now gives the LOCAL date.
+function localStamp(d = new Date()) {
+  const p = n => String(Math.floor(Math.abs(n))).padStart(2, '0');
+  const off = -d.getTimezoneOffset();
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+    + `T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+    + `.${String(d.getMilliseconds()).padStart(3, '0')}`
+    + `${off >= 0 ? '+' : '-'}${p(off / 60)}:${p(off % 60)}`;
+}
+
+const now = localStamp();
 for (const e of entries) {
   const severity = severityFor(e);
   doc.findings[e.domain] = {
     verdict: e.verdict,
     // 0-10 magnitude; absent only for 'blocked'. See SEVERITY_RANGE above.
     ...(severity === undefined ? {} : { severity }),
+    // Where the DEFECT is, as the reviewer stated it — stored verbatim, never
+    // inferred from or conflated with which surfaces were examined.
     where: e.where || 'clip',
     // 'unknown' until a reviewer has actually compared against the prior run's
     // image — never silently defaulted to 'none', which would assert no
@@ -195,7 +262,14 @@ for (const e of entries) {
     regressedFrom: e.regressedFrom || '',
     note: e.note || '',
     by: e.by || by,
+    // Whole-entry stamp, kept for the gallery's REGRESSED tier (which asks
+    // only "has this been reviewed at all").
     reviewedAt: now,
+    // WHEN each surface was examined. Per-surface on purpose: after a
+    // cast-only re-review a single shared timestamp would report the cast's
+    // date as the clip's, so a clip unexamined for two sweeps reads as current.
+    ...(examined(e, 'clip') ? { clipReviewedAt: now } : keepStamp(e.domain, 'clip')),
+    ...(examined(e, 'cast') ? { castReviewedAt: now } : keepStamp(e.domain, 'cast')),
   };
 }
 
