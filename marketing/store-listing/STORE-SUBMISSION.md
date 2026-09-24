@@ -36,44 +36,53 @@ curators") until it exists.
 `description` above whatever goes in this field, so it is reproduced here only to show
 how the listing reads end to end. Pasting it would duplicate the summary.
 
-> Web clipper for saving articles, quotes and pages. Rate and tag what you clip, and publish your picks to Nostr if you want.
+>Web clipper for saving articles, selections, pages, and bookmarks. Rate and tag clips, and keep them private or publish to Nostr.
 
 **Paste only the fenced block below.**
 
 ```
-Discern the signal from the noise on the web.
-Discerned is a local-first web clipper for saving and organizing web content — and a decentralized discovery tool for seeing what people you trust are rating across any website.
+KEEP TRACK OF WHAT YOU FIND WORTHWHILE.
 
-CLIP & RATE WHAT MATTERS
-• Save full pages, articles, text selections, or bookmarks in one click.
-• You can assign a Signal Rating — five levels, from "Toxic" through "Ordinary" to "Masterpiece".
-• Tag clips by tone, utility, and longevity, or add your own custom qualifiers.
-• Sort into custom categories alongside built-in ones.
-• Add personal notes to any clip.
+Discerned helps you keep track of the things you discover on the web—and record what you think is worth your attention.
 
-SEE WHAT OTHERS ARE RATING ACROSS THE WEB
-• Break free from walled gardens: discover what curators and readers rate highly or lowly across multiple websites, not just a single platform controlled by one company.
-• Published clips and ratings feed directly into a public index at discerned.online, open to read by anyone.
-• Filter feeds by Signal Rating, category, or qualifiers to see genuine recommendations and skip the noise.
-• Follow people you know and trusted curators to grow your network and see what it's rating across the web.
+CAPTURE WHAT MATTERS
 
-CAPTURES THAT LOOK LIKE WHAT YOU READ
-• Preserves the page's real structure rather than flattening it into plain text.
-• Dedicated handling for complex sites that defeat ordinary clippers, keeping visual layout intact.
-• Strips out ads, clutter, and unwanted noise automatically.
+Clip a selection, article, webpage, or bookmark. Keep the source with your clip so you can return to it later.
 
-PUBLISH TO AN OPEN PROTOCOL
-• Publish your clips whenever you choose to Nostr — an open social network where you own your identity, posts, and social graph.
-• Bring your existing key, or generate one locally in seconds — no email, password, or third-party auth required.
-• Every public rating is cryptographically signed under your own key and works seamlessly across compatible apps.
-• Freedom from lock-in: no single company owns your data, controls the feed, or can take your clips away.
+RECORD YOUR JUDGMENT
 
-NO ACCOUNT NEEDED — OWN YOUR DATA
-• Start clipping immediately with zero mandatory account creation.
-• Your clip library remains local-first, stored on your device.
-• Export your entire library as JSON at any time, or import existing clips from JSON and Evernote files.
+When you clip something, you can give it a Signal Rating:
 
-Start discerning signal from noise.
+★★★★★ Masterpiece
+★★★★ Worthwhile
+★★★ Ordinary
+★★ Noise
+★ Toxic
+
+You can also add optional qualifiers such as Timeless, Practical Tool, Primary Source, Academic, or Current Event—or create your own.
+
+Don't want to rate or tag something? Just clip it without them.
+
+KEEP YOUR LIBRARY YOURS
+
+Your personal clips can stay private on your device. No account is required to start building your collection.
+
+Bring your existing collection with you using Evernote import, or import and export your clips as JSON. Your data isn't locked into Discerned.
+
+SHARE WHAT YOU DISCOVER
+
+When you clip something, choose whether to keep it private, publish it to Nostr, or do both.
+
+Nostr is an open, decentralized network where you can publish without relying on a single platform. Your identity and content aren't tied to one company's social network, and you can use different Nostr apps and services to access the same network.
+
+Your published discerns aren't confined to Discerned. They're published to the open Nostr network and can be viewed through Discerned and other Nostr clients.
+
+DISCOVER WHAT OTHERS VALUE
+
+Explore public discerns, follow people whose judgment you trust, and discover worthwhile things through the recommendations of other people.
+
+The web is full of information. Discerned helps you keep track of what you think is worth your attention.
+
 ```
 
 ---
