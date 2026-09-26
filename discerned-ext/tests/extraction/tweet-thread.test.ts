@@ -139,6 +139,49 @@ describe('x.com conversation capture', () => {
     expect((html.match(/class="tweet-reply"/g) ?? []).length).toBe(2);
   });
 
+  it('picks the focused tweet by status id, not the first article (parent context above it)', async () => {
+    document.body.innerHTML = `<div id="react-root"><ul>
+      <li><div>${article('parent', 'Parent Poster', 'The parent this status replies to.', '900')}</div></li>
+      <li><div>${article('author', 'Author', 'The focused tweet everyone is replying to.', '1000')}</div></li>
+      <li><div>${article('replierone', 'Replier One', 'First reply, disagreeing politely.', '1001')}</div></li>
+    </ul></div>`;
+    const html = (await captureContext('article')).bodyHtml ?? '';
+
+    expect(html).toContain('The focused tweet everyone is replying to.');
+    expect(html.indexOf('The focused tweet')).toBeLessThan(html.indexOf('First reply'));
+    expect(html).not.toContain('The parent this status replies to.');
+    expect((html.match(/class="tweet-reply"/g) ?? []).length).toBe(1);
+  });
+
+  it('scrolls back to a focused tweet X has virtualised away, then restores the scroll', async () => {
+    // Scrolled down: only later replies are mounted; scrolling to the top remounts the conversation.
+    document.body.innerHTML = `<div id="react-root"><ul>
+      <li><div>${article('replierfive', 'Replier Five', 'Fifth reply, far down the thread.', '1005')}</div></li>
+      <li><div>${article('repliersix', 'Replier Six', 'Sixth reply.', '1006')}</div></li>
+    </ul></div>`;
+    let y = 4000;
+    const scrolls: number[] = [];
+    const origScrollY = Object.getOwnPropertyDescriptor(window, 'scrollY');
+    Object.defineProperty(window, 'scrollY', { get: () => y, configurable: true });
+    const origScrollTo = window.scrollTo;
+    window.scrollTo = ((a: number | ScrollToOptions, b?: number) => {
+      const top = typeof a === 'number' ? (b ?? 0) : (a.top ?? 0);
+      y = top; scrolls.push(top);
+      if (top === 0) buildConversation();
+    }) as typeof window.scrollTo;
+    try {
+      const html = (await captureContext('article')).bodyHtml ?? '';
+      expect(html).toContain('The focused tweet everyone is replying to.');
+      expect(html).toContain('First reply, disagreeing politely.');
+      expect(html).not.toContain('Fifth reply');
+      expect(scrolls).toEqual([0, 4000]);
+    } finally {
+      window.scrollTo = origScrollTo;
+      if (origScrollY) Object.defineProperty(window, 'scrollY', origScrollY);
+      else delete (window as { scrollY?: number }).scrollY;
+    }
+  });
+
   it('leaves a single-tweet page as one card with no thread wrapper', async () => {
     document.body.innerHTML = `<div id="react-root"><ul><li><div>
       <article class="flex flex-col gap-1">

@@ -1133,8 +1133,8 @@ const MAX_TWEET_REPLIES = 25;
  * shape this can't read), so the caller degrades to the existing one-card
  * capture rather than failing.
  */
-function collectTweetReplyArticles(focused: Element): Element[] {
-  if (document.querySelectorAll('article').length < 2) return [];
+function findConversationContainer(focused: Element): { container: Element; focusedChild: Element } | null {
+  if (document.querySelectorAll('article').length < 2) return null;
 
   // Climb from the FOCUSED tweet to the timeline container, rather than taking
   // the lowest common ancestor of every article on the page: a page also
@@ -1153,14 +1153,30 @@ function collectTweetReplyArticles(focused: Element): Element[] {
       .some(c => c !== child && c.querySelector('article'));
     if (hasSiblingTweet) { container = cur; focusedChild = child; break; }
   }
-  if (!container || !focusedChild) return [];
+  return container && focusedChild ? { container, focusedChild } : null;
+}
 
+/** A cell that opens X's post-conversation recommendations; nothing after it is a reply. */
+const TWEET_THREAD_END_RE = /^(discover more|more posts|you might like)\b/i;
+
+/**
+ * The reply articles CURRENTLY MOUNTED in the conversation container that are
+ * not yet in `seenStatus`. `ended` reports that the recommendations cell was reached.
+ */
+function collectTweetReplyArticles(
+  container: Element, focusedChild: Element, focused: Element, seenStatus: Set<string>,
+): { replies: Element[]; ended: boolean } {
   const replies: Element[] = [];
-  const seenStatus = new Set<string>();
+  const focusedId = (testPathOverride ?? window.location.pathname).match(/\/status\/(\d+)/)?.[1];
+  // Once scrolled past, X unmounts the focused cell; the ordering filter only applies while it is present.
+  const focusedMounted = focusedChild.parentElement === container;
   for (const child of Array.from(container.children)) {
     // Replies follow the focused tweet; anything above it is thread context
     // we deliberately leave out of the "replies" set.
-    if (!(focusedChild.compareDocumentPosition(child) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+    if (focusedMounted && !(focusedChild.compareDocumentPosition(child) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+    if (!child.querySelector('article') && TWEET_THREAD_END_RE.test(child.textContent?.trim() ?? '')) {
+      return { replies, ended: true };
+    }
     // EVERY outermost article in the cell, not just the first: X packs a run of
     // consecutive replies — typically the author's own self-thread — into ONE
     // cell. Measured on x.com/NoLimitGains/status/2100262310560280811: 16
@@ -1172,7 +1188,7 @@ function collectTweetReplyArticles(focused: Element): Element[] {
     const inCell = Array.from(child.querySelectorAll('article'));
     const outermost = inCell.filter(a => !inCell.some(o => o !== a && o.contains(a)));
     for (const art of outermost) {
-      if (art === focused) continue;
+      if (art === focused || (focusedId && articleOwnsStatus(art, focusedId))) continue;
       // A reply must carry its own status link; the sidebar's "Relevant people"
       // card and any promoted cell do not.
       const ownStatus = Array.from(art.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
@@ -1185,10 +1201,83 @@ function collectTweetReplyArticles(focused: Element): Element[] {
       if (seenStatus.has(id)) continue;
       seenStatus.add(id);
       replies.push(art);
-      if (replies.length >= MAX_TWEET_REPLIES) return replies;
     }
   }
-  return replies;
+  return { replies, ended: false };
+}
+
+/**
+ * Visit every reply of the conversation, in order, up to MAX_TWEET_REPLIES.
+ * X virtualises the thread — only cells near the viewport are mounted — so this
+ * scrolls down through it and hands each reply to `visit` WHILE it is mounted.
+ * The caller restores the scroll position. Returns the number of replies visited.
+ */
+async function forEachTweetReply(focused: Element, visit: (art: Element) => Promise<void>): Promise<number> {
+  const found = findConversationContainer(focused);
+  if (!found) return 0;
+  const { container, focusedChild } = found;
+  const seenStatus = new Set<string>();
+  // No layout (jsdom) means nothing to scroll: take what is mounted.
+  const canScroll = document.documentElement.scrollHeight > window.innerHeight;
+  let visited = 0;
+  let idleSteps = 0;
+  while (container.isConnected) {
+    const { replies, ended } = collectTweetReplyArticles(container, focusedChild, focused, seenStatus);
+    for (const art of replies) {
+      if (visited >= MAX_TWEET_REPLIES) return visited;
+      await visit(art);
+      visited++;
+    }
+    if (ended || !canScroll || visited >= MAX_TWEET_REPLIES) break;
+    idleSteps = replies.length ? 0 : idleSteps + 1;
+    const before = window.scrollY;
+    window.scrollTo({ top: before + Math.round(window.innerHeight * 0.8), behavior: 'instant' });
+    await new Promise(r => setTimeout(r, 400));
+    // Stop at the bottom of the page, or after a few steps that mounted nothing new.
+    if ((window.scrollY === before && !replies.length) || idleSteps >= 3) break;
+  }
+  return visited;
+}
+
+/** True when `art` carries its OWN link to /status/<id> — not one inside a nested (quoted) article. */
+function articleOwnsStatus(art: Element, id: string): boolean {
+  const re = new RegExp(`/status/${id}(?:[/?#]|$)`);
+  return Array.from(art.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
+    .some(a => a.closest('article') === art && re.test(a.getAttribute('href') ?? ''));
+}
+
+/**
+ * Find the article of the status named in the address bar. X virtualises a
+ * conversation, so once the user has scrolled down the focused tweet and the
+ * first replies are UNMOUNTED and the first <article> in the DOM is a later
+ * reply. In that case scroll to the top and wait for the focused tweet to mount.
+ * The caller restores the scroll position.
+ */
+async function locateFocusedTweet(): Promise<Element | null> {
+  const id = (testPathOverride ?? window.location.pathname).match(/\/status\/(\d+)/)?.[1];
+  if (!id) return null;
+  const find = () => Array.from(document.querySelectorAll('article'))
+    .find(a => !a.parentElement?.closest('article') && articleOwnsStatus(a, id)) ?? null;
+  const here = find();
+  if (here || window.scrollY <= 0) return here;
+
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  for (let waited = 0; waited < 3000; waited += 100) {
+    await new Promise(r => setTimeout(r, 100));
+    const art = find();
+    if (art) {
+      log(LL.NORMAL, `Discerned: focused tweet was virtualised away — scrolled to top to capture it (${waited + 100}ms)`, 'url:', window.location.href);
+      return art;
+    }
+  }
+  log(LL.WARN, 'Discerned: focused tweet not found after scrolling to top', 'url:', window.location.href);
+  return null;
+}
+
+function firstTweetArticle(): Element | null {
+  return document.querySelector('article[data-testid="tweet"]')
+    ?? document.querySelector('article[data-tweet-id]')
+    ?? document.querySelector('article');
 }
 
 /**
@@ -1213,10 +1302,17 @@ async function extractTweet(
   articleOverride?: Element,
   withReplies = true,
 ): Promise<Capture | null> {
-  const article = articleOverride
-    ?? document.querySelector('article[data-testid="tweet"]')
-    ?? document.querySelector('article[data-tweet-id]')
-    ?? document.querySelector('article');
+  if (!articleOverride && withReplies) {
+    // Finding the focused tweet and harvesting replies both scroll the page; put it back after.
+    const startY = window.scrollY;
+    try {
+      const focused = await locateFocusedTweet() ?? firstTweetArticle();
+      return focused ? await extractTweet(base, format, focused, withReplies) : null;
+    } finally {
+      if (window.scrollY !== startY) window.scrollTo({ top: startY, behavior: 'instant' });
+    }
+  }
+  const article = articleOverride ?? firstTweetArticle();
   if (!article) return null;
 
   // The canonical URL of THIS post, which is not base.url once replies are
@@ -1518,19 +1614,18 @@ async function extractTweet(
   const replyTexts: string[] = [];
   const replyImageUrls: string[] = [];
   if (withReplies && format !== 'selection') {
-    const replyArticles = collectTweetReplyArticles(article);
-    for (const replyArticle of replyArticles) {
+    const replyCount = await forEachTweetReply(article, async (replyArticle) => {
       const reply = await extractTweet(base, 'article', replyArticle, false);
-      if (!reply?.bodyHtml) continue;
+      if (!reply?.bodyHtml) return;
       repliesHtml += `\n<div class="tweet-reply">${reply.bodyHtml}</div>`;
       // extractTweet already leads bodyText with "Name @handle", so the cast
       // can reuse it verbatim rather than re-deriving the author.
       const text = (reply.bodyText ?? '').trim();
       if (text) replyTexts.push(text);
       for (const u of reply.imageUrls ?? []) if (!replyImageUrls.includes(u)) replyImageUrls.push(u);
-    }
-    if (replyArticles.length > 0) {
-      log(LL.NORMAL, `Discerned: x conversation — ${replyTexts.length}/${replyArticles.length} replies captured`, 'url:', base.url);
+    });
+    if (replyCount > 0) {
+      log(LL.NORMAL, `Discerned: x conversation — ${replyTexts.length}/${replyCount} replies captured${replyCount >= MAX_TWEET_REPLIES ? ' (cap reached)' : ''}`, 'url:', base.url);
     }
   }
 
