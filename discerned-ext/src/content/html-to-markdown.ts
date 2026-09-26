@@ -137,6 +137,20 @@ function isChromeImage(el: HTMLElement): boolean {
   return false;
 }
 
+// A table used for page LAYOUT rather than data (paulgraham.com holds each whole
+// essay in one <td>). A GFM cell is one line of textContent, so converting it
+// as data discarded every <br><br> paragraph break. Layout = at most one
+// non-empty cell, or a cell carrying multi-paragraph prose no GFM row can hold.
+function isLayoutTable(table: HTMLTableElement): boolean {
+  const cells = Array.from(table.rows).flatMap((r) => Array.from(r.cells));
+  const filled = cells.filter((c) => (c.textContent ?? '').trim() || c.querySelector('img'));
+  if (filled.length <= 1) return true;
+  // <br><br> runs are already <p>s here (brPairsToParagraphs runs first).
+  return filled.some((c) =>
+    (c.textContent ?? '').trim().length >= 500
+    && !!c.querySelector('p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre'));
+}
+
 let service: TurndownService | null = null;
 
 function getService(): TurndownService {
@@ -184,8 +198,10 @@ function getService(): TurndownService {
   // has none (GFM requires a header + delimiter row to render at all).
   td.addRule('gfm-table-always', {
     filter: (node) => node.nodeName === 'TABLE',
-    replacement: (_content, node) => {
+    replacement: (content, node) => {
       const table = node as HTMLTableElement;
+      // A LAYOUT table is page structure, not data: emit its converted content.
+      if (isLayoutTable(table)) return `\n\n${content}\n\n`;
       const rows = Array.from(table.querySelectorAll('tr'));
       if (rows.length === 0) return '';
       // Cell text, single-lined and pipe-escaped (a literal | would break the
@@ -645,6 +661,31 @@ function liftTrailingBreaks(root: Element): void {
   }
 }
 
+// A `<br><br>` run is the paragraph break of pre-CSS pages (paulgraham.com),
+// but turndown emits it as a hard line break. Replace it with an empty <p>,
+// which turndown renders as a blank line. Skipped inside emphasis/links/<pre>,
+// where a blank line would split the delimiters or the code.
+function brPairsToParagraphs(root: Element): void {
+  for (const br of Array.from(root.querySelectorAll('br'))) {
+    if (!br.isConnected || br.closest('pre, strong, b, em, i, a')) continue;
+    const next = br.nextSibling;
+    const second = next?.nodeName === 'BR' ? next
+      : next?.nodeType === 3 && !(next.textContent ?? '').trim() && next.nextSibling?.nodeName === 'BR'
+        ? next.nextSibling : null;
+    if (!second) continue;
+    // Swallow the whole run (3+ <br>s are still one paragraph break).
+    let tail: ChildNode | null = second.nextSibling;
+    while (tail && (tail.nodeName === 'BR' || (tail.nodeType === 3 && !(tail.textContent ?? '').trim()))) {
+      const n: ChildNode | null = tail.nextSibling;
+      tail.remove();
+      tail = n;
+    }
+    if (next !== second) next?.remove();
+    second.remove();
+    br.replaceWith(br.ownerDocument.createElement('p'));
+  }
+}
+
 /**
  * Convert sanitised capture HTML to CommonMark for a kind-30023 body.
  * Returns an empty string for empty/whitespace input.
@@ -662,6 +703,7 @@ export function htmlToMarkdown(html: string): string {
     if (container) {
       restorePreLineBreaks(container);
       liftTrailingBreaks(container);
+      brPairsToParagraphs(container);
       joinBylineTimestamp(container);
       separateInlineFacets(container);
       source = container.innerHTML;

@@ -218,6 +218,33 @@ describe('cast markdown — GFM tables', () => {
     expect(md).toMatch(/\|\s*Year\s*\|\s*Price\s*\|/);
     expect(md).toMatch(/\|\s*2020\s*\|\s*\$7k\s*\|/);
   });
+
+  // paulgraham.com holds each whole essay in one <td>, paragraphs split by <br><br>.
+  it('unwraps a single-cell LAYOUT table, keeping its paragraph breaks', () => {
+    const html = `<table><tr><td><font>First paragraph ends by making it.<br><br>Partly my goal was a guide.<br><br>Third.</font></td></tr></table>`;
+    const md = htmlToMarkdown(html);
+    expect(md).not.toMatch(/\|/);
+    expect(md).not.toMatch(/it\.Partly/);
+    expect(md).toMatch(/making it\.\n\nPartly my goal/);
+  });
+
+  it('unwraps a multi-cell table whose cell holds multi-paragraph prose', () => {
+    const para = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '.repeat(6);
+    const html = `<table><tr><td><img src="https://example.com/nav.gif" width="69" height="357"></td><td>${para}<br><br>${para}</td></tr></table>`;
+    const md = htmlToMarkdown(html);
+    expect(md).not.toMatch(/\|\s*---/);
+    expect(md).toMatch(/elit\.\n\nLorem/);
+  });
+
+  it('keeps a data table whose cells carry single <br>s as GFM', () => {
+    const html = `<table>
+      <tr><td>Address</td><td>1 Main St<br>Springfield</td></tr>
+      <tr><td>Phone</td><td>555-0100</td></tr>
+    </table>`;
+    const md = htmlToMarkdown(html);
+    expect(md).toMatch(/\|\s*---\s*\|\s*---\s*\|/);
+    expect(md).toMatch(/\|\s*Phone\s*\|\s*555-0100\s*\|/);
+  });
 });
 
 // ── Finding 1: Bluesky facet wall — glued hashtags/mentions ─────────────────

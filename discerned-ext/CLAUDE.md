@@ -899,6 +899,21 @@ Google"` (chrome) with `"3 On the Run Pink Floyd 3:36"` (content). The count
 regex also matches a timecode first, so a `1:04` duration no longer truncates
 to `1`.
 
+**A LAYOUT `<table>` is not data, and a GFM cell cannot hold paragraphs.**
+paulgraham.com puts each whole essay in ONE `<td>` with `<br><br>` paragraph
+breaks; `gfm-table-always` flattened it to one cell via `textContent`, so the
+cast was a single run-on line ("making it.Partly my goal"). `isLayoutTable`
+unwraps a table with ≤1 non-empty cell, or a ≥500-char cell holding a
+paragraph-level block, and `brPairsToParagraphs` turns a `<br><br>` run into a
+real blank line (turndown alone emits a hard break). Measured over the corpus:
+28 casts changed, 0 indented code blocks introduced. HN and GitHub-PR comment
+tables were layout too, and shrank sharply (github-pr 476k → 39k chars) because
+the old rule's `querySelectorAll('tr')` also swept NESTED tables' rows,
+emitting every comment more than once. A word-level diff found no lost text,
+only glue artifacts (`2023even`) now separated. Guarded in
+`tests/nostr/cast-markdown.test.ts` (GFM tables block, incl. a `<br>`-bearing
+data table that must stay GFM).
+
 ### Shadow DOM support
 
 Some sites (Stansberry's Angular app is the reference case) ship article content via declarative open Shadow DOM (`<template shadowrootmode="open">`). `document.querySelector` and `window.getSelection` don't pierce shadow boundaries, and `cloneNode(true)` doesn't clone a host's shadow root — so the capture pipeline must descend manually wherever it touches the live DOM.
