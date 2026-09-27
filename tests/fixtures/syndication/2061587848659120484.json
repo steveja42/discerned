@@ -1,0 +1,50 @@
+{
+  "__typename": "Tweet",
+  "favorite_count": 13752,
+  "lang": "en",
+  "created_at": "2026-06-01T23:17:00.000Z",
+  "display_text_range": [
+    0,
+    278
+  ],
+  "entities": {},
+  "id_str": "2061587848659120484",
+  "text": "The fight against cartels should unite us, not divide us.  People on both sides of our border want to live safely and in peace.  They deserve freedom from the intimidation, corruption, and fear that the cartels inflict.  Every moment spent turning this shared security challenge",
+  "user": {
+    "id_str": "774328791606767617",
+    "name": "Embajador Ronald Johnson",
+    "screen_name": "USAmbMex",
+    "is_blue_verified": true,
+    "profile_image_shape": "Circle",
+    "verified": false,
+    "verified_type": "Government",
+    "profile_image_url_https": "https://pbs.twimg.com/profile_images/1927484764744814592/t8CjjmwA_normal.jpg",
+    "highlighted_label": {
+      "badge": {
+        "url": "https://pbs.twimg.com/profile_images/2065445010053431296/I2jXbYJL_bigger.jpg"
+      },
+      "description": "Department of State",
+      "url": {
+        "url": "https://twitter.com/StateDept",
+        "url_type": "DeepLink"
+      },
+      "user_label_display_type": "Badge",
+      "user_label_type": "BusinessLabel"
+    }
+  },
+  "edit_control": {
+    "edit_tweet_ids": [
+      "2061587848659120484"
+    ],
+    "editable_until_msecs": "1780359420000",
+    "edits_remaining": "5",
+    "is_edit_eligible": true
+  },
+  "conversation_count": 1832,
+  "news_action_type": "conversation",
+  "isEdited": false,
+  "isStaleEdit": false,
+  "note_tweet": {
+    "id": "Tm90ZVR3ZWV0UmVzdWx0czoyMDYxNTg3ODQ4NTk2MjIxOTUy"
+  }
+}

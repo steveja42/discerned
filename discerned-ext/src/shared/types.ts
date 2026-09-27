@@ -136,6 +136,10 @@ export interface OwnProfile {
   fetchedAt: number;
 }
 
+/** A cross-origin content iframe (e.g. a live blog) whose body the capture wants inlined. */
+export interface ContentFrameRequest { key: string; src: string }
+export interface ContentFrameResult { key: string; html: string }
+
 /**
  * Embedded-tweet data harvested from a third-party page that embeds a tweet.
  * Sourced either from the rendered platform.twitter.com iframe (rich, with
@@ -196,7 +200,8 @@ export type BackgroundMessage =
   // publish mode are withheld rather than disclosed without the user's say-so.
   | { type: 'OPEN_FEEDBACK'; target?: 'extension' | 'web' | 'both' }
   | { type: 'REGISTER_LOG_TAB' }
-  | { type: 'EXTRACT_EMBEDDED_TWEETS' }
+  | { type: 'EXTRACT_EMBEDDED_TWEETS'; ids?: string[] }
+  | { type: 'EXTRACT_CONTENT_FRAMES'; frames: ContentFrameRequest[] }
   | { type: 'GET_CLIP_BODY'; id: string }
   | { type: 'PUSH_PENDING_SIGN'; id: string; event: Record<string, unknown>; expectedPubkey?: string }
   | { type: 'RESOLVE_PENDING_SIGN'; id: string; signed: Record<string, unknown> }

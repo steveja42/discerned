@@ -8,7 +8,7 @@
 //         chrome.runtime.sendMessage (for INLINE_IMAGE round-trip)
 
 import { Readability } from '@mozilla/readability';
-import type { Capture, ClipFormat, EmbeddedTweetData } from '@/shared/types';
+import type { Capture, ClipFormat, EmbeddedTweetData, ContentFrameRequest, ContentFrameResult } from '@/shared/types';
 import { LL, log } from '@/shared/logger';
 
 
@@ -2710,7 +2710,8 @@ async function harvestEmbeddedTweets(scope: Document | Element): Promise<Map<str
   try {
     const res = await Promise.race([
       chrome.runtime.sendMessage({ type: 'EXTRACT_EMBEDDED_TWEETS' }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 1000)),
+      // 3s: an unrendered embed fetches its data from X's syndication JSON (≤2.5s).
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
     ]);
     if (res?.success && Array.isArray(res.data)) {
       (res.data as EmbeddedTweetData[]).forEach(d => {
@@ -2728,6 +2729,139 @@ async function harvestEmbeddedTweets(scope: Document | Element): Promise<Map<str
   }
 
   return merged;
+}
+
+// A content iframe is column-width and tall; a 300x600 half-page ad is neither.
+const CONTENT_FRAME_MIN_W = 400;
+const CONTENT_FRAME_MIN_H = 600;
+const AD_FRAME_SRC_RE = /doubleclick|googlesyndication|amazon-adsystem|adnxs|adsafeprotected|\/ads?[/?]/i;
+
+/**
+ * Harvest the body of cross-origin CONTENT iframes (a third-party live blog —
+ * ESPN's Arena tracker holds the whole story) from the live DOM. Keyed by the
+ * iframe's `src` attribute, which the clone carries verbatim.
+ */
+async function harvestContentFrames(scope: Document | Element): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const reqs: ContentFrameRequest[] = [];
+  for (const f of Array.from(scope.querySelectorAll<HTMLIFrameElement>('iframe[src]'))) {
+    const src = f.getAttribute('src') ?? '';
+    if (!/^https?:/i.test(f.src) || reqs.some(r => r.key === src)) continue;
+    if (/platform\.twitter\.com|twitter-widget/i.test(src + f.id) || f.hasAttribute('data-tweet-id')) continue;
+    if (matchVideoEmbed(f.src) || AD_FRAME_SRC_RE.test(f.src)) continue;
+    if (f.closest(`${SPONSORED_WIDGET_SELECTOR}, ${COMMENT_WIDGET_SELECTOR}`)) continue;
+    const r = f.getBoundingClientRect();
+    if (r.width < CONTENT_FRAME_MIN_W || r.height < CONTENT_FRAME_MIN_H) continue;
+    reqs.push({ key: src, src: f.src });
+  }
+  if (reqs.length === 0) return out;
+  try {
+    const res = await Promise.race([
+      chrome.runtime.sendMessage({ type: 'EXTRACT_CONTENT_FRAMES', frames: reqs }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+    ]);
+    if (res?.success && Array.isArray(res.data)) {
+      (res.data as ContentFrameResult[]).forEach(d => { if (d?.key && d.html) out.set(d.key, d.html); });
+    }
+  } catch (err) {
+    log(LL.DEBUG, `harvestContentFrames: unavailable (${err instanceof Error ? err.message : err})`, 'url:', window.location.href);
+  }
+  log(LL.DEBUG, `harvestContentFrames: ${out.size}/${reqs.length} content iframe(s) harvested`, 'url:', window.location.href);
+  // Unreadable (cross-origin without the all-sites grant): '' makes substitution leave a link.
+  reqs.forEach(r => { if (!out.has(r.key)) out.set(r.key, ''); });
+  return out;
+}
+
+/** Link standing in for a content iframe whose body could not be read. */
+function contentFrameLink(src: string): HTMLElement {
+  let href = src;
+  let host = '';
+  try { const u = new URL(src, document.baseURI); href = u.href; host = u.hostname; } catch { /* keep raw */ }
+  const p = document.createElement('p');
+  const a = document.createElement('a');
+  a.href = href;
+  a.textContent = host ? `View the embedded content (${host})` : 'View the embedded content';
+  p.appendChild(a);
+  return p;
+}
+
+/**
+ * Replace each harvested content iframe in the clone with its body markup (or a
+ * link when unreadable), and unwrap an enclosing <aside> so stripPageChrome's
+ * landmark pass keeps it. Must run before sanitisation (which drops iframes).
+ */
+export function substituteContentFrames(root: Element, frames: Map<string, string>): void {
+  if (frames.size === 0) return;
+  for (const iframe of Array.from(root.querySelectorAll('iframe[src]'))) {
+    const src = iframe.getAttribute('src') ?? '';
+    const html = frames.get(src);
+    if (html === undefined) continue;
+    let box: HTMLElement;
+    if (html) {
+      const parsed = new DOMParser().parseFromString(html, 'text/html');
+      box = document.createElement('div');
+      box.append(...Array.from(parsed.body.childNodes).map(n => document.importNode(n, true)));
+    } else {
+      box = contentFrameLink(src);
+    }
+    iframe.replaceWith(box);
+    for (let a = box.parentElement; a && a !== root; a = a.parentElement) {
+      if (!a.matches('aside, [role="complementary"]')) continue;
+      const div = document.createElement('div');
+      div.append(...Array.from(a.childNodes));
+      a.replaceWith(div);
+      a = div;
+    }
+  }
+}
+
+/** Tweet id of an embedded-tweet iframe; '' for a tweet embed with no id, null for any other iframe. */
+function tweetEmbedId(iframe: Element): string | null {
+  const id = iframe.getAttribute('id') ?? '';
+  const src = iframe.getAttribute('src') ?? '';
+  const dataTweetId = iframe.getAttribute('data-tweet-id') ?? '';
+  // Host-page wrappers expose the tweet ID in the URL fragment. Common
+  // shapes: "/tweet-5.html#2061814497598169130" or
+  // "/tweet-5.html#2061814497598169130-onlyvideo".
+  const wrapperHostPattern = /\/(tweet|status|x-embed)[^\/]*\.html#/i;
+  const isTweetEmbed = /^twitter-widget/i.test(id)
+    || /platform\.twitter\.com\/embed/i.test(src)
+    || wrapperHostPattern.test(src)
+    || dataTweetId.length > 0;
+  if (!isTweetEmbed) return null;
+
+  if (dataTweetId) return dataTweetId;
+  const qIdx = src.indexOf('?');
+  if (qIdx >= 0) {
+    const idParam = new URLSearchParams(src.slice(qIdx + 1)).get('id');
+    if (idParam) return idParam;
+  }
+  // Fragment fallback (Breitbart-style): "...#ID" or "...#ID-onlyvideo".
+  const hashIdx = src.indexOf('#');
+  const fragMatch = hashIdx >= 0 ? src.slice(hashIdx + 1).match(/^(\d{6,})/) : null;
+  return fragMatch ? fragMatch[1] : '';
+}
+
+/**
+ * Fetch data for tweets the harvest missed — an embed whose iframe never loaded
+ * (lazy, far below the fold). The background runs the extractor by id inside a
+ * loaded tweet frame, so it needs no extra permission.
+ */
+async function fillMissingTweets(ids: string[], harvested: Map<string, EmbeddedTweetData>): Promise<void> {
+  const missing = [...new Set(ids)].filter(id => !harvested.get(id) || harvested.get(id)?.source !== 'iframe');
+  if (missing.length === 0) return;
+  try {
+    const res = await Promise.race([
+      chrome.runtime.sendMessage({ type: 'EXTRACT_EMBEDDED_TWEETS', ids: missing }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+    ]);
+    if (res?.success && Array.isArray(res.data)) {
+      (res.data as EmbeddedTweetData[]).forEach(d => { if (d?.tweetId) harvested.set(d.tweetId, d); });
+    }
+  } catch (err) {
+    log(LL.DEBUG, `fillMissingTweets: unavailable (${err instanceof Error ? err.message : err})`, 'url:', window.location.href);
+  }
+  log(LL.DEBUG, `fillMissingTweets: ${missing.filter(id => harvested.get(id)?.source === 'iframe').length}/${missing.length} recovered`, 'url:', window.location.href);
 }
 
 function buildStubCard(statusUrl: string): HTMLElement {
@@ -2832,37 +2966,11 @@ async function substituteEmbeddedTweets(
   //   3. Host-page wrappers like Breitbart's tweet-5.html#ID (and similar
   //      sites that re-wrap the standard widget) — tweet ID lives in the
   //      URL fragment.
-  const iframes = Array.from(root.querySelectorAll('iframe')) as HTMLIFrameElement[];
-  for (const iframe of iframes) {
-    const id = iframe.getAttribute('id') ?? '';
-    const src = iframe.getAttribute('src') ?? '';
-    const dataTweetId = iframe.getAttribute('data-tweet-id') ?? '';
-    // Host-page wrappers expose the tweet ID in the URL fragment. Common
-    // shapes: "/tweet-5.html#2061814497598169130" or
-    // "/tweet-5.html#2061814497598169130-onlyvideo".
-    const wrapperHostPattern = /\/(tweet|status|x-embed)[^\/]*\.html#/i;
-    const isTweetEmbed = /^twitter-widget/i.test(id)
-      || /platform\.twitter\.com\/embed/i.test(src)
-      || wrapperHostPattern.test(src)
-      || dataTweetId.length > 0;
-    if (!isTweetEmbed) continue;
-
-    let tweetId = dataTweetId;
-    if (!tweetId && src) {
-      const qIdx = src.indexOf('?');
-      if (qIdx >= 0) {
-        const idParam = new URLSearchParams(src.slice(qIdx + 1)).get('id');
-        if (idParam) tweetId = idParam;
-      }
-      // Fragment fallback (Breitbart-style): "...#ID" or "...#ID-onlyvideo".
-      if (!tweetId) {
-        const hashIdx = src.indexOf('#');
-        if (hashIdx >= 0) {
-          const fragMatch = src.slice(hashIdx + 1).match(/^(\d{6,})/);
-          if (fragMatch) tweetId = fragMatch[1];
-        }
-      }
-    }
+  const iframes = (Array.from(root.querySelectorAll('iframe')) as HTMLIFrameElement[])
+    .map(iframe => ({ iframe, tweetId: tweetEmbedId(iframe) }))
+    .filter((x): x is { iframe: HTMLIFrameElement; tweetId: string } => x.tweetId !== null);
+  await fillMissingTweets(iframes.map(x => x.tweetId).filter(Boolean), harvested);
+  for (const { iframe, tweetId } of iframes) {
     if (!tweetId) { iframe.remove(); continue; }
 
     const data = harvested.get(tweetId);
@@ -3053,7 +3161,8 @@ function findArticleElement(smartDetection: boolean): Element | null {
         // Only the `article` selectors can yield a card; <main>/[role=main]
         // are page-level, never a card, so skip the (costly) card check for them.
         if (e.tagName.toLowerCase() === 'article' && looksLikeArticleCard(e)) return false;
-        return true;
+        // An empty ad-slot <article> (ESPN's `article.ad-300`) must not shadow the real one.
+        return (e.textContent ?? '').trim().length >= ARTICLE_MIN_CHARS;
       }
       catch { return true; }
     }) ?? null;
@@ -4072,6 +4181,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
   // pass can lose hidden blockquotes (widgets.js leaves the source blockquote
   // behind with display:none, which markExcluded would otherwise drop).
   const harvestedTweets = await harvestEmbeddedTweets(document);
+  const harvestedFrames = await harvestContentFrames(document);
 
   // Apply per-site live-DOM tagger (if registered for this hostname) so the
   // captured HTML carries dx-* markers across sanitisation regardless of
@@ -4168,6 +4278,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     census.at('clone', clone);
     sizeCleanup();
     cleanup();
+    substituteContentFrames(clone, harvestedFrames);
     clone.querySelector('#discerned-overlay')?.remove();
     // Site-tagger post-clone hook — runs BEFORE removeMarked so the hook can
     // lift content out of soon-to-be-excluded wrappers (Reddit subreddit
@@ -4265,6 +4376,7 @@ async function extractArticle(opts: CaptureOptions): Promise<Capture> {
     census.at('clone', clone);
     sizeCleanup();
     cleanup();
+    substituteContentFrames(clone, harvestedFrames);
     clone.querySelector('#discerned-overlay')?.remove();
     // Site-tagger post-clone hook: runs only on the detached clone so any
     // destructive mutations (replaceWith, restructuring) never leak into
@@ -4467,11 +4579,13 @@ async function extractFullPage(opts: CaptureOptions): Promise<Capture> {
   // Pre-harvest embedded tweets from the LIVE DOM before cloning (the iframe
   // round-trip + hidden-blockquote data only exists pre-clone).
   const harvestedTweets = await harvestEmbeddedTweets(document);
+  const harvestedFrames = await harvestContentFrames(document);
   const fpLiveVideoFrames = await captureVideoFrames(document.body);
   // Clone the body only — using outerHTML (which includes <html>/<head>) causes
   // DOMParser to restructure the document in ways that leave <script> content as
   // orphaned text nodes that querySelectorAll('script') can't reach.
   const bodyClone = cloneBodyClean();
+  substituteContentFrames(bodyClone, harvestedFrames);
   // Site tagger post-clone work (dx-excl promotion + postClone hook + removeMarked).
   // Shared with extractArticle + extractSelection so all three formats produce
   // the same site-tagger-aware structure.
@@ -4554,6 +4668,16 @@ function isCarouselSlide(el: Element): boolean {
     if (m) offsets.add(m[1]);
   }
   return offsets.size >= 2;
+}
+
+const TICKER_MAX_H = 120;
+/** Short horizontal scroller whose content is ≥2x its visible width — a ticker, not prose. */
+function isTickerStrip(el: Element): boolean {
+  const h = el.clientHeight;
+  if (h <= 0 || h > TICKER_MAX_H || el.clientWidth <= 0) return false;
+  if (el.scrollWidth < el.clientWidth * 2) return false;
+  // A wide code block or data table scrolls sideways too, and is content.
+  return !el.closest('pre, code, table') && !el.querySelector('pre, table');
 }
 
 function markExcluded(root: HTMLElement = document.body): () => void {
@@ -4724,6 +4848,17 @@ function markExcluded(root: HTMLElement = document.body): () => void {
       if (off && Math.abs(parseFloat(off[1])) >= 100 && isCarouselSlide(el)) {
         el.setAttribute(EXCL_MARKER, '1');
       }
+    }
+    // A TICKER strip (ESPN's scores bar, market tickers): short, horizontally
+    // clipped, and its track far wider than its box. Drop its whole short region.
+    if (s.overflowX !== 'visible' && isTickerStrip(el)) {
+      let region: Element = el;
+      while (region.parentElement && region.parentElement !== root) {
+        const h = region.parentElement.getBoundingClientRect().height;
+        if (h <= 0 || h > TICKER_MAX_H) break;
+        region = region.parentElement;
+      }
+      region.setAttribute(EXCL_MARKER, '1');
     }
   });
   return () => querySelectorAllDeep(root, `[${EXCL_MARKER}]`).forEach(el => el.removeAttribute(EXCL_MARKER));

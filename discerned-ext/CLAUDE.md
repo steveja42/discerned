@@ -168,6 +168,62 @@ size cap, added up to 1.5 s per image before falling through, and would have
 doubled the test matrix (granted/declined x permissive/hostile) for a path no
 existing spec could actually verify. Don't reintroduce it without solving those.
 
+**Content iframes (live blogs) are inlined, also gated by host access.** ESPN's
+free-agency tracker keeps its whole story — 25 entries, 21 tweets — in a
+cross-origin Arena `<iframe>` inside an `<aside>`, so the sanitiser (drops
+iframes) and `stripPageChrome` (drops asides) lost all of it.
+`harvestContentFrames` picks column-sized iframes (≥400x600, not tweet/video/ad
+embeds) on the live DOM; the background injects `extractFromContentFrame`
+(`shared/content-frame.ts`) and `substituteContentFrames` swaps the iframe for
+that markup on the clone and unwraps its `<aside>`. The frame's tweet embeds
+keep their `data-tweet-id`, so the existing tweet substitution cards them. There
+is deliberately **no** permission pre-check: `activeTab` covers a same-origin
+frame, and for a cross-origin one Chrome refuses the injection without the
+`<all_urls>` grant — the iframe is then replaced by a "View the embedded content
+(host)" link rather than dropped. Guarded offline by
+`tests/e2e/content-frame.spec.ts` (same-origin fixture, so no grant is involved).
+
+**Lazy tweet embeds are filled from X's syndication JSON.** A tweet far below the
+fold has not rendered when capture runs — measured on ESPN: 5 of 6 sampled
+`platform.twitter.com` frames had no `<img>` at all, and one tweet's frame had
+never loaded — so cards came out avatar-less and photo-less, or as "View on X"
+stubs. `extractFromTweetEmbed` (which runs INSIDE a tweet frame) now falls back to
+`cdn.syndication.twimg.com/tweet-result` whenever the avatar is missing; that
+endpoint's CORS allows only `https://platform.twitter.com`, i.e. exactly the frame
+we already inject into, so no new permission is needed. A tweet whose frame never
+loaded is fetched by id from a SIBLING tweet frame (`fillMissingTweets` →
+`EXTRACT_EMBEDDED_TWEETS { ids }`). The harvest budget is 3s (was 1s) to cover it.
+`breitbart-fixture-visual` exercises this path offline: its two embeds never
+render, so it serves their syndication JSON and the images it names from
+`tests/fixtures/syndication/` (refetch both files if X changes the response).
+Its baseline is taller than the old 1400px viewport, so the spec sizes the
+viewport to the clip — an element screenshot leaves anything below the scrolling
+panel's visible area blank, and that blank baseline "passed" twice.
+
+**A ticker strip is chrome in every format.** ESPN's scores bar sits in a plain
+`div#header-wrapper`, so neither Tier 1 nor the landmark stripper removes it from
+`full-page`. `markExcluded` drops any element ≤120px tall, horizontally clipped,
+whose track is ≥2x its visible width (`isTickerStrip`), climbing to the tallest
+still-short ancestor so the strip's label goes too. Code blocks and tables are
+exempt — they scroll sideways and are content.
+
+**Toggling the grant in a test.** `tests/e2e/helpers/siteAccess.ts` drives the
+permissions page's own buttons (`#btn-perm` / `#btn-revoke`). Chrome prompts only
+for the FIRST grant in a profile; after that a revoke + re-request is granted
+silently, so a profile a person granted once can be toggled freely. Never answer
+the prompt with OS keystrokes: a Space sent that way landed on the page's revoke
+button (focused after the silent re-grant) and undid the grant.
+Arena frames were measured with a Playwright frame probe, which can read
+cross-origin frames the extension cannot. Note Arena mounts a second, EMPTY frame
+at the same URL, so the background tries each matching frame until one returns
+content.
+
+The same page exposed a Tier 1 defect: its FIRST `<article>` is an empty ad slot
+(`article.ad-300`). `findArticleElement` took it, failed the 200-char gate, and
+skipped the whole `article` selector, so the layout finder captured the entire
+page, NFL scores strip included. The length gate now sits inside the candidate
+filter (`tests/extraction/espn-liveblog.test.ts`).
+
 **Inlining is for CLIPS ONLY — casts never carry inlined images.** The grant
 affects the private clip and nothing else. `inlineAllImages` overwrites `src` with
 base64 but preserves the real URL in `data-dx-src`, and `htmlToMarkdown`'s

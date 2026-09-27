@@ -4,7 +4,7 @@
 
 import { test, expect } from '@playwright/test';
 import { resolve } from 'node:path';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { launchWithExtension } from './helpers/launchExtension';
 import { activateExtensionOnTab } from './helpers/activateExtension';
 
@@ -21,6 +21,17 @@ test('breitbart-fixture-visual', async () => {
   const out = (n: string) => resolve(outDir, n);
 
   const { ctx } = await launchWithExtension({ headed: !!process.env.PWDEBUG_HEADED });
+  // The embeds never render here, so their cards are filled from X's syndication
+  // JSON — served from saved copies (and the images they name) for a stable baseline.
+  const SYND = resolve(__dirname, '..', 'fixtures', 'syndication');
+  await ctx.route('**://cdn.syndication.twimg.com/**', (route) => {
+    const file = resolve(SYND, `${new URL(route.request().url()).searchParams.get('id')}.json`);
+    return existsSync(file) ? route.fulfill({ path: file, contentType: 'application/json' }) : route.abort();
+  });
+  await ctx.route('**://pbs.twimg.com/**', (route) => {
+    const file = resolve(SYND, new URL(route.request().url()).pathname.slice(1).replace(/\//g, '_'));
+    return existsSync(file) ? route.fulfill({ path: file, contentType: 'image/jpeg' }) : route.abort();
+  });
   try {
     const page = await ctx.newPage();
     page.on('console', (msg) => {
@@ -89,6 +100,12 @@ test('breitbart-fixture-visual', async () => {
     // Pixel-diff baseline. Regenerate with `--update-snapshots` after
     // intentional visual changes; otherwise this fails on accidental layout
     // regressions to shared CSS or generic taggers.
+    // Fit the whole clip in the viewport — the scrolling panel leaves anything
+    // below its visible area unpainted in an element screenshot.
+    await libPage.waitForLoadState('networkidle');
+    const clipH = Math.ceil((await clipBody.boundingBox())?.height ?? 1200);
+    await libPage.setViewportSize({ width: 1280, height: clipH + 400 });
+    await libPage.waitForTimeout(500);
     await expect(clipBody).toHaveScreenshot('breitbart-fixture-clipbody.png', { maxDiffPixelRatio: 0.02 });
   } finally {
     await ctx.close();

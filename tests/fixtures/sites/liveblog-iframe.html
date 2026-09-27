@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>2026 NFL free agency tracker: Signings, trades, cuts</title>
+<!-- ESPN-shaped (2026-09-26): a scores strip above the story, an EMPTY ad-slot
+     <article> before the real one, and the tracker body in a live-blog <iframe>
+     wrapped in an <aside>. The frame is same-origin so activeTab covers it. -->
+<style>
+  body { margin: 0; font-family: Georgia, serif; }
+  .scoreboard { height: 64px; overflow: hidden; background: #222; color: #fff; }
+  /* A ticker: the track is far wider than its clipped box. */
+  .scores-track { display: flex; gap: 12px; width: 3000px; white-space: nowrap; }
+  .layout { display: flex; gap: 24px; padding: 16px; }
+  .ad-300 { width: 300px; height: 250px; flex: none; }
+  .article { width: 700px; }
+  .module-iframe-wrapper iframe { width: 640px; height: 1400px; border: 0; }
+</style>
+</head>
+<body>
+<div id="global-viewport">
+  <div class="scoreboard"><div class="scores-track">
+    <div class="cscore">Final ATL 35 GB 14</div><div class="cscore">Sun 10:00 AM PT FOX CAR 1-1 CLE 1-1</div>
+    <div class="cscore">Sun 10:00 AM PT CBS CIN 2-0 PIT 1-1</div><div class="cscore">Sun 10:00 AM PT CBS HOU 0-2 IND 0-2</div>
+    <div class="cscore">Sun 10:00 AM PT FOX KC 2-0 MIA 0-2</div><div class="cscore">Sun 10:00 AM PT FOX LAC 0-2 BUF 2-0</div>
+    <div class="cscore">Sun 10:00 AM PT FOX NYJ 1-1 DET 1-1</div><div class="cscore">Sun 10:00 AM PT CBS SEA 2-0 WSH 0-2</div>
+  </div></div>
+  <div class="layout">
+    <article class="ad-300"></article>
+    <article class="article">
+      <header><h1>2026 NFL free agency tracker: Signings, trades, cuts</h1>
+        <p>ESPN staff · Mar 19, 2026</p></header>
+      <div class="article-body">
+        <p>NFL free agency began with the legal negotiation window on March 9, while March 11 marked the start of the new league year. We tracked all the action.</p>
+        <p>After the Maxx Crosby trade fell through, the Ravens salvaged their free agency plans by signing edge rusher Trey Hendrickson. Quarterbacks relocated all over the league.</p>
+        <h2>Free agency and trade market updates</h2>
+        <p>Last updated: March 19 at 3:40 p.m. ET</p>
+        <aside class="module-iframe-wrapper">
+          <iframe id="arena-liveblog-iframe" src="liveblog-iframe-frame.html"></iframe>
+        </aside>
+      </div>
+    </article>
+  </div>
+</div>
+</body>
+</html>

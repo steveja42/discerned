@@ -1,0 +1,158 @@
+{
+  "__typename": "Tweet",
+  "favorite_count": 56,
+  "lang": "es",
+  "possibly_sensitive": false,
+  "created_at": "2026-06-02T14:17:37.000Z",
+  "display_text_range": [
+    0,
+    280
+  ],
+  "entities": {
+    "media": [
+      {
+        "display_url": "pic.x.com/HSdTWV0cVI",
+        "expanded_url": "https://x.com/El_Universal_Mx/status/2061814497598169130/video/1",
+        "indices": [
+          280,
+          303
+        ],
+        "url": "https://t.co/HSdTWV0cVI"
+      }
+    ]
+  },
+  "id_str": "2061814497598169130",
+  "text": "🔴  “Los asuntos de México le corresponden a las y los mexicanos”.\n\nClaudia Sheinbaum respondió al embajador de EU en México, Ronald Johnson, y señaló que los diplomáticos deben mantenerse en el ámbito de la coordinación institucional y ser respetuosos de los asuntos políticos de https://t.co/HSdTWV0cVI",
+  "user": {
+    "id_str": "16676396",
+    "name": "El Universal",
+    "screen_name": "El_Universal_Mx",
+    "is_blue_verified": true,
+    "profile_image_shape": "Circle",
+    "verified": false,
+    "profile_image_url_https": "https://pbs.twimg.com/profile_images/1290059307195670529/BniAB8VL_normal.jpg"
+  },
+  "edit_control": {
+    "edit_tweet_ids": [
+      "2061814497598169130"
+    ],
+    "editable_until_msecs": "1780413457000",
+    "edits_remaining": "5",
+    "is_edit_eligible": true
+  },
+  "mediaDetails": [
+    {
+      "additional_media_info": {},
+      "display_url": "pic.x.com/HSdTWV0cVI",
+      "expanded_url": "https://x.com/El_Universal_Mx/status/2061814497598169130/video/1",
+      "ext_media_availability": {
+        "status": "Available"
+      },
+      "indices": [
+        280,
+        303
+      ],
+      "media_url_https": "https://pbs.twimg.com/amplify_video_thumb/2061814363304927233/img/hQWcFVEh3igmEsYa.jpg",
+      "original_info": {
+        "focus_rects": [],
+        "height": 644,
+        "width": 1206
+      },
+      "sizes": {
+        "large": {
+          "h": 644,
+          "resize": "fit",
+          "w": 1206
+        },
+        "medium": {
+          "h": 641,
+          "resize": "fit",
+          "w": 1200
+        },
+        "small": {
+          "h": 363,
+          "resize": "fit",
+          "w": 680
+        },
+        "thumb": {
+          "h": 150,
+          "resize": "crop",
+          "w": 150
+        }
+      },
+      "type": "video",
+      "url": "https://t.co/HSdTWV0cVI",
+      "video_info": {
+        "aspect_ratio": [
+          603,
+          322
+        ],
+        "duration_millis": 103795,
+        "variants": [
+          {
+            "content_type": "application/x-mpegURL",
+            "url": "https://video.twimg.com/amplify_video/2061814363304927233/pl/AoMpobCusnhwnyLh.m3u8?v=d37"
+          },
+          {
+            "bitrate": 256000,
+            "content_type": "video/mp4",
+            "url": "https://video.twimg.com/amplify_video/2061814363304927233/vid/avc1/504x270/6_ZTfkKxk51nEV6L.mp4"
+          },
+          {
+            "bitrate": 832000,
+            "content_type": "video/mp4",
+            "url": "https://video.twimg.com/amplify_video/2061814363304927233/vid/avc1/674x360/J-cvA-isCyM1tlim.mp4"
+          },
+          {
+            "bitrate": 2176000,
+            "content_type": "video/mp4",
+            "url": "https://video.twimg.com/amplify_video/2061814363304927233/vid/avc1/1206x644/1TaYgYQySFB3I3VA.mp4"
+          }
+        ]
+      }
+    }
+  ],
+  "photos": [],
+  "video": {
+    "aspectRatio": [
+      603,
+      322
+    ],
+    "contentType": "media_entity",
+    "durationMs": 103795,
+    "mediaAvailability": {
+      "status": "available"
+    },
+    "poster": "https://pbs.twimg.com/amplify_video_thumb/2061814363304927233/img/hQWcFVEh3igmEsYa.jpg",
+    "variants": [
+      {
+        "type": "application/x-mpegURL",
+        "src": "https://video.twimg.com/amplify_video/2061814363304927233/pl/AoMpobCusnhwnyLh.m3u8?v=d37"
+      },
+      {
+        "type": "video/mp4",
+        "src": "https://video.twimg.com/amplify_video/2061814363304927233/vid/avc1/504x270/6_ZTfkKxk51nEV6L.mp4"
+      },
+      {
+        "type": "video/mp4",
+        "src": "https://video.twimg.com/amplify_video/2061814363304927233/vid/avc1/674x360/J-cvA-isCyM1tlim.mp4"
+      },
+      {
+        "type": "video/mp4",
+        "src": "https://video.twimg.com/amplify_video/2061814363304927233/vid/avc1/1206x644/1TaYgYQySFB3I3VA.mp4"
+      }
+    ],
+    "videoId": {
+      "type": "tweet",
+      "id": "2061814497598169130"
+    },
+    "viewCount": 0
+  },
+  "conversation_count": 152,
+  "news_action_type": "conversation",
+  "isEdited": false,
+  "isStaleEdit": false,
+  "note_tweet": {
+    "id": "Tm90ZVR3ZWV0UmVzdWx0czoyMDYxODE0NDk3NTI2ODQ1NDQw"
+  }
+}

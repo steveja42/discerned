@@ -27,8 +27,9 @@ import {
   getOrCreateBunkerSigner,
   invalidateBunkerSigner,
 } from '@/shared/nostr/nip46-manager';
-import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation, ClipData, EmbeddedTweetData, RelayMode } from '@/shared/types';
+import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation, ClipData, EmbeddedTweetData, RelayMode, ContentFrameRequest, ContentFrameResult } from '@/shared/types';
 import { STORAGE_KEYS, relaysForMode } from '@/shared/types';
+import { extractFromContentFrame } from '@/shared/content-frame';
 import { getEffectiveRelays, getRelayRows, saveRelayPrefs, mergeDiscoveredRelays } from '@/shared/relays';
 import { fetchPreferredRelays, clearDiscoveryCache } from './relay-list-fetcher';
 import { fetchCurrentFollowList } from './follow-list-fetcher';
@@ -792,7 +793,10 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
       return handleFetchVideoBlob(message.src);
 
     case 'EXTRACT_EMBEDDED_TWEETS':
-      return handleExtractEmbeddedTweets(senderTabId);
+      return handleExtractEmbeddedTweets(senderTabId, message.ids);
+
+    case 'EXTRACT_CONTENT_FRAMES':
+      return handleExtractContentFrames(senderTabId, message.frames);
 
     case 'REGISTER_LOG_TAB':
       if (senderTabId !== undefined) registerLogTab(senderTabId);
@@ -971,7 +975,7 @@ async function handleDisconnectAuth(): Promise<BackgroundResponse> {
  * the rendered tweet DOM. Returned image URLs are raw https; the page-side
  * substituter inlines them via the existing INLINE_IMAGE path.
  */
-async function handleExtractEmbeddedTweets(tabId?: number): Promise<BackgroundResponse> {
+async function handleExtractEmbeddedTweets(tabId?: number, ids?: string[]): Promise<BackgroundResponse> {
   if (tabId === undefined) return { success: false, error: 'no tab id' };
   let frames: chrome.webNavigation.GetAllFrameResultDetails[];
   try {
@@ -987,6 +991,26 @@ async function handleExtractEmbeddedTweets(tabId?: number): Promise<BackgroundRe
 
   log(LL.DEBUG, `EXTRACT_EMBEDDED_TWEETS: found ${tweetFrames.length} tweet embed frame(s) in tab ${tabId}`);
 
+  // Tweets whose own frame never loaded (lazy): fetch each by id from a loaded
+  // tweet frame, whose origin X's syndication JSON allows.
+  if (ids?.length) {
+    const host = tweetFrames[0];
+    const byId = await Promise.all(ids.map(async (id) => {
+      try {
+        const injected = await chrome.scripting.executeScript({
+          target: { tabId, frameIds: [host.frameId] },
+          func: extractFromTweetEmbed,
+          args: [id],
+        });
+        return injected?.[0]?.result ?? null;
+      } catch (err) {
+        log(LL.WARN, `EXTRACT_EMBEDDED_TWEETS: by-id fetch failed for ${id}`, err);
+        return null;
+      }
+    }));
+    return { success: true, data: byId.filter((d): d is EmbeddedTweetData => d !== null) };
+  }
+
   const results = await Promise.all(tweetFrames.map(async (frame) => {
     try {
       const injected = await chrome.scripting.executeScript({
@@ -1001,6 +1025,52 @@ async function handleExtractEmbeddedTweets(tabId?: number): Promise<BackgroundRe
   }));
 
   return { success: true, data: results.filter((d): d is EmbeddedTweetData => d !== null) };
+}
+
+// ── Content-iframe extraction (live blogs etc.) ─────────────────────────────
+
+/** Frame URL with query/hash dropped, for matching a frame to its iframe `src`. */
+function frameUrlStem(u: string): string {
+  try { const x = new URL(u); return x.origin + x.pathname; } catch { return u; }
+}
+
+/**
+ * Inline the body of CONTENT iframes (ESPN's Arena live blog). activeTab covers
+ * same-origin frames only; a cross-origin one needs the optional all-sites grant,
+ * so Chrome refuses the injection without it and the iframe is dropped as before.
+ */
+async function handleExtractContentFrames(tabId: number | undefined, requests: ContentFrameRequest[]): Promise<BackgroundResponse> {
+  const none = { success: true as const, data: [] as ContentFrameResult[] };
+  if (tabId === undefined || requests.length === 0) return none;
+  let frames: chrome.webNavigation.GetAllFrameResultDetails[];
+  try { frames = (await chrome.webNavigation.getAllFrames({ tabId })) ?? []; }
+  catch (err) { log(LL.WARN, 'EXTRACT_CONTENT_FRAMES: getAllFrames failed', err); return none; }
+  const results = await Promise.all(requests.map(async (req): Promise<ContentFrameResult | null> => {
+    // Exact URL first, then same origin+path. A vendor may mount a second, EMPTY
+    // frame at the same URL (ESPN's Arena does), so take the first with content.
+    const stem = frameUrlStem(req.src);
+    const candidates = [
+      ...frames.filter(f => f.url === req.src),
+      ...frames.filter(f => f.url !== req.src && frameUrlStem(f.url) === stem),
+    ];
+    for (const frame of candidates) {
+      try {
+        const injected = await chrome.scripting.executeScript({
+          target: { tabId, frameIds: [frame.frameId] },
+          func: extractFromContentFrame,
+        });
+        const html = injected?.[0]?.result;
+        if (typeof html === 'string' && html) return { key: req.key, html };
+      } catch (err) {
+        // Expected without the all-sites grant on a cross-origin frame.
+        log(LL.DEBUG, `EXTRACT_CONTENT_FRAMES: cannot inject into ${frame.url}`, err);
+      }
+    }
+    return null;
+  }));
+  const data = results.filter((r): r is ContentFrameResult => r !== null);
+  log(LL.DEBUG, `EXTRACT_CONTENT_FRAMES: ${data.length}/${requests.length} frame(s) extracted`);
+  return { success: true, data };
 }
 
 /**
@@ -1019,7 +1089,10 @@ async function handleExtractEmbeddedTweets(tabId?: number): Promise<BackgroundRe
  *
  * Returns null on extraction failure so the page falls back to blockquote data.
  */
-function extractFromTweetEmbed(): unknown {
+async function extractFromTweetEmbed(forId?: string): Promise<EmbeddedTweetData | null> {
+  const VERIFIED_SVG = '<svg class="tweet-badge-verified" viewBox="0 0 22 22" aria-label="Verified" width="16" height="16"><path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"/></svg>';
+  // forId: a tweet whose own frame never loaded, fetched from a sibling frame's origin.
+  const fromDom = forId ? null : ((): EmbeddedTweetData | null => {
   try {
     const article = document.querySelector('article') ?? document.body;
     if (!article) return null;
@@ -1124,9 +1197,7 @@ function extractFromTweetEmbed(): unknown {
     // SVG Tier 0 uses on twitter.com so the card matches visually. The SVG
     // path data is the standard X verified glyph.
     const isVerified = !!article.querySelector('[data-testid="icon-verified"]');
-    const badgesHtml = isVerified
-      ? '<svg class="tweet-badge-verified" viewBox="0 0 22 22" aria-label="Verified" width="16" height="16"><path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"/></svg>'
-      : '';
+    const badgesHtml = isVerified ? VERIFIED_SVG : '';
 
     return {
       tweetId,
@@ -1139,10 +1210,62 @@ function extractFromTweetEmbed(): unknown {
       videoInfos,
       avatarSrc,
       dateText,
-      source: 'iframe',
+      source: 'iframe' as const,
     };
   } catch {
     return null;
+  }
+  })();
+
+  // An embed far below the fold has not rendered yet (no avatar, often no media
+  // or even no status link). Fill the gaps from the JSON the widget itself
+  // loads — its CORS allows platform.twitter.com, i.e. this frame.
+  if (fromDom?.avatarSrc) return fromDom;
+  const tweetId = forId || fromDom?.tweetId || new URLSearchParams(location.search).get('id') || '';
+  if (!/^\d+$/.test(tweetId)) return fromDom;
+  try {
+    const token = ((Number(tweetId) / 1e15) * Math.PI).toString(36).replace(/(0+|\.)/g, '');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2500);
+    const res = await fetch(`https://cdn.syndication.twimg.com/tweet-result?id=${tweetId}&token=${token}&lang=en`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return fromDom;
+    type Media = { type?: string; media_url_https?: string; original_info?: { width?: number; height?: number } };
+    const j = await res.json() as {
+      text?: string; display_text_range?: [number, number]; created_at?: string;
+      user?: { name?: string; screen_name?: string; profile_image_url_https?: string; is_blue_verified?: boolean; verified?: boolean };
+      mediaDetails?: Media[];
+    };
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const handle = j.user?.screen_name ?? fromDom?.handle ?? '';
+    const media = j.mediaDetails ?? [];
+    const range = j.display_text_range;
+    const text = range ? Array.from(j.text ?? '').slice(range[0], range[1]).join('') : (j.text ?? '');
+    const created = j.created_at ? new Date(j.created_at) : null;
+    return {
+      tweetId,
+      statusUrl: fromDom?.statusUrl || `https://x.com/${handle}/status/${tweetId}`,
+      displayName: fromDom?.displayName || j.user?.name || handle,
+      handle,
+      badgesHtml: fromDom?.badgesHtml || (j.user?.is_blue_verified || j.user?.verified ? VERIFIED_SVG : ''),
+      tweetTextHtml: fromDom?.tweetTextHtml || esc(text),
+      photoSrcs: fromDom?.photoSrcs.length ? fromDom.photoSrcs
+        : media.filter(m => m.type === 'photo' && m.media_url_https).map(m => m.media_url_https as string),
+      videoInfos: fromDom?.videoInfos.length ? fromDom.videoInfos
+        : media.filter(m => m.type !== 'photo' && m.media_url_https).map(m => ({
+          poster: m.media_url_https as string,
+          duration: null,
+          aspectPct: m.original_info?.width && m.original_info.height
+            ? (m.original_info.height / m.original_info.width) * 100 : null,
+        })),
+      avatarSrc: (j.user?.profile_image_url_https ?? '').replace('_normal.', '_bigger.'),
+      dateText: fromDom?.dateText || (created
+        ? `${created.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} · ${created.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+        : ''),
+      source: 'iframe',
+    };
+  } catch {
+    return fromDom;
   }
 }
 
