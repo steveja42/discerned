@@ -1027,7 +1027,6 @@ ${themeVarsBlock(this.effectiveTheme)}
       desc.textContent = granted
         ? 'Images are being stored inside your clips*, so they stay readable even if the original page changes or disappears.'
         : 'Clips currently link to images on the original site*, so they can break if that page changes or disappears. To allow storing images inside the clips, visit Discerned’s permissions page.';
-      btn.hidden = granted;
     };
 
     // The grant is given on a DIFFERENT tab, so an open drawer is stale the moment
