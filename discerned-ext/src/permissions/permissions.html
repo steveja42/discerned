@@ -48,7 +48,6 @@
     .btn:disabled { opacity: 0.55; cursor: default; }
     .status { font-size: 0.84rem; color: var(--p-ink-3); line-height: 1.5; }
     .status.ok { color: var(--p-accent-ink); }
-    .revoke-hint { font-size: 0.8rem; color: var(--p-ink-4); line-height: 1.5; }
     /* Footnote aside — same tier as .revoke-hint so the asterisked caveat reads
        as secondary to the card's main explanation. */
     .perm-note { font-size: 0.8rem; color: var(--p-ink-4); line-height: 1.5; }
@@ -71,11 +70,8 @@
         they already live — stored copies are far too large to publish.
       </p>
       <button class="btn" id="btn-perm" type="button">Save images in my clips</button>
+      <button class="btn" id="btn-revoke" type="button" hidden>Stop saving images in my clips</button>
       <p class="status" id="perm-status" hidden></p>
-      <p class="revoke-hint" id="revoke-hint" hidden>
-        To turn this off later, open <strong>chrome://extensions</strong> → Discerned →
-        Details → Site access.
-      </p>
     </div>
   </div>
   <script type="module" src="./permissions.ts"></script>

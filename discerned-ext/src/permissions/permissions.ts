@@ -15,13 +15,15 @@ initPageTheme();
 const ORIGINS = { origins: ['<all_urls>'] };
 
 const btn = document.getElementById('btn-perm') as HTMLButtonElement | null;
+const revokeBtn = document.getElementById('btn-revoke') as HTMLButtonElement | null;
 const status = document.getElementById('perm-status');
-const revokeHint = document.getElementById('revoke-hint');
 
 function render(granted: boolean): void {
   if (btn) {
-    btn.disabled = granted;
-    btn.textContent = granted ? 'Images are being saved' : 'Save images in my clips';
+    btn.hidden = granted;
+  }
+  if (revokeBtn) {
+    revokeBtn.hidden = !granted;
   }
   if (status) {
     status.hidden = false;
@@ -30,7 +32,6 @@ function render(granted: boolean): void {
       ? 'Your clips keep their own copy of each image.'
       : 'Clips currently link to images on the original site.';
   }
-  if (revokeHint) revokeHint.hidden = !granted;
 }
 
 void chrome.permissions.contains(ORIGINS)
@@ -52,6 +53,25 @@ btn?.addEventListener('click', () => {
         + 'If Chrome did not show a prompt, it may have remembered an earlier '
         + 'refusal — you can grant access from chrome://extensions → Discerned '
         + '→ Details → Site access → On all sites.';
+    }
+  }).catch(() => {
+    if (status) {
+      status.hidden = false;
+      status.textContent = 'Could not complete that request.';
+    }
+  });
+});
+
+revokeBtn?.addEventListener('click', () => {
+  chrome.permissions.remove(ORIGINS).then((removed) => {
+    if (removed) {
+      render(false);
+      return;
+    }
+    if (status) {
+      status.hidden = false;
+      status.className = 'status';
+      status.textContent = 'Could not remove that permission.';
     }
   }).catch(() => {
     if (status) {
