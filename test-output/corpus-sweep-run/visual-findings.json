@@ -26,16 +26,16 @@
       "castReviewedAt": "2026-09-17T13:25:04.045-07:00"
     },
     "aljazeera": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 2,
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "A Recommended Stories block of four unrelated links sits mid-article between paragraphs two and three, plus a Listen/Save/Share row and an Add-on-Google strip; the article itself is complete.",
+      "note": "Headline, dek, captioned hero, byline and full body are complete; a Listen/Save/Share row sits under the dek in the clip and leaves a stray 7 in the cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:24:11.109-07:00",
-      "clipReviewedAt": null,
-      "castReviewedAt": null
+      "reviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "clipReviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "castReviewedAt": "2026-09-28T05:41:04.376-07:00"
     },
     "wikipedia-en": {
       "verdict": "clean",
@@ -433,28 +433,28 @@
       "castReviewedAt": "2026-09-18T21:50:09.454-07:00"
     },
     "slashdot": {
-      "verdict": "flaw",
-      "severity": 5,
+      "verdict": "clean",
+      "severity": 1,
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Only the first story captures at 4% coverage - headline, byline, summary and quoted excerpt render well but the comment thread is absent.",
+      "note": "Story plus the full threaded comment thread with name · score · date bylines on both surfaces; the cast flattens reply indentation.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:28:03.614-07:00",
-      "clipReviewedAt": "2026-09-18T17:28:03.614-07:00",
-      "castReviewedAt": "2026-09-18T17:28:03.614-07:00"
+      "reviewedAt": "2026-09-28T00:09:58.038-07:00",
+      "clipReviewedAt": "2026-09-28T00:09:58.038-07:00",
+      "castReviewedAt": "2026-09-28T00:09:58.038-07:00"
     },
     "cbc": {
       "verdict": "flaw",
-      "severity": 4,
-      "where": "cast",
+      "severity": 3,
+      "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Clip is complete with headline, dek, byline, captioned hero and author bio; the cast still renders the hero as literal alt text instead of the image.",
+      "note": "Headline, dek, byline, captioned hero, body and author bio render and the cast hero now shows, but a What on Earth newsletter signup and a standards/Report-error footer trail the article.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:04:01.816-07:00",
-      "castReviewedAt": null,
-      "clipReviewedAt": null
+      "reviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "clipReviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "castReviewedAt": "2026-09-28T05:41:04.376-07:00"
     },
     "spotify-album": {
       "verdict": "clean",
@@ -781,16 +781,16 @@
       "castReviewedAt": "2026-09-17T12:47:53.937-07:00"
     },
     "xda-forums": {
-      "verdict": "flaw",
-      "severity": 6,
+      "verdict": "clean",
+      "severity": 1,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Only the opening post captures with garbled join stats (Jul 5, 2017 21 1) and post-nav chrome; every reply in the thread is missing at 15% coverage.",
+      "note": "Title, thread meta and every reply render with two-row author bylines and labelled stats; members with letter avatars show no avatar pin.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:59:04.075-07:00",
-      "clipReviewedAt": "2026-09-17T12:59:04.075-07:00",
-      "castReviewedAt": "2026-09-17T12:59:04.075-07:00"
+      "reviewedAt": "2026-09-28T00:09:58.038-07:00",
+      "clipReviewedAt": "2026-09-28T00:09:58.038-07:00",
+      "castReviewedAt": "2026-09-28T00:09:58.038-07:00"
     },
     "appstore": {
       "verdict": "clean",
@@ -1022,15 +1022,15 @@
     },
     "haaretz": {
       "verdict": "flaw",
-      "severity": 5,
+      "severity": 3,
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Only one body paragraph survives the paywall, after which a subscribe block, email-registration form and a full comment-form scaffold fill most of the capture before the real comments.",
+      "note": "Paywalled lead paragraph, byline and the full comment thread render, but a follow-topics strip, Sort controls and a trailing In the News rail with run-together tag links remain.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:28:19.319-07:00",
-      "clipReviewedAt": null,
-      "castReviewedAt": null
+      "reviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "clipReviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "castReviewedAt": "2026-09-28T05:41:04.376-07:00"
     },
     "playstore": {
       "verdict": "clean",
@@ -1590,11 +1590,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Question, all seven answers and every code block render with correct spacing, but a Join-Super-User signup prompt replaces the question as the page heading and edit-timestamp links collapse into one-character vertical columns.",
+      "note": "A Join Super User signup heading replaces the question title on both surfaces; the question, every answer, comments and code blocks render with no collapsed columns.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:52:57.809-07:00",
-      "clipReviewedAt": null,
-      "castReviewedAt": null
+      "reviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "clipReviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "castReviewedAt": "2026-09-28T05:41:04.376-07:00"
     },
     "tiktok-profile": {
       "verdict": "flaw",
@@ -1646,15 +1646,15 @@
     },
     "deepmind-blog": {
       "verdict": "flaw",
-      "severity": 3,
+      "severity": 5,
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headings, prose and video captions are intact but each inline video leaves a tall blank gap with only a small Video link card, and one grey placeholder box.",
+      "note": "Each inline video becomes a blank grey-and-black placeholder pair with its caption repeated, plus tall blank gaps above small Video link cards in the clip; the prose is complete.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:04:01.816-07:00",
-      "clipReviewedAt": null,
-      "castReviewedAt": null
+      "reviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "clipReviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "castReviewedAt": "2026-09-28T05:41:04.376-07:00"
     },
     "dev-to": {
       "verdict": "clean",
@@ -2451,13 +2451,13 @@
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, credited cartoon, byline, dates, series note and full body all render on both surfaces; bare Advertisement labels remain where ad slots were stripped.",
+      "note": "Headline, dek, captioned art, byline, series note and full body render; a share/save/comments icon row (a bare 110 in the cast), a 0:05 timecode and a Read 110 comments link remain.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:18:19.129-07:00",
-      "clipReviewedAt": null,
-      "castReviewedAt": null
+      "reviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "clipReviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "castReviewedAt": "2026-09-28T05:41:04.376-07:00"
     },
     "walmart": {
       "verdict": "flaw",

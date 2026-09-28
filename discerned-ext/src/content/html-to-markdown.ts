@@ -661,6 +661,45 @@ function liftTrailingBreaks(root: Element): void {
   }
 }
 
+// `<i>para one<br><br>para two</i>` (Slashdot's quoted excerpts): the pair is a
+// paragraph break, which emphasis cannot span in CommonMark, so both `*` print
+// literally. Close the emphasis before each break and reopen it after.
+function splitEmphasisAtBreakPairs(root: Element): void {
+  const isBlank = (n: ChildNode) => n.nodeType === 3 && !(n.textContent ?? '').trim();
+  // Innermost first, so <b><i>…</i></b> splits the <i> and then the <b>.
+  for (const em of Array.from(root.querySelectorAll('strong, b, em, i')).reverse()) {
+    const kids = Array.from(em.childNodes);
+    const segments: ChildNode[][] = [[]];
+    const breaks: ChildNode[][] = [];
+    for (let i = 0; i < kids.length; i++) {
+      let j = i;
+      let brs = 0;
+      while (j < kids.length && (kids[j].nodeName === 'BR' || isBlank(kids[j]))) {
+        if (kids[j].nodeName === 'BR') brs++;
+        j++;
+      }
+      if (brs >= 2) {
+        breaks.push(kids.slice(i, j));
+        segments.push([]);
+        i = j - 1;
+      } else {
+        segments[segments.length - 1].push(kids[i]);
+      }
+    }
+    if (!breaks.length) continue;
+    const out: Node[] = [];
+    segments.forEach((seg, k) => {
+      if (seg.some(n => !isBlank(n))) {
+        const part = em.cloneNode(false) as Element;
+        part.append(...seg);
+        out.push(part);
+      }
+      if (k < breaks.length) out.push(...breaks[k]);
+    });
+    em.replaceWith(...out);
+  }
+}
+
 // A `<br><br>` run is the paragraph break of pre-CSS pages (paulgraham.com),
 // but turndown emits it as a hard line break. Replace it with an empty <p>,
 // which turndown renders as a blank line. Skipped inside emphasis/links/<pre>,
@@ -703,6 +742,7 @@ export function htmlToMarkdown(html: string): string {
     if (container) {
       restorePreLineBreaks(container);
       liftTrailingBreaks(container);
+      splitEmphasisAtBreakPairs(container);
       brPairsToParagraphs(container);
       joinBylineTimestamp(container);
       separateInlineFacets(container);

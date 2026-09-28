@@ -437,6 +437,16 @@ export default defineConfig({
       retries: 0,
     },
     {
+      name: 'xenforo-thread-fixture-visual',
+      testMatch: /xenforo-thread-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'slashdot-story-fixture-visual',
+      testMatch: /slashdot-story-fixture-visual\.spec\.ts/,
+      retries: 0,
+    },
+    {
       name: 'youtube-viewcount-fixture-visual',
       testMatch: /youtube-viewcount-fixture-visual\.spec\.ts/,
       retries: 0,
@@ -516,6 +526,11 @@ export default defineConfig({
     {
       name: 'snapshot-fixtures',
       testMatch: /tools\/snapshot-fixtures\.spec\.ts/,
+      retries: 0,
+    },
+    {
+      name: 'snapshot-page',
+      testMatch: /tools\/snapshot-page\.spec\.ts$/,
       retries: 0,
     },
     {

@@ -5640,6 +5640,129 @@ function tagHackerNews(root: Document | Element): Element | void {
 }
 
 /**
+ * Tag Slashdot story pages. The story is an `<article>`, but the comment thread
+ * lives in a SIBLING container, so Tier 1 captured the story alone. Stable,
+ * unhashed hooks:
+ *   - `article.fhitem-story`  the story (the sponsored rail reuses it, in an aside)
+ *   - `#commentlisting`       the thread: `li.comment`, nested via `ul#commtree_N`
+ *   - `.commentTop`           subject + score + "by <name> (<uid>) on <date>"
+ * Collapsed ("oneline") comments still carry their full body, so the clip shows it.
+ * Returns the section holding story + thread; everything else in it is excluded.
+ */
+function tagSlashdot(root: Document | Element): Element | void {
+  const story = Array.from(root.querySelectorAll('article.fhitem-story')).find(a => !a.closest('aside'));
+  const listing = root.querySelector('#commentlisting');
+  if (!story || !listing) return undefined;
+
+  appendClass(story, 'dx-post');
+  // Hidden id/type block, the comment-count bubble glued to the title, and the
+  // prev/next "Related Links" strip under the summary.
+  story.querySelectorAll('.sd-info-block, .comment-bubble, .story-details, aside')
+    .forEach(el => appendClass(el, 'dx-excl'));
+
+  listing.querySelectorAll('li.comment').forEach(li =>
+    appendClass(li, li.parentElement?.closest('li.comment') ? 'dx-reply' : 'dx-post'));
+  // Per-comment chrome: the "›" focus glyph, status stubs, Share links, reply
+  // stubs and the empty hidden-reply groups.
+  listing.querySelectorAll('span.current, .commentstatus, .commentSub, [id^="replyto_"], [id^="group_"], li.hide')
+    .forEach(el => appendClass(el, 'dx-excl'));
+
+  // The shared ancestor also holds the login modal, moderation menus, the
+  // sponsored rail, the discussion-controls bar and the related-stories footer.
+  const scope = commonWrapper(story, listing, story.ownerDocument.body);
+  if (!scope) return story;
+  const keep = [story, listing];
+  for (const k of keep) {
+    for (let cur: Element = k; cur !== scope && cur.parentElement; cur = cur.parentElement) {
+      Array.from(cur.parentElement.children).forEach(sib => {
+        if (!keep.some(x => sib.contains(x))) appendClass(sib, 'dx-excl');
+      });
+    }
+  }
+  return scope;
+}
+
+/**
+ * Flatten Slashdot's nested `<ul>/<li>` thread into one row per comment,
+ * indented by depth (the HN idiom), each with a one-line byline. Left nested,
+ * the clip bullets every comment and the cast becomes a deep markdown list.
+ */
+function postCloneSlashdot(clone: Element): void {
+  const doc = clone.ownerDocument;
+  const listing = clone.querySelector('#commentlisting');
+  if (!doc || !listing) return;
+
+  const rows: Element[] = [];
+  listing.querySelectorAll('li.comment').forEach(li => {
+    let depth = 0;
+    for (let p = li.parentElement?.closest('li.comment'); p; p = p.parentElement?.closest('li.comment')) depth++;
+    const row = doc.createElement('div');
+    row.className = depth ? 'dx-reply' : 'dx-post';
+    if (depth) row.setAttribute('style', `margin-left:${Math.min(depth, 6) * 20}px`);
+    // A below-threshold comment the page never loaded is an empty .cw.
+    const cw = li.querySelector(':scope > .cw');
+    if (!cw?.querySelector('.commentTop')) return;
+    const permalink = (cw.querySelector('.title a[href]') as HTMLAnchorElement | null)?.href ?? '';
+    rebuildSlashdotCommentTop(cw, doc);
+    // A collapsed comment ships only its first ~512 chars, cut mid-word at
+    // span.substr; say so rather than end on a fragment.
+    cw.querySelectorAll('.commentBody .substr').forEach(cut => {
+      if (!permalink) { cut.replaceWith('…'); return; }
+      const more = doc.createElement('a');
+      more.href = permalink;
+      more.textContent = 'Read the rest of this comment';
+      cut.replaceWith('… ', more);
+    });
+    // Slashdot's reply-quote block; its class is stripped, so make it a real quote.
+    cw.querySelectorAll('.commentBody div.quote').forEach(q => {
+      const bq = doc.createElement('blockquote');
+      bq.append(...Array.from(q.childNodes));
+      q.replaceWith(bq);
+    });
+    row.appendChild(cw);
+    rows.push(row);
+  });
+  const thread = doc.createElement('div');
+  thread.append(...rows);
+  listing.replaceWith(thread);
+}
+
+/** "Subject (Score:5, Funny) / by name (uid) * writes: on <date> (#id)" →
+ *  the subject (dropped when it is a "Re:" echo) over "name · score · date". */
+function rebuildSlashdotCommentTop(cw: Element, doc: Document): void {
+  const top = cw.querySelector('.commentTop');
+  const details = top?.querySelector('.details');
+  if (!top || !details) return;
+
+  const scoreEl = top.querySelector('.score');
+  const score = (scoreEl?.textContent ?? '').replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
+  scoreEl?.remove();
+  const title = top.querySelector('.title');
+  if (title && /^\s*(Re:|$)/i.test(title.textContent ?? '')) title.remove();
+
+  // The name is a profile link, or plain text for "Anonymous Coward".
+  const by = details.querySelector('.by');
+  by?.querySelectorAll('.byby, .uid').forEach(el => el.remove());
+  by?.querySelectorAll('a').forEach(a => { if ((a.textContent ?? '').trim() === '*') a.remove(); });
+  const nameLink = by?.querySelector('a');
+  const nameText = (by?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  // "<email> on <date> (#id) Journal" — the email, permalink and journal/homepage
+  // links are chrome; removing them leaves an empty "<>" and "()".
+  const other = details.querySelector('.otherdetails');
+  other?.querySelectorAll('a, small').forEach(el => el.remove());
+  const date = (other?.textContent ?? '').replace(/\(\s*\)|<\s*>/g, '').replace(/\s+/g, ' ').trim().replace(/^on\s+/i, '');
+
+  const byline = doc.createElement('div');
+  byline.className = 'dx-byline';
+  if (nameLink) byline.appendChild(nameLink);
+  else if (nameText) byline.appendChild(doc.createElement('span')).textContent = nameText;
+  for (const part of [score, date]) {
+    if (part) byline.appendChild(doc.createElement('span')).textContent = part;
+  }
+  details.replaceWith(byline);
+}
+
+/**
  * Tag bitcointalk.org (Simple Machines Forum) topic pages. SMF is server-
  * rendered nested-table soup with stable, unhashed class names:
  *   - `td.msgcl1`            one message wrapper per post
@@ -5903,6 +6026,137 @@ function postClonePhpBB(clone: Element): void {
     line.textContent = [[name, rank].filter(Boolean).join(' · '), stats.join(' · ')]
       .filter(Boolean).join(' — ');
     panel.appendChild(line);
+  });
+}
+
+/**
+ * Tag XenForo 2 thread pages — an ENGINE tagger like tagPhpBB: XDA Forums and
+ * thousands of other forums share its stock, unhashed classes:
+ *   - `article.message--post`  one post
+ *   - `.message-user`          author column (avatar, name, title, user stats)
+ *   - `.message-attribution`   post date + "#N" permalink + share gadget
+ *   - `.message-body`          the post prose
+ *   - `.reactionsBar`          "Reactions: a, b and N others"
+ * The author column flattens into a stack of one-word lines, and UIX-themed
+ * forums (XDA) label its stats with icons only, so they read as bare numbers
+ * ("Jul 5, 2017 21 1"). postCloneXenForo rebuilds it.
+ */
+function tagXenForo(root: Document | Element): Element | void {
+  const posts = Array.from(root.querySelectorAll('article.message--post'));
+  if (!posts.length) return undefined;
+
+  posts.forEach(post => {
+    appendClass(post, 'dx-post');
+    post.querySelectorAll('.message-user, .message-attribution, .reactionsBar')
+      .forEach(el => appendClass(el, 'dx-byline'));
+    // "#N" + share gadget, signature, reaction sprite (a 1x1 gif), the quote
+    // "Click to expand/collapse" toggles, popup menus, and a link preview's
+    // favicon (served via the forum's image proxy, so broken in the cast).
+    post.querySelectorAll(
+      '.message-attribution-opposite, .message-signature, .message-actionBar, .reactionSummary, '
+      + '.bbCodeBlock-expandLink, .message-userArrow, .menu, .bbCodeBlockUnfurl-icon',
+    ).forEach(el => appendClass(el, 'dx-excl'));
+  });
+
+  // "Thread starter · Start date · Tags" under the title.
+  const description = root.querySelector('.p-description');
+  if (description) appendClass(description, 'dx-byline');
+
+  // Page chrome inside the content column: breadcrumbs, the pagination /
+  // thread-search / "log in to reply" bars, share row, similar threads, ad
+  // slots and the reply composer.
+  root.querySelectorAll('.breadcrumb, .p-breadcrumbs, .block-outer, .block--similarContents, .spot, form')
+    .forEach(el => appendClass(el, 'dx-excl'));
+  root.querySelectorAll('.shareButtons').forEach(el => appendClass(el.closest('.blockMessage') ?? el, 'dx-excl'));
+
+  return root.querySelector('.p-body-content') ?? undefined;
+}
+
+const XF_USER_STATS_RE = /^(joined|messages|posts|reaction score|points)$/i;
+
+/**
+ * Rebuild each XenForo author column as avatar + two short rows: the name and
+ * title, then "Joined … · Messages … · Reaction score …". A stat's label is
+ * the <dt> text, or on icon-only themes the icon's aria-label.
+ */
+function postCloneXenForo(clone: Element): void {
+  const doc = clone.ownerDocument;
+  if (!doc) return;
+  const text = (el: Element | null | undefined) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+  clone.querySelectorAll('.message-signature, .message-attribution-opposite').forEach(el => el.remove());
+
+  // The image proxy (proxy.php?image=<url>&hash=…) sits behind the forum's own
+  // wall, so a cast reader cannot load it; use the original https URL instead.
+  clone.querySelectorAll('img[src*="proxy.php?image="]').forEach(img => {
+    try {
+      const inner = new URL(img.getAttribute('src') ?? '', window.location.href).searchParams.get('image');
+      if (inner && /^https:\/\//i.test(inner)) img.setAttribute('src', inner);
+    } catch { /* keep the proxy URL */ }
+  });
+
+  // The date line and the thread-starter strip are inline <ul>s whose list
+  // padding indents them; lift each item to a direct byline child instead.
+  // Thread-starter items become ONE text leaf each ("Start date Jul 6, 2026"):
+  // the cast joins a byline's leaves with " · ", splitting label from value.
+  clone.querySelectorAll('.message-attribution ul, .p-description ul').forEach(ul => {
+    const flatten = !!ul.closest('.p-description');
+    ul.replaceWith(...Array.from(ul.children).map(li => {
+      const span = doc.createElement('span');
+      const tags = Array.from(li.querySelectorAll('.tagItem')).map(text);
+      if (tags.length) span.textContent = `${text(li.querySelector('.tagList dt')) || 'Tags'} ${tags.join(', ')}`;
+      else if (flatten) span.textContent = text(li);
+      else span.append(...Array.from(li.childNodes));
+      return span;
+    }));
+  });
+
+  // "Reactions: a, b and N others" as one leaf, for the same reason.
+  clone.querySelectorAll('.reactionsBar').forEach(bar => {
+    bar.querySelector('.reactionSummary')?.remove();
+    bar.textContent = text(bar);
+  });
+
+  clone.querySelectorAll('.message-user').forEach(panel => {
+    const avatar = panel.querySelector('.message-avatar img');
+    const name = panel.querySelector('.message-name a') ?? panel.querySelector('.message-name');
+    const titles = [...new Set([text(panel.querySelector('.userTitle')), text(panel.querySelector('.userBanner'))])]
+      .filter(Boolean);
+    const stats: string[] = [];
+    panel.querySelectorAll('.message-userExtras dl').forEach(dl => {
+      const dt = dl.querySelector('dt');
+      const label = text(dt) || (dt?.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '').trim();
+      const value = text(dl.querySelector('dd'));
+      if (value && XF_USER_STATS_RE.test(label)) stats.push(`${label} ${value}`);
+    });
+
+    // Separate elements, not one " · "-joined string: the cast joins a
+    // byline's leaves with " · " itself, so an embedded separator doubles.
+    const nameRow = doc.createElement('div');
+    if (name) nameRow.appendChild(doc.createElement('strong')).appendChild(name);
+    for (const t of titles) {
+      const span = nameRow.appendChild(doc.createElement('span'));
+      span.textContent = t;
+      span.setAttribute('style', 'margin-left:8px');
+    }
+    const statsRow = doc.createElement('div');
+    statsRow.textContent = stats.join(' · ');
+    // Inline display:block beats .dx-byline's inline-grandchild rule, so the
+    // rows stack whether or not there is an avatar beside them.
+    const col = doc.createElement('div');
+    for (const row of [nameRow, statsRow]) {
+      if (!row.textContent) continue;
+      row.setAttribute('style', 'display:block');
+      col.appendChild(row);
+    }
+
+    panel.replaceChildren();
+    // Letter avatars are a styled <span>, not an image — nothing to keep.
+    if (avatar?.getAttribute('src')) {
+      appendClass(avatar, 'dx-avatar');
+      panel.appendChild(avatar);
+    }
+    panel.appendChild(col);
   });
 }
 
@@ -7490,6 +7744,16 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     anchors: ['#hnmain', 'table.fatitem', 'tr.athing.comtr'],
   },
   {
+    name: 'slashdot',
+    // Story pages only: the front page shares the host but has no thread, and
+    // belongs on the generic path.
+    match: h => /(^|\.)slashdot\.org$/i.test(h) &&
+      typeof document !== 'undefined' && !!document.querySelector('#commentlisting'),
+    tag: tagSlashdot,
+    postClone: postCloneSlashdot,
+    anchors: ['article.fhitem-story', '#commentlisting li.comment'],
+  },
+  {
     name: 'stackernews',
     match: h => /(^|\.)stacker\.news$/i.test(h),
     tag: tagStackerNews,
@@ -7537,11 +7801,19 @@ const SITE_TAGGERS: SiteTagger_Entry[] = [
     tag: tagYelp,
     anchors: ['[data-testid="photoHeader"], [class*="photoHeader"]'],
   },
-  // ENGINE tagger, not a site tagger — keep it LAST so any host-specific
-  // entry above claims its page first. phpBB ships stock, unhashed classes
-  // across thousands of independent forums, so matching the MARKUP covers
-  // all of them; a hostname list never could. This is the only entry that
-  // ignores `host` and sniffs the live DOM instead.
+  // ENGINE taggers (xenforo, phpbb) — keep them LAST so any host-specific
+  // entry above claims its page first. They ignore `host` and sniff the live
+  // DOM instead: XenForo marks its root <html id="XF">.
+  {
+    name: 'xenforo',
+    match: () => typeof document !== 'undefined' &&
+      document.documentElement.id === 'XF' && !!document.querySelector('article.message--post'),
+    tag: tagXenForo,
+    postClone: postCloneXenForo,
+    anchors: ['article.message--post', '.message-user', '.message-body'],
+  },
+  // phpBB ships stock, unhashed classes across thousands of independent
+  // forums, so matching the MARKUP covers all of them; a hostname list never could.
   {
     name: 'phpbb',
     match: () => typeof document !== 'undefined' &&
@@ -8034,6 +8306,11 @@ function appendClass(el: Element, token: string): void {
   const existing = el.getAttribute('class') ?? '';
   if (existing.split(/\s+/).includes(token)) return;
   el.setAttribute('class', existing ? `${existing} ${token}` : token);
+}
+
+/** The poster <img> of a click-to-play video card. */
+function isPlayCardPoster(img: Element): boolean {
+  return (img.getAttribute('class') ?? '').split(/\s+/).includes('tweet-video-poster');
 }
 
 /** True when img's authored width AND height fall in the avatar size band. */
@@ -9646,6 +9923,9 @@ function dedupAdjacentImages(root: Element): void {
     const dxSrc = (img.getAttribute('data-dx-src') ?? '').trim();
     const src = img.getAttribute('src') ?? '';
     const urlForKey = dxSrc || (src.startsWith('data:') ? '' : src);
+    // A play-card poster's stem ("mqdefault") and alt ("YouTube video thumbnail")
+    // are shared by EVERY video; only the path carries the video id.
+    if (isPlayCardPoster(img)) return urlForKey ? [`url:${urlForKey.split(/[?#]/)[0].toLowerCase()}`] : [];
     if (urlForKey) {
       const stem = urlStem(urlForKey);
       keys.push(`url:${stem ?? urlForKey.toLowerCase()}`);
@@ -9806,6 +10086,9 @@ function dedupGalleryThumbnails(root: Element): void {
   // or same-stem-different-crop hero variants (no shared long alt).
   const groups = new Map<string, Element[]>();
   imgs.forEach(img => {
+    // A carousel rail is never made of play cards, and two cards' posters share
+    // alt + stem across different videos (see dedupAdjacentImages).
+    if (isPlayCardPoster(img)) return;
     const alt = (img.getAttribute('alt') ?? '').trim();
     const stem = stemOf(img);
     if (alt.length <= 10 || !stem) return;
@@ -9902,7 +10185,8 @@ function dedupRepeatedIcons(root: Element): void {
 
   const groups = new Map<string, Element[]>();
   Array.from(root.querySelectorAll('img')).forEach(img => {
-    if (inThread(img)) return;
+    // Every YouTube poster's stem is "mqdefault", so 3+ videos looked like a glyph.
+    if (inThread(img) || isPlayCardPoster(img)) return;
     const stem = stemOf(img);
     if (!stem) return;
     if (!groups.has(stem)) groups.set(stem, []);

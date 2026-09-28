@@ -41,12 +41,18 @@ describe('video embed substitution', () => {
 
       it('handles the youtube-nocookie variant', async () => {
         const html = (await capture()).bodyHtml ?? '';
-        // Note: under jsdom every inlined image is the SAME 1px base64 stub, so
-        // dedupAdjacentImages collapses the two identical poster <img>s and only
-        // the first survives. The card + canonical watch link still prove the
-        // nocookie host was recognised; on a real page the posters differ.
         expect(html, 'watch link').toContain('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
         expect(html, 'card built').toContain('tweet-video');
+      });
+
+      it('keeps one poster per distinct video', async () => {
+        // Every YouTube poster shares its alt and the "mqdefault" filename, so
+        // both image-dedup passes used to treat different videos as one photo —
+        // an XDA reply's video vanished from its clip.
+        const html = (await capture()).bodyHtml ?? '';
+        for (const id of ['OSW2zeM3yLU', 'dQw4w9WgXcQ', 'jNQXAC9IVRw']) {
+          expect(html, `poster for ${id}`).toContain(`i.ytimg.com/vi/${id}/mqdefault.jpg`);
+        }
       });
 
       it('degrades thumbnail-less providers to a link card', async () => {

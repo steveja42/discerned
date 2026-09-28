@@ -65,6 +65,12 @@ export interface FixtureVisualOptions {
   pageClipScreenshot?: boolean;
   /** Options forwarded to assertClipBodyHealth (e.g. disable a check). */
   health?: ClipHealthOptions;
+  /**
+   * Grow the viewport to fit the whole clip before the element screenshot. The
+   * clip sits in a scrolling panel, so a clip taller than the viewport
+   * rasterises blank below the panel's visible area (breitbart's lesson).
+   */
+  fitViewportToClip?: boolean;
 }
 
 export async function runFixtureVisual(opts: FixtureVisualOptions): Promise<void> {
@@ -95,6 +101,7 @@ export async function runFixtureVisual(opts: FixtureVisualOptions): Promise<void
       format: opts.format,
       pageClipScreenshot: opts.pageClipScreenshot,
       health: opts.health,
+      fitViewportToClip: opts.fitViewportToClip,
     });
   } finally {
     await ctx.close();
@@ -113,6 +120,7 @@ interface DriveArgs {
   format?: 'article' | 'full-page';
   pageClipScreenshot?: boolean;
   health?: ClipHealthOptions;
+  fitViewportToClip?: boolean;
 }
 
 async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
@@ -220,7 +228,8 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
   });
   await libPage.waitForTimeout(500);
 
-  await libPage.setViewportSize({ width: 1280, height: args.viewportHeight + 200 });
+  const clipH = args.fitViewportToClip ? Math.ceil((await clipBody.boundingBox())?.height ?? 0) + 400 : 0;
+  await libPage.setViewportSize({ width: 1280, height: Math.max(args.viewportHeight + 200, clipH) });
   await libPage.waitForTimeout(300);
   await libPage.screenshot({
     path: args.out(`${args.site}-fixture-rendered.png`),

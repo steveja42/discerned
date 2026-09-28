@@ -1,4 +1,6 @@
-// Read the pipeline census for a page. Set CENSUS_URL to any site.
+// Read the pipeline census for a page. Set CENSUS_URL to any site; CENSUS_DUMP=<name>
+// also writes test-output/census-<name>-{source,clip}.html (the source is dumped AFTER
+// capture, so it carries dx-* markers — use snapshot-page.spec.ts for a fixture).
 import { test } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -41,6 +43,13 @@ test('census: per-stage element counts', async () => {
     await p.waitForTimeout(1200);
     const html = cap.html ?? '';
     lines.push(`FINAL: ${(html.match(/<img/g) || []).length}i in bodyHtml`);
+    // CENSUS_DUMP=<name> also saves the live page DOM and the captured bodyHtml.
+    const dump = process.env.CENSUS_DUMP;
+    if (dump) {
+      const src = await p.evaluate(() => '<!doctype html>\n' + document.documentElement.outerHTML);
+      writeFileSync(resolve(OUT, `census-${dump}-source.html`), src, 'utf8');
+      writeFileSync(resolve(OUT, `census-${dump}-clip.html`), html, 'utf8');
+    }
   } finally {
     writeFileSync(resolve(OUT, 'census.txt'), lines.join('\n'), 'utf8');
     // eslint-disable-next-line no-console

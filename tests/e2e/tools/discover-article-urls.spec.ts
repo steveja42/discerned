@@ -200,7 +200,7 @@ const SEEDS: Seed[] = [
   { name: 'superuser', seedUrl: 'https://superuser.com/questions?tab=Votes', hrefRe: 'superuser\\.com/questions/\\d+/[a-z0-9-]+', minText: 10, note: 'SE-network Q&A thread' },
   { name: 'mathoverflow', seedUrl: 'https://mathoverflow.net/questions?tab=Votes', hrefRe: 'mathoverflow\\.net/questions/\\d+/[a-z0-9-]+', minText: 10, note: 'Q&A thread with MathJax' },
   { name: 'discourse-meta', seedUrl: 'https://meta.discourse.org/latest', hrefRe: 'meta\\.discourse\\.org/t/[a-z0-9-]+/\\d+', minText: 10, note: 'Discourse forum thread (virtualised scroll)' },
-  { name: 'xda-forums', seedUrl: 'https://xdaforums.com/t/how-to-unlock-bootloader.4515295/', hrefRe: '', direct: true, note: 'XenForo forum thread' },
+  { name: 'xda-forums', seedUrl: 'https://xdaforums.com/t/app-root-gunyah-droidvm-windows-on-arm-ubuntu-vm-on-android-with-native-virtualization.4794047/', hrefRe: '', direct: true, note: 'XenForo forum thread with replies' },
   { name: 'github-issue', seedUrl: 'https://github.com/facebook/react/issues/24502', hrefRe: '', direct: true, note: 'issue thread (comment timeline)' },
   { name: 'github-pr', seedUrl: 'https://github.com/microsoft/TypeScript/pull/45711', hrefRe: '', direct: true, note: 'PR thread (diff + comments)' },
   { name: 'gitlab-repo', seedUrl: 'https://gitlab.com/gitlab-org/gitlab', hrefRe: '', direct: true, note: 'repo landing page (README below file table)' },

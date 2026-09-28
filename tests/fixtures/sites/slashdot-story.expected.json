@@ -1,0 +1,13 @@
+{
+  "_comment": "Story + first two comment threads. bodyText is PROSE only, so this guards the generic reach into the thread; the tagger's structure is asserted by discerned-ext/tests/extraction/forum-taggers.test.ts and slashdot-story-fixture-visual.",
+  "format": "article",
+  "url": "https://hardware.slashdot.org/story/26/07/29/0441240/trump-administration-bans-new-chinese-humanoid-robots",
+  "hostOverride": "hardware.slashdot.org",
+  "title": { "contains": "Trump Administration Bans New Chinese Humanoid Robots" },
+  "bodyText": {
+    "minLength": 2000,
+    "contains": ["Enron Husk desperate to stop the stock freefall", "Tesla Optimus"],
+    "excludes": ["binspam", "Compare the top business software"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

@@ -52,6 +52,15 @@
     <p id="p5">An unrecognised iframe (an ad slot, a newsletter widget) must
       still be dropped by the sanitiser exactly as it was before.</p>
     <iframe src="https://ads.example.com/slot?id=99" width="300" height="250"></iframe>
+
+    <section>
+      <p id="p6">A reply further down the thread embeds a third, different
+        video. Every YouTube poster shares the alt and the mqdefault filename,
+        so only the video id in the URL tells them apart.</p>
+      <figure><img src="https://example.com/images/harbour-at-dawn.jpg"
+        alt="The harbour at dawn, seen from the breakwater" width="640" height="400"></figure>
+      <iframe src="https://www.youtube.com/embed/jNQXAC9IVRw" width="560" height="315"></iframe>
+    </section>
   </article>
 </body>
 </html>

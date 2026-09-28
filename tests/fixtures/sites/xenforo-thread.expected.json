@@ -1,0 +1,12 @@
+{
+  "_comment": "XDA Forums (XenForo 2) thread with replies. bodyText is PROSE only (post bodies are bare <br> text), so this stays generic; the tagger's structure is asserted by discerned-ext/tests/extraction/forum-taggers.test.ts and xenforo-thread-fixture-visual.",
+  "format": "article",
+  "url": "https://xdaforums.com/t/app-root-gunyah-droidvm-windows-on-arm-ubuntu-vm-on-android-with-native-virtualization.4794047/",
+  "title": { "contains": "DroidVM" },
+  "bodyText": {
+    "minLength": 1500,
+    "contains": ["Windows on ARM boots and runs", "Please suggest a os"],
+    "excludes": ["Similar threads"]
+  },
+  "bodyHtml": { "noScripts": true }
+}

@@ -56,6 +56,22 @@ describe('emphasis ending in a line break', () => {
   });
 });
 
+// Slashdot italicises a multi-paragraph quoted excerpt as ONE <i> with a
+// <br><br> inside. Emphasis cannot span a paragraph break, so the cast printed
+// a literal `*` at each end.
+describe('emphasis spanning a <br><br> paragraph break', () => {
+  it('closes and reopens the emphasis around the break', () => {
+    const md = htmlToMarkdown(
+      `<div>The BBC reports: <i>The FCC has added the items to its <a href="https://fcc.gov/">Covered List</a>.` +
+        `<br> <br>The FCC cited concerns about <b>remote access<br><br>and surveillance</b>.</i></div>`,
+    );
+    const paras = md.split(/\n\s*\n/).map((p) => p.trim());
+    expect(paras[0]).toBe('The BBC reports: *The FCC has added the items to its [Covered List](https://fcc.gov/).*');
+    expect(paras[1]).toBe('*The FCC cited concerns about **remote access***');
+    expect(paras[2]).toBe('***and surveillance**.*');
+  });
+});
+
 // The generic tagger stamps dx-stats on any short flex row of icon-bearing
 // children — which a Spotify track row is. dx-stats-counts then reduced it to
 // its numbers, turning a 10-track album into "1 · 1, 2 · 2" while the clip
