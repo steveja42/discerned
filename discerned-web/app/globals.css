@@ -1416,8 +1416,9 @@ a { color: inherit; }
   line-height: 1.65;
   color: #1a1714;
   background: var(--paper);
+  /* Never `word-break: break-word` / `overflow-wrap: anywhere` here: both let a
+     word break inside min-content, so any flex item could shrink to one glyph. */
   overflow-wrap: break-word;
-  word-break: break-word;
 }
 .clip-body * { max-width: 100%; box-sizing: border-box; }
 .clip-body img { display: block !important; position: static !important; float: none !important; max-width: 100% !important; height: auto !important; max-height: 420px !important; object-fit: contain !important; object-position: left top !important; border-radius: 4px; margin: 12px 0; }
@@ -2412,6 +2413,12 @@ a { color: inherit; }
 .clip-body .dx-header > :first-child {
   flex-shrink: 0;
 }
+/* A TEXT-first header (politico's newsletter heading beside its logo, a Stack
+   Exchange "edited …" link before the avatar) has no avatar cell: it shares the
+   row instead of being pinned and painted as one (a 44px grey oval). */
+.clip-body .dx-header > :first-child:not(:only-child):not(:has(img)):has(a, p, span, time, h1, h2, h3, h4, h5, h6) {
+  flex-shrink: 1;
+}
 /* The name branch (everything else) stacks name on top, handle below. */
 .clip-body .dx-header > :not(:first-child) {
   display: flex;
@@ -2555,7 +2562,7 @@ a { color: inherit; }
    container-less avatar wrapper doesn't stretch the flex row. Guarded with
    :not(:only-child) — a header with no separate avatar cell must not have its
    whole content squeezed to 44px. */
-.clip-body .dx-header > :first-child:not(:only-child) {
+.clip-body .dx-header > :first-child:not(:only-child):is(:has(img), :not(:has(a, p, span, time, h1, h2, h3, h4, h5, h6))) {
   width: 44px;
   min-width: 44px;
 }
@@ -2606,7 +2613,7 @@ a { color: inherit; }
    anonymous-user silhouette so the row still aligns left-to-right. The
    silhouette is an inline SVG data URI — no external request, no flash. */
 .clip-body .dx-reply-row > :first-child:not(:only-child):not(:has(img)),
-.clip-body .dx-header > :first-child:not(:only-child):not(:has(img)) {
+.clip-body .dx-header > :first-child:not(:only-child):not(:has(img, a, p, span, time, h1, h2, h3, h4, h5, h6)) {
   background-color: #d5cfc4;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><circle cx='20' cy='15' r='7' fill='%23a39e94'/><path d='M6 36c0-8 6-13 14-13s14 5 14 13z' fill='%23a39e94'/></svg>");
   background-size: cover;

@@ -34,8 +34,8 @@
       "note": "A Recommended Stories block of four unrelated links sits mid-article between paragraphs two and three, plus a Listen/Save/Share row and an Add-on-Google strip; the article itself is complete.",
       "by": "ai",
       "reviewedAt": "2026-09-17T13:24:11.109-07:00",
-      "clipReviewedAt": "2026-09-17T13:24:11.109-07:00",
-      "castReviewedAt": "2026-09-17T13:24:11.109-07:00"
+      "clipReviewedAt": null,
+      "castReviewedAt": null
     },
     "wikipedia-en": {
       "verdict": "clean",
@@ -1029,8 +1029,8 @@
       "note": "Only one body paragraph survives the paywall, after which a subscribe block, email-registration form and a full comment-form scaffold fill most of the capture before the real comments.",
       "by": "ai",
       "reviewedAt": "2026-09-18T17:28:19.319-07:00",
-      "clipReviewedAt": "2026-09-18T17:28:19.319-07:00",
-      "castReviewedAt": "2026-09-18T17:28:19.319-07:00"
+      "clipReviewedAt": null,
+      "castReviewedAt": null
     },
     "playstore": {
       "verdict": "clean",
@@ -1593,8 +1593,8 @@
       "note": "Question, all seven answers and every code block render with correct spacing, but a Join-Super-User signup prompt replaces the question as the page heading and edit-timestamp links collapse into one-character vertical columns.",
       "by": "ai",
       "reviewedAt": "2026-09-18T21:52:57.809-07:00",
-      "clipReviewedAt": "2026-09-18T21:52:57.809-07:00",
-      "castReviewedAt": "2026-09-18T21:52:57.809-07:00"
+      "clipReviewedAt": null,
+      "castReviewedAt": null
     },
     "tiktok-profile": {
       "verdict": "flaw",
@@ -2229,7 +2229,7 @@
       "note": "Fixed: narrowing no longer discards this article's own paragraph-row body as if it were a separate feed post; full body renders on both surfaces.",
       "by": "ai",
       "reviewedAt": "2026-09-21T08:22:47.090-07:00",
-      "clipReviewedAt": "2026-09-21T08:22:47.090-07:00",
+      "clipReviewedAt": null,
       "castReviewedAt": "2026-09-21T08:22:47.090-07:00"
     },
     "msn-slideshow": {
@@ -2456,8 +2456,8 @@
       "note": "Headline, dek, credited cartoon, byline, dates, series note and full body all render on both surfaces; bare Advertisement labels remain where ad slots were stripped.",
       "by": "ai",
       "reviewedAt": "2026-09-17T12:18:19.129-07:00",
-      "clipReviewedAt": "2026-09-17T12:18:19.129-07:00",
-      "castReviewedAt": "2026-09-17T12:18:19.129-07:00"
+      "clipReviewedAt": null,
+      "castReviewedAt": null
     },
     "walmart": {
       "verdict": "flaw",

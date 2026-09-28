@@ -41,6 +41,8 @@ async function mockRelayWith(page: Page, event: NostrEvent): Promise<void> {
   // intercept) rather than the local dev relay.
   await page.addInitScript(() => {
     try { localStorage.setItem('discerned.relayMode', 'production'); } catch { /* ignore */ }
+    // The feed hides TEST_CAST_PUBKEY's casts by default, and every cast here is one.
+    try { localStorage.setItem('discerned.showTestCasts', '1'); } catch { /* ignore */ }
   });
   await page.routeWebSocket(/^wss:\/\//, (ws) => {
     ws.onMessage((message: string | Buffer) => {
@@ -71,6 +73,7 @@ async function serveViaLocalRelay(page: Page, event: NostrEvent): Promise<void> 
   await publishToLocalRelay(event);
   await page.addInitScript(() => {
     try { localStorage.setItem('discerned.relayMode', 'local'); } catch { /* ignore */ }
+    try { localStorage.setItem('discerned.showTestCasts', '1'); } catch { /* ignore */ }
   });
 }
 

@@ -9979,7 +9979,11 @@ const STRONG_RELATED_RE = new RegExp(
   // those bodies are bare <div>s.
   '|more from \\w.*|more (articles|news|coverage)|top stories' +
   '|read (next|more) on \\w.*|what to read next|latest on:?' +
-  '|latest news|in focus)$', 'i');
+  '|latest news|in focus' +
+  // aljazeera/time "Recommended Stories", pcmag "You May Also Like", theregister
+  // "More context", motherjones "<brand> top stories", smh "From our partners".
+  '|recommended (stories|articles|reads|reading)|you may (also )?like|more context' +
+  '|(?:[\\w\'’&.-]+ ){1,3}top stories|from our partners)$', 'i');
 
 // E-commerce cross-sell rail HEADINGS (Amazon "Frequently bought together",
 // "More items to explore", "Customers also bought or read", "Products related to
@@ -10034,7 +10038,9 @@ const RELATED_HEADING_RE = new RegExp(
   // Section-tail headings promoted to STRONG (above) — repeated here because
   // seeds are filtered by THIS regex first.
   '|more (articles|news|coverage)|top stories|read (next|more) on \\w.*' +
-  '|what to read next|latest on:?|latest news|in focus)$', 'i');
+  '|what to read next|latest on:?|latest news|in focus' +
+  '|recommended (stories|articles|reads|reading)|you may (also )?like|more context' +
+  '|(?:[\\w\'’&.-]+ ){1,3}top stories|from our partners)$', 'i');
 // Newsletter signup copy.
 // The consent tail ("By signing up, you agree to…") is the strongest hook: it
 // closes every signup box and never appears in prose. Measured over the corpus
@@ -10047,6 +10053,10 @@ const NEWSLETTER_RE =
 // hook. Always followed by a duration ("5 min", "00:00 08:27"), never by prose.
 const AUDIO_NARRATION_RE =
   /(listen to this (article|story)|listen to (the )?article|écouter l|escuchar (el|este) (artículo|articulo)|artikel anh[öo]ren|audio version of this)/i;
+// Push-notification opt-in button (aljazeera's "Yes, keep me updated"), matched
+// against its ENTIRE text. "Notify me" is left out: product pages use it beside the price.
+const ALERT_OPTIN_CTA_RE =
+  /^(yes,?\s*)?(keep me (updated|posted|informed)|(turn on|enable|allow) (push |breaking news )?(notifications|alerts))[.!]?$/i;
 // Material-Icons ligature names (the element's text IS the glyph). First token
 // is a UI-affordance word — that is what separates an icon from a code
 // identifier or a username of the same snake_case shape.
@@ -10060,6 +10070,31 @@ const ICON_LIGATURE_RE = new RegExp(
 // "Make us your preferred source" promos (Google preferred-source pitch) that
 // render as plain text next to an icon link rather than as a labelled link.
 const PREFERRED_SOURCE_RE = /(preferred source of news|add us on google|make .{0,40} your preferred source)/i;
+// Google's own preferred-source landing page. The LINK is the reliable hook: its
+// text names the brand ("Add AP News on Google"), which no text regex can list.
+const PREFERRED_SOURCE_HREF_SEL = 'a[href*="google.com/preferences/source" i]';
+// The same promo as a JS button with no href (aljazeera's "Add Al Jazeera on
+// Google"). Matched against an element's ENTIRE text, so prose never matches.
+const PREFERRED_SOURCE_LABEL_RE = /^\+?\s*(add|make|prefer|choose) .{1,40} (on|in) google$/i;
+// An emptied ad slot's label, matched against an element's ENTIRE text.
+// "Advertising" is left out: appstore uses it as a privacy-label category.
+const AD_LABEL_RE =
+  /^[-–—\s]*(advertisement(\s*[-–—:]\s*scroll to continue)?|(story|article) continues below (this )?advertisement|publicité|anzeige|publicidad|pubblicità|広告|광고)[-–—\s]*$/i;
+// Text-entry controls that seed a form widget. Checkbox/radio/number are not
+// seeds: GitHub task lists are checkboxes inside content, quantity is a number.
+const FORM_ENTRY_SELECTOR = [
+  'input:not([type])', 'input[type="text" i]', 'input[type="email" i]', 'input[type="password" i]',
+  'input[type="search" i]', 'input[type="tel" i]', 'input[type="url" i]', 'textarea',
+].join(', ');
+const QUANTITY_FIELD_RE = /qty|quantity/i;
+// A <form> seeds by its own action/id/class/name/testid: Readability drops the
+// inputs, and a composer may not have hydrated yet. A bare-<form> seed is unsafe
+// (GitHub wraps each comment in `form.js-comment-update`, so no bare "comment").
+const SIGNUP_FORM_RE = new RegExp('newsletter|subscri|sign-?up|(^|[^a-z])(sign|log)-?in|register|mailing-?list' +
+  '|comment-?form|reply-?form|new-?comment|add-?comment|post-?comment', 'i');
+// A widget's consent line is part of the widget, not text outside it.
+const FORM_CONSENT_RE =
+  /\b(by (registering|signing up|subscribing|checking|clicking|submitting|adding)|terms (of (use|service)|and conditions)|privacy policy|unsubscribe|no spam)\b/i;
 // E-commerce buy-box / shipping / Prime promo copy (Amazon-style) that renders as
 // plain-text blocks above the product content — a shipping pitch, delivery ETA,
 // Prime upsell, or a sponsored ad strip, none of it product information.
@@ -10142,12 +10177,100 @@ function tagProseWrappers(root: Element): void {
   });
 }
 
+/**
+ * Drop form widgets: newsletter signups, comment composers, login and search
+ * boxes. The sanitiser unwraps <form>/<input>/<label>/<button>, so the inputs
+ * vanish but their labels, consent text and button text survive as loose text
+ * (politico's "Email / Employer / Job Title / Sign Up"). Seeded on a text-entry
+ * control and bounded by size, so a page-wide <form> only loses its input rows.
+ */
+function removeFormWidgets(root: Element): void {
+  const len = (el: Element): number => (el.textContent ?? '').replace(/\s+/g, ' ').trim().length;
+  // At most one long block: the consent paragraph. An article fragment has more.
+  const isWidgetSized = (el: Element): boolean =>
+    len(el) <= 1200 &&
+    !el.querySelector('h1, video, .dx-post, .dx-reply, [class*="tweet-card"], a.tweet-video') &&
+    Array.from(el.querySelectorAll('p, li')).filter(n => len(n) >= 200).length <= 1;
+  const ident = (el: Element, attr: string): string => [attr, 'id', 'name', 'class', 'data-testid']
+    .map(a => el.getAttribute(a) ?? '').join(' ');
+  const controls = Array.from(root.querySelectorAll(FORM_ENTRY_SELECTOR)).filter(c => {
+    // A readonly/disabled field displays rather than collects (copy-command boxes).
+    if (c.hasAttribute('readonly') || c.hasAttribute('disabled')) return false;
+    return !QUANTITY_FIELD_RE.test(ident(c, 'aria-label')) && !c.closest('code, pre, [class*="tweet-card"]');
+  });
+  const signupForms = Array.from(root.querySelectorAll('form'))
+    .filter(f => SIGNUP_FORM_RE.test(ident(f, 'action')));
+  for (const seed of [...controls, ...signupForms]) {
+    if (!root.contains(seed)) continue;
+    const form = seed.closest('form');
+    const formIsWidget = !!form && form !== root && root.contains(form) && isWidgetSized(form);
+    if (!formIsWidget && seed.matches('form')) continue;
+    let box: Element = formIsWidget && form ? form : seed;
+    // Absorb the widget's own heading/blurb, never a byline or an article paragraph.
+    for (let i = 0; i < 3; i++) {
+      const p = box.parentElement;
+      if (!p || p === root || !isWidgetSized(p)) break;
+      if (p.matches('[class*="dx-"], [class*="tweet-"]')) break;
+      const outside = (sel: string): Element[] =>
+        Array.from(p.querySelectorAll(sel)).filter(n => !box.contains(n) && !n.contains(box));
+      const consentEls = outside('p, small, label')
+        .filter(n => FORM_CONSENT_RE.test(n.textContent ?? '') && len(n) <= 400);
+      const consent = consentEls.filter(n => !consentEls.some(m => m !== n && m.contains(n)))
+        .reduce((sum, n) => sum + len(n), 0);
+      if (len(p) - len(box) - consent > 160) break;
+      if (outside('p, li').some(n => len(n) >= 120)) break;
+      // A generic dx-header (logo + heading row) can be the widget's own title.
+      const marked = 'time, address, .dx-byline, .dx-post, .dx-reply, .dx-stats, .dx-author, .dx-quote';
+      if (outside('a').length > 2 || outside(marked).length > 0) break;
+      if (outside('img').some(img => img.closest('figure') ||
+          parseInt(img.getAttribute('width') ?? '', 10) >= 150 ||
+          parseInt(img.getAttribute('height') ?? '', 10) >= 150)) break;
+      box = p;
+    }
+    const text = (box.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    box.remove();
+    log(LL.DEBUG, `Discerned: removeGenericChrome dropped form widget "${text}"`, 'url:', window.location.href);
+  }
+}
+
+/**
+ * Drop an emptied ad slot's label ("Advertisement", "- Advertisement -") and the
+ * wrapper chain it leaves with no text and no media.
+ */
+function removeAdSlotLabels(root: Element): void {
+  const norm = (el: Element): string => (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const labels = Array.from(root.querySelectorAll(
+    'p, span, div, small, strong, em, b, i, label, figcaption, h2, h3, h4, h5, h6')).filter(el => {
+    const t = norm(el);
+    if (t.length === 0 || t.length > 60 || !AD_LABEL_RE.test(t)) return false;
+    return !Array.from(el.children).some(c => norm(c) === t); // tightest match only
+  });
+  for (const label of labels) {
+    if (!root.contains(label) || label.closest('table, pre, code, [class*="tweet-card"]')) continue;
+    // A standalone label, not the word used inside a sentence.
+    if (Array.from(label.parentElement?.childNodes ?? []).some(n =>
+      n.nodeType === Node.TEXT_NODE && (n.textContent ?? '').trim().length > 0)) continue;
+    let shell: Element | null = label.parentElement;
+    label.remove();
+    while (shell && shell !== root && norm(shell).length === 0 &&
+           !shell.querySelector('img, video, picture')) {
+      const next: Element | null = shell.parentElement;
+      shell.remove();
+      shell = next;
+    }
+  }
+}
+
 function removeGenericChrome(root: Element): void {
   const inTweetCard = (el: Element): boolean => !!el.closest('[class*="tweet-card"]');
 
   // (0) Buy box — runs FIRST, before (1) strips the "Add to cart"/"Buy Now"
   // action links the cluster detection anchors on.
   removeBuyBox(root);
+
+  // (0a) Form widgets (signups, composers, search boxes) — before (1) and (4)
+  // strip the buttons and selects that belong to them.
+  removeFormWidgets(root);
 
   // (0b) Sponsored ad-slot banners: a text-less <a> wrapping only an image whose
   // href carries retail ad-placement / sponsored-brand tracking params (Amazon
@@ -10382,6 +10505,27 @@ function removeGenericChrome(root: Element): void {
     log(LL.DEBUG, 'Discerned: removeGenericChrome dropped audio narration player', 'url:', window.location.href);
   }
 
+  // (3b0) Push-notification opt-in prompts: the CTA button seeds, and the climb
+  // takes its pitch and bell icon but stops at real prose (it sits mid-article).
+  const optinSeeds = Array.from(root.querySelectorAll('a, button, div, span, p')).filter(el => {
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    return ALERT_OPTIN_CTA_RE.test(t) &&
+      !Array.from(el.children).some(c => ALERT_OPTIN_CTA_RE.test((c.textContent ?? '').replace(/\s+/g, ' ').trim()));
+  });
+  for (const seed of optinSeeds) {
+    if (!root.contains(seed) || inTweetCard(seed)) continue;
+    const hasProse = (el: Element): boolean =>
+      Array.from(el.querySelectorAll('p, li')).some(n => (n.textContent ?? '').trim().length >= 80);
+    let box: Element = seed;
+    for (let i = 0; i < 3; i++) {
+      const p = box.parentElement;
+      if (!p || p === root || (p.textContent ?? '').replace(/\s+/g, ' ').length > 300 || hasProse(p)) break;
+      box = p;
+    }
+    box.remove();
+    log(LL.DEBUG, 'Discerned: removeGenericChrome dropped notification opt-in prompt', 'url:', window.location.href);
+  }
+
   // (3a) E-commerce buy-box / shipping / Prime promo blocks: plain-text pitches
   // (shipping, delivery ETA, Prime upsell, sponsored ad strip) above the product
   // content. Same shape as newsletter blocks — deepest text match, climb to the
@@ -10508,6 +10652,38 @@ function removeGenericChrome(root: Element): void {
     }
     box.remove();
   }
+
+  // (3b') The same promo keyed on its HREF, whatever the link text. Only EMPTY
+  // shells are climbed: politico's link shares a wrapper with the byline.
+  const holdsMedia = (el: Element): boolean => !!el.querySelector('video, picture, figure') ||
+    Array.from(el.querySelectorAll('img')).some(img =>
+      parseInt(img.getAttribute('width') ?? '', 10) >= 100 || parseInt(img.getAttribute('height') ?? '', 10) >= 100);
+  // Text outside <svg>: an icon's <title>info</title> must not make a shell look non-empty.
+  const textSansSvg = (el: Element): string => {
+    const c = el.cloneNode(true) as Element;
+    c.querySelectorAll('svg').forEach(s => s.remove());
+    return (c.textContent ?? '').replace(/\s+/g, '');
+  };
+  const dropPromo = (el: Element): void => {
+    let shell: Element | null = el.parentElement;
+    el.remove();
+    while (shell && shell !== root && textSansSvg(shell).length <= 3 && !holdsMedia(shell)) {
+      const next: Element | null = shell.parentElement;
+      shell.remove();
+      shell = next;
+    }
+  };
+  root.querySelectorAll(PREFERRED_SOURCE_HREF_SEL).forEach(a => {
+    if (root.contains(a) && !inTweetCard(a)) dropPromo(a);
+  });
+  Array.from(root.querySelectorAll('a, button, span, div, p')).filter(el => {
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    return t.length <= 60 && PREFERRED_SOURCE_LABEL_RE.test(t) &&
+      !Array.from(el.children).some(c => PREFERRED_SOURCE_LABEL_RE.test((c.textContent ?? '').replace(/\s+/g, ' ').trim()));
+  }).forEach(el => { if (root.contains(el) && !inTweetCard(el)) dropPromo(el); });
+
+  // (3c) Emptied ad slots' "Advertisement" labels.
+  removeAdSlotLabels(root);
 
   // (4) Interactive ARIA chrome that has no meaning in a static clip: dropdown
   // menus, sort listboxes, tab strips, native selects.
