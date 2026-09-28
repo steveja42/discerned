@@ -4680,6 +4680,129 @@ function isTickerStrip(el: Element): boolean {
   return !el.closest('pre, code, table') && !el.querySelector('pre, table');
 }
 
+/** The page's one visible, title-length <h1>, or null when there are none or several. */
+function soleVisibleHeadline(root: Element): Element | null {
+  const found = querySelectorAllDeep(root, 'h1').filter(h => {
+    const len = collapseWhitespace(h.textContent ?? '').length;
+    const r = h.getBoundingClientRect();
+    return len >= HEADLINE_MIN_CHARS && len <= HEADLINE_MAX_CHARS && r.width > 0 && r.height > 0;
+  });
+  return found.length === 1 ? found[0] : null;
+}
+
+const STICKY_COLUMN_MIN_H = 200;
+const STICKY_PHOTO_MIN_PX = 200;
+
+/** A tall sticky element holding the headline, or a big photo named like it, is a
+ *  content column (target's title panel, walmart's gallery), not a header or an ad. */
+function isStickyContentColumn(el: Element, headline: Element | null): boolean {
+  if (!headline || el.getBoundingClientRect().height < STICKY_COLUMN_MIN_H) return false;
+  if (el.contains(headline)) return true;
+  const titleWords = significantWords(headline.textContent ?? '');
+  return Array.from(el.querySelectorAll('img')).some(img => {
+    const r = img.getBoundingClientRect();
+    if (r.width < STICKY_PHOTO_MIN_PX || r.height < STICKY_PHOTO_MIN_PX) return false;
+    const altWords = significantWords(img.alt);
+    let shared = 0;
+    for (const w of altWords) if (titleWords.has(w)) shared++;
+    return altWords.size > 0 && shared / altWords.size >= HEADLINE_TITLE_OVERLAP;
+  });
+}
+
+const CAROUSEL_MIN_OVERFLOW_PX = 40;
+const CARD_PRICE_RE = /[$£€¥₹]\s?\d|\d\s?€/;
+// A product's own title+price block is small; a category grid or an article
+// only meets the h1 at a far larger ancestor.
+const PRODUCT_SUMMARY_MAX_CHARS = 3000;
+// Words a shelf's module may add beyond its cards (heading, "See all", a label).
+const SHELF_MODULE_EXTRA_WORDS = 30;
+
+const visibleTextLen = (el: Element): number =>
+  collapseWhitespace((el as HTMLElement).innerText ?? el.textContent ?? '').length;
+
+/** Words that will reach the clip: text already marked excluded doesn't count
+ *  (ebay pads "Sponsored" with ~40 words of hidden glyph runs that innerText reports). */
+function keptWordCount(el: Element): number {
+  let n = 0;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+    const parent = t.parentElement;
+    if (!parent || parent.closest(`[${EXCL_MARKER}], script, style, template`)) continue;
+    n += (t.nodeValue ?? '').split(/\s+/).filter(Boolean).length;
+  }
+  return n;
+}
+
+/** A horizontally clipped scroller holding images — a gallery or a card shelf. */
+function isClippedCarousel(el: Element): boolean {
+  if (el === document.body || el === document.documentElement || el.clientWidth <= 0) return false;
+  if (el.scrollWidth <= el.clientWidth + CAROUSEL_MIN_OVERFLOW_PX) return false;
+  // Wide code blocks and data tables scroll sideways too, and are content.
+  if (el.closest('pre, table') || el.querySelector('pre, table')) return false;
+  return el.querySelectorAll('img').length >= 2;
+}
+
+/** A single-product page: the headline sits beside a price in a small block. A
+ *  carousel's own prices don't count, or a short article's shop shelf would pass. */
+function headlineHasOwnPrice(headline: Element, carousels: Element[]): boolean {
+  const chain: Element[] = [];
+  for (let a: Element | null = headline; a && a !== document.body; a = a.parentElement) chain.push(a);
+  let lowest = chain.length;
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (!CARD_PRICE_RE.test(n.nodeValue ?? '')) continue;
+    if (carousels.some(c => c.contains(n))) continue;
+    for (let a = n.parentElement, i = 0; a && i < 40; a = a.parentElement, i++) {
+      const at = chain.indexOf(a);
+      if (at >= 0) { lowest = Math.min(lowest, at); break; }
+    }
+  }
+  return lowest < chain.length && visibleTextLen(chain[lowest]) <= PRODUCT_SUMMARY_MAX_CHARS;
+}
+
+/** Stripped of CSS, a clipped carousel stacks every slide. Keep what was in frame;
+ *  a priced shelf on a product page is cross-sell and goes whole with its heading. */
+function markClippedCarousel(scroller: Element, headline: Element | null, isProductPage: () => boolean): void {
+  if (headline && scroller.contains(headline)) return;
+  // The track is the deepest element still holding every image.
+  let track: Element = scroller;
+  for (let i = 0; i < 6; i++) {
+    const total = track.querySelectorAll('img').length;
+    const inner = Array.from(track.children).find(c => c.querySelectorAll('img').length === total);
+    if (!inner) break;
+    track = inner;
+  }
+  const frame = scroller.getBoundingClientRect();
+  const items = Array.from(track.children)
+    .map(el => ({ el, r: el.getBoundingClientRect() }))
+    .filter(it => it.r.width > 0);
+  const off = items.filter(it => it.r.right <= frame.left + 1 || it.r.left >= frame.right - 1);
+  if (items.length < 2 || off.length === 0) return;
+
+  const widths = items.map(it => it.r.width).sort((a, b) => a - b);
+  const isShelf = widths[Math.floor(widths.length / 2)] < frame.width * 0.5;
+  const priced = items.filter(it => it.el.querySelector('img') && CARD_PRICE_RE.test(it.el.textContent ?? '')).length;
+  if (isShelf && headline && priced >= 3 && priced * 2 >= items.length && isProductPage()) {
+    // Climb to the module holding the shelf's heading, stopping before one that
+    // adds real content (the headline, or more than a heading's worth of words).
+    const own = keptWordCount(scroller);
+    let module: Element = scroller;
+    let hops = 0;
+    let stop = '';
+    for (let a = scroller.parentElement, i = 0; a && a !== document.body && i < 8; a = a.parentElement, i++) {
+      const extra = keptWordCount(a) - own;
+      if (a.contains(headline) || extra > SHELF_MODULE_EXTRA_WORDS) { stop = `+${extra} words`; break; }
+      module = a;
+      hops = i + 1;
+    }
+    module.setAttribute(EXCL_MARKER, '1');
+    log(LL.DEBUG, `Discerned: carousel — priced shelf (${priced}/${items.length} cards) dropped <${module.tagName.toLowerCase()}> +${hops} ${stop}`, 'url:', window.location.href);
+    return;
+  }
+  off.forEach(it => it.el.setAttribute(EXCL_MARKER, '1'));
+  log(LL.DEBUG, `Discerned: carousel — ${isShelf ? 'shelf' : 'gallery'} trimmed ${off.length}/${items.length} off-frame`, 'url:', window.location.href);
+}
+
 function markExcluded(root: HTMLElement = document.body): () => void {
   // Third-party reader-comment widgets (Viafoura, Disqus, Coral, OpenWeb, …).
   // These are marked here — on the LIVE DOM, where their id/class still exist
@@ -4794,10 +4917,16 @@ function markExcluded(root: HTMLElement = document.body): () => void {
     });
   } catch { /* invalid selector on some engine — skip */ }
 
+  const headline = soleVisibleHeadline(root);
+  const carousels: Element[] = [];
+  let productPage: boolean | undefined;
+  const isProductPage = (): boolean =>
+    (productPage ??= !!headline && headlineHasOwnPrice(headline, carousels));
   forEachDeepElement(root, el => {
     if (el.id === 'discerned-overlay') return;
     const s = window.getComputedStyle(el);
-    if (s.position === 'fixed' || s.position === 'sticky' ||
+    const stickyColumn = s.position === 'sticky' && isStickyContentColumn(el, headline);
+    if (s.position === 'fixed' || (s.position === 'sticky' && !stickyColumn) ||
         s.display === 'none' || s.visibility === 'hidden') {
       el.setAttribute(EXCL_MARKER, '1');
       return;
@@ -4859,8 +4988,11 @@ function markExcluded(root: HTMLElement = document.body): () => void {
         region = region.parentElement;
       }
       region.setAttribute(EXCL_MARKER, '1');
+    } else if (s.overflowX !== 'visible' && isClippedCarousel(el)) {
+      carousels.push(el);
     }
   });
+  carousels.forEach(c => markClippedCarousel(c, headline, isProductPage));
   return () => querySelectorAllDeep(root, `[${EXCL_MARKER}]`).forEach(el => el.removeAttribute(EXCL_MARKER));
 }
 
@@ -10279,7 +10411,7 @@ const STRONG_RELATED_RE = new RegExp(
 const CROSS_SELL_HEADING_RE = new RegExp(
   '^(frequently bought together|more items to explore|products? related to this item' +
   '|customers (who (bought|viewed)|also (bought|viewed|read))' +
-  '|compare with similar items|what other items do customers buy' +
+  '|compare (with )?similar (items|products)|what other items do customers buy' +
   '|4 stars and above|explore (similar|more) (items|products)|related products' +
   // Amazon storefront rails: "Explore more across the store", "Explore more from
   // across the store", "Books with Buy", "More to explore", "Related to items
@@ -10411,7 +10543,8 @@ const BUYBOX_SUPPORT_RE = /\b(in stock|only \d+ left in stock|quantity\b|other s
 // prefix — "Customer reviews", "Top reviews from …", "Reviews with images",
 // "N global ratings", "Ratings and reviews", "Community reviews".
 const REVIEWS_SECTION_RE = new RegExp(
-  '^(customer reviews?|top reviews?\\b.*|reviews with images|ratings? (and|&) reviews?' +
+  '^(customer reviews?|top reviews?\\b.*|reviews with images' +
+  '|((customer|guest|user|buyer|shopper)s? )?ratings? (and|&) reviews?|seller feedback\\b.*' +
   '|community reviews?|reader reviews?|user reviews?|verified purchase reviews?' +
   '|what (customers|people|readers) (are )?saying|review this (product|book|item)' +
   '|\\d[\\d,.]*\\s*(global |total )?(ratings?|reviews?)\\b.*|most (helpful|recent) reviews?)', 'i');

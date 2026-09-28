@@ -1746,11 +1746,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "FIXED from critical: product title, image and the full spec/marketing sections with headings and prose all render; no price or buy-box appears.",
+      "note": "Title and the full spec/marketing sections render, but the product photo gallery and price column are absent.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:27:47.859-07:00",
-      "clipReviewedAt": "2026-09-18T17:27:47.859-07:00",
-      "castReviewedAt": "2026-09-18T17:27:47.859-07:00"
+      "reviewedAt": "2026-09-28T06:41:51.530-07:00",
+      "clipReviewedAt": "2026-09-28T06:41:51.530-07:00",
+      "castReviewedAt": "2026-09-28T06:41:51.530-07:00"
     },
     "newsweek": {
       "verdict": "clean",
@@ -1862,15 +1862,15 @@
     },
     "ebay": {
       "verdict": "flaw",
-      "severity": 5,
-      "where": "both",
+      "severity": 3,
+      "where": "clip",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Capture is three near-identical seller marketing images stacked vertically plus a photo, with no item title, price or specifics above them.",
+      "note": "Hero, title, seller, price, item specifics and seller description render; the shipping block leaves a large blank gap beside a squeezed delivery column.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:28:35.271-07:00",
-      "clipReviewedAt": "2026-09-18T17:28:35.271-07:00",
-      "castReviewedAt": "2026-09-18T17:28:35.271-07:00"
+      "reviewedAt": "2026-09-28T06:41:51.530-07:00",
+      "clipReviewedAt": "2026-09-28T06:41:51.530-07:00",
+      "castReviewedAt": "2026-09-28T06:41:51.530-07:00"
     },
     "genius": {
       "verdict": "flaw",
@@ -2042,15 +2042,15 @@
     },
     "etsy": {
       "verdict": "flaw",
-      "severity": 5,
+      "severity": 3,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Thumbnail gallery collapses to a tall vertical stack and the listing title sits below the image rail and price; item details and full description are intact.",
+      "note": "Hero, thumbnail rail, title, price, details and full description render; the customer-reviews scroll still trails the listing.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:26:27.092-07:00",
-      "clipReviewedAt": "2026-09-17T12:26:27.092-07:00",
-      "castReviewedAt": "2026-09-17T12:26:27.092-07:00"
+      "reviewedAt": "2026-09-28T06:41:51.530-07:00",
+      "clipReviewedAt": "2026-09-28T06:41:51.530-07:00",
+      "castReviewedAt": "2026-09-28T06:41:51.530-07:00"
     },
     "github-pr": {
       "verdict": "clean",
@@ -2461,15 +2461,15 @@
     },
     "walmart": {
       "verdict": "flaw",
-      "severity": 6,
+      "severity": 3,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Title, ratings, pricing and Key item features render, but About this item, Product details, Specifications, Warranty and Warnings are empty headings, there is no product image, and a cross-sell rail collapses into one-character columns.",
+      "note": "Hero, thumbnail rail, title, rating, pack-size prices and key features render; stray '+4 View all' chrome and empty Specs/Related pages headings remain.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:23:39.667-07:00",
-      "clipReviewedAt": "2026-09-17T12:23:39.667-07:00",
-      "castReviewedAt": "2026-09-17T12:23:39.667-07:00"
+      "reviewedAt": "2026-09-28T06:41:51.530-07:00",
+      "clipReviewedAt": "2026-09-28T06:41:51.530-07:00",
+      "castReviewedAt": "2026-09-28T06:41:51.530-07:00"
     },
     "stackernews": {
       "verdict": "clean",

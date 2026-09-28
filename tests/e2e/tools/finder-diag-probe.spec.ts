@@ -106,6 +106,8 @@ const TARGETS: Record<string, string> = {
   politico: 'https://www.politico.com/news/2026/07/21/nasa-nuclear-mars-mission-cost-01005610',
   ebay: 'https://www.ebay.com/itm/397652415204',
   target: 'https://www.target.com/p/razer-ornata-v3-tenkeyless-espeon-umbreon-edition/-/A-95017977',
+  newegg: 'https://www.newegg.com/p/N82E16819113865',
+  'amazon-product': 'https://www.amazon.com/dp/0345339681',
   lastfm: 'https://www.last.fm/music/Radiohead',
   // Narrow-column collapse (2026-08-22): body text renders one character per
   // line in the clip while the cast, from the same bodyHtml, is perfect — so
@@ -673,6 +675,67 @@ test('live-page diagnostics (finder / picker)', async () => {
           out.push('TOI TAIL + HEADER STRUCTURES:\n' + widgetDump);
         }
 
+        // Product-page structure: is the h1/price inside a sticky or fixed column
+        // (markExcluded drops those as chrome), and which image scrollers are
+        // horizontally clipped (a gallery whose off-frame slides stack in a clip)?
+        const pdp = await page.evaluate(() => {
+          const lines: string[] = [];
+          const desc = (e: Element) => `<${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''} class="${(e.className || '').toString().slice(0, 40)}">`;
+          const pinned = (e: Element) => {
+            const hits: string[] = [];
+            for (let a: Element | null = e, d = 0; a && a !== document.body; a = a.parentElement, d++) {
+              const cs = getComputedStyle(a);
+              if (cs.position === 'sticky' || cs.position === 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') {
+                const r = a.getBoundingClientRect();
+                hits.push(`${cs.position}/${cs.display}/${cs.visibility} up${d} ${desc(a)} ${Math.round(r.width)}x${Math.round(r.height)} txt=${(a.textContent ?? '').replace(/\s+/g, ' ').trim().length}`);
+              }
+            }
+            return hits.length ? hits.join('\n      ') : '(none)';
+          };
+          for (const h of Array.from(document.querySelectorAll('h1')).slice(0, 3)) {
+            const r = h.getBoundingClientRect();
+            lines.push(`h1 "${(h.textContent ?? '').trim().slice(0, 60)}" ${Math.round(r.width)}x${Math.round(r.height)}@${Math.round(r.left)},${Math.round(r.top)}`);
+            lines.push(`    pinned ancestors: ${pinned(h)}`);
+          }
+          const prices = Array.from(document.querySelectorAll('span, div, p, b, strong'))
+            .filter(e => /^(now\s+)?\$\s?\d[\d,]*(\.\d\d)?\+?$/i.test((e.textContent ?? '').replace(/\s+/g, ' ').trim())
+              && !Array.from(e.children).some(c => (c.textContent ?? '').trim() === (e.textContent ?? '').trim()))
+            .map(e => ({ e, r: e.getBoundingClientRect() }))
+            .filter(p => p.r.width > 0 && p.r.top < 1400).slice(0, 3);
+          for (const p of prices) {
+            lines.push(`price "${(p.e.textContent ?? '').trim()}" @${Math.round(p.r.left)},${Math.round(p.r.top)}`);
+            lines.push(`    pinned ancestors: ${pinned(p.e)}`);
+          }
+          // The hero: the largest visible image near the top of the page.
+          const hero = Array.from(document.images)
+            .map(i => ({ i, r: i.getBoundingClientRect() }))
+            .filter(h => h.r.width > 0 && h.r.top < 1200)
+            .sort((a, b) => b.r.width * b.r.height - a.r.width * a.r.height)[0];
+          if (hero) {
+            const clips: string[] = [];
+            for (let a: Element | null = hero.i.parentElement, d = 1; a && a !== document.body; a = a.parentElement, d++) {
+              const cs = getComputedStyle(a);
+              if (cs.overflowX !== 'visible' && a.scrollWidth > a.clientWidth + 40) clips.push(`up${d} ${desc(a)} scrollW=${a.scrollWidth} clientW=${a.clientWidth} imgs=${a.querySelectorAll('img').length}`);
+            }
+            lines.push(`hero img ${Math.round(hero.r.width)}x${Math.round(hero.r.height)}@${Math.round(hero.r.left)},${Math.round(hero.r.top)} alt="${hero.i.alt.slice(0, 40)}"`);
+            lines.push(`    pinned ancestors: ${pinned(hero.i)}`);
+            lines.push(`    clipping ancestors: ${clips.join(' | ') || '(none)'}`);
+          }
+          const scrollers = Array.from(document.querySelectorAll('*')).filter(e => {
+            const cs = getComputedStyle(e);
+            return cs.overflowX !== 'visible' && e.scrollWidth > e.clientWidth + 40 && e.clientWidth > 0
+              && e.querySelectorAll('img').length >= 2;
+          });
+          for (const s of scrollers.slice(0, 8)) {
+            const sr = s.getBoundingClientRect();
+            const kids = Array.from(s.querySelectorAll('img')).map(i => i.getBoundingClientRect());
+            const outside = kids.filter(k => k.right <= sr.left + 1 || k.left >= sr.right - 1).length;
+            lines.push(`scroller ${desc(s)} ${Math.round(sr.width)}x${Math.round(sr.height)}@${Math.round(sr.left)},${Math.round(sr.top)} scrollW=${s.scrollWidth} imgs=${kids.length} outsideFrame=${outside} ovx=${getComputedStyle(s).overflowX}`);
+          }
+          return lines.join('\n');
+        });
+        out.push('PRODUCT-PAGE STRUCTURE:\n' + pdp);
+
         out.push(`prose <p>(>40ch): ${diag.proseParagraphs}  proseChars: ${diag.proseChars}  totalBodyText: ${diag.totalBodyText}`);
         const hl = diag.headline as Record<string, unknown>;
         if (hl && hl.found) {
@@ -706,7 +769,7 @@ test('live-page diagnostics (finder / picker)', async () => {
           // whether a missing headline is a layout-finder problem at all: Tier 1
           // takes <article>/<main> before the finder runs, and that root often
           // starts below the h1 (Phase 5a).
-          if (/census|layout-finder|selfCheck|narrowed|expand|handoff|prose-wrap|captured via|skipping </i.test(t)) censusLines.push(t);
+          if (/census|carousel|layout-finder|selfCheck|narrowed|expand|handoff|prose-wrap|captured via|skipping </i.test(t)) censusLines.push(t);
         });
 
         // Bind the content script FIRST. Production ships no broad host
@@ -747,7 +810,11 @@ test('live-page diagnostics (finder / picker)', async () => {
             + 'concluding anything about capture.');
         }
 
-
+        // DIAG_DUMP_SRC=1 saves the live DOM BEFORE capture (no dx-* markers yet).
+        if (process.env.DIAG_DUMP_SRC) {
+          const src = await page.evaluate(() => '<!doctype html>\n' + document.documentElement.outerHTML);
+          writeFileSync(resolve(__dirname, '..', '..', '..', 'test-output', `finder-diag-${name}-source.html`), src, 'utf8');
+        }
 
         await activateExtensionOnPage(page).catch((e) => {
           out.push(`ACTIVATION FAILED: ${(e as Error).message.split('\n')[0]}`);
