@@ -1,0 +1,15 @@
+{
+  "format": "article",
+  "url": "http://127.0.0.1:4173/svg-var-fill.html",
+  "hostOverride": "www.yelp.com",
+  "title": { "contains": "Lalibela" },
+  "bodyText": {
+    "minLength": 300,
+    "contains": ["vegetarian combination platter", "doro wat"]
+  },
+  "bodyHtml": {
+    "noScripts": true,
+    "contains": ["fill=\"rgb(255, 100, 61)\"", "fill=\"rgb(255, 255, 255)\"", "fill=\"rgba(180, 180, 180, 0.48)\""],
+    "excludes": ["var(--", "Loading..."]
+  }
+}

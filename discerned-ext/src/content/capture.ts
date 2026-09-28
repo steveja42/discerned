@@ -8892,6 +8892,22 @@ function annotateLiveImageSizes(liveRoot: Element): () => void {
     }
   });
 
+  // SVG paint that names a page CSS variable is invalid once that stylesheet is
+  // gone and falls back to black (Yelp's rating stars became black squares).
+  // Swap in the computed colour for the clone; cleanup restores the original.
+  const paintResolved: Array<{ el: Element; attr: string; orig: string }> = [];
+  querySelectorAllDeep(liveRoot, '[fill*="var("], [stroke*="var("]').forEach(el => {
+    const cs = window.getComputedStyle(el);
+    for (const attr of ['fill', 'stroke'] as const) {
+      const orig = el.getAttribute(attr);
+      if (!orig || !orig.includes('var(')) continue;
+      const resolved = cs.getPropertyValue(attr).trim();
+      if (!resolved || resolved.includes('var(') || resolved.startsWith('url(')) continue;
+      el.setAttribute(attr, resolved);
+      paintResolved.push({ el, attr, orig });
+    }
+  });
+
   return () => {
     annotated.forEach(({ img, hadWidth, hadHeight }) => {
       if (!hadWidth) img.removeAttribute('width');
@@ -8902,6 +8918,7 @@ function annotateLiveImageSizes(liveRoot: Element): () => void {
     // LIVE page comes back off (the clone keeps its copy).
     liveImgs.forEach(img => img.removeAttribute(CURRENTSRC_ATTR));
     flexMarked.forEach(el => el.removeAttribute(FLEXSEP_MARKER));
+    paintResolved.forEach(({ el, attr, orig }) => el.setAttribute(attr, orig));
   };
 }
 
@@ -11091,6 +11108,12 @@ function sanitiseTreeInPlace(root: Element, stripStyles = false) {
     // Remove the button wrapper when there is one, so an empty shell is not left.
     const target = el.closest('button, [role="button"]') ?? el;
     target.remove();
+  });
+
+  // A "Loading…" SVG is a lazy slide's skeleton; its gradient fill is dropped
+  // with <defs>, so it renders as a black square (Yelp's photo carousel).
+  root.querySelectorAll('svg').forEach(el => {
+    if (/^loading\b/i.test(accessibleName(el))) el.remove();
   });
 
 

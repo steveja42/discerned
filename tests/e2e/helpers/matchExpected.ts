@@ -20,7 +20,7 @@ export interface ExpectedCapture {
    */
   hostOverride?: string;
   bodyText?: { minLength?: number; contains?: string[]; excludes?: string[] };
-  bodyHtml?: { hasImgs?: boolean; noScripts?: true; allowsOnly?: string[]; containsClasses?: string[] };
+  bodyHtml?: { hasImgs?: boolean; noScripts?: true; allowsOnly?: string[]; containsClasses?: string[]; contains?: string[]; excludes?: string[] };
   thumbnail?: 'present' | 'absent';
   selectionText?: { contains?: string };
   imageUrls?: { contains?: string[]; excludes?: string[]; minCount?: number };
@@ -85,6 +85,12 @@ export function matchExpected(
       expect(html).not.toMatch(FORM_RE);
     }
     if (exp.bodyHtml.hasImgs) expect(html).toMatch(/<img[\s>]/i);
+    for (const needle of exp.bodyHtml.contains ?? []) {
+      expect(html, `bodyHtml contains "${needle}"`).toContain(needle);
+    }
+    for (const needle of exp.bodyHtml.excludes ?? []) {
+      expect(html, `bodyHtml excludes "${needle}"`).not.toContain(needle);
+    }
     for (const cls of exp.bodyHtml.containsClasses ?? []) {
       expect(html, `bodyHtml contains class="${cls}"`).toMatch(
         new RegExp(`class\\s*=\\s*"[^"]*\\b${cls}\\b[^"]*"`),

@@ -2142,11 +2142,11 @@
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Name, rating line, hours, photo gallery and menu capture, but no review text appears anywhere and the star ratings render as black squares.",
+      "note": "Stars now render correctly, but no review text appears in either surface and the Yes/No/Maybe recommend widget survives.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:30:23.350-07:00",
-      "clipReviewedAt": "2026-09-17T12:30:23.350-07:00",
-      "castReviewedAt": "2026-09-17T12:30:23.350-07:00"
+      "reviewedAt": "2026-09-26T19:18:39.196-07:00",
+      "clipReviewedAt": "2026-09-26T19:18:39.196-07:00",
+      "castReviewedAt": "2026-09-26T19:18:39.196-07:00"
     },
     "zillow": {
       "verdict": "flaw",
