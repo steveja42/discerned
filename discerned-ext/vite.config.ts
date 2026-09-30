@@ -135,9 +135,11 @@ export default defineConfig(({ mode }) => ({
   // URLs instead.
   base: '',
   server: {
-    port: 5173,
+    // Outside Windows' Hyper-V/WSL excluded ranges (4753-5361 at last check), which
+    // made 5173 fail with EACCES.
+    port: 15173,
     hmr: {
-      port: 5173,
+      port: 15173,
     },
     // Vite 5.4.12+ hardened the dev server's CORS to same-origin only (CVE
     // fix). crxjs dev mode loads the service worker and HMR client FROM the
