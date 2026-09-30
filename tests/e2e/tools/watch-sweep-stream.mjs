@@ -26,10 +26,8 @@
 // remains the authoritative "what is outstanding right now", and is what you
 // use to resume review in a later session (this watcher exits at DONE).
 //
-// Waits for the CAST png too, not just the clip: the cast is written after the
-// clip, and a clip-only trigger produces a notification for a domain whose cast
-// image does not exist yet — which is precisely how a review ends up
-// clip-only. Both must be present before a domain is announced.
+// Waits for the sidecar's `cast` outcome, not the cast FILE: the folder is
+// overwritten in place, so the previous run's --3-cast.png is always there.
 //
 // Usage (via Monitor):
 //   node tests/e2e/tools/watch-sweep-stream.mjs [--since <epochSeconds>] [--only d1,d2]
@@ -207,14 +205,13 @@ function poll() {
     if (since && rec.ranAt && Date.parse(rec.ranAt) < since) continue;
 
     if (rec.status === 'ok') {
-      // Only queue once BOTH images exist — see header. A cast can be
-      // legitimately absent (castShotSafe swallows a flaky render), so give it
-      // a grace period rather than waiting forever.
+      // Wait for the cast OUTCOME, not the cast file: the sidecar is written once
+      // before the cast renders, and the previous run's --3-cast.png is still on disk then.
       const clip = resolve(RUN_DIR, `${domain}--2-clip.png`);
       const cast = resolve(RUN_DIR, `${domain}--3-cast.png`);
       const ageMs = Date.now() - st.mtimeMs;
       if (!existsSync(clip)) continue;
-      if (!existsSync(cast) && ageMs < 45_000) continue;
+      if (!rec.cast && ageMs < 150_000) continue;
 
       announced.add(domain);
       sliceQueue.push({
