@@ -5,13 +5,13 @@
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Category, headline, captioned hero, byline, Takeaways and the Terminal paywall boundary all correct; a Contact-us/tip link stack and share-icon row leak as minor chrome.",
+      "note": "Category, headline, captioned hero, byline, Takeaways and the Terminal paywall boundary correct; a share-icon row, Save/Translate labels and cast Expand/BookmarkSave residue remain.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:08:08.103-07:00",
-      "clipReviewedAt": "2026-09-17T12:08:08.103-07:00",
-      "castReviewedAt": "2026-09-17T12:08:08.103-07:00"
+      "reviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "clipReviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "castReviewedAt": "2026-09-28T07:37:22.866-07:00"
     },
     "cnn": {
       "verdict": "clean",
@@ -31,83 +31,83 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, captioned hero, byline and full body are complete; a Listen/Save/Share row sits under the dek in the clip and leaves a stray 7 in the cast.",
+      "note": "Headline, dek, captioned hero, byline and full body render correctly; a stray '7' share-count digit sits under the dek.",
       "by": "ai",
-      "reviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "reviewedAt": "2026-09-28T10:41:00.380-07:00",
       "clipReviewedAt": "2026-09-28T05:41:04.376-07:00",
-      "castReviewedAt": "2026-09-28T05:41:04.376-07:00"
+      "castReviewedAt": "2026-09-28T10:41:00.380-07:00"
     },
     "wikipedia-en": {
       "verdict": "clean",
-      "severity": 1,
+      "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Title, issue banners, captioned architecture diagram, full lead prose with citation links and section headings all render with the TOC sidebar stripped; stray hide and edit links remain.",
+      "note": "Title, issue banners, diagram, full lead prose and section headings render; cast collapses the maintenance-notice banners into one run-together table cell.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:28:51.633-07:00",
-      "clipReviewedAt": "2026-09-17T13:28:51.633-07:00",
-      "castReviewedAt": "2026-09-17T13:28:51.633-07:00"
+      "reviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "castReviewedAt": "2026-09-28T10:39:23.624-07:00"
     },
     "danluu": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Full essay prose with proper paragraph breaks, inline code, section headings, blockquotes and links all render correctly on clip and cast.",
+      "note": "Full essay prose with paragraph breaks, inline code, headings, blockquotes and links all render correctly on clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:36:10.132-07:00",
-      "clipReviewedAt": "2026-09-17T13:36:10.132-07:00",
-      "castReviewedAt": "2026-09-17T13:36:10.132-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.391-07:00"
     },
     "theverge": {
       "verdict": "clean",
       "severity": 2,
       "where": "clip",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, byline, hero with credit, bio and full body all render on both surfaces; stray + glyphs from follow buttons persist throughout the clip but the cast removes them.",
+      "note": "Headline, dek, byline, hero, bio and full body render on both surfaces; stray + glyphs from follow buttons persist in the clip but not the cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:18:55.462-07:00",
-      "clipReviewedAt": "2026-09-17T13:18:55.462-07:00",
-      "castReviewedAt": "2026-09-17T13:18:55.462-07:00"
+      "reviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "castReviewedAt": "2026-09-28T10:34:40.100-07:00"
     },
     "axios": {
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "A What-to-read-next block of five empty AXIOS placeholder tiles trails the article on the clip and five empty bullets on the cast.",
+      "note": "A What-to-read-next block of five empty AXIOS placeholder tiles trails the article in the clip and five empty bullets in the cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:07:01.279-07:00",
-      "clipReviewedAt": "2026-09-17T12:07:01.279-07:00",
-      "castReviewedAt": "2026-09-17T12:07:01.279-07:00"
+      "reviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "clipReviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "castReviewedAt": "2026-09-28T07:37:22.866-07:00"
     },
     "npr": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Kicker, headline, byline, hero with caption and credit, body and inline related-story cards all render; the clip clips those card headlines at the right edge where the cast shows them in full.",
+      "note": "Kicker, headline, byline, hero with caption/credit, body and inline related-story cards all render correctly on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:18:37.171-07:00",
-      "clipReviewedAt": "2026-09-17T13:18:37.171-07:00",
-      "castReviewedAt": "2026-09-17T13:18:37.171-07:00"
+      "reviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "castReviewedAt": "2026-09-28T10:34:40.100-07:00"
     },
     "arxiv": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Subject breadcrumb, submission line, title, author list, full abstract, metadata table, seven-version submission history and access links all render correctly on both surfaces.",
+      "note": "Breadcrumb, submission line, title, author list, abstract, metadata table, submission history and access links all render correctly on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:27:36.812-07:00",
-      "clipReviewedAt": "2026-09-17T13:27:36.812-07:00",
-      "castReviewedAt": "2026-09-17T13:27:36.812-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.289-07:00"
     },
     "python-docs": {
       "verdict": "clean",
@@ -137,37 +137,37 @@
       "verdict": "clean",
       "severity": 0,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Date, headline, dek, hero, full body prose with inline links and the survey call-to-action all render correctly on both surfaces with no chrome.",
+      "note": "Date, headline, hero, full body prose with inline links and the survey CTA render correctly with no chrome.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:32:11.067-07:00",
-      "clipReviewedAt": "2026-09-17T13:32:11.067-07:00",
+      "reviewedAt": "2026-09-28T10:38:39.595-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.595-07:00",
       "castReviewedAt": "2026-09-17T13:32:11.067-07:00"
     },
     "martinfowler": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Title, author link and photo, date, intro prose, book cover and the full pattern-catalog index with linked headings and summaries all render correctly.",
+      "note": "Title, author photo, intro prose, book cover and the full pattern-catalog index with linked headings render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:34:37.907-07:00",
-      "clipReviewedAt": "2026-09-17T13:34:37.907-07:00",
-      "castReviewedAt": "2026-09-17T13:34:37.907-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.495-07:00"
     },
     "paulgraham": {
-      "verdict": "flaw",
-      "severity": 5,
-      "where": "cast",
-      "regression": "unknown",
-      "regressedFrom": "",
-      "note": "Cast still renders the whole essay as one run-on block with sentences colliding at every paragraph boundary (making it.Partly my goal); the clip keeps its breaks, and a nav button stack rides along on both.",
+      "verdict": "clean",
+      "severity": 1,
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "was: cast ran paragraphs together at every boundary (making it.Partly my goal); now clean.",
+      "note": "Cast now preserves paragraph breaks throughout the essay; the run-on sentence collision from the prior run is gone.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:34:50.662-07:00",
-      "castReviewedAt": "2026-09-17T13:34:50.662-07:00",
-      "clipReviewedAt": "2026-09-17T13:34:50.662-07:00"
+      "reviewedAt": "2026-09-28T10:41:00.380-07:00",
+      "clipReviewedAt": "2026-09-17T13:34:50.662-07:00",
+      "castReviewedAt": "2026-09-28T10:41:00.380-07:00"
     },
     "overreacted": {
       "verdict": "flaw",
@@ -184,145 +184,146 @@
     "hackaday": {
       "verdict": "flaw",
       "severity": 4,
-      "where": "clip",
+      "where": "cast",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Clip body text overflows its column and is cut off mid-word at the right edge on most lines (elegant about it. Y, spock.loca); the cast wraps correctly and code blocks keep their whitespace.",
+      "note": "Clip no longer overflows/cuts text as before, but the cast now mangles the systemd unit table into one garbled run of line numbers and directives.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:40:50.625-07:00",
-      "clipReviewedAt": "2026-09-17T13:40:50.625-07:00",
-      "castReviewedAt": "2026-09-17T13:40:50.625-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.071-07:00"
     },
     "usatoday": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Breadcrumb, headline, avatar byline, Q&A subheads and inline images all render; the date and Updated still run together and an Add Topic button sits in the breadcrumb.",
+      "note": "Headline, avatar byline, hero and Q&A body all render; an Add Topic button sits in the breadcrumb.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:49:01.820-07:00",
-      "clipReviewedAt": "2026-09-17T13:49:01.820-07:00",
+      "reviewedAt": "2026-09-28T10:38:39.595-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.595-07:00",
       "castReviewedAt": "2026-09-17T13:49:01.820-07:00"
     },
     "businessinsider": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, credited hero, two-author byline, section headings and body with links all render; one grey BI placeholder image sits mid-article and stray + glyphs follow each author name.",
+      "note": "Headline, dek, credited hero, two-author byline and full body with links render; grey BI placeholder images sit mid-article and a related-series tail has empty grey boxes.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:50:58.056-07:00",
-      "clipReviewedAt": "2026-09-17T13:50:58.056-07:00",
+      "reviewedAt": "2026-09-28T10:39:09.540-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.540-07:00",
       "castReviewedAt": "2026-09-17T13:50:58.056-07:00"
     },
     "forbes": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Kicker, headline, paid-program byline, Summary, captioned image and body prose all render on both surfaces; the AI-voice TTS widget remains as a large headphone box with a duplicated title.",
+      "note": "Kicker, headline, paid-program byline, Summary, captioned image and full body render; the AI-voice headphone box with duplicate title remains and the cast byline has · residue.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:19:58.244-07:00",
-      "clipReviewedAt": "2026-09-17T12:19:58.244-07:00",
-      "castReviewedAt": "2026-09-17T12:19:58.244-07:00"
+      "reviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "clipReviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "castReviewedAt": "2026-09-28T08:13:05.035-07:00"
     },
     "cnbc": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Kicker, headline, avatar byline, Key Points, credited hero and body with links all render; the published/updated dates still smash together and a CREATE FREE ACCOUNT promo strip leaks in.",
+      "note": "Kicker, headline, byline, Key Points, credited hero and body with links render; published/updated dates smash together and a CREATE FREE ACCOUNT strip leaks in.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:51:53.396-07:00",
-      "clipReviewedAt": "2026-09-17T13:51:53.396-07:00",
-      "castReviewedAt": "2026-09-17T13:51:53.396-07:00"
+      "reviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "castReviewedAt": "2026-09-28T10:38:38.965-07:00"
     },
     "foxnews": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Kicker, headline, dek, byline, date, body with links, captioned image grid and section headings all render; a Fox News Flash promo, a CyberGuy Live class advert and a reaction glyph row ride along.",
+      "note": "Kicker, headline, dek, byline, date, body with links, captioned image grid and section headings all render; a Flash promo and CyberGuy ad ride along.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:52:53.778-07:00",
-      "clipReviewedAt": "2026-09-17T13:52:53.778-07:00",
-      "castReviewedAt": "2026-09-17T13:52:53.778-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.391-07:00"
     },
     "cbsnews": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Hero, section, headline, byline and full body with links all render and the video transport bar stays gone; the byline splits awkwardly across lines and an Add-on-Google strip remains.",
+      "note": "Hero, section, headline and full body with links render; the byline name drops to its own blank line under 'By'.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:53:48.819-07:00",
-      "clipReviewedAt": "2026-09-17T13:53:48.819-07:00",
-      "castReviewedAt": "2026-09-17T13:53:48.819-07:00"
+      "reviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "castReviewedAt": "2026-09-28T10:38:38.965-07:00"
     },
     "independent": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, byline, date, credited hero and full body with subheadings and second image all render; a Copy-link/Bookmark row, a stray 'Removed from bookmarks' status and an 'open image in gallery' label survive.",
+      "note": "Headline, byline, credited hero and full body render; a Copy-link/Bookmark row and a stray 'Removed from bookmarks' status persist as before.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:54:06.652-07:00",
-      "clipReviewedAt": "2026-09-17T13:54:06.652-07:00",
-      "castReviewedAt": "2026-09-17T13:54:06.652-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.071-07:00"
     },
     "timesofindia": {
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "A Comments/Share/AA/Text Size block with Small-Medium-Large options still renders between the byline and the body, plus a TOI App promo and grey placeholder; the article is complete.",
+      "note": "Comments/Share/AA/Text Size block and a TOI App promo with grey placeholder still sit between byline and body; article body itself is complete.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:57:28.863-07:00",
-      "clipReviewedAt": "2026-09-17T13:57:28.863-07:00",
-      "castReviewedAt": "2026-09-17T13:57:28.863-07:00"
+      "reviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "castReviewedAt": "2026-09-28T10:39:23.624-07:00"
     },
     "scmp": {
       "verdict": "flaw",
       "severity": 4,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Body complete through the author bio, but an unlabelled stat pair and missing date separator remain and the bio byline name collapses into a one-character vertical column.",
+      "note": "Body renders through the author bio, but an unlabeled stat pair persists and the bio byline name collapses into a one-character vertical column.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:57:17.798-07:00",
-      "clipReviewedAt": "2026-09-17T13:57:17.798-07:00",
-      "castReviewedAt": "2026-09-17T13:57:17.798-07:00"
+      "reviewedAt": "2026-09-28T16:46:08.589-07:00",
+      "clipReviewedAt": "2026-09-28T16:46:08.589-07:00",
+      "castReviewedAt": "2026-09-28T16:46:08.589-07:00"
     },
     "macrumors": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, byline with date, dek, hero and the full bulleted 12-feature list with bold labels and inline links all render correctly on both surfaces.",
+      "note": "Headline, byline with date, dek, hero and the full bulleted 12-feature list with bold labels and inline links all render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T14:01:40.037-07:00",
-      "clipReviewedAt": "2026-09-17T14:01:40.037-07:00",
+      "reviewedAt": "2026-09-28T10:39:09.540-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.540-07:00",
       "castReviewedAt": "2026-09-17T14:01:40.037-07:00"
     },
     "homedepot": {
-      "verdict": "blocked",
+      "verdict": "clean",
+      "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Page served a 155-character shell at HTTP 200 (tagline plus a Customer Service link); measures the load, not the capture pipeline.",
+      "note": "Title, price, hero image, full gallery thumbnails, bullet features, store stock and return policy all present; minor cosmetic price glyph spacing.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:25:43.528-07:00",
-      "clipReviewedAt": "2026-09-17T12:25:43.528-07:00",
-      "castReviewedAt": "2026-09-17T12:25:43.528-07:00"
+      "reviewedAt": "2026-09-28T20:04:49.236-07:00",
+      "clipReviewedAt": "2026-09-28T20:04:49.236-07:00",
+      "castReviewedAt": "2026-09-28T20:04:49.236-07:00"
     },
     "npmjs": {
       "verdict": "clean",
@@ -330,11 +331,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Recovered from blocked: package name, description, inline code spans, the full JSX usage example with nested indentation and doc links all render correctly.",
+      "note": "Package name, description, inline code, full JSX usage example and doc links all render correctly in both clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:50:58.078-07:00",
-      "clipReviewedAt": "2026-09-18T21:50:58.078-07:00",
-      "castReviewedAt": "2026-09-18T21:50:58.078-07:00"
+      "reviewedAt": "2026-09-28T10:33:44.921-07:00",
+      "clipReviewedAt": "2026-09-28T10:33:44.921-07:00",
+      "castReviewedAt": "2026-09-28T10:33:44.921-07:00"
     },
     "pypi": {
       "verdict": "clean",
@@ -342,11 +343,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "The REPL block keeps every space and newline including nested quotes and dict output; badges, prose and feature list all render, with badges stacked one per row.",
+      "note": "Full PyPI project page captured intact: header, code block, install instructions, maintainers, classifiers, sponsor block; clip and cast match.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:28:51.931-07:00",
-      "clipReviewedAt": "2026-09-18T17:28:51.931-07:00",
-      "castReviewedAt": "2026-09-18T17:28:51.931-07:00"
+      "reviewedAt": "2026-09-28T20:00:34.640-07:00",
+      "clipReviewedAt": "2026-09-28T20:00:34.640-07:00",
+      "castReviewedAt": "2026-09-28T20:00:34.640-07:00"
     },
     "github-repo": {
       "verdict": "clean",
@@ -366,23 +367,23 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Hero, category, headline and summary bullets render but the article body is absent at 5% coverage, ending in a share-icon row (paywall-hidden prose).",
+      "note": "Hero, category, headline and summary bullets render but the article body is absent, ending at a share-icon row behind the paywall.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:30:07.485-07:00",
-      "clipReviewedAt": "2026-09-18T17:30:07.485-07:00",
+      "reviewedAt": "2026-09-28T10:39:09.540-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.540-07:00",
       "castReviewedAt": "2026-09-18T17:30:07.485-07:00"
     },
     "rfc-editor": {
       "verdict": "clean",
-      "severity": 1,
+      "severity": 0,
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Numbered spec sections, prose, cross-reference links and bulleted status-code lists all render correctly.",
+      "note": "Numbered spec sections, prose, cross-reference links and bulleted status-code lists render identically to baseline.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:52:41.647-07:00",
-      "clipReviewedAt": "2026-09-18T21:52:41.647-07:00",
-      "castReviewedAt": "2026-09-18T21:52:41.647-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.170-07:00"
     },
     "thehindu": {
       "verdict": "clean",
@@ -390,11 +391,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, date, byline, hero with caption and credit and body prose all render; only a READ LATER chrome button remains.",
+      "note": "Headline, dek, date, byline, hero with caption/credit and body prose all render; only a READ LATER chrome button remains.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:48:23.727-07:00",
-      "clipReviewedAt": "2026-09-18T21:48:23.727-07:00",
-      "castReviewedAt": "2026-09-18T21:48:23.727-07:00"
+      "reviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "castReviewedAt": "2026-09-28T10:39:51.775-07:00"
     },
     "gutenberg": {
       "verdict": "clean",
@@ -402,23 +403,23 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Book title and full prose with italic emphasis and page-number anchors render correctly; the 1% coverage reflects the whole book being measured against the captured chapter.",
+      "note": "Book cover, title and full prose with italics and page-number anchors render correctly in the cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:54:23.103-07:00",
+      "reviewedAt": "2026-09-28T10:41:00.380-07:00",
       "clipReviewedAt": "2026-09-18T21:54:23.103-07:00",
-      "castReviewedAt": "2026-09-18T21:54:23.103-07:00"
+      "castReviewedAt": "2026-09-28T10:41:00.380-07:00"
     },
     "chicagotribune": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 1,
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, captioned hero and avatar byline render correctly but the body truncates mid-sentence after three paragraphs into a SIGN UP paywall prompt.",
+      "note": "Headline, captioned hero, avatar byline and the FULL body (including reporting-credit closer) now render with no paywall truncation.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:28:35.271-07:00",
-      "clipReviewedAt": "2026-09-18T17:28:35.271-07:00",
-      "castReviewedAt": "2026-09-18T17:28:35.271-07:00"
+      "reviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "castReviewedAt": "2026-09-28T10:38:38.965-07:00"
     },
     "yahoofinance": {
       "verdict": "flaw",
@@ -426,11 +427,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, avatar byline, captioned hero and body all render, but a More-from-Yahoo-Scout block of four unanswered questions sits mid-article and terms/privacy links trail it.",
+      "note": "Headline, avatar byline, captioned hero and body render, but a More-from-Yahoo-Scout block of unanswered questions sits mid-article with terms/privacy links trailing.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:50:09.454-07:00",
-      "clipReviewedAt": "2026-09-18T21:50:09.454-07:00",
-      "castReviewedAt": "2026-09-18T21:50:09.454-07:00"
+      "reviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "castReviewedAt": "2026-09-28T10:39:23.624-07:00"
     },
     "slashdot": {
       "verdict": "clean",
@@ -450,11 +451,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, byline, captioned hero, body and author bio render and the cast hero now shows, but a What on Earth newsletter signup and a standards/Report-error footer trail the article.",
+      "note": "Headline, byline, captioned hero, full body and author bio render, but a What-on-Earth newsletter signup and standards/report-error footer trail the article.",
       "by": "ai",
-      "reviewedAt": "2026-09-28T05:41:04.376-07:00",
-      "clipReviewedAt": "2026-09-28T05:41:04.376-07:00",
-      "castReviewedAt": "2026-09-28T05:41:04.376-07:00"
+      "reviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "castReviewedAt": "2026-09-28T10:38:38.965-07:00"
     },
     "spotify-album": {
       "verdict": "clean",
@@ -462,10 +463,10 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "FIXED: every track now renders as a full row with number, title, artist and duration instead of collapsing to bare counts; cover, title, year and copyright all correct.",
+      "note": "Cover, title, artist, year and every track row with number/title/artist/duration render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:29:27.202-07:00",
-      "clipReviewedAt": "2026-09-18T17:29:27.202-07:00",
+      "reviewedAt": "2026-09-28T10:38:39.595-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.595-07:00",
       "castReviewedAt": "2026-09-18T17:29:27.202-07:00"
     },
     "applemusic-album": {
@@ -474,10 +475,10 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Cover, title, artist and the full editorial review render and most tracks are proper rows, but the first track's number, title, PREVIEW and duration each stack on their own line.",
+      "note": "Cover, title, artist and full editorial review render and most tracks are proper rows, but the first track's number, preview and duration each stack on their own line.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:29:27.202-07:00",
-      "clipReviewedAt": "2026-09-18T17:29:27.202-07:00",
+      "reviewedAt": "2026-09-28T10:39:09.540-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.540-07:00",
       "castReviewedAt": "2026-09-18T17:29:27.202-07:00"
     },
     "github-issue": {
@@ -486,35 +487,35 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Full issue thread with avatars, timestamps, code block, labels, comments and inline code all render; every date duplicates itself (on Jan 5, 2017on Jan 5, 2017).",
+      "note": "Full issue thread with avatars, timestamps, code block, labels and comments renders on both surfaces; dates still duplicate themselves.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:51:14.234-07:00",
-      "clipReviewedAt": "2026-09-18T21:51:14.234-07:00",
-      "castReviewedAt": "2026-09-18T21:51:14.234-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.071-07:00"
     },
     "wikivoyage": {
+      "verdict": "flaw",
+      "severity": 3,
+      "where": "cast",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Clip's climate chart table renders cleanly but the cast smashes its rows into unreadable digit runs (e.g. \"JFMAMJJASOND505392...\"); rest of article is intact.",
+      "by": "ai",
+      "reviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "castReviewedAt": "2026-09-28T10:39:23.624-07:00"
+    },
+    "smh": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Breadcrumb, banner, intro, captioned photos, district map and section headings all render correctly.",
+      "note": "Breadcrumb, headline, avatar byline, captioned hero and full body render; the previous bare Advertisement labels and Add-to-Google strip are now gone in both clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:55:14.510-07:00",
-      "clipReviewedAt": "2026-09-18T21:55:14.510-07:00",
-      "castReviewedAt": "2026-09-18T21:55:14.510-07:00"
-    },
-    "smh": {
-      "verdict": "clean",
-      "severity": 2,
-      "where": "both",
-      "regression": "none",
-      "regressedFrom": "",
-      "note": "Breadcrumb, headline, avatar byline, captioned hero and full body all render; bare Advertisement labels bracket the article and a From-our-partners block begins at the tail.",
-      "by": "ai",
-      "reviewedAt": "2026-09-18T21:48:40.009-07:00",
-      "clipReviewedAt": "2026-09-18T21:48:40.009-07:00",
-      "castReviewedAt": "2026-09-18T21:48:40.009-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.170-07:00"
     },
     "w3c-spec": {
       "verdict": "clean",
@@ -544,13 +545,13 @@
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Address block, CIK/SIC lines, former-names history and the full 10-K filings table all render; the search-filter widget leaks in, columns are cramped and the cast merges File/Film numbers into one digit run.",
+      "note": "Address block, CIK/SIC lines, former-names history and full 10-K filings table render; cast still merges File/Film numbers into one digit run (e.g. 001-36743251437791).",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:37:05.598-07:00",
-      "clipReviewedAt": "2026-09-17T12:37:05.598-07:00",
-      "castReviewedAt": "2026-09-17T12:37:05.598-07:00"
+      "reviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "castReviewedAt": "2026-09-28T10:34:17.049-07:00"
     },
     "abc-au": {
       "verdict": "clean",
@@ -560,9 +561,9 @@
       "regressedFrom": "",
       "note": "Headline, category, posted/updated line, captioned hero, In-short summary and full body with section headings all render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:49:53.858-07:00",
-      "clipReviewedAt": "2026-09-18T21:49:53.858-07:00",
-      "castReviewedAt": "2026-09-18T21:49:53.858-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.289-07:00"
     },
     "meduza": {
       "verdict": "clean",
@@ -582,11 +583,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Recovered from blocked: title, authors, description, files table and additional details all render; a long citations table trails the record.",
+      "note": "Title, authors, description, files table and additional details render cleanly; a long citations table trails with links glued to titles without spacing.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:54:39.567-07:00",
-      "clipReviewedAt": "2026-09-18T21:54:39.567-07:00",
-      "castReviewedAt": "2026-09-18T21:54:39.567-07:00"
+      "reviewedAt": "2026-09-28T10:39:09.540-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.540-07:00",
+      "castReviewedAt": "2026-09-28T10:39:09.540-07:00"
     },
     "crates-io": {
       "verdict": "clean",
@@ -606,11 +607,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "French headline, byline, dates, section headings and body with italics and accents all render, but a podcast promo card sits mid-article, a bare Publicite label remains and no hero image appears.",
+      "note": "French headline, byline, dates and body render, but a podcast promo card sits mid-article and no hero image appears.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:49:22.675-07:00",
-      "clipReviewedAt": "2026-09-18T21:49:22.675-07:00",
-      "castReviewedAt": "2026-09-18T21:49:22.675-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.495-07:00"
     },
     "biorxiv": {
       "verdict": "clean",
@@ -618,11 +619,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Title, authors, DOI, preprint notice, full abstract, teaser, competing-interest and funder statements all render; nav and citation-tool links trail the record.",
+      "note": "Title, authors, DOI, preprint notice, full abstract, teaser, competing-interest and funder statements render; nav/citation links trail.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:50:23.694-07:00",
-      "clipReviewedAt": "2026-09-18T21:50:23.694-07:00",
-      "castReviewedAt": "2026-09-18T21:50:23.694-07:00"
+      "reviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "castReviewedAt": "2026-09-28T10:38:38.965-07:00"
     },
     "discourse-meta": {
       "verdict": "clean",
@@ -630,11 +631,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Title, category, date and the full post with headings, bulleted lists, links and emoji all render correctly.",
+      "note": "Title, category, date and the full post with headings, lists, links and emoji all render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:52:57.809-07:00",
-      "clipReviewedAt": "2026-09-18T21:52:57.809-07:00",
-      "castReviewedAt": "2026-09-18T21:52:57.809-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.391-07:00"
     },
     "dockerhub": {
       "verdict": "clean",
@@ -642,11 +643,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Header, description and the complete supported-tags table with all version links render intact; some tag rows show as grey code boxes rather than links.",
+      "note": "Header, description and full supported-tags table with version links render intact; some tag rows show as grey code boxes instead of links.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:51:14.234-07:00",
-      "clipReviewedAt": "2026-09-18T21:51:14.234-07:00",
-      "castReviewedAt": "2026-09-18T21:51:14.234-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.391-07:00"
     },
     "go-docs": {
       "verdict": "flaw",
@@ -654,11 +655,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Breadcrumb, two-column TOC table and full prose with inline code all render, but every section heading carries a trailing paragraph-anchor glyph.",
+      "note": "Breadcrumb, TOC table and full prose with code blocks render correctly, but every section heading still carries a trailing paragraph-anchor glyph.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:51:46.075-07:00",
-      "clipReviewedAt": "2026-09-18T21:51:46.075-07:00",
-      "castReviewedAt": "2026-09-18T21:51:46.075-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.071-07:00"
     },
     "mathoverflow": {
       "verdict": "flaw",
@@ -678,23 +679,23 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, date, italic author note, body prose, section headings and bold-labelled bullet lists all render correctly.",
+      "note": "Headline, date, italic byline note, body prose, section headings and bullet lists all render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:56:28.459-07:00",
-      "clipReviewedAt": "2026-09-18T21:56:28.459-07:00",
+      "reviewedAt": "2026-09-28T10:38:39.595-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.595-07:00",
       "castReviewedAt": "2026-09-18T21:56:28.459-07:00"
     },
     "openstreetmap": {
-      "verdict": "clean",
-      "severity": 1,
+      "verdict": "flaw",
+      "severity": 4,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Relation title, version, changeset, the full multilingual tags table with Cyrillic, CJK and Arabic values, and the members list all render correctly.",
+      "note": "Tag table and member-way list captured completely, but the page's primary content (the interactive boundary map) is absent from both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:54:23.103-07:00",
-      "clipReviewedAt": "2026-09-18T21:54:23.103-07:00",
-      "castReviewedAt": "2026-09-18T21:54:23.103-07:00"
+      "reviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "castReviewedAt": "2026-09-28T10:39:09.474-07:00"
     },
     "propublica": {
       "verdict": "clean",
@@ -702,11 +703,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Credited illustration, Spanish headline, dek, dual byline, co-publish line and full body with italics all render with accents intact.",
+      "note": "Credited illustration, headline, dek, dual byline, co-publish line and full Spanish body all render identically to baseline.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:46:49.291-07:00",
-      "clipReviewedAt": "2026-09-18T21:46:49.291-07:00",
-      "castReviewedAt": "2026-09-18T21:46:49.291-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.170-07:00"
     },
     "rust-book": {
       "verdict": "clean",
@@ -726,11 +727,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, prose, section headings, code and lists render, but a Download-example button becomes a full-width blue block, step numbers detach from their labels and stray Server labels repeat.",
+      "note": "Headline, prose, section headings, code and lists render, but step numbers detach from their labels and stray Server/Client labels repeat as standalone lines.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:52:02.283-07:00",
-      "clipReviewedAt": "2026-09-18T21:52:02.283-07:00",
-      "castReviewedAt": "2026-09-18T21:52:02.283-07:00"
+      "reviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "castReviewedAt": "2026-09-28T10:39:51.775-07:00"
     },
     "wikidata": {
       "verdict": "clean",
@@ -738,11 +739,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Entity title, description, the multilingual label table with CJK values, statements and the portrait with its multi-script caption list all render correctly.",
+      "note": "Entity title, multilingual label table, statements, portrait and multi-script media captions all render correctly in both clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:54:55.181-07:00",
-      "clipReviewedAt": "2026-09-18T21:54:55.181-07:00",
-      "castReviewedAt": "2026-09-18T21:54:55.181-07:00"
+      "reviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "castReviewedAt": "2026-09-28T10:39:23.624-07:00"
     },
     "wiktionary": {
       "verdict": "clean",
@@ -760,36 +761,36 @@
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Site logo still renders as a wide hero because its og:image is a 1200x630 card the square-logo rule cannot see; Headmatter and the full opinion below are correct.",
+      "note": "The CourtListener logo still renders as a wide hero above Headmatter; the case header, Blackmun's full opinion and citations are intact on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:38:28.059-07:00",
-      "clipReviewedAt": "2026-09-17T12:38:28.059-07:00",
-      "castReviewedAt": "2026-09-17T12:38:28.059-07:00"
+      "reviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "clipReviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "castReviewedAt": "2026-09-28T08:13:05.035-07:00"
     },
     "ndtv": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, hero with caption, section headings, quotes and inline links all render on both surfaces; two Advertisement - Scroll to continue strips remain.",
+      "note": "Headline, dek, two hero photos with captions, section headings and full body render cleanly on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:47:53.937-07:00",
-      "clipReviewedAt": "2026-09-17T12:47:53.937-07:00",
-      "castReviewedAt": "2026-09-17T12:47:53.937-07:00"
+      "reviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "castReviewedAt": "2026-09-28T10:34:17.049-07:00"
     },
     "xda-forums": {
       "verdict": "clean",
       "severity": 1,
-      "where": "both",
-      "regression": "unknown",
+      "where": "clip",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Title, thread meta and every reply render with two-row author bylines and labelled stats; members with letter avatars show no avatar pin.",
+      "note": "Title, thread meta and every reply render with two-row bylines and labelled stats; the new-member's letter avatar renders fine as a colored circle.",
       "by": "ai",
-      "reviewedAt": "2026-09-28T00:09:58.038-07:00",
-      "clipReviewedAt": "2026-09-28T00:09:58.038-07:00",
+      "reviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:17.049-07:00",
       "castReviewedAt": "2026-09-28T00:09:58.038-07:00"
     },
     "appstore": {
@@ -798,11 +799,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Icon, app name, subtitle, price, devices, full description, rating and user reviews all render; the description collapses into one unbroken paragraph with inline bullet characters.",
+      "note": "Icon, app name, price, description, rating and reviews all render; description collapses into one unbroken paragraph with inline bullet characters.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:53:48.030-07:00",
-      "clipReviewedAt": "2026-09-18T21:53:48.030-07:00",
-      "castReviewedAt": "2026-09-18T21:53:48.030-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.289-07:00"
     },
     "lesswrong": {
       "verdict": "clean",
@@ -810,11 +811,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Tags, vote count, title, byline, date, tl;dr with links, video poster with play overlay and the full essay with italics and numbered lists all render correctly.",
+      "note": "Tags, vote count, byline, video poster with play overlay and the full album post with lyrics render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:55:52.810-07:00",
-      "clipReviewedAt": "2026-09-18T21:55:52.810-07:00",
-      "castReviewedAt": "2026-09-18T21:55:52.810-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.495-07:00"
     },
     "engadget": {
       "verdict": "clean",
@@ -830,15 +831,15 @@
     },
     "target": {
       "verdict": "flaw",
-      "severity": 6,
-      "where": "both",
+      "severity": 3,
+      "where": "cast",
       "regression": "none",
       "regressedFrom": "",
-      "note": "First content capture: Highlights and Description render, but the product's own title, price and buy-box are absent while a cross-sell rail supplies the only visible price ($59.99 for a different product).",
+      "note": "Product title, price, buy-box, highlights and description now all capture correctly; cast still shows one unlabeled stat quad (5/4/4/4) for rating/questions/bought/returns.",
       "by": "ai",
-      "reviewedAt": "2026-09-20T09:50:06.562-07:00",
-      "clipReviewedAt": "2026-09-20T09:50:06.562-07:00",
-      "castReviewedAt": "2026-09-20T09:50:06.562-07:00"
+      "reviewedAt": "2026-09-28T16:46:08.589-07:00",
+      "clipReviewedAt": "2026-09-28T16:46:08.589-07:00",
+      "castReviewedAt": "2026-09-28T16:46:08.589-07:00"
     },
     "substack-generic": {
       "verdict": "clean",
@@ -858,71 +859,71 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Title sits below the metadata and the hero shows art from a different film; scores, synopsis and Top Cast render but the cast list is one photo per row.",
+      "note": "Title sits below the metadata block; scores and Top Cast render but the cast list is one photo per row instead of a grid.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T14:07:20.901-07:00",
-      "clipReviewedAt": "2026-09-17T14:07:20.901-07:00",
-      "castReviewedAt": "2026-09-17T14:07:20.901-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.495-07:00"
     },
     "noahpinion": {
       "verdict": "clean",
-      "severity": 2,
+      "severity": 1,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Headline, dek, avatar byline, credited hero, numbered sections and an embedded tweet card all render; a Discover-more subscribe banner leads the clip.",
+      "note": "Substack roundup with embedded X card, blockquotes and inline chart all render correctly in clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:56:28.459-07:00",
-      "clipReviewedAt": "2026-09-18T21:56:28.459-07:00",
-      "castReviewedAt": "2026-09-18T21:56:28.459-07:00"
+      "reviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "castReviewedAt": "2026-09-28T10:39:09.474-07:00"
     },
     "instagram-home": {
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Feed narrows to one post with its own photo as hero, but the profile avatar is CORP-blocked and spills alt text across two lines; the cast expands the action row into a vertical Like/35/Comment/4/Share/Save list.",
+      "note": "Feed narrows to one post with its photo as hero, but the profile avatar is CORP-blocked (grey silhouette) and the cast expands the action row into a vertical Like/Comment/Share/Save list.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:07:53.557-07:00",
-      "clipReviewedAt": "2026-09-17T13:07:53.557-07:00",
-      "castReviewedAt": "2026-09-17T13:07:53.557-07:00"
+      "reviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "castReviewedAt": "2026-09-28T10:34:28.663-07:00"
     },
     "zdnet": {
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "unknown",
-      "regressedFrom": "",
-      "note": "Headline recovered, hero, byline, key-takeaways and section subheads all render, but a video playlist widget leaks mid-body with Previous/Next controls, Keep Watching and an unrelated video title.",
-      "by": "ai",
-      "reviewedAt": "2026-09-17T14:00:13.101-07:00",
-      "clipReviewedAt": "2026-09-17T14:00:13.101-07:00",
-      "castReviewedAt": "2026-09-17T14:00:13.101-07:00"
-    },
-    "espn": {
-      "verdict": "flaw",
-      "severity": 5,
-      "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, byline, intro and coverage links capture, but the clip stops at the 'Free agency and trade market updates' heading so the tracker's actual signings and trades are absent at 19% coverage.",
+      "note": "Headline, hero, byline, key-takeaways and body render but a video playlist widget leaks mid-body with Previous/Next controls and an unrelated video title.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:45:38.377-07:00",
-      "clipReviewedAt": "2026-09-17T13:45:38.377-07:00",
-      "castReviewedAt": "2026-09-17T13:45:38.377-07:00"
+      "reviewedAt": "2026-09-28T10:39:09.540-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.540-07:00",
+      "castReviewedAt": "2026-09-28T10:39:09.540-07:00"
+    },
+    "espn": {
+      "verdict": "clean",
+      "severity": 1,
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "clip stopped at the tracker heading (19% coverage), now full live-blog tracker with tweet cards and images renders",
+      "note": "Headline, byline, intro and full live-blog tracker with embedded signing/trade tweet cards now capture completely.",
+      "by": "ai",
+      "reviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.391-07:00"
     },
     "youtube-watch": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Poster with play overlay, title, round avatar, subscriber line, description and the 1.8B views/16 years ago row all render; the clip clips description text at the right edge and the cast reduces the stats row to a bare 1.8B.",
+      "note": "Poster with play overlay, title, avatar, description and views/age row render; cast reduces the stats row to a bare \"1.8B\" and clip clips description at right edge.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:46:42.831-07:00",
-      "clipReviewedAt": "2026-09-17T13:46:42.831-07:00",
-      "castReviewedAt": "2026-09-17T13:46:42.831-07:00"
+      "reviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "castReviewedAt": "2026-09-28T10:39:23.624-07:00"
     },
     "aws-blog": {
       "verdict": "clean",
@@ -930,95 +931,95 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "IMPROVED: section headings now render as proper bold instead of leaking an unclosed strong; hero, video play card, diagrams and bulleted announcements all correct, with a preferred-source link and an empty placeholder box remaining.",
+      "note": "Hero, video play card, diagrams and bulleted announcements all correct; the Polly audio-narration widget leaks as giant 'Voiced by Amazon Polly' text plus a preferred-source link.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:29:09.740-07:00",
+      "reviewedAt": "2026-09-28T10:41:00.380-07:00",
       "clipReviewedAt": "2026-09-18T17:29:09.740-07:00",
-      "castReviewedAt": "2026-09-18T17:29:09.740-07:00"
+      "castReviewedAt": "2026-09-28T10:41:00.380-07:00"
     },
     "aljazeera-tech": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Same site-wide defect as aljazeera: a Recommended Stories block of four unrelated links sits mid-article, plus a Listen/Save/Share row and an Add-on-Google strip; the article itself is complete.",
+      "note": "Full article and embedded tweet render cleanly; the Recommended Stories rail, Listen/Save/Share row and Add-on-Google strip seen in the prior run are gone.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:55:41.449-07:00",
-      "clipReviewedAt": "2026-09-17T13:55:41.449-07:00",
-      "castReviewedAt": "2026-09-17T13:55:41.449-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.289-07:00"
     },
     "newscientist": {
       "verdict": "clean",
-      "severity": 2,
+      "severity": 0,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Section, headline, dek, byline, date, captioned hero and body with Q-and-A section headings all render; a Read-more recirculation link sits mid-article and a bare Advertisement label remains.",
+      "note": "Full article with headline, byline, hero, inline images and body faithfully captured in both clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:50:39.980-07:00",
-      "clipReviewedAt": "2026-09-18T21:50:39.980-07:00",
-      "castReviewedAt": "2026-09-18T21:50:39.980-07:00"
+      "reviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "castReviewedAt": "2026-09-28T10:39:09.474-07:00"
     },
     "storygraph": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 1,
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Cover, author, page count, mood tags, description and review stats all capture, but the clip opens on action links before the book and the title renders as a small label rather than a heading.",
+      "note": "Book cover, metadata, mood stats, and community reviews captured identically to baseline; description text has a minor run-on glue.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:53:15.636-07:00",
-      "clipReviewedAt": "2026-09-18T21:53:15.636-07:00",
-      "castReviewedAt": "2026-09-18T21:53:15.636-07:00"
+      "reviewedAt": "2026-09-28T10:42:32.071-07:00",
+      "clipReviewedAt": "2026-09-28T10:42:32.071-07:00",
+      "castReviewedAt": "2026-09-28T10:42:32.071-07:00"
     },
     "mayoclinic": {
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Mayo Clinic logo still heroes as a wide blue card (og:image 600x315, invisible to the square-logo rule) and a cookie notice replaces the video; Overview and Symptoms sections are correct.",
+      "note": "Mayo Clinic logo still heroes as a wide blue card and a cookie notice replaces the video; Overview through Complications sections render fully.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:56:18.371-07:00",
-      "clipReviewedAt": "2026-09-17T12:56:18.371-07:00",
-      "castReviewedAt": "2026-09-17T12:56:18.371-07:00"
+      "reviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "castReviewedAt": "2026-09-28T10:34:17.049-07:00"
     },
     "time": {
       "verdict": "flaw",
       "severity": 3,
-      "where": "both",
+      "where": "cast",
       "regression": "none",
       "regressedFrom": "",
-      "note": "FIXED: the three Recommended Stories items now render as a real bulleted list instead of literal **bold** in code boxes, but that recirculation block still sits mid-article and bare Advertisement labels repeat throughout.",
+      "note": "Hero, headline and full body render cleanly in clip and cast, but bare Advertisement labels repeat throughout the cast between paragraphs.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:48:41.415-07:00",
-      "clipReviewedAt": "2026-09-17T13:48:41.415-07:00",
-      "castReviewedAt": "2026-09-17T13:48:41.415-07:00"
+      "reviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "castReviewedAt": "2026-09-28T10:39:51.775-07:00"
     },
     "instagram-reels": {
       "verdict": "clean",
-      "severity": 2,
+      "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Reel poster with play overlay, caption, hashtags and the two-column layout all render; only the small profile avatar is CORP-blocked, and the cast additionally keeps the engagement counts.",
+      "note": "Reel poster with play overlay, caption, hashtags and engagement counts all render correctly on both surfaces; avatar now displays instead of the previously CORP-blocked icon.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:05:31.353-07:00",
-      "clipReviewedAt": "2026-09-17T13:05:31.353-07:00",
-      "castReviewedAt": "2026-09-17T13:05:31.353-07:00"
+      "reviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "castReviewedAt": "2026-09-28T10:34:28.663-07:00"
     },
     "pubmed": {
       "verdict": "clean",
       "severity": 2,
       "where": "cast",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Citation, title, 24-author list, PMID/DOI, Abstract, Keywords, Figures and Comment-in all render; the cast heroes an NLM disclaimer banner the clip correctly omits.",
+      "note": "Citation, title, author list, PMID/DOI, Abstract, Keywords, Figures, Comment-in and references all render; cast heroes an NLM disclaimer banner the clip omits.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:53:51.726-07:00",
-      "castReviewedAt": "2026-09-17T12:53:51.726-07:00",
-      "clipReviewedAt": "2026-09-17T12:53:51.726-07:00"
+      "reviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "castReviewedAt": "2026-09-28T10:34:17.049-07:00"
     },
     "haaretz": {
       "verdict": "flaw",
@@ -1033,16 +1034,16 @@
       "castReviewedAt": "2026-09-28T05:41:04.376-07:00"
     },
     "playstore": {
-      "verdict": "clean",
-      "severity": 1,
+      "verdict": "flaw",
+      "severity": 3,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Screenshot, About-this-app heading and the full description with bullet lists correctly separated all render.",
+      "note": "App description, ratings and icon captured well, but a cross-sell 'Similar apps' rail is included as chrome and no screenshot carousel is captured.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:54:06.391-07:00",
-      "clipReviewedAt": "2026-09-18T21:54:06.391-07:00",
-      "castReviewedAt": "2026-09-18T21:54:06.391-07:00"
+      "reviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "castReviewedAt": "2026-09-28T10:39:09.474-07:00"
     },
     "simonwillison": {
       "verdict": "flaw",
@@ -1050,23 +1051,23 @@
       "where": "cast",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Cast shows the post truncated mid-sentence inside an embedded preview box then repeats a condensed copy, followed by Recent-articles, tag counts and a sponsor block.",
+      "note": "Cast still shows the post truncated inside an embedded preview box then repeats a condensed copy, followed by Recent-articles and a sponsor block.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:28:19.319-07:00",
-      "castReviewedAt": "2026-09-18T17:28:19.319-07:00",
-      "clipReviewedAt": "2026-09-18T17:28:19.319-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.170-07:00"
     },
     "css-tricks": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Hero, tags, headline, byline, prose with inline code and a correctly-indented JS block all render; an Ad line sits in the dek position directly under the byline.",
+      "note": "Hero, tags, headline, byline, prose with inline code and indented JS block render; an Ad line sits under the byline.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:32:43.914-07:00",
-      "clipReviewedAt": "2026-09-17T13:32:43.914-07:00",
-      "castReviewedAt": "2026-09-17T13:32:43.914-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.391-07:00"
     },
     "musicbrainz": {
       "verdict": "clean",
@@ -1074,11 +1075,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Artist name, type, the full Wikipedia biography with italics and the discography table with all columns render correctly.",
+      "note": "Artist name, type, the full Wikipedia biography and the discography table with all columns render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:53:32.560-07:00",
-      "clipReviewedAt": "2026-09-18T21:53:32.560-07:00",
-      "castReviewedAt": "2026-09-18T21:53:32.560-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.495-07:00"
     },
     "allrecipes": {
       "verdict": "flaw",
@@ -1086,11 +1087,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Recipe title, ratings, byline, times table, photos and body all render, but an NBC television advert occupies the hero slot above the food photos and Add Photo collapses into a one-character column.",
+      "note": "Recipe title, ratings, byline, times, photos and body render but an NBC TV ad occupies the hero slot above the food photos.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:55:37.555-07:00",
-      "clipReviewedAt": "2026-09-18T21:55:37.555-07:00",
-      "castReviewedAt": "2026-09-18T21:55:37.555-07:00"
+      "reviewedAt": "2026-09-28T10:33:44.921-07:00",
+      "clipReviewedAt": "2026-09-28T10:33:44.921-07:00",
+      "castReviewedAt": "2026-09-28T10:33:44.921-07:00"
     },
     "straitstimes": {
       "verdict": "flaw",
@@ -1098,35 +1099,35 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Hero, avatar byline, dates, AI summary bullets and full body render, but the capture starts at the hero with no headline and a Top-stories recirculation block begins at the tail.",
+      "note": "Hero, avatar byline, dates, AI summary bullets and full body render, but capture starts at the hero with no headline and a Top-stories recirculation block begins at the tail.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:49:05.234-07:00",
-      "clipReviewedAt": "2026-09-18T21:49:05.234-07:00",
-      "castReviewedAt": "2026-09-18T21:49:05.234-07:00"
+      "reviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "castReviewedAt": "2026-09-28T10:39:51.775-07:00"
     },
     "arstechnica": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Kicker, headline, dek, byline, credited hero, section headings and inline photos all render on both surfaces; an Ars Video promo card for an unrelated video sits mid-article.",
+      "note": "Kicker, headline, byline, credited hero and body render fully; an Ars Video promo card for an unrelated video sits mid-article.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:20:26.191-07:00",
-      "clipReviewedAt": "2026-09-17T13:20:26.191-07:00",
-      "castReviewedAt": "2026-09-17T13:20:26.191-07:00"
+      "reviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "castReviewedAt": "2026-09-28T10:34:40.100-07:00"
     },
     "imdb": {
       "verdict": "flaw",
       "severity": 3,
-      "where": "cast",
-      "regression": "unknown",
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Top Cast with headshots is present below a long trailer/clip rail; the cast reduces the rating block to a label-less run (9.3 10 3.2M 46) and runs together 7 Videos99+ Photos.",
+      "note": "Top Cast follows a long trailer/clip rail; the clip adds a second trailer frame under the still and the cast reduces the rating block to a label-less 9.3 · 10 · 3.2M · 47 run.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:14:27.361-07:00",
-      "castReviewedAt": "2026-09-17T12:14:27.361-07:00",
-      "clipReviewedAt": "2026-09-17T12:14:27.361-07:00"
+      "reviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "clipReviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "castReviewedAt": "2026-09-28T07:37:22.866-07:00"
     },
     "thenation": {
       "verdict": "flaw",
@@ -1134,71 +1135,71 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "OppArt cartoon, headline, dek and artist byline render correctly, but a five-paragraph donor-appeal letter signed by the publisher follows and dominates the short piece.",
+      "note": "OppArt cartoon, headline and byline render correctly, but a donor-appeal letter follows and dominates the short piece.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:47:28.803-07:00",
-      "clipReviewedAt": "2026-09-18T21:47:28.803-07:00",
+      "reviewedAt": "2026-09-28T10:38:39.595-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.595-07:00",
       "castReviewedAt": "2026-09-18T21:47:28.803-07:00"
     },
     "spiegel": {
       "verdict": "clean",
-      "severity": 2,
+      "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Author avatar, kicker, headline, byline, dek, date and credited hero all render through the SPIEGEL+ paywall with umlauts intact; the headline appears twice and a Google preferred-source strip leaks in.",
+      "note": "Headline, avatar byline, dek, date, hero with caption/credit and paywall gate all render cleanly; the Google-preferred-source strip and duplicate headline seen previously are gone.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:55:08.602-07:00",
-      "clipReviewedAt": "2026-09-17T13:55:08.602-07:00",
-      "castReviewedAt": "2026-09-17T13:55:08.602-07:00"
+      "reviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "castReviewedAt": "2026-09-28T10:39:51.775-07:00"
     },
     "tiktok-foryou": {
       "verdict": "flaw",
       "severity": 4,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Poster, author, hashtags and sound capture, but the player timecode 00:04 / 00:14 renders as the clip's largest heading and the cast reduces stats to a label-less run (191K 3059 21K 31.3K).",
+      "note": "Poster, author, hashtags and sound capture, but the player timecode renders as the clip's largest heading and the cast reduces stats to a label-less number run.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:10:49.903-07:00",
-      "clipReviewedAt": "2026-09-17T13:10:49.903-07:00",
-      "castReviewedAt": "2026-09-17T13:10:49.903-07:00"
+      "reviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "castReviewedAt": "2026-09-28T10:34:28.663-07:00"
     },
     "facebook-reels": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Avatar, author, caption, video poster with play overlay and engagement counts all render correctly in a clean card on both surfaces.",
+      "note": "Avatar, author, caption, video poster with play overlay and engagement counts render correctly on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:12:10.615-07:00",
-      "clipReviewedAt": "2026-09-17T13:12:10.615-07:00",
-      "castReviewedAt": "2026-09-17T13:12:10.615-07:00"
+      "reviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "castReviewedAt": "2026-09-28T10:34:28.663-07:00"
     },
     "globeandmail": {
       "verdict": "flaw",
       "severity": 5,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Paywall withholds the body (not a capture fault), but the clip then fills with a tickers table, newsletter promos, Globe Events and a SecureDrop banner instead of stopping.",
+      "note": "Registration wall withholds the body (faithful), but after headline and byline the capture is mostly promos: newsletter, reporter profile, Watchlist and SecureDrop pitches.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:36:14.836-07:00",
-      "clipReviewedAt": "2026-09-17T12:36:14.836-07:00",
-      "castReviewedAt": "2026-09-17T12:36:14.836-07:00"
+      "reviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "clipReviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "castReviewedAt": "2026-09-28T08:13:05.035-07:00"
     },
     "wired": {
-      "verdict": "flaw",
-      "severity": 4,
+      "verdict": "clean",
+      "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Paywalled stub captured faithfully, but a free-trial promo, empty Comments block, a five-item Kids These Days recirculation list and the inbox-signup block all trail it.",
+      "note": "Different open (non-paywalled) article than baseline; headline, byline, hero, captioned photos and full body render cleanly on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:21:49.968-07:00",
-      "clipReviewedAt": "2026-09-17T13:21:49.968-07:00",
-      "castReviewedAt": "2026-09-17T13:21:49.968-07:00"
+      "reviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "castReviewedAt": "2026-09-28T10:34:40.100-07:00"
     },
     "reason": {
       "verdict": "clean",
@@ -1206,11 +1207,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Category, headline, dek, byline, credited hero and full body with inline links all render; an Add-to-Google strip remains.",
+      "note": "Headline, byline, hero, embedded video screengrab and NY Post card, and full body all render; the prior Add-to-Google strip is now gone.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:47:08.317-07:00",
-      "clipReviewedAt": "2026-09-18T21:47:08.317-07:00",
-      "castReviewedAt": "2026-09-18T21:47:08.317-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.170-07:00"
     },
     "signalvnoise": {
       "verdict": "clean",
@@ -1238,27 +1239,27 @@
     },
     "ytmusic-album": {
       "verdict": "flaw",
-      "severity": 3,
+      "severity": 5,
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "FIXED from critical: every track now carries title, play count and duration on both surfaces instead of collapsing to bare counts; each field still stacks on its own line rather than one row per track.",
+      "note": "Album title, artist name, and cover art are missing from both surfaces; capture starts directly at the tracklist, identical to baseline.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:27:47.859-07:00",
-      "clipReviewedAt": "2026-09-18T17:27:47.859-07:00",
-      "castReviewedAt": "2026-09-18T17:27:47.859-07:00"
+      "reviewedAt": "2026-09-28T10:42:32.071-07:00",
+      "clipReviewedAt": "2026-09-28T10:42:32.071-07:00",
+      "castReviewedAt": "2026-09-28T10:42:32.071-07:00"
     },
     "facebook-home": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Feed narrows correctly to one post: round avatar, author, full caption, photo and engagement counts all render inside a clean card on both surfaces.",
+      "note": "Feed narrows to one post with round avatar, author, full caption, photo and engagement counts rendering cleanly on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:09:31.722-07:00",
-      "clipReviewedAt": "2026-09-17T13:09:31.722-07:00",
-      "castReviewedAt": "2026-09-17T13:09:31.722-07:00"
+      "reviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "castReviewedAt": "2026-09-28T10:34:28.663-07:00"
     },
     "huffpost": {
       "verdict": "flaw",
@@ -1268,8 +1269,8 @@
       "regressedFrom": "",
       "note": "Article body renders correctly but a large membership-solicitation block follows it with an editor portrait and three pricing tiers with feature checklists.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:46:33.710-07:00",
-      "clipReviewedAt": "2026-09-18T21:46:33.710-07:00",
+      "reviewedAt": "2026-09-28T10:39:09.540-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.540-07:00",
       "castReviewedAt": "2026-09-18T21:46:33.710-07:00"
     },
     "weather-gov": {
@@ -1278,22 +1279,22 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Station name, coordinates, current conditions, the full observations table and extended forecast with icons all render; NOAA branding leads the clip and Lat/Lon labels run together with their values.",
+      "note": "Station info, current conditions, observations table and 7-day extended forecast with icons all render; Lat/Lon labels still run together with their values.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:55:14.510-07:00",
-      "clipReviewedAt": "2026-09-18T21:55:14.510-07:00",
-      "castReviewedAt": "2026-09-18T21:55:14.510-07:00"
+      "reviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "castReviewedAt": "2026-09-28T10:39:23.624-07:00"
     },
     "bbc-news": {
       "verdict": "clean",
       "severity": 0,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, date, byline, credited hero, standfirst, quotes, section heading and inline links including x.com all render correctly on both surfaces.",
+      "note": "Different HSBC-outage article than baseline; headline, byline, date, hero, quotes, section headings and related-story links all render cleanly.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:23:10.276-07:00",
-      "clipReviewedAt": "2026-09-17T13:23:10.276-07:00",
+      "reviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:40.100-07:00",
       "castReviewedAt": "2026-09-17T13:23:10.276-07:00"
     },
     "seattletimes": {
@@ -1302,23 +1303,23 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, byline, hero and every event with heading, date, venue, pricing and pro-tip all render; emoji icons remain as standalone glyphs where field labels were.",
+      "note": "Headline, dek, byline, hero and every event with heading, date, venue, pricing and pro-tip all render; emoji icons remain as standalone glyphs where labels were.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:47:50.899-07:00",
-      "clipReviewedAt": "2026-09-18T21:47:50.899-07:00",
-      "castReviewedAt": "2026-09-18T21:47:50.899-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.170-07:00"
     },
     "9to5mac": {
       "verdict": "clean",
-      "severity": 2,
+      "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Tags, headline, date, comment count, hero, section headings, numbered list and captioned images all render; the byline author name is crushed into a three-line one-word-per-line column beside the avatar.",
+      "note": "Headline, byline, date, comments, hero, section headings, numbered list and captions all render; the byline is now on one line, no longer crushed into a vertical column.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T14:02:22.445-07:00",
-      "clipReviewedAt": "2026-09-17T14:02:22.445-07:00",
-      "castReviewedAt": "2026-09-17T14:02:22.445-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.289-07:00"
     },
     "jvns": {
       "verdict": "clean",
@@ -1326,11 +1327,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Title, date, prose, linked section headings, bulleted lists and Python code blocks with full indentation and blank lines all render correctly.",
+      "note": "Full essay prose with headings, bulleted lists, blockquote and Python/HTML code blocks with correct indentation renders perfectly on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:56:09.168-07:00",
-      "clipReviewedAt": "2026-09-18T21:56:09.168-07:00",
-      "castReviewedAt": "2026-09-18T21:56:09.168-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.071-07:00"
     },
     "postguam": {
       "verdict": "clean",
@@ -1338,95 +1339,95 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, byline, dates, captioned images with credits and full body all render; a stray X share glyph and image expand icons remain.",
+      "note": "Headline, byline, dates, captioned images with credits and full body all render; a stray X share glyph and image-expand icons remain.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:48:06.363-07:00",
-      "clipReviewedAt": "2026-09-18T21:48:06.363-07:00",
-      "castReviewedAt": "2026-09-18T21:48:06.363-07:00"
+      "reviewedAt": "2026-09-28T14:53:50.753-07:00",
+      "clipReviewedAt": "2026-09-28T14:53:50.753-07:00",
+      "castReviewedAt": "2026-09-28T14:53:50.753-07:00"
     },
     "nature": {
       "verdict": "flaw",
       "severity": 5,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Paywall leaves a one-sentence body, after which a full Nature Careers jobs board with five listings, employer logos and locations fills roughly half the capture.",
+      "note": "Paywall leaves a one-sentence body, then a full Nature Careers jobs board with five listings and employer logos fills roughly half the capture.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:27:03.844-07:00",
-      "clipReviewedAt": "2026-09-17T13:27:03.844-07:00",
-      "castReviewedAt": "2026-09-17T13:27:03.844-07:00"
+      "reviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "castReviewedAt": "2026-09-28T10:34:40.100-07:00"
     },
     "kotaku": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline with italics, dek, byline, credited hero, prose links inline and the YouTube poster card all render correctly; Comments () shows an empty count and a stray X sits under the byline.",
+      "note": "Headline, byline, credited hero and body with inline links render correctly; Comments () shows an empty count and a stray X sits under the byline as before.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T14:02:39.499-07:00",
-      "clipReviewedAt": "2026-09-17T14:02:39.499-07:00",
-      "castReviewedAt": "2026-09-17T14:02:39.499-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.071-07:00"
     },
     "lobsters": {
       "verdict": "flaw",
       "severity": 3,
       "where": "cast",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cast still leaks merged-story metadata, archive links and a stray Preview item as list chrome above the comments; the nested thread with scores, quotes and inline code renders correctly.",
+      "note": "Cast still leaks merged-story metadata, archive links and a stray Preview item as list chrome above the comment thread.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:39:49.363-07:00",
-      "castReviewedAt": "2026-09-17T13:39:49.363-07:00",
-      "clipReviewedAt": "2026-09-17T13:39:49.363-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.495-07:00"
     },
     "theatlantic": {
-      "verdict": "clean",
-      "severity": 1,
-      "where": "both",
-      "regression": "unknown",
-      "regressedFrom": "",
-      "note": "Section, headline, dek, byline, credited hero and the free body all render, stopping cleanly at the paywall with the subscribe block and author bio; only a Discuss glyph row leaks.",
+      "verdict": "flaw",
+      "severity": 4,
+      "where": "clip",
+      "regression": "regressed",
+      "regressedFrom": "was a clean paywall gate (Subscribe/Start Free Trial block), now a Cloudflare 403 access-blocked graphic is captured mid-article in the clip",
+      "note": "Clip now embeds a Cloudflare '403 Your access has been blocked' error block into the article body where the clean paywall gate used to render; cast is unaffected and clean.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:42:44.282-07:00",
-      "clipReviewedAt": "2026-09-17T13:42:44.282-07:00",
-      "castReviewedAt": "2026-09-17T13:42:44.282-07:00"
+      "reviewedAt": "2026-09-28T16:46:08.589-07:00",
+      "clipReviewedAt": "2026-09-28T16:46:08.589-07:00",
+      "castReviewedAt": "2026-09-28T16:46:08.589-07:00"
     },
     "pcmag": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline recovered above the body with prose, images and captions correct; a dangling You May Also Like heading with the PCMag logo sits mid-article.",
+      "note": "Headline, prose, images and video-thumbnail correct; a dangling You May Also Like heading with PCMag logo sits mid-article.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T14:00:51.657-07:00",
-      "clipReviewedAt": "2026-09-17T14:00:51.657-07:00",
+      "reviewedAt": "2026-09-28T10:38:39.595-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.595-07:00",
       "castReviewedAt": "2026-09-17T14:00:51.657-07:00"
     },
     "theregister": {
-      "verdict": "flaw",
-      "severity": 3,
+      "verdict": "clean",
+      "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Hero, headline, dek, byline and prose with inline links all render, but a MORE CONTEXT block of four unrelated headlines sits mid-article between paragraphs.",
+      "note": "Hero, headline, dek, byline and full prose with inline links and headings render cleanly; the mid-article MORE CONTEXT recirculation block is no longer present.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T14:04:34.815-07:00",
-      "clipReviewedAt": "2026-09-17T14:04:34.815-07:00",
-      "castReviewedAt": "2026-09-17T14:04:34.815-07:00"
+      "reviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "castReviewedAt": "2026-09-28T10:39:51.775-07:00"
     },
     "amazon-product": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cover, samples, title, author/format, rating, best-seller badge, description and product-details list all render; a Books-with-Buzz promo and Frequently-bought-together trail, and no price appears.",
+      "note": "Cover, samples, title, rating, best-seller badge, description and product-details all render; a Frequently-bought-together promo trail rides along and no price shows.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:47:12.321-07:00",
-      "clipReviewedAt": "2026-09-17T13:47:12.321-07:00",
-      "castReviewedAt": "2026-09-17T13:47:12.321-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.289-07:00"
     },
     "lastfm": {
       "verdict": "flaw",
@@ -1434,47 +1435,47 @@
       "where": "clip",
       "regression": "none",
       "regressedFrom": "",
-      "note": "All content is present but the clip renders it on a dark green block with dark text that is near-illegible, and the Similar To heading is crushed beside a collapsed element.",
+      "note": "Hero/title/stats sit on a dark-green block with near-illegible dark text; Similar To heading crushed beside a collapsed element.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:29:44.436-07:00",
-      "clipReviewedAt": "2026-09-18T17:29:44.436-07:00",
-      "castReviewedAt": "2026-09-18T17:29:44.436-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.495-07:00"
     },
     "offguardian": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Date, comment count, headline, byline and the full body with italics, blockquotes and inline links all render correctly.",
+      "note": "Long essay with hero banner and full body captured faithfully; low textCoverage score is a false positive for this long article.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:48:06.363-07:00",
-      "clipReviewedAt": "2026-09-18T21:48:06.363-07:00",
-      "castReviewedAt": "2026-09-18T21:48:06.363-07:00"
+      "reviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "castReviewedAt": "2026-09-28T10:39:09.474-07:00"
     },
     "openlibrary": {
-      "verdict": "clean",
-      "severity": 2,
+      "verdict": "flaw",
+      "severity": 3,
       "where": "both",
-      "regression": "none",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Cover, title, author, ratings, description, publication metadata, subjects and people all render, but the capture opens on borrow and buy action links before reaching the book title.",
+      "note": "Book detail page captured well, but unresolved 'Loading Lists'/'Loading carousel' skeleton text leaks into both clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:53:48.030-07:00",
-      "clipReviewedAt": "2026-09-18T21:53:48.030-07:00",
-      "castReviewedAt": "2026-09-18T21:53:48.030-07:00"
+      "reviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "castReviewedAt": "2026-09-28T10:39:09.474-07:00"
     },
     "techcrunch": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, full prose with inline links and Topics render on both surfaces with no grey-pill link cards; no byline or date, and a Build Mode video promo caption runs into the next paragraph on the clip.",
+      "note": "Headline and full prose with inline links render cleanly on both surfaces; a video-promo caption runs into the next paragraph on the clip.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:20:55.472-07:00",
-      "clipReviewedAt": "2026-09-17T13:20:55.472-07:00",
-      "castReviewedAt": "2026-09-17T13:20:55.472-07:00"
+      "reviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "castReviewedAt": "2026-09-28T10:34:40.100-07:00"
     },
     "theintercept": {
       "verdict": "clean",
@@ -1482,22 +1483,22 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, avatar byline, hero with caption and credit, and full body with pull quote and inline links all render correctly.",
+      "note": "Headline, avatar byline, hero with caption/credit, full body with quotes and inline links, and author signoff all render correctly in both clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:47:08.317-07:00",
-      "clipReviewedAt": "2026-09-18T21:47:08.317-07:00",
-      "castReviewedAt": "2026-09-18T21:47:08.317-07:00"
+      "reviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "castReviewedAt": "2026-09-28T10:39:51.775-07:00"
     },
     "venturebeat": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
       "note": "Headline, byline, date, hero with credit, body with inline links, section headings and quotes all render correctly with no chrome.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T14:04:56.737-07:00",
-      "clipReviewedAt": "2026-09-17T14:04:56.737-07:00",
+      "reviewedAt": "2026-09-28T10:38:39.595-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.595-07:00",
       "castReviewedAt": "2026-09-17T14:04:56.737-07:00"
     },
     "asahi": {
@@ -1506,10 +1507,10 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Japanese headline, byline, captioned hero and body all render before the paywall, but a four-item thumbnail rail sits between hero and body with each thumbnail alone on its own row.",
+      "note": "Headline, byline, captioned hero and body render before the paywall, but a four-item thumbnail rail sits between hero and body with each thumbnail alone on its own row.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:48:23.727-07:00",
-      "clipReviewedAt": "2026-09-18T21:48:23.727-07:00",
+      "reviewedAt": "2026-09-28T10:39:09.540-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.540-07:00",
       "castReviewedAt": "2026-09-18T21:48:23.727-07:00"
     },
     "bbc-sport": {
@@ -1518,11 +1519,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, credited hero, dates, intro and every club's fixture list with dates, scores, linked teams and venues all render correctly.",
+      "note": "Headline, credited hero, intro and every club's full fixture list with dates, scores, linked teams and venues render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:49:37.251-07:00",
-      "clipReviewedAt": "2026-09-18T21:49:37.251-07:00",
-      "castReviewedAt": "2026-09-18T21:49:37.251-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.289-07:00"
     },
     "bleacherreport": {
       "verdict": "clean",
@@ -1530,59 +1531,59 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Credited hero, headline, avatar byline, date, body with links and quotes and an embedded video still with caption all render correctly.",
+      "note": "Hero, headline, avatar byline, date, body with embedded photo/video and caption all render; a Trending-on-B/R rail trails the story.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:49:53.858-07:00",
-      "clipReviewedAt": "2026-09-18T21:49:53.858-07:00",
-      "castReviewedAt": "2026-09-18T21:49:53.858-07:00"
+      "reviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "castReviewedAt": "2026-09-28T10:38:38.965-07:00"
     },
     "economist": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
       "note": "Faithful paywall capture with kicker, headline, dek, credited hero, date and the one free paragraph; 'wasthe attacker' runs together on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:09:49.941-07:00",
-      "clipReviewedAt": "2026-09-17T12:09:49.941-07:00",
-      "castReviewedAt": "2026-09-17T12:09:49.941-07:00"
+      "reviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "clipReviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "castReviewedAt": "2026-09-28T07:37:22.866-07:00"
     },
     "ghost-blog": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Breadcrumb, headline, dek, bulleted list, captioned screenshot, bookmark card with thumbnail and embedded video with play overlay all render correctly on both surfaces.",
+      "note": "Breadcrumb, headline, bulleted list, screenshots, bookmark card and embedded video play card all render correctly on clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:38:04.460-07:00",
-      "clipReviewedAt": "2026-09-17T13:38:04.460-07:00",
-      "castReviewedAt": "2026-09-17T13:38:04.460-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.071-07:00"
     },
     "nbcnews": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
-      "regressedFrom": "",
-      "note": "Headline, dek, credited hero, byline and every roundup section with headings and images render correctly; a TTS speed-control row, two Add-to-Google strips and a duplicated video still remain.",
-      "by": "ai",
-      "reviewedAt": "2026-09-17T13:26:08.869-07:00",
-      "clipReviewedAt": "2026-09-17T13:26:08.869-07:00",
-      "castReviewedAt": "2026-09-17T13:26:08.869-07:00"
-    },
-    "nypost": {
-      "verdict": "clean",
-      "severity": 1,
-      "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Section, exclusive tag, headline, byline, date, hero with caption and credit and full body all render; an Add-on-Google strip remains.",
+      "note": "Headline, dek, hero, byline and every roundup section with headings/images render correctly on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:46:49.291-07:00",
-      "clipReviewedAt": "2026-09-18T21:46:49.291-07:00",
-      "castReviewedAt": "2026-09-18T21:46:49.291-07:00"
+      "reviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "castReviewedAt": "2026-09-28T10:34:40.100-07:00"
+    },
+    "nypost": {
+      "verdict": "flaw",
+      "severity": 3,
+      "where": "cast",
+      "regression": "unknown",
+      "regressedFrom": "",
+      "note": "Article body and images fully captured; cast tail leaves a stray AdChoices link as trailing chrome.",
+      "by": "ai",
+      "reviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "castReviewedAt": "2026-09-28T10:39:09.474-07:00"
     },
     "superuser": {
       "verdict": "flaw",
@@ -1590,23 +1591,23 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "A Join Super User signup heading replaces the question title on both surfaces; the question, every answer, comments and code blocks render with no collapsed columns.",
+      "note": "A Join Super User signup heading replaces the question title; question, every answer, comments and code blocks render intact.",
       "by": "ai",
-      "reviewedAt": "2026-09-28T05:41:04.376-07:00",
-      "clipReviewedAt": "2026-09-28T05:41:04.376-07:00",
+      "reviewedAt": "2026-09-28T10:38:39.595-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.595-07:00",
       "castReviewedAt": "2026-09-28T05:41:04.376-07:00"
     },
     "tiktok-profile": {
       "verdict": "flaw",
       "severity": 5,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Profile header, verified badge, stats, bio and playlists render, but TikTok's own 'Something went wrong' error replaced the video grid and the clip leaves ~1300px blank where it sat.",
+      "note": "Profile header, verified badge, stats, bio and playlists render, but TikTok's own 'Something went wrong' error replaced the video grid, leaving a large blank gap in the clip.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:14:14.358-07:00",
-      "clipReviewedAt": "2026-09-17T13:14:14.358-07:00",
-      "castReviewedAt": "2026-09-17T13:14:14.358-07:00"
+      "reviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "castReviewedAt": "2026-09-28T10:34:28.663-07:00"
     },
     "tmdb": {
       "verdict": "flaw",
@@ -1614,11 +1615,11 @@
       "where": "cast",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Cast still loses the User Score value (label with three empty bullets), the vibe emojis and the Play Trailer link; overview, credits and Top Billed Cast render.",
+      "note": "Cast loses the User Score value (three empty bullets replace vibe emojis) and Play Trailer collapses to plain text; overview/cast/credits render fine.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T14:07:20.901-07:00",
-      "castReviewedAt": "2026-09-17T14:07:20.901-07:00",
-      "clipReviewedAt": "2026-09-17T14:07:20.901-07:00"
+      "reviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "castReviewedAt": "2026-09-28T10:39:23.624-07:00"
     },
     "aljazeera-ar": {
       "verdict": "flaw",
@@ -1626,11 +1627,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Arabic RTL headline, captioned hero, byline, dates and liveblog entries all render, but three byline avatars stack one per row including a blank placeholder and sentence-final punctuation lands at line-start.",
+      "note": "Arabic RTL headline, hero, byline, liveblog entries all render, but byline avatars stack one per row and the cast literally prints icon class names like share-nodes/live-blue as text.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:49:22.675-07:00",
-      "clipReviewedAt": "2026-09-18T21:49:22.675-07:00",
-      "castReviewedAt": "2026-09-18T21:49:22.675-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.289-07:00"
     },
     "scientificamerican": {
       "verdict": "clean",
@@ -1638,71 +1639,71 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Date, read-time, headline, dek, byline, credited hero and body with section headings and italic math notation all render correctly.",
+      "note": "Date, read-time, headline, dek, byline, credited hero and body with headings, math notation and diagrams all render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:50:23.694-07:00",
-      "clipReviewedAt": "2026-09-18T21:50:23.694-07:00",
+      "reviewedAt": "2026-09-28T10:38:39.595-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.595-07:00",
       "castReviewedAt": "2026-09-18T21:50:23.694-07:00"
     },
     "deepmind-blog": {
       "verdict": "flaw",
       "severity": 5,
-      "where": "both",
+      "where": "cast",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Each inline video becomes a blank grey-and-black placeholder pair with its caption repeated, plus tall blank gaps above small Video link cards in the clip; the prose is complete.",
+      "note": "Clip renders inline video thumbnails cleanly, but each cast video becomes a blank grey/black placeholder pair with repeated captions.",
       "by": "ai",
-      "reviewedAt": "2026-09-28T05:41:04.376-07:00",
-      "clipReviewedAt": "2026-09-28T05:41:04.376-07:00",
-      "castReviewedAt": "2026-09-28T05:41:04.376-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.391-07:00"
     },
     "dev-to": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
-      "regressedFrom": "",
-      "note": "Cover, byline, title, tags, body, images and the embedded prior-post card all render; a bare stat run (57 16 14 18 13) sits under the byline and the embedded card runs 157 reactionsComments together.",
-      "by": "ai",
-      "reviewedAt": "2026-09-17T13:38:52.839-07:00",
-      "clipReviewedAt": "2026-09-17T13:38:52.839-07:00",
-      "castReviewedAt": "2026-09-17T13:38:52.839-07:00"
-    },
-    "reddit-thread": {
-      "verdict": "clean",
-      "severity": 2,
-      "where": "both",
-      "regression": "unknown",
-      "regressedFrom": "",
-      "note": "Subreddit header, title, removed-post notice, Comments Section and threaded comments with code and blockquotes all render; cast loses vote arrows and avatars and leaves dot-separator residue in bylines.",
-      "by": "ai",
-      "reviewedAt": "2026-09-17T12:16:27.318-07:00",
-      "clipReviewedAt": "2026-09-17T12:16:27.318-07:00",
-      "castReviewedAt": "2026-09-17T12:16:27.318-07:00"
-    },
-    "bandcamp": {
-      "verdict": "clean",
-      "severity": 2,
-      "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Banner, album title, artist, cover, supporter reviews, purchase options and the full track table with numbers, titles and durations all render; a dense supporter avatar grid rides along.",
+      "note": "Cover, byline, title, tags, body, images and embedded prior-post card render; a bare stat run and run-together reactions/comments text ride along.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:53:32.560-07:00",
-      "clipReviewedAt": "2026-09-18T21:53:32.560-07:00",
-      "castReviewedAt": "2026-09-18T21:53:32.560-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.391-07:00"
+    },
+    "reddit-thread": {
+      "verdict": "flaw",
+      "severity": 3,
+      "where": "both",
+      "regression": "unknown",
+      "regressedFrom": "",
+      "note": "Title, video play card and full comment thread render; a player strip (0:16 / 1:07 720p…144p Auto) leaks on both surfaces and cast bylines carry · • · residue.",
+      "by": "ai",
+      "reviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "clipReviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "castReviewedAt": "2026-09-28T07:37:22.866-07:00"
+    },
+    "bandcamp": {
+      "verdict": "flaw",
+      "severity": 4,
+      "where": "clip",
+      "regression": "unknown",
+      "regressedFrom": "",
+      "note": "Album, tracklist and credits all render, but a related-album recommendation title collapses into a one-letter-per-line vertical column in the clip.",
+      "by": "ai",
+      "reviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.289-07:00"
     },
     "britannica": {
       "verdict": "flaw",
       "severity": 3,
-      "where": "cast",
-      "regression": "unknown",
-      "regressedFrom": "baseline had a rendered cast image reviewed clean on both surfaces",
-      "note": "Clip is complete (portrait, title, contributors, Top Questions, News, full biography); the cast render timed out at 90s on a 13k-char page, immediately after github-pr's timeout, so likely transient.",
+      "where": "both",
+      "regression": "none",
+      "regressedFrom": "",
+      "note": "Portrait, title, Top Questions, News and full biography render; a Today-in-History newsletter signup sits mid-body and the cast prints the vice versa link as raw markdown.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:44:36.522-07:00",
-      "castReviewedAt": "2026-09-17T12:44:36.522-07:00",
-      "clipReviewedAt": "2026-09-17T12:44:36.522-07:00"
+      "reviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "clipReviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "castReviewedAt": "2026-09-28T08:13:05.035-07:00"
     },
     "chosun": {
       "verdict": "flaw",
@@ -1710,35 +1711,35 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Korean headline, byline, captioned hero and full body render correctly, but a related-articles block with three teasers, images and excerpts follows the story.",
+      "note": "Korean headline, byline, captioned hero and full body render correctly, but a related-articles block with several teasers and images trails the story.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:48:40.009-07:00",
-      "clipReviewedAt": "2026-09-18T21:48:40.009-07:00",
-      "castReviewedAt": "2026-09-18T21:48:40.009-07:00"
+      "reviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "castReviewedAt": "2026-09-28T10:38:38.965-07:00"
     },
     "github-blog": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
       "note": "Breadcrumb, headline, dek, hero, byline with dates and read-time, and full body with linked section headings all render; a stray bulleted Share: item remains under the byline.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:31:55.002-07:00",
-      "clipReviewedAt": "2026-09-17T13:31:55.002-07:00",
+      "reviewedAt": "2026-09-28T10:39:09.540-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.540-07:00",
       "castReviewedAt": "2026-09-17T13:31:55.002-07:00"
     },
     "investopedia": {
-      "verdict": "clean",
-      "severity": 2,
+      "verdict": "flaw",
+      "severity": 3,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Title, dek, byline, Definition, Key Takeaways, headings and captioned illustration all render; the Q&A link cluster still doubles and a Volvo video ad occupies the hero slot.",
+      "note": "Title, byline, Key Takeaways, charts and body render; formula exponents flatten to (1 + i)n, a Volvo video ad fills the hero slot and Open a New Account residue stays.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:50:53.407-07:00",
-      "clipReviewedAt": "2026-09-17T12:50:53.407-07:00",
-      "castReviewedAt": "2026-09-17T12:50:53.407-07:00"
+      "reviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "clipReviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "castReviewedAt": "2026-09-28T08:13:05.035-07:00"
     },
     "newegg": {
       "verdict": "flaw",
@@ -1746,35 +1747,35 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Title and the full spec/marketing sections render, but the product photo gallery and price column are absent.",
+      "note": "Title runs on into spec text as one heading, and the spec table is clipped at the right edge; product photo gallery and price column remain absent as in the clip.",
       "by": "ai",
-      "reviewedAt": "2026-09-28T06:41:51.530-07:00",
+      "reviewedAt": "2026-09-28T10:41:00.380-07:00",
       "clipReviewedAt": "2026-09-28T06:41:51.530-07:00",
-      "castReviewedAt": "2026-09-28T06:41:51.530-07:00"
+      "castReviewedAt": "2026-09-28T10:41:00.380-07:00"
     },
     "newsweek": {
       "verdict": "clean",
-      "severity": 2,
+      "severity": 1,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Headline, avatar byline, full body with section headings and links all render; a video transport row (0:09 / 0:52), a Prefer-on-Google strip with an orphaned trailing sentence and a Trust Project badge leak in.",
+      "note": "Full article with hero video thumbnail, byline, body, data table and images captured cleanly in both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:50:17.166-07:00",
-      "clipReviewedAt": "2026-09-17T13:50:17.166-07:00",
-      "castReviewedAt": "2026-09-17T13:50:17.166-07:00"
+      "reviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "castReviewedAt": "2026-09-28T10:39:09.474-07:00"
     },
     "theguardian": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Hero with caption and credit, headline, standfirst, body and captioned images all render with links inline; a Support the Guardian donation heading sits above the hero as the clip's first element.",
+      "note": "Hero with caption/credit, headline, standfirst, body and captioned images all render; a Support the Guardian donation heading sits above the hero.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:22:38.851-07:00",
-      "clipReviewedAt": "2026-09-17T13:22:38.851-07:00",
-      "castReviewedAt": "2026-09-17T13:22:38.851-07:00"
+      "reviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "castReviewedAt": "2026-09-28T10:34:40.100-07:00"
     },
     "apnews": {
       "verdict": "flaw",
@@ -1782,11 +1783,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "IMPROVED: the headline now renders on both surfaces and the Viafoura comment thread, video rail and photo carousel all stay absent; a newsletter signup block still interrupts the body mid-article.",
+      "note": "Headline, byline, hero image and body render on both surfaces; a newsletter signup block still interrupts the article body.",
       "by": "ai",
-      "reviewedAt": "2026-09-19T09:02:49.223-07:00",
-      "clipReviewedAt": "2026-09-19T09:02:49.223-07:00",
-      "castReviewedAt": "2026-09-19T09:02:49.223-07:00"
+      "reviewedAt": "2026-09-28T14:53:50.753-07:00",
+      "clipReviewedAt": "2026-09-28T14:53:50.753-07:00",
+      "castReviewedAt": "2026-09-28T14:53:50.753-07:00"
     },
     "cloudflare-blog": {
       "verdict": "clean",
@@ -1794,11 +1795,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Tags, date, headline, avatar byline, read-time, translation links, hero chart and full body with section headings and data links all render correctly.",
+      "note": "Tags, date, headline, avatar byline, read-time, translation links, hero chart, full body with headings/links and an embedded video card all render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:55:52.810-07:00",
-      "clipReviewedAt": "2026-09-18T21:55:52.810-07:00",
-      "castReviewedAt": "2026-09-18T21:55:52.810-07:00"
+      "reviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "castReviewedAt": "2026-09-28T10:38:38.965-07:00"
     },
     "coindesk": {
       "verdict": "clean",
@@ -1806,23 +1807,23 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Section, headline, dek, byline, read-time, credited hero, summary box and full body all render; a fragmented Make-preferred-on chrome strip remains.",
+      "note": "Section, headline, dek, byline, hero, summary box and full body render; a fragmented Make-preferred-on chrome strip remains.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:50:09.454-07:00",
-      "clipReviewedAt": "2026-09-18T21:50:09.454-07:00",
-      "castReviewedAt": "2026-09-18T21:50:09.454-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.391-07:00"
     },
     "sciencedaily": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Kicker, headline, dek, Date/Source/Summary meta block, credited hero and full body with section headings all render; the clip runs Share: and FULL STORY into the summary paragraph.",
+      "note": "Kicker, headline, meta block, credited hero and full body render; the clip still runs Share: and FULL STORY into the summary paragraph.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:27:15.098-07:00",
-      "clipReviewedAt": "2026-09-17T13:27:15.098-07:00",
-      "castReviewedAt": "2026-09-17T13:27:15.098-07:00"
+      "reviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:40.100-07:00",
+      "castReviewedAt": "2026-09-28T10:34:40.100-07:00"
     },
     "smashingmagazine": {
       "verdict": "clean",
@@ -1830,11 +1831,11 @@
       "where": "cast",
       "regression": "none",
       "regressedFrom": "",
-      "note": "FIXED: the three workshop cards that leaked as literal markdown in code boxes now render as real images with bulleted session lists; literal *sometimes* asterisks and heading # anchors remain.",
+      "note": "Workshop cards render as real images with bulleted session lists in both clip and cast, matching the previously fixed baseline.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:33:58.388-07:00",
-      "castReviewedAt": "2026-09-17T13:33:58.388-07:00",
-      "clipReviewedAt": "2026-09-17T13:33:58.388-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.170-07:00"
     },
     "anthropic-news": {
       "verdict": "clean",
@@ -1842,11 +1843,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Kicker, headline, date, hero, prose, the highlighted benchmark table, both charts and the video play card all render correctly on clip and cast.",
+      "note": "Kicker, headline, hero, prose, the benchmark table, all charts and the video play card render correctly on clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:04:01.816-07:00",
-      "clipReviewedAt": "2026-09-17T12:04:01.816-07:00",
-      "castReviewedAt": "2026-09-17T12:04:01.816-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.289-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.289-07:00"
     },
     "aws-docs": {
       "verdict": "clean",
@@ -1866,11 +1867,11 @@
       "where": "clip",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Hero, title, seller, price, item specifics and seller description render; the shipping block leaves a large blank gap beside a squeezed delivery column.",
+      "note": "Hero, title, seller, price and item specifics render; shipping/delivery block leaves a large blank gap beside a squeezed column.",
       "by": "ai",
-      "reviewedAt": "2026-09-28T06:41:51.530-07:00",
-      "clipReviewedAt": "2026-09-28T06:41:51.530-07:00",
-      "castReviewedAt": "2026-09-28T06:41:51.530-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.391-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.391-07:00"
     },
     "genius": {
       "verdict": "flaw",
@@ -1878,11 +1879,11 @@
       "where": "cast",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Cast leaks literal markdown in the contributors line (## heading and > blockquote markers as text), shows a broken Video image and an unrelated artist photo gallery; lyrics and credits render below.",
+      "note": "Cast leaks literal markdown (## and > markers as text) and shows a broken Video image; clip and lyrics/credits render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:29:44.436-07:00",
-      "castReviewedAt": "2026-09-18T17:29:44.436-07:00",
-      "clipReviewedAt": "2026-09-18T17:29:44.436-07:00"
+      "reviewedAt": "2026-09-28T10:33:44.921-07:00",
+      "clipReviewedAt": "2026-09-28T10:33:44.921-07:00",
+      "castReviewedAt": "2026-09-28T10:33:44.921-07:00"
     },
     "huggingface": {
       "verdict": "clean",
@@ -1890,11 +1891,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Model name, stats, task tags, library badges, license line, access gate and the full LLAMA licence agreement with nested lists all render correctly.",
+      "note": "Model card header, tags, license gate and the full LLAMA license and acceptable-use policy render correctly on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:55:37.555-07:00",
-      "clipReviewedAt": "2026-09-18T21:55:37.555-07:00",
-      "castReviewedAt": "2026-09-18T21:55:37.555-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.071-07:00"
     },
     "longreads": {
       "verdict": "clean",
@@ -1902,11 +1903,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Intro with links, book cover, buy links and the full Q-and-A interview with question headings, answers and italics all render correctly.",
+      "note": "Intro with links, book cover, buy links and the full Q-and-A interview with question headings render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:50:39.980-07:00",
-      "clipReviewedAt": "2026-09-18T21:50:39.980-07:00",
-      "castReviewedAt": "2026-09-18T21:50:39.980-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.495-07:00"
     },
     "motherjones": {
       "verdict": "flaw",
@@ -1924,61 +1925,61 @@
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Kicker, headline, dek, hero with caption and credit, full body prose and captioned gallery images all render correctly; a comment-glyph row sits under the dek and no byline appears.",
+      "note": "Headline, dek, hero with credit, full body prose and captioned gallery images all render correctly; no byline shown, same as before.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:41:36.822-07:00",
-      "clipReviewedAt": "2026-09-17T13:41:36.822-07:00",
-      "castReviewedAt": "2026-09-17T13:41:36.822-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.170-07:00"
     },
     "rottentomatoes": {
       "verdict": "flaw",
       "severity": 4,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Poster, scores, synopsis, Critics Consensus and full critics reviews all capture, but the film title never renders as a heading and a stray 'Content collapsed.' line shows under the synopsis.",
+      "note": "Poster, scores, synopsis, Critics Consensus, cast, and reviews all capture, but the film title never renders as a heading and a stray 'Content collapsed.' line persists.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T14:05:19.663-07:00",
-      "clipReviewedAt": "2026-09-17T14:05:19.663-07:00",
-      "castReviewedAt": "2026-09-17T14:05:19.663-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.170-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.170-07:00"
     },
     "tripadvisor": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Breadcrumb, title, rating, review count, ranking, hero photo, About and Recommended-experiences cards all render; the cast keeps the 'N of 5 bubbles' text the clip drops.",
+      "note": "Breadcrumb, title, rating, review count, ranking, hero photo, About and Recommended-experiences cards render cleanly on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:32:07.051-07:00",
-      "clipReviewedAt": "2026-09-17T12:32:07.051-07:00",
-      "castReviewedAt": "2026-09-17T12:32:07.051-07:00"
+      "reviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "castReviewedAt": "2026-09-28T10:34:17.049-07:00"
     },
     "goodreads-author": {
       "verdict": "flaw",
       "severity": 4,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Opens with Join-Goodreads promo text and the author name never renders as a heading, so the first heading is Stephen King's Followers; photo, shelves and friends are intact.",
+      "note": "Opens with Join-Goodreads promo and the sidebar (photo, followers, friends) before the name heading; the cast book table drops covers and glues each title to its rating.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:27:31.019-07:00",
-      "clipReviewedAt": "2026-09-17T12:27:31.019-07:00",
-      "castReviewedAt": "2026-09-17T12:27:31.019-07:00"
+      "reviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "clipReviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "castReviewedAt": "2026-09-28T08:13:05.035-07:00"
     },
     "imdb-name": {
       "verdict": "flaw",
       "severity": 3,
       "where": "cast",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Name, professions, headshot and full biography render on both; the cast drops the video card to literal Video alt text and keeps label-less stat runs (160 136, 99+ Videos99+ Photos).",
+      "note": "Name, professions, headshot, full bio, news, known-for and credits render; the cast keeps label-less stat runs (162 · 137, 99+ Videos99+ Photos, 918K) and glued credit tabs.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:21:14.570-07:00",
-      "castReviewedAt": "2026-09-17T12:21:14.570-07:00",
-      "clipReviewedAt": "2026-09-17T12:21:14.570-07:00"
+      "reviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "clipReviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "castReviewedAt": "2026-09-28T08:13:05.035-07:00"
     },
     "japantimes": {
       "verdict": "flaw",
@@ -1986,11 +1987,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Section, headline, captioned hero, four-author byline, full body and More-information links all render, but the KEYWORDS tag strip with a thumbnail still trails the article.",
+      "note": "Headline, byline, hero, full body and More-information links render, but the KEYWORDS tag strip with thumbnails still trails the article on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:49:05.234-07:00",
-      "clipReviewedAt": "2026-09-18T21:49:05.234-07:00",
-      "castReviewedAt": "2026-09-18T21:49:05.234-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.071-07:00"
     },
     "kaggle": {
       "verdict": "flaw",
@@ -1998,11 +1999,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "IMPROVED: only one Material icon ligature still renders as text rather than eight, but the CSV preview still collapses into an unstructured value run and a linked chart image is broken.",
+      "note": "Title, hero, description and chart images render, but the raw CSV preview and the Activity Overview stats collapse into unstructured digit runs on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:54:39.567-07:00",
-      "clipReviewedAt": "2026-09-18T21:54:39.567-07:00",
-      "castReviewedAt": "2026-09-18T21:54:39.567-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.071-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.071-07:00"
     },
     "mdn": {
       "verdict": "clean",
@@ -2022,23 +2023,23 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, byline, pull quote and video card render, but two related-story links with their own timestamps sit embedded mid-article and a large blank gap follows the byline.",
+      "note": "Headline, byline, pull quote and video card render, but a related-story link with its own timestamp sits embedded mid-article.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:47:50.899-07:00",
-      "clipReviewedAt": "2026-09-18T21:47:50.899-07:00",
-      "castReviewedAt": "2026-09-18T21:47:50.899-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.495-07:00"
     },
     "newyorker": {
       "verdict": "clean",
-      "severity": 1,
+      "severity": 0,
       "where": "both",
       "regression": "unknown",
       "regressedFrom": "",
-      "note": "Section label, rubric, headline, dek, byline, date, credited hero and full body prose all render correctly; the hero caption runs into its photo credit and the first paragraph.",
+      "note": "Long-form article with all hero/body images and captions captured faithfully in clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:43:40.946-07:00",
-      "clipReviewedAt": "2026-09-17T13:43:40.946-07:00",
-      "castReviewedAt": "2026-09-17T13:43:40.946-07:00"
+      "reviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "castReviewedAt": "2026-09-28T10:39:09.474-07:00"
     },
     "etsy": {
       "verdict": "flaw",
@@ -2046,35 +2047,35 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Hero, thumbnail rail, title, price, details and full description render; the customer-reviews scroll still trails the listing.",
+      "note": "Hero, title, price, seller, highlights, description, shipping and reviews render; the thumbnail rail stacks vertically in the clip and becomes nine empty bullets in the cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-28T06:41:51.530-07:00",
-      "clipReviewedAt": "2026-09-28T06:41:51.530-07:00",
-      "castReviewedAt": "2026-09-28T06:41:51.530-07:00"
+      "reviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "clipReviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "castReviewedAt": "2026-09-28T08:13:05.035-07:00"
     },
     "github-pr": {
-      "verdict": "clean",
-      "severity": 1,
-      "where": "clip",
-      "regression": "unknown",
+      "verdict": "flaw",
+      "severity": 3,
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Clip renders the PR title, merge state, diff stat, TypeScript generics in code blocks and the full comment/commit timeline; cast not reviewable - its render times out at 90s and the image was correctly deleted.",
+      "note": "Title, merge state, code blocks and full timeline render and the cast now completes, but it prints four commit links as raw [text](url) markdown; dates double on both.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:40:58.663-07:00",
-      "clipReviewedAt": "2026-09-17T12:40:58.663-07:00",
-      "castReviewedAt": "2026-09-17T12:40:58.663-07:00"
+      "reviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "clipReviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "castReviewedAt": "2026-09-28T08:13:05.035-07:00"
     },
     "letterboxd": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Poster, title, synopsis, full crew credits and the long release-dates list all render as proper headings and bullets with no literal markdown; two Remove-Ads strips survive.",
+      "note": "Poster, title, synopsis, full crew credits and release-dates list render cleanly with proper headings; two Remove-Ads strips survive.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T14:07:47.012-07:00",
-      "clipReviewedAt": "2026-09-17T14:07:47.012-07:00",
-      "castReviewedAt": "2026-09-17T14:07:47.012-07:00"
+      "reviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.495-07:00",
+      "castReviewedAt": "2026-09-28T10:38:39.495-07:00"
     },
     "plato-stanford": {
       "verdict": "clean",
@@ -2092,37 +2093,37 @@
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Both C++ and Java blocks render with correct indentation, nesting and blank lines preserved, inline code spans work, and the Copy label sits above each block rather than glued to the first include.",
+      "note": "C++ and Java code blocks render with correct indentation and blank lines, inline code spans and images intact, badges/bylines render correctly in both clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:45:51.071-07:00",
-      "clipReviewedAt": "2026-09-17T13:45:51.071-07:00",
-      "castReviewedAt": "2026-09-17T13:45:51.071-07:00"
+      "reviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "castReviewedAt": "2026-09-28T10:39:51.775-07:00"
     },
     "steam": {
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Hero, description, review scores, release date and tags capture, but the screenshot rail renders as a column of 116px thumbnails, the not-signed-in banner survives and the game title never appears as a heading.",
+      "note": "Hero, description, review scores, release date and tags capture fine, but the screenshot rail renders as small thumbnails, the not-signed-in banner survives and no game-title heading appears.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T14:08:45.993-07:00",
-      "clipReviewedAt": "2026-09-17T14:08:45.993-07:00",
-      "castReviewedAt": "2026-09-17T14:08:45.993-07:00"
+      "reviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "castReviewedAt": "2026-09-28T10:39:51.775-07:00"
     },
     "vox": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, byline, intro and the per-entry liveblog with avatars, dates, images and captions all render correctly; LIVEUpdated still runs together at the top.",
+      "note": "Headline, byline, intro and full liveblog entries with avatars, images and captions render correctly; LIVEUpdated still glues together at the top.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:43:58.682-07:00",
-      "clipReviewedAt": "2026-09-17T13:43:58.682-07:00",
-      "castReviewedAt": "2026-09-17T13:43:58.682-07:00"
+      "reviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "castReviewedAt": "2026-09-28T10:39:23.624-07:00"
     },
     "wikipedia-person": {
       "verdict": "clean",
@@ -2130,83 +2131,83 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Title, infobox with photo, signature and lead prose with citations all render; three infobox rows come out empty and labels run together (Causeof death, Knownfor).",
+      "note": "Infobox with photo, signature, lead prose and full biography render; several infobox labels run together with values (Causeof death, Knownfor).",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:46:33.710-07:00",
-      "clipReviewedAt": "2026-09-18T21:46:33.710-07:00",
-      "castReviewedAt": "2026-09-18T21:46:33.710-07:00"
+      "reviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:23.624-07:00",
+      "castReviewedAt": "2026-09-28T10:39:23.624-07:00"
     },
     "yelp": {
       "verdict": "flaw",
       "severity": 5,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Stars now render correctly, but no review text appears in either surface and the Yes/No/Maybe recommend widget survives.",
+      "note": "Stars, photos and popular-dishes menu render, but no actual review text appears on either surface and the Yes/No/Maybe recommend widget survives.",
       "by": "ai",
-      "reviewedAt": "2026-09-26T19:18:39.196-07:00",
-      "clipReviewedAt": "2026-09-26T19:18:39.196-07:00",
-      "castReviewedAt": "2026-09-26T19:18:39.196-07:00"
+      "reviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "castReviewedAt": "2026-09-28T10:34:17.049-07:00"
     },
     "zillow": {
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Recovered from blocked: photos, price, address, beds/baths/sqft, property details and Zestimate all capture, but 'Sold' collapses into a one-character vertical column and the gallery stacks one photo per row.",
+      "note": "Photos, price, address, beds/baths/sqft and Zestimate all capture; the Home value price-history chart still runs years and prices together as one unbroken string.",
       "by": "ai",
-      "reviewedAt": "2026-09-19T09:03:16.764-07:00",
-      "clipReviewedAt": "2026-09-19T09:03:16.764-07:00",
-      "castReviewedAt": "2026-09-19T09:03:16.764-07:00"
+      "reviewedAt": "2026-09-28T16:46:08.589-07:00",
+      "clipReviewedAt": "2026-09-28T16:46:08.589-07:00",
+      "castReviewedAt": "2026-09-28T16:46:08.589-07:00"
     },
     "goodreads-book": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cover, title, author, description, genres, stats and full bio all render; author avatar is CORP-blocked, clip clips the genre pills at the right edge and the cast runs together 80 books131k followers.",
+      "note": "Cover, title, description, genres, author card with avatar, bio and reviews render; reader avatars stack in a column, genre pills clip at the right, cast runs together 80 books131k followers.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:15:26.362-07:00",
-      "clipReviewedAt": "2026-09-17T12:15:26.362-07:00",
-      "castReviewedAt": "2026-09-17T12:15:26.362-07:00"
+      "reviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "clipReviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "castReviewedAt": "2026-09-28T07:37:22.866-07:00"
     },
     "discogs": {
       "verdict": "clean",
-      "severity": 1,
+      "severity": 2,
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "First content capture: title, cover, the full release metadata table, tracklist with durations, companies, credits and notes all render correctly.",
+      "note": "Title, cover, release table, tracklist, companies, credits, notes and reviews render; clip metadata labels are oversized and the cast shows a bare 1 · 5 stat row.",
       "by": "ai",
-      "reviewedAt": "2026-09-20T09:50:06.562-07:00",
-      "clipReviewedAt": "2026-09-20T09:50:06.562-07:00",
-      "castReviewedAt": "2026-09-20T09:50:06.562-07:00"
+      "reviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "clipReviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "castReviewedAt": "2026-09-28T08:13:05.035-07:00"
     },
     "producthunt": {
       "verdict": "clean",
       "severity": 1,
-      "where": "both",
+      "where": "cast",
       "regression": "none",
       "regressedFrom": "",
-      "note": "FIXED since baseline: the cast's Launches rows now carry product names, descriptions and dates instead of five bare count pairs; forum threads and header render correctly.",
+      "note": "Header, launches, forum threads and reviews all render; cast pros/cons lists still show bare unlabeled numbers instead of tag text.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:34:51.479-07:00",
-      "clipReviewedAt": "2026-09-17T12:34:51.479-07:00",
-      "castReviewedAt": "2026-09-17T12:34:51.479-07:00"
+      "reviewedAt": "2026-09-28T16:46:08.589-07:00",
+      "clipReviewedAt": "2026-09-28T16:46:08.589-07:00",
+      "castReviewedAt": "2026-09-28T16:46:08.589-07:00"
     },
     "medium-generic": {
       "verdict": "clean",
       "severity": 2,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Title, subtitle, avatar byline, full prose with italics, act headings and captioned illustrations all correct; the author card with topic tags is hoisted above the title.",
+      "note": "Title, subtitle, avatar byline, full prose, act headings and captioned illustrations correct; the author card with topic tags sits above the title and the cast byline has · · · residue.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:10:52.796-07:00",
-      "clipReviewedAt": "2026-09-17T12:10:52.796-07:00",
-      "castReviewedAt": "2026-09-17T12:10:52.796-07:00"
+      "reviewedAt": "2026-09-28T08:13:05.035-07:00",
+      "clipReviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "castReviewedAt": "2026-09-28T08:13:05.035-07:00"
     },
     "netflix-techblog": {
       "verdict": "clean",
@@ -2214,23 +2215,23 @@
       "where": "cast",
       "regression": "none",
       "regressedFrom": "",
-      "note": "IMPROVED: the baseline's unclosed-bold heading now renders correctly with no asterisks, but stray delimiters still leak after the byline and as a post***)*** run in one list item.",
+      "note": "Clip renders title, byline, diagrams and body text cleanly; carrying forward prior cast finding of stray markdown delimiters leaking after the byline and in one list item.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:01:40.068-07:00",
-      "castReviewedAt": "2026-09-17T13:01:40.068-07:00",
-      "clipReviewedAt": "2026-09-17T13:01:40.068-07:00"
+      "reviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "castReviewedAt": "2026-09-17T13:01:40.068-07:00"
     },
     "politico": {
       "verdict": "clean",
       "severity": 0,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Fixed: narrowing no longer discards this article's own paragraph-row body as if it were a separate feed post; full body renders on both surfaces.",
+      "note": "Full article with hero, headline, byline and body renders identically on clip and cast.",
       "by": "ai",
-      "reviewedAt": "2026-09-21T08:22:47.090-07:00",
-      "clipReviewedAt": null,
-      "castReviewedAt": "2026-09-21T08:22:47.090-07:00"
+      "reviewedAt": "2026-09-28T16:46:08.589-07:00",
+      "clipReviewedAt": "2026-09-28T16:46:08.589-07:00",
+      "castReviewedAt": "2026-09-28T16:46:08.589-07:00"
     },
     "msn-slideshow": {
       "verdict": "clean",
@@ -2238,10 +2239,10 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline and full body prose with inline links render correctly with no slideshow chrome; the 2761% coverage is a page-measurement artifact.",
+      "note": "Hero image with credit, headline and full body prose with inline links render correctly, no slideshow chrome.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T17:30:07.485-07:00",
-      "clipReviewedAt": "2026-09-18T17:30:07.485-07:00",
+      "reviewedAt": "2026-09-28T10:38:39.595-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.595-07:00",
       "castReviewedAt": "2026-09-18T17:30:07.485-07:00"
     },
     "librarything-author": {
@@ -2283,13 +2284,13 @@
       "verdict": "flaw",
       "severity": 3,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cast still pads inline boundaries before punctuation (Framework ., Monitoring , which) and the clip drops the space the other way (meet theCritical, under ourPreparedness); body is otherwise complete.",
+      "note": "Cast still pads before punctuation (\"Alignment —\", \"Monitoring ,\") while body, headings and links are otherwise complete on both surfaces.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:46:06.983-07:00",
-      "clipReviewedAt": "2026-09-17T12:46:06.983-07:00",
-      "castReviewedAt": "2026-09-17T12:46:06.983-07:00"
+      "reviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "castReviewedAt": "2026-09-28T10:34:17.049-07:00"
     },
     "sciencemag": {
       "verdict": "clean",
@@ -2297,23 +2298,23 @@
       "where": "cast",
       "regression": "none",
       "regressedFrom": "",
-      "note": "First content capture (baseline was blocked): headline, issue citation and the full feature with quotes and inline links all render; the cast shows the cover as literal 'issue cover image' alt text.",
+      "note": "Headline, issue citation and full feature article with quotes and inline links render on both surfaces; cast now shows the real cover photo, not alt text.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:52:07.905-07:00",
-      "castReviewedAt": "2026-09-17T12:52:07.905-07:00",
-      "clipReviewedAt": "2026-09-17T12:52:07.905-07:00"
+      "reviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "castReviewedAt": "2026-09-28T10:34:17.049-07:00"
     },
     "rateyourmusic": {
       "verdict": "flaw",
       "severity": 4,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Cover, title, artist, genre, release, ranking and lyrics capture, but the rating badge alt text collapses into a one-character vertical column and a long user-lists rail trails.",
+      "note": "Cover, title, artist, genre, release, ranking and lyrics capture, but the rating badge collapses into a one-character vertical column and the cast shows raw unrendered markdown links for the list rail.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:03:57.659-07:00",
-      "clipReviewedAt": "2026-09-17T13:03:57.659-07:00",
-      "castReviewedAt": "2026-09-17T13:03:57.659-07:00"
+      "reviewedAt": "2026-09-28T14:53:50.753-07:00",
+      "clipReviewedAt": "2026-09-28T14:53:50.753-07:00",
+      "castReviewedAt": "2026-09-28T14:53:50.753-07:00"
     },
     "lemmy-thread": {
       "verdict": "flaw",
@@ -2321,11 +2322,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Recovered from blocked: post and the full nested comment thread render with indentation and depth bars intact, but comment metadata collapses into one-character vertical columns (Englis/h, 2 months/ago).",
+      "note": "Post and full nested comment thread render with indentation intact, but byline metadata collapses into one-character vertical columns (Englis/h, 2 months/ago) and the cast prints raw icon-glyph words (minus-square, arrow-up, link, fedilink).",
       "by": "ai",
-      "reviewedAt": "2026-09-19T09:03:04.792-07:00",
-      "clipReviewedAt": "2026-09-19T09:03:04.792-07:00",
-      "castReviewedAt": "2026-09-19T09:03:04.792-07:00"
+      "reviewedAt": "2026-09-28T14:53:50.753-07:00",
+      "clipReviewedAt": "2026-09-28T14:53:50.753-07:00",
+      "castReviewedAt": "2026-09-28T14:53:50.753-07:00"
     },
     "boardgamegeek": {
       "verdict": "flaw",
@@ -2333,23 +2334,23 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "First content capture: hero art and the full game description render, but the title shows as 'Gloomhaven ()' with an empty year and no rating, rank, player count or designer metadata is captured.",
+      "note": "Hero art and full description render, but title shows 'Gloomhaven ()' with empty year and no rating, rank, player count or designer metadata.",
       "by": "ai",
-      "reviewedAt": "2026-09-20T09:50:45.224-07:00",
-      "clipReviewedAt": "2026-09-20T09:50:45.224-07:00",
-      "castReviewedAt": "2026-09-20T09:50:45.224-07:00"
+      "reviewedAt": "2026-09-28T14:53:50.753-07:00",
+      "clipReviewedAt": "2026-09-28T14:53:50.753-07:00",
+      "castReviewedAt": "2026-09-28T14:53:50.753-07:00"
     },
     "snapchat-web": {
       "verdict": "flaw",
       "severity": 3,
       "where": "cast",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Clip has poster, play overlay, views, avatar, handle and likes; the cast carries a Watch-video link with views, author and likes but no poster, since the blob-backed frame has no http URL a relay could serve.",
+      "note": "Clip has poster, play overlay, views, avatar and likes; the cast is text-only (Watch-video link, views, author, likes) with no poster since the blob-backed frame has no http URL.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:15:02.725-07:00",
-      "castReviewedAt": "2026-09-17T13:15:02.725-07:00",
-      "clipReviewedAt": "2026-09-17T13:15:02.725-07:00"
+      "reviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "clipReviewedAt": "2026-09-28T10:34:28.663-07:00",
+      "castReviewedAt": "2026-09-28T10:34:28.663-07:00"
     },
     "kubernetes-docs": {
       "verdict": "clean",
@@ -2364,16 +2365,16 @@
       "castReviewedAt": "2026-09-18T17:28:51.931-07:00"
     },
     "hackernews": {
-      "verdict": "flaw",
-      "severity": 4,
-      "where": "cast",
-      "regression": "unknown",
+      "verdict": "clean",
+      "severity": 2,
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Clip renders the thread faithfully; the cast duplicates each comment across two or three table cells with author, date and body run together.",
+      "note": "Nested comment thread renders faithfully on both surfaces; the parent-story link is dropped, the site footer links remain and the cast flattens reply nesting.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:12:21.352-07:00",
-      "castReviewedAt": "2026-09-17T12:12:21.352-07:00",
-      "clipReviewedAt": "2026-09-17T12:12:21.352-07:00"
+      "reviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "clipReviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "castReviewedAt": "2026-09-28T07:37:22.866-07:00"
     },
     "postgresql-docs": {
       "verdict": "clean",
@@ -2381,10 +2382,10 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Version nav, chapter nav table, full prose and SQL blocks with an ASCII result table keep their column alignment and indentation exactly.",
+      "note": "Version nav, chapter table, full prose and SQL/result blocks keep column alignment and indentation exactly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:52:02.283-07:00",
-      "clipReviewedAt": "2026-09-18T21:52:02.283-07:00",
+      "reviewedAt": "2026-09-28T10:38:39.595-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:39.595-07:00",
       "castReviewedAt": "2026-09-18T21:52:02.283-07:00"
     },
     "tildes": {
@@ -2402,50 +2403,50 @@
     "thedailybeast": {
       "verdict": "clean",
       "severity": 0,
-      "where": "clip",
-      "regression": "unknown",
+      "where": "both",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Hard paywall after 2 paragraphs; clip faithfully matches what the page serves.",
+      "note": "Cast matches the paywalled clip exactly: headline, two paragraphs, then 'Top Stories'/READ MORE chrome.",
       "by": "ai",
-      "reviewedAt": "2026-09-21T13:22:07.684-07:00",
+      "reviewedAt": "2026-09-28T10:41:00.380-07:00",
       "clipReviewedAt": "2026-09-21T13:22:07.684-07:00",
-      "castReviewedAt": "2026-09-21T13:22:07.684-07:00"
+      "castReviewedAt": "2026-09-28T10:41:00.380-07:00"
     },
     "fortune": {
       "verdict": "clean",
       "severity": 1,
       "where": "both",
-      "regression": "unknown",
+      "regression": "none",
       "regressedFrom": "",
-      "note": "Headline recovered above the body, hero, prose, section headings and inline links all render; a stray Recommended Video label sits mid-article.",
+      "note": "Headline, hero, prose, section headings and inline links all render; a stray Recommended Video label sits mid-article.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T13:51:09.458-07:00",
-      "clipReviewedAt": "2026-09-17T13:51:09.458-07:00",
+      "reviewedAt": "2026-09-28T10:39:09.540-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.540-07:00",
       "castReviewedAt": "2026-09-17T13:51:09.458-07:00"
     },
     "myanimelist": {
       "verdict": "flaw",
       "severity": 3,
-      "where": "both",
-      "regression": "none",
+      "where": "cast",
+      "regression": "unknown",
       "regressedFrom": "",
-      "note": "Title, poster, alternative titles, Information, Statistics and Synopsis all capture but render in a cramped narrow two-column layout, with Hide-Ads/Login chrome, Edit links, a broken banner and a MALxJapan promo riding along.",
+      "note": "Info panel and synopsis captured well; cast tail includes ad/promo cards (giveaway, manga survey) as trailing chrome.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:54:06.391-07:00",
-      "clipReviewedAt": "2026-09-18T21:54:06.391-07:00",
-      "castReviewedAt": "2026-09-18T21:54:06.391-07:00"
+      "reviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:09.474-07:00",
+      "castReviewedAt": "2026-09-28T10:39:09.474-07:00"
     },
     "reuters": {
       "verdict": "flaw",
       "severity": 5,
-      "where": "clip",
+      "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Clip leaks a video transport-control bar as a token strip (180p 288p CC OFFEnglish) and collapses inline ticker links into one-character columns; both surfaces keep Advertisement - Scroll to continue strips and an ad video.",
+      "note": "Clip leaks a video transport-control strip (CC English 180p…720p OFFEnglish) and splits ticker-link sentences into columns; both keep Advertisement · Scroll to continue strips and an ad video.",
       "by": "ai",
-      "reviewedAt": "2026-09-17T12:05:53.218-07:00",
-      "clipReviewedAt": "2026-09-17T12:05:53.218-07:00",
-      "castReviewedAt": "2026-09-17T12:05:53.218-07:00"
+      "reviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "clipReviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "castReviewedAt": "2026-09-28T07:37:22.866-07:00"
     },
     "nytimes": {
       "verdict": "clean",
@@ -2453,11 +2454,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Headline, dek, captioned art, byline, series note and full body render; a share/save/comments icon row (a bare 110 in the cast), a 0:05 timecode and a Read 110 comments link remain.",
+      "note": "Headline, dek, captioned art, byline, series note and full body render; the cast shows a bare 110 for the comments-count icon row, clip adds a resources card box.",
       "by": "ai",
-      "reviewedAt": "2026-09-28T05:41:04.376-07:00",
-      "clipReviewedAt": "2026-09-28T05:41:04.376-07:00",
-      "castReviewedAt": "2026-09-28T05:41:04.376-07:00"
+      "reviewedAt": "2026-09-28T10:34:17.049-07:00",
+      "clipReviewedAt": "2026-09-28T07:37:22.866-07:00",
+      "castReviewedAt": "2026-09-28T10:34:17.049-07:00"
     },
     "walmart": {
       "verdict": "flaw",
@@ -2477,11 +2478,11 @@
       "where": "both",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Post title, sats/comments/author byline, territory tags, image, full body and comment threads with their own bylines all render, with the related-items rail and sort nav correctly excluded.",
+      "note": "Post title, sats/comments/author byline, territory tags, image, full body and comment threads with bylines all render, related-items rail and sort nav correctly excluded.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:52:41.647-07:00",
-      "clipReviewedAt": "2026-09-18T21:52:41.647-07:00",
-      "castReviewedAt": "2026-09-18T21:52:41.647-07:00"
+      "reviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "clipReviewedAt": "2026-09-28T10:39:51.775-07:00",
+      "castReviewedAt": "2026-09-28T10:39:51.775-07:00"
     },
     "bsky-thread": {
       "verdict": "clean",
@@ -2489,11 +2490,11 @@
       "where": "cast",
       "regression": "none",
       "regressedFrom": "",
-      "note": "Focused post and every reply render with avatar, handle, body, photo and stats; the cast runs '55 reposts2 quotes2K likes' together and shows reply GIFs as broken Video alt text.",
+      "note": "Focused post and every reply render with avatar, handle, body, photo and stats; the cast shows reply GIFs as a bare Video link and runs stat counts together.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:46:15.149-07:00",
-      "castReviewedAt": "2026-09-18T21:46:15.149-07:00",
-      "clipReviewedAt": "2026-09-18T21:46:15.149-07:00"
+      "reviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "castReviewedAt": "2026-09-28T10:38:38.965-07:00"
     },
     "bsky-profile": {
       "verdict": "clean",
@@ -2503,9 +2504,9 @@
       "regressedFrom": "",
       "note": "Banner, name, verified badge, handle, follower counts, bio, pinned post and feed posts with images and stats all render correctly.",
       "by": "ai",
-      "reviewedAt": "2026-09-18T21:46:15.149-07:00",
-      "clipReviewedAt": "2026-09-18T21:46:15.149-07:00",
-      "castReviewedAt": "2026-09-18T21:46:15.149-07:00"
+      "reviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "clipReviewedAt": "2026-09-28T10:38:38.965-07:00",
+      "castReviewedAt": "2026-09-28T10:38:38.965-07:00"
     }
   }
 }
