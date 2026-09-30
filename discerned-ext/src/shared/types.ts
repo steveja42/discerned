@@ -161,6 +161,15 @@ export interface EmbeddedTweetData {
   source: 'iframe' | 'blockquote';
 }
 
+/** Background → offscreen document: fetch a video's leading bytes and decode one frame. */
+export interface OffscreenVideoFrameRequest {
+  type: 'OFFSCREEN_VIDEO_FRAME';
+  src: string;
+  currentTime: number;
+  width: number;
+  height: number;
+}
+
 // Messages between content script and background
 export type BackgroundMessage =
   | { type: 'CLIP'; data: { capture: Capture; evaluation: Evaluation } }
@@ -187,7 +196,7 @@ export type BackgroundMessage =
   | { type: 'SIGN_WITH_NIP07'; event: Record<string, unknown> }
   | { type: 'PING' }
   | { type: 'INLINE_IMAGE'; src: string }
-  | { type: 'FETCH_VIDEO_BLOB'; src: string }
+  | { type: 'CAPTURE_VIDEO_FRAME'; src: string; currentTime: number; width: number; height: number }
   | { type: 'PUSH_NEW_CLIP'; clip: ClipData }
   | { type: 'FORCE_BRIDGE_RESYNC' }
   | { type: 'NAVIGATE_TO_CLIP'; clipId: string }

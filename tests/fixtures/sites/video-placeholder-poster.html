@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Lazy videos with a placeholder poster</title></head>
+<body>
+<!-- deepmind.google's player shape: every <video> carries ONE site-wide grey
+     poster, the page's own light/dark copies of it sit beside the <video>, and
+     the real URL is in <source data-src> until the video is scrolled to. -->
+<main>
+  <article>
+    <h1>Lazy videos with a placeholder poster</h1>
+    <p>An agent that plays, reasons and learns in virtual worlds. This paragraph is here so the article carries enough prose for every capture tier to treat it as content rather than chrome.</p>
+    <figure>
+      <figure>
+        <div class="video-wrapper">
+          <div class="media-video-poster"><img src="/static/images/fallback/video_poster_fallback_light.jpg" alt=""><img src="/static/images/fallback/video_poster_fallback_dark.jpg" alt=""></div>
+          <video autoplay loop muted playsinline preload="none" poster="/static/images/fallback/video_poster_fallback_light.jpg">
+            <source data-src="https://storage.example.com/media/clip-one.mp4#t=0.1" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      </figure>
+      <figcaption><p>The agent answers the user's questions about its own behaviour.</p></figcaption>
+    </figure>
+    <p>A second paragraph of prose between the videos, long enough to read as article text and keep the figures inside the captured body.</p>
+    <figure>
+      <figure>
+        <div class="video-wrapper">
+          <div class="media-video-poster"><img src="/static/images/fallback/video_poster_fallback_light.jpg" alt=""><img src="/static/images/fallback/video_poster_fallback_dark.jpg" alt=""></div>
+          <video autoplay loop muted playsinline preload="none" poster="/static/images/fallback/video_poster_fallback_light.jpg">
+            <source data-src="https://storage.example.com/media/clip-two.mp4#t=0.1" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      </figure>
+      <figcaption><p>The agent interprets abstract concepts and logical commands.</p></figcaption>
+    </figure>
+    <figure>
+      <figure>
+        <div class="video-wrapper">
+          <div class="media-video-poster"><img src="/static/images/fallback/video_poster_fallback_light.jpg" alt=""><img src="/static/images/fallback/video_poster_fallback_dark.jpg" alt=""></div>
+          <video autoplay loop muted playsinline preload="none" poster="/static/images/fallback/video_poster_fallback_light.jpg">
+            <source data-src="https://storage.example.com/media/clip-three.mp4#t=0.1" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      </figure>
+      <figcaption><p>The agent carries out long and complex tasks.</p></figcaption>
+    </figure>
+    <p>A closing paragraph so the last figure is followed by prose, as it is on the source page, rather than sitting at the edge of the capture.</p>
+  </article>
+</main>
+</body>
+</html>

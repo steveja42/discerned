@@ -10,7 +10,8 @@
     "activeTab",
     "tabs",
     "scripting",
-    "webNavigation"
+    "webNavigation",
+    "offscreen"
   ],
   "host_permissions": [
     "https://platform.twitter.com/*"

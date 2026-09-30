@@ -138,6 +138,9 @@ export default defineConfig(({ mode }) => ({
     // Outside Windows' Hyper-V/WSL excluded ranges (4753-5361 at last check), which
     // made 5173 fail with EACCES.
     port: 15173,
+    // A config-change restart that can't reclaim the port must fail, not drift to
+    // 15174: the HMR client still dials 15173 and crxjs reload-loops the extension.
+    strictPort: true,
     hmr: {
       port: 15173,
     },
@@ -165,6 +168,7 @@ export default defineConfig(({ mode }) => ({
         onboarding: resolve(__dirname, 'src/onboarding/onboarding.html'),
         popup: resolve(__dirname, 'src/popup/popup.html'),
         permissions: resolve(__dirname, 'src/permissions/permissions.html'),
+        offscreen: resolve(__dirname, 'src/offscreen/offscreen.html'),
       },
     },
   },

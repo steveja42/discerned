@@ -27,7 +27,7 @@ import {
   getOrCreateBunkerSigner,
   invalidateBunkerSigner,
 } from '@/shared/nostr/nip46-manager';
-import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation, ClipData, EmbeddedTweetData, RelayMode, ContentFrameRequest, ContentFrameResult } from '@/shared/types';
+import type { BackgroundMessage, BackgroundResponse, AuthState, Capture, Evaluation, ClipData, EmbeddedTweetData, RelayMode, ContentFrameRequest, ContentFrameResult, OffscreenVideoFrameRequest } from '@/shared/types';
 import { STORAGE_KEYS, relaysForMode } from '@/shared/types';
 import { extractFromContentFrame } from '@/shared/content-frame';
 import { getEffectiveRelays, getRelayRows, saveRelayPrefs, mergeDiscoveredRelays } from '@/shared/relays';
@@ -789,8 +789,8 @@ async function handleMessage(message: BackgroundMessage, senderTabId?: number): 
     case 'INLINE_IMAGE':
       return handleInlineImage(message.src);
 
-    case 'FETCH_VIDEO_BLOB':
-      return handleFetchVideoBlob(message.src);
+    case 'CAPTURE_VIDEO_FRAME':
+      return handleCaptureVideoFrame(message.src, message.currentTime, message.width, message.height);
 
     case 'EXTRACT_EMBEDDED_TWEETS':
       return handleExtractEmbeddedTweets(senderTabId, message.ids);
@@ -1363,30 +1363,51 @@ async function handleInlineImage(src: string): Promise<BackgroundResponse> {
  * most H.264 MP4s) and return it as a data URI. Used by captureVideoFrames
  * in capture.ts to work around the cross-origin canvas SecurityError.
  */
-async function handleFetchVideoBlob(src: string): Promise<BackgroundResponse> {
+// The frame is decoded in an offscreen document, not the page: a site's CSP can
+// forbid blob: media (deepmind.google's media-src does), which blocked every grab.
+const OFFSCREEN_URL = 'src/offscreen/offscreen.html';
+let offscreenCreating: Promise<void> | null = null;
+let offscreenIdleTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function ensureOffscreenDocument(): Promise<void> {
+  const url = chrome.runtime.getURL(OFFSCREEN_URL);
+  const existing = await chrome.runtime.getContexts({
+    contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+    documentUrls: [url],
+  });
+  if (existing.length > 0) return;
+  offscreenCreating ??= chrome.offscreen.createDocument({
+    url: OFFSCREEN_URL,
+    reasons: [chrome.offscreen.Reason.BLOBS],
+    justification: 'Decode one frame of a page video as the poster image of a saved clip.',
+  }).finally(() => { offscreenCreating = null; });
+  await offscreenCreating;
+}
+
+async function handleCaptureVideoFrame(
+  src: string, currentTime: number, width: number, height: number,
+): Promise<BackgroundResponse> {
+  if (!/^https:/i.test(src)) return { success: false, error: 'Unsupported scheme' };
+  if (!(await canFetchCrossOrigin())) {
+    return { success: false, error: 'No host permission for video frame capture' };
+  }
+  clearTimeout(offscreenIdleTimer);
   try {
-    if (!/^https:/i.test(src)) return { success: false, error: 'Unsupported scheme' };
-    if (!(await canFetchCrossOrigin())) {
-      return { success: false, error: 'No host permission for video frame capture' };
+    await ensureOffscreenDocument();
+    const req: OffscreenVideoFrameRequest = { type: 'OFFSCREEN_VIDEO_FRAME', src, currentTime, width, height };
+    const res = await chrome.runtime.sendMessage(req) as { dataUri?: string; error?: string } | undefined;
+    if (!res?.dataUri) {
+      log(LL.DEBUG, 'video frame grab failed:', res?.error ?? 'no response', 'src:', src);
+      return { success: false, error: res?.error ?? 'no frame' };
     }
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    let res: Response;
-    try {
-      res = await fetch(src, {
-        signal: controller.signal,
-        headers: { Range: 'bytes=0-524287' },
-      });
-    } finally {
-      clearTimeout(timer);
-    }
-    // 200 or 206 (partial content) both OK.
-    if (!res.ok && res.status !== 206) return { success: false, error: `HTTP ${res.status}` };
-    const blob = await res.blob();
-    const dataUri = await blobToDataUri(blob);
-    return { success: true, data: { dataUri } };
+    return { success: true, data: { dataUri: res.dataUri } };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : 'fetch failed' };
+    log(LL.DEBUG, 'video frame grab threw:', err, 'src:', src);
+    return { success: false, error: err instanceof Error ? err.message : 'frame capture failed' };
+  } finally {
+    // Close once captures stop; recreated on the next one.
+    clearTimeout(offscreenIdleTimer);
+    offscreenIdleTimer = setTimeout(() => { chrome.offscreen.closeDocument().catch(() => undefined); }, 30_000);
   }
 }
 

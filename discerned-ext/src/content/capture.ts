@@ -9337,13 +9337,9 @@ function stripSizeMarkers(root: Element | DocumentFragment): void {
 }
 
 /**
- * Try to draw the current frame of a cross-origin <video> by:
- * 1. Fetching the video src through the background worker (has <all_urls>),
- *    which returns the bytes as a data URI.
- * 2. Converting the data URI to a same-origin blob URL.
- * 3. Creating a scratch <video>, seeking to the same currentTime, and
- *    canvas-capturing from the blob-URL video (no SecurityError).
- * Times out after 8 s to avoid blocking capture on a slow/large video.
+ * Grab a frame of a cross-origin <video> via the background, which fetches the
+ * leading bytes and decodes them in an offscreen document. Not in the page: a
+ * site's CSP can forbid blob: media, and deepmind.google's does. Needs the grant.
  */
 async function captureVideoFrameViaBackground(
   srcUrl: string,
@@ -9353,45 +9349,10 @@ async function captureVideoFrameViaBackground(
 ): Promise<string | null> {
   try {
     const res = await Promise.race([
-      chrome.runtime.sendMessage({ type: 'FETCH_VIDEO_BLOB', src: srcUrl }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
+      chrome.runtime.sendMessage({ type: 'CAPTURE_VIDEO_FRAME', src: srcUrl, currentTime, width, height }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 15_000)),
     ]) as { success: boolean; data?: { dataUri: string } };
-    if (!res?.success || !res.data?.dataUri) return null;
-
-    // Convert the data URI to a blob URL so the scratch <video> is same-origin.
-    const dataUri = res.data.dataUri;
-    const fetchRes = await fetch(dataUri);
-    const blob = await fetchRes.blob();
-    const blobUrl = URL.createObjectURL(blob);
-
-    try {
-      const dataUriOut = await new Promise<string | null>((resolve) => {
-        const v = document.createElement('video');
-        v.muted = true;
-        v.preload = 'auto';
-        v.src = blobUrl;
-        const abort = setTimeout(() => resolve(null), 5_000);
-        v.onseeked = () => {
-          clearTimeout(abort);
-          try {
-            const c = document.createElement('canvas');
-            c.width = width;
-            c.height = height;
-            c.getContext('2d')?.drawImage(v, 0, 0);
-            const uri = c.toDataURL('image/jpeg', 0.85);
-            resolve(uri && uri !== 'data:,' ? uri : null);
-          } catch {
-            resolve(null);
-          }
-        };
-        v.onerror = () => { clearTimeout(abort); resolve(null); };
-        v.addEventListener('loadedmetadata', () => { v.currentTime = currentTime; }, { once: true });
-        v.load();
-      });
-      return dataUriOut;
-    } finally {
-      URL.revokeObjectURL(blobUrl);
-    }
+    return res?.success && res.data?.dataUri ? res.data.dataUri : null;
   } catch {
     return null;
   }
@@ -9448,18 +9409,79 @@ async function captureVideoFrameViaCors(
 }
 
 /**
+ * A video's own URL, preferring the MP4 alternate (the portable one; bsky lists
+ * webm first). Lazy players keep it in `data-src` until scrolled to (deepmind).
+ */
+function videoSourceUrl(video: Element): string {
+  const srcOf = (el: Element) => {
+    const raw = el.getAttribute('src') || el.getAttribute('data-src') || '';
+    try { return raw ? new URL(raw, document.baseURI).href : ''; } catch { return ''; }
+  };
+  const sources = Array.from(video.querySelectorAll('source')).map(s => ({ s, url: srcOf(s) })).filter(x => x.url);
+  return srcOf(video)
+    || sources.find(x => /mp4/i.test(x.s.getAttribute('type') ?? '') || /\.mp4($|[?#])/i.test(x.url))?.url
+    || sources[0]?.url || '';
+}
+
+/** Stamped on a live <video> whose `poster` is a site-wide stand-in, not a frame of it. */
+const PLACEHOLDER_POSTER_ATTR = 'data-dx-poster-placeholder';
+const PLACEHOLDER_POSTER_NAME_RE = /(?:^|[/_.-])(?:placeholder|fallback)(?:[_.-]|$)/i;
+
+/**
+ * Poster URLs that are placeholders: named as one, or shared by ≥3 DIFFERENT
+ * videos (deepmind.google puts one grey JPEG on all 25). Two is not enough —
+ * responsive variants of one clip legitimately share a poster.
+ */
+function placeholderPosterUrls(videos: Element[]): Set<string> {
+  const srcsByPoster = new Map<string, Set<string>>();
+  for (const v of videos) {
+    const p = v.getAttribute('poster');
+    if (!p) continue;
+    let srcs = srcsByPoster.get(p);
+    if (!srcs) srcsByPoster.set(p, srcs = new Set());
+    srcs.add(videoSourceUrl(v));
+  }
+  const out = new Set<string>();
+  for (const [p, srcs] of srcsByPoster) {
+    const name = p.split(/[?#]/)[0].split('/').pop() ?? '';
+    if (srcs.size >= 3 || PLACEHOLDER_POSTER_NAME_RE.test(name)) out.add(p);
+  }
+  return out;
+}
+
+/** Max frames fetched for videos the page has not loaded yet (each is a 512 KB range fetch). */
+const MAX_UNLOADED_VIDEO_FRAMES = 12;
+
+/**
  * Capture the current frame of every playing <video> in the live DOM as a
  * canvas data URI. Stamps a temporary `data-uuid` on each video so the result
  * survives cloning (the clone carries the attribute; the live element is the key
  * in the live DOM but the clone has no .readyState). Returns Map<uuid, dataUri>.
  * Must be called BEFORE deepCloneWithShadow — the clone has no active media.
+ *
+ * A video the page has NOT loaded yet (`preload="none"` until scrolled to) is
+ * grabbed from its source too when it has no real poster, as long as it is in
+ * the horizontal frame (off-frame carousel slides are trimmed later anyway).
  */
 async function captureVideoFrames(root: Element | Document): Promise<Map<string, string>> {
   const frames = new Map<string, string>();
   let idx = 0;
+  let unloadedBudget = MAX_UNLOADED_VIDEO_FRAMES;
   const videos = querySelectorAllDeep(root as Element, 'video') as HTMLVideoElement[];
+  const placeholders = placeholderPosterUrls(videos);
+  const jobs: Array<() => Promise<void>> = [];
   for (const video of videos) {
-    if (video.readyState < 2 || video.videoWidth === 0) continue;
+    const poster = video.getAttribute('poster');
+    const hasPlaceholder = !!poster && placeholders.has(poster);
+    if (hasPlaceholder) video.setAttribute(PLACEHOLDER_POSTER_ATTR, '');
+    const loaded = video.readyState >= 2 && video.videoWidth > 0;
+    if (!loaded) {
+      if (poster && !hasPlaceholder) continue;
+      const r = video.getBoundingClientRect();
+      const inFrame = r.width > 0 && r.height > 0 && r.right > 0 && r.left < window.innerWidth;
+      if (!inFrame || unloadedBudget <= 0) continue;
+      unloadedBudget--;
+    }
 
     // Stamp a stable uuid on the live element so the clone carries it.
     let uuid = video.getAttribute('data-uuid');
@@ -9467,56 +9489,57 @@ async function captureVideoFrames(root: Element | Document): Promise<Map<string,
       uuid = `dcv-${Date.now()}-${idx++}`;
       video.setAttribute('data-uuid', uuid);
     }
+    const key = uuid;
+    jobs.push(async () => {
+      const dataUri = await captureOneVideoFrame(video, loaded);
+      if (dataUri) frames.set(key, dataUri);
+    });
+  }
+  // A few at a time: each cross-origin grab is a network round-trip plus a decode.
+  const queue = jobs.slice();
+  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+    for (let job = queue.shift(); job; job = queue.shift()) await job();
+  }));
+  return frames;
+}
 
-    // Try direct canvas capture first (works for same-origin videos).
-    let dataUri: string | null = null;
+async function captureOneVideoFrame(video: HTMLVideoElement, loaded: boolean): Promise<string | null> {
+  // Try direct canvas capture first (works for same-origin videos).
+  if (loaded) {
     try {
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       canvas.getContext('2d')?.drawImage(video, 0, 0);
       const uri = canvas.toDataURL('image/jpeg', 0.85);
-      if (uri && uri !== 'data:,') dataUri = uri;
+      if (uri && uri !== 'data:,') return uri;
     } catch {
       // SecurityError for cross-origin video — fall through to background fetch.
     }
-
-    // For cross-origin videos, fetch through background worker then canvas-capture
-    // the blob URL (same-origin, no SecurityError).
-    if (!dataUri) {
-      // Prefer the MP4 alternate when the element lists several sources: it is
-      // the portable one, and bsky lists webm first.
-      const sourceEls = Array.from(video.querySelectorAll('source'));
-      const srcUrl = video.getAttribute('src')
-        ?? sourceEls.find(s => /mp4/i.test(s.getAttribute('type') ?? '')
-            || /\.mp4($|\?)/i.test(s.getAttribute('src') ?? ''))?.getAttribute('src')
-        ?? sourceEls[0]?.getAttribute('src') ?? '';
-      if (srcUrl && /^https:/i.test(srcUrl)) {
-        // A CORS-permissive host can be grabbed with NO extension permission:
-        // the page's own <video> taints the canvas only because the site never
-        // set crossOrigin, so re-loading the same URL with
-        // crossOrigin="anonymous" lifts the taint. MEASURED against
-        // k.gifs.bsky.app (tools/gif-frame-probe), from an unrelated origin:
-        // crossOrigin="anonymous" grabbed a 640x360 frame, the same URL with
-        // no crossOrigin threw SecurityError. This is what makes bsky GIFs
-        // (posterless <video autoplay loop>, the shape a reply's "image"
-        // actually is) recoverable as real images rather than dropped.
-        dataUri = await captureVideoFrameViaCors(
-          srcUrl, video.currentTime, video.videoWidth, video.videoHeight,
-        );
-      }
-      // Still nothing: fall back to the privileged fetch, which works for
-      // hosts that send no CORS header but needs the optional grant.
-      if (!dataUri && srcUrl && /^https:/i.test(srcUrl)) {
-        dataUri = await captureVideoFrameViaBackground(
-          srcUrl, video.currentTime, video.videoWidth, video.videoHeight,
-        );
-      }
-    }
-
-    if (dataUri) frames.set(uuid, dataUri);
   }
-  return frames;
+
+  // For cross-origin videos, fetch through background worker then canvas-capture
+  // the blob URL (same-origin, no SecurityError).
+  const srcUrl = videoSourceUrl(video);
+  if (!srcUrl || !/^https:/i.test(srcUrl)) return null;
+  // A CORS-permissive host can be grabbed with NO extension permission:
+  // the page's own <video> taints the canvas only because the site never
+  // set crossOrigin, so re-loading the same URL with
+  // crossOrigin="anonymous" lifts the taint. MEASURED against
+  // k.gifs.bsky.app (tools/gif-frame-probe), from an unrelated origin:
+  // crossOrigin="anonymous" grabbed a 640x360 frame, the same URL with
+  // no crossOrigin threw SecurityError. This is what makes bsky GIFs
+  // (posterless <video autoplay loop>, the shape a reply's "image"
+  // actually is) recoverable as real images rather than dropped.
+  const viaCors = await captureVideoFrameViaCors(
+    srcUrl, video.currentTime, video.videoWidth, video.videoHeight,
+  );
+  if (viaCors) return viaCors;
+  // Still nothing: fall back to the privileged fetch, which works for
+  // hosts that send no CORS header but needs the optional grant.
+  return captureVideoFrameViaBackground(
+    srcUrl, video.currentTime, video.videoWidth, video.videoHeight,
+  );
 }
 
 /**
@@ -9677,13 +9700,25 @@ function substituteVideoEmbeds(root: Element | DocumentFragment): void {
  * <video> element via data-uuid or index). Pass the result of captureVideoFrames()
  * called before cloning.
  */
+/** Text under `el`, ignoring a <video>'s own "your browser does not support" fallback and <noscript>. */
+function textOutsidePlayer(el: Element): string {
+  const walker = (el.ownerDocument ?? document).createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let out = '';
+  for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+    if (!t.parentElement?.closest('video, noscript, script, style')) out += t.textContent ?? '';
+  }
+  return out;
+}
+
 function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrames?: Map<string, string>): void {
   Array.from((root as Element).querySelectorAll('video')).forEach(video => {
     // Prefer the HTML poster attribute, then a canvas frame captured from the
     // live video before cloning (keyed by data-uuid stamped on the live element).
     const uuid = video.getAttribute('data-uuid') ?? '';
     const framePoster = uuid ? liveFrames?.get(uuid) : undefined;
-    const poster = video.getAttribute('poster') ?? framePoster ?? null;
+    // A placeholder poster (the site's grey stand-in) never wins over a real frame.
+    const placeholder = video.hasAttribute(PLACEHOLDER_POSTER_ATTR);
+    const poster = (placeholder ? framePoster : video.getAttribute('poster') ?? framePoster) ?? null;
     const tweetPhoto = video.closest('[data-testid="tweetPhoto"]');
     // Media Chrome player wrapper (<media-controller>) — replace the whole
     // wrapper so the inlined shadow-DOM controls (Media Chrome's "Pause" /
@@ -9696,14 +9731,16 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
     // the label unreadable on top of it and the box overflowing the column.
     // Climb to the outermost ancestor that still holds nothing but this video
     // (its aspect-ratio/background box), so the whole player goes at once.
+    // The same climb takes a placeholder-postered player whole, so the site's own
+    // stand-in <img>s beside the <video> (deepmind: light + dark grey copies) go too.
     let gifBox: Element | null = null;
-    if (video.hasAttribute('loop') && !video.getAttribute('poster')) {
+    if (placeholder || (video.hasAttribute('loop') && !video.getAttribute('poster'))) {
       let cur: Element | null = video.parentElement;
       for (let i = 0; i < 6 && cur; i++) {
         // Stop before a node that holds sibling content (the post's text), so
         // only the player subtree is ever replaced.
         if (cur.querySelectorAll('video').length !== 1) break;
-        if ((cur.textContent ?? '').replace(/\s+/g, '').replace(/GIF/gi, '').length > 0) break;
+        if (textOutsidePlayer(cur).replace(/\s+/g, '').replace(/GIF/gi, '').length > 0) break;
         gifBox = cur;
         cur = cur.parentElement;
       }
@@ -9732,11 +9769,7 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
       // when the poster is base64: a poster that already has an http URL
       // publishes itself.
       if (/^data:/i.test(poster)) {
-        const sourceEls = Array.from(video.querySelectorAll('source'));
-        const realUrl = video.getAttribute('src')
-          ?? sourceEls.find(s => /mp4/i.test(s.getAttribute('type') ?? '')
-              || /\.mp4($|\?)/i.test(s.getAttribute('src') ?? ''))?.getAttribute('src')
-          ?? sourceEls[0]?.getAttribute('src') ?? '';
+        const realUrl = videoSourceUrl(video);
         if (/^https:/i.test(realUrl)) img.setAttribute('data-dx-src', realUrl);
       }
       // A site tagger can stamp `data-dx-link` on a video whose poster only
@@ -9875,9 +9908,8 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
       return;
     }
     // No usable poster. Try to produce a "▶ Video" link from the first <source>.
-    const srcUrl = video.getAttribute('src') ??
-      video.querySelector('source')?.getAttribute('src') ?? null;
-    if (srcUrl && /^https:/i.test(srcUrl)) {
+    const srcUrl = videoSourceUrl(video);
+    if (/^https:/i.test(srcUrl)) {
       const a = document.createElement('a');
       a.href = srcUrl;
       a.className = 'dx-video-link';
