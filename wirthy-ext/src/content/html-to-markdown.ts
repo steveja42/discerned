@@ -1,0 +1,757 @@
+// Role: Content Script — HTML → Markdown converter for long-form (NIP-23) casts
+// Description: Converts a clip's sanitised capture HTML (bodyHtml for article/full-page,
+//              selectionText for selections) into CommonMark for a kind-30023 event body.
+//              Uses turndown for structural fidelity (headings, nested lists, links,
+//              blockquotes, code) + a GFM table/strikethrough rule (the web feed renders
+//              with remarkGfm). Wirthy-specific rules: (1) drop data: (base64) images —
+//              private + oversize for relays; only real http(s) URLs survive as ![alt](url);
+//              (2) drop chrome images (avatars/logos/icons) that would otherwise render
+//              full-width; (3) drop pure-chrome dx-* engagement/zap rows; (4) re-emit
+//              stat/byline leaf text with separators so name/handle/time/counts don't glue.
+//              A DOM pre-pass (separateInlineFacets) re-derives the inline spacing the clip
+//              gets from applyFlexSeparation, since that marker never reaches this converter.
+//              All other dx-* wrappers collapse to their text/links automatically.
+// Access: DOM (turndown parses HTML via the ambient document / DOMParser)
+
+import TurndownService from 'turndown';
+import { strikethrough } from 'turndown-plugin-gfm';
+
+// dx-* marker classes that are pure page chrome with no prose value in a
+// long-form article. Collapsing them to text would leak raw icon glyphs, so we
+// remove them wholesale. dx-stats is NOT here — its counts are re-emitted as a
+// clean "8 · 528 · 62" row by the dx-stats-counts rule below.
+const CHROME_MARKER_CLASSES = ['dx-zaps-row'];
+
+// Link text that is a UI verb, not content — a stats row legitimately holds
+// these ("Notifications", "Fork", "Add to Google"), so they must not make the
+// row look like a content list. Kept narrow: only whole-text matches.
+const STATS_CHROME_LINK_RE =
+  /^(share|save|saved|follow|following|unfollow|notifications?|fork|star|watch|login|log ?in|sign ?in|sign ?up|register|subscribe|report|reply|replies|comments?|like|likes|edit|delete|copy link|permalink|add to google|add .{0,30} on google|more|see more|show more|view more|load more|next|previous|prev|home|menu|search|settings|help|download|install|deploy|preview|cancel|submit|send|done|close|back|top|new|newest|oldest|popular|latest|sort|filter|print|rate|contribute|suggest an edit)$/i;
+
+// Inside a list item, a dx-* rule must emit INLINE. A block construct
+// (blockquote, or a `**line**` wrapped in blank lines) leaves the <li> empty
+// and its content indented after a blank line — which CommonMark parses as an
+// indented CODE BLOCK, so `**Headline**` renders literally in a code box
+// (time.com's "Recommended Stories" cards, smashingmagazine's workshop cards).
+function inListItem(node: Node): boolean {
+  return !!(node as Element).parentElement?.closest('li');
+}
+
+// A link whose own text is real content (a track title, a product name, a
+// tag) rather than a count or a UI verb. Its presence is what separates a
+// content row the tagger over-matched from a genuine engagement strip.
+function hasContentLink(el: HTMLElement): boolean {
+  return Array.from(el.querySelectorAll('a')).some((a) => {
+    const t = (a.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (t.length < 4 || !/[A-Za-zÀ-ɏ]{3,}/.test(t)) return false;
+    if (STATS_CHROME_LINK_RE.test(t)) return false;
+    // A bare count ("3.2M", "13.8k") is a stat, however it is linked.
+    return !/^\d[\d,.]*[KMB]?$/i.test(t);
+  });
+}
+
+// Collect the visible text of each LEAF (an element with no child elements, or
+// a bare text node) under `el`, in document order. Whitespace-collapsed, empties
+// dropped, and adjacent duplicates removed. Used to separate byline/header leaf
+// nodes that the source renders with no whitespace between them (name + handle +
+// time, YouTube's channel + subscriber rows) — flattening textContent would glue
+// them ("Gigidergigi.com"). Dropping adjacent duplicates also collapses the
+// repeated facets Bluesky emits (e.g. two identical hashtag <a>s in a row).
+function leafTexts(el: HTMLElement): string[] {
+  const out: string[] = [];
+  const push = (raw: string) => {
+    const t = raw.replace(/\s+/g, ' ').trim();
+    if (t && out[out.length - 1] !== t) out.push(t);
+  };
+  const walk = (node: Node) => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3 /* TEXT_NODE */) {
+        push(child.textContent ?? '');
+      } else if (child.nodeType === 1 /* ELEMENT_NODE */) {
+        const child2 = child as Element;
+        if (child2.children.length === 0) {
+          push(child2.textContent ?? '');
+        } else {
+          walk(child2);
+        }
+      }
+    }
+  };
+  walk(el);
+  return out;
+}
+
+// alt / src-filename tokens that mark an <img> as chrome (avatar, logo, icon,
+// badge, favicon, profile picture) rather than article content. Matched against
+// both the alt text and the URL's filename stem.
+const CHROME_IMG_RE =
+  /\b(avatar|logo|icon|favicon|badge|profile[\s_-]?(pic|picture|photo)|user[\s_-]?(pic|image)|emoji|sprite)\b/i;
+
+// An <img> that IS an emoji, returning the character to emit in its place.
+//
+// Every major site that substitutes emoji images puts the character itself in
+// the alt — X/Twemoji (`<img alt="🇺🇸" src=".../emoji/v2/svg/1f1fa-1f1f8.svg">`),
+// GitHub, Slack, Discourse. So the recovery is just the alt, and the guard is
+// that the alt must be ONLY emoji (plus optional variation selectors / ZWJ, so
+// flags 🇺🇸, skin tones 👏🏾 and ZWJ sequences 👨‍👩‍👧 all pass), and short — an
+// `alt="😀 Team photo"` on a real picture must not collapse to a glyph.
+//
+// Deliberately alt-driven rather than URL-driven: keying on
+// `abs.twimg.com/emoji/` would fix X alone and miss every other host, and an
+// emoji alt is the one signal they share.
+const EMOJI_ONLY_RE =
+  /^(?:[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Component}‍️]|\s)+$/u;
+
+function emojiFromImage(el: HTMLElement): string | null {
+  const alt = (el.getAttribute('alt') ?? '').trim();
+  if (!alt || alt.length > 16) return null;
+  if (!EMOJI_ONLY_RE.test(alt)) return null;
+  // A bare digit/#/* is Emoji_Component too ("1", "#"), which would turn a
+  // numeric alt into stray text — require at least one real pictograph.
+  if (!/[\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(alt)) return null;
+  return alt;
+}
+
+// Is this <img> layout chrome (avatar/logo/icon) that must NOT become a
+// full-width markdown image? Drops:
+//  - alt="avatar" (legacy explicit marker) and any alt/filename chrome token;
+//  - the img (or an ancestor) tagged dx-avatar, or an ancestor dx-header
+//    (header/byline art — the byline text is re-emitted separately);
+//  - images the capture annotated as small on the live page (avatar-sized): both
+//    width & height ≤ 72 (raised nothing — a genuine 72px content thumbnail is
+//    vanishingly rare, and full-width chrome is the worse failure).
+function isChromeImage(el: HTMLElement): boolean {
+  const alt = (el.getAttribute('alt') ?? '').trim();
+  if (alt.toLowerCase() === 'avatar') return true;
+  const src = el.getAttribute('data-dx-src') || el.getAttribute('src') || '';
+  const rawStem = src.split('?')[0].split('#')[0].split('/').pop() ?? '';
+  let fileStem = rawStem;
+  try { fileStem = decodeURIComponent(rawStem); } catch { /* keep raw on malformed % escapes */ }
+  if (CHROME_IMG_RE.test(alt) || CHROME_IMG_RE.test(fileStem)) return true;
+  // dx-avatar on the img itself or any ancestor wrapper; or inside a dx-header.
+  if (el.closest?.('.dx-avatar, .dx-header')) return true;
+  if (el.className.split(/\s+/).includes('dx-avatar')) return true;
+  const w = parseInt(el.getAttribute('width') ?? '', 10);
+  const h = parseInt(el.getAttribute('height') ?? '', 10);
+  if (Number.isFinite(w) && Number.isFinite(h) && w <= 72 && h <= 72) return true;
+  return false;
+}
+
+// A table used for page LAYOUT rather than data (paulgraham.com holds each whole
+// essay in one <td>). A GFM cell is one line of textContent, so converting it
+// as data discarded every <br><br> paragraph break. Layout = at most one
+// non-empty cell, or a cell carrying multi-paragraph prose no GFM row can hold.
+function isLayoutTable(table: HTMLTableElement): boolean {
+  const cells = Array.from(table.rows).flatMap((r) => Array.from(r.cells));
+  const filled = cells.filter((c) => (c.textContent ?? '').trim() || c.querySelector('img'));
+  if (filled.length <= 1) return true;
+  // <br><br> runs are already <p>s here (brPairsToParagraphs runs first).
+  return filled.some((c) =>
+    (c.textContent ?? '').trim().length >= 500
+    && !!c.querySelector('p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre'));
+}
+
+let service: TurndownService | null = null;
+
+function getService(): TurndownService {
+  if (service) return service;
+  const td = new TurndownService({
+    headingStyle: 'atx',
+    codeBlockStyle: 'fenced',
+    bulletListMarker: '-',
+    emDelimiter: '*',
+    linkStyle: 'inlined',
+  });
+
+  // GFM strikethrough (~~del~~). Not the full `gfm` bundle — task lists /
+  // autolinks aren't relevant to captured article HTML and the autolink rule
+  // would fight our own safe-links rule.
+  td.use(strikethrough);
+
+  // Fenced code for a bare <pre>. Turndown's own fencedCodeBlock rule requires
+  // `pre > code` as the FIRST child; a <pre> holding plain text (WordPress /
+  // Hackaday shell listings) falls through to default text handling and is
+  // emitted UNFENCED — its leading-`#` comment lines then read as ATX headings
+  // and render as giant fake section titles in the cast.
+  td.addRule('fenced-bare-pre', {
+    filter: (node) =>
+      node.nodeName === 'PRE' &&
+      !(node.firstChild && node.firstChild.nodeName === 'CODE'),
+    replacement: (_content, node) => {
+      const code = (node.textContent ?? '').replace(/\n$/, '');
+      if (code.trim().length === 0) return '';
+      // Widen the fence past any backtick run inside the code, as turndown does.
+      const longest = (code.match(/`+/g) ?? []).reduce((n, m) => Math.max(n, m.length), 0);
+      const fence = '`'.repeat(Math.max(3, longest + 1));
+      return `\n\n${fence}\n${code}\n${fence}\n\n`;
+    },
+  });
+
+  // Tables → GFM. Base turndown has NO <table> rule at all, so without this an
+  // infobox (Wikipedia) or any data table flattens into a bare column of cell
+  // text. The web renderer loads remarkGfm, so a `| … | … |` GFM table
+  // round-trips. We do NOT use turndown-plugin-gfm's `tables` rule because it
+  // `keep()`s any table WITHOUT an all-<th> heading row as raw HTML — and
+  // ReactMarkdown drops raw HTML, so such a table would VANISH from the cast.
+  // Infobox key/value tables almost never have an all-<th> first row. Our rule
+  // ALWAYS emits a GFM table, synthesising a blank header row when the source
+  // has none (GFM requires a header + delimiter row to render at all).
+  td.addRule('gfm-table-always', {
+    filter: (node) => node.nodeName === 'TABLE',
+    replacement: (content, node) => {
+      const table = node as HTMLTableElement;
+      // A LAYOUT table is page structure, not data: emit its converted content.
+      if (isLayoutTable(table)) return `\n\n${content}\n\n`;
+      const rows = Array.from(table.querySelectorAll('tr'));
+      if (rows.length === 0) return '';
+      // Cell text, single-lined and pipe-escaped (a literal | would break the
+      // column layout). Empty cells become a non-breaking placeholder so the
+      // column count stays consistent.
+      const cellText = (cell: Element): string =>
+        (cell.textContent ?? '').replace(/\s+/g, ' ').replace(/\|/g, '\\|').trim();
+      const rowCells = (tr: Element): string[] =>
+        Array.from(tr.querySelectorAll('th, td')).map(cellText);
+      const bodyRows = rows.map(rowCells).filter((r) => r.length > 0);
+      if (bodyRows.length === 0) return '';
+      const cols = Math.max(...bodyRows.map((r) => r.length));
+      const pad = (r: string[]): string[] =>
+        r.length >= cols ? r.slice(0, cols) : [...r, ...Array(cols - r.length).fill('')];
+      // A heading row = the first <tr> is entirely <th>. Otherwise synthesise a
+      // blank header (GFM requires a header + delimiter row to render at all).
+      const firstTr = rows[0];
+      const firstAllTh =
+        firstTr.querySelectorAll('th').length > 0 &&
+        firstTr.querySelectorAll('td').length === 0;
+      const header = firstAllTh ? pad(bodyRows[0]) : Array(cols).fill('');
+      const dataRows = firstAllTh ? bodyRows.slice(1) : bodyRows;
+      const line = (cells: string[]) => `| ${pad(cells).join(' | ')} |`;
+      const out = [
+        line(header),
+        `| ${Array(cols).fill('---').join(' | ')} |`,
+        ...dataRows.map(line),
+      ];
+      return `\n\n${out.join('\n')}\n\n`;
+    },
+  });
+
+  // Images: publish a real http(s) URL, never a data: URI (private + oversize
+  // for relays). The capture pipeline inlines images as base64 in `src` but
+  // preserves the original URL in `data-dx-src` (see inlineAllImages). Prefer
+  // that; fall back to `src` when it is itself http(s); otherwise drop the image.
+  td.addRule('image-real-url', {
+    filter: 'img',
+    replacement: (_content, node) => {
+      const el = node as HTMLElement;
+      // An EMOJI image is content, not chrome — X (and Slack/GitHub/Discourse)
+      // renders emoji as <img> with the character itself in the alt:
+      //   <img alt="🇺🇸" src="https://abs.twimg.com/emoji/v2/svg/1f1fa-1f1f8.svg">
+      // Emit the CHARACTER, not the image. Publishing `![🇺🇸](…)` would look
+      // right here — MdImg can size it — but a cast is a public Nostr event,
+      // and Twemoji assets are SVG (no intrinsic size), so a client without
+      // our CSS scales one to the container width: a flag as wide as the post.
+      // The alt already holds the real emoji, so the character costs no bytes,
+      // needs no renderer support, and displays correctly in every client.
+      // Checked BEFORE isChromeImage, which would otherwise drop it silently
+      // on the ≤72px rule and lose the emoji from the sentence entirely.
+      const emojiAlt = emojiFromImage(el);
+      if (emojiAlt) return emojiAlt;
+      // Avatars, logos, and icon-chrome are layout, not content — in markdown
+      // they carry no class/size, so the web renderer draws them full-width (a
+      // giant face/logo above every post). Drop them; keep real content images.
+      if (isChromeImage(el)) return '';
+      const dxSrc = el.getAttribute('data-dx-src') ?? '';
+      const src = el.getAttribute('src') ?? '';
+      const url = /^https?:/i.test(dxSrc)
+        ? dxSrc
+        : /^https?:/i.test(src)
+          ? src
+          : '';
+      if (!url) return '';
+      const alt = (el.getAttribute('alt') ?? '').replace(/\n+/g, ' ');
+      // A poster whose only publishable URL is the VIDEO it came from (a bsky
+      // GIF: the frame is a canvas grab with no address of its own, so
+      // data-dx-src carries the .mp4). `![](…mp4)` is a broken image in every
+      // client, so publish it as a LINK instead — the clip still shows the
+      // real frame, and the cast points at something that plays.
+      if (/\.(mp4|webm|m4v|mov)($|\?)/i.test(url)) {
+        return `[${alt && alt !== 'Video' ? alt : '▶ Video'}](${url})`;
+      }
+      return `![${alt}](${url})`;
+    },
+  });
+
+  // Links, safely. Turndown's built-in rule wraps ANY anchor content in
+  // [content](href) — an anchor with block children (primal's quote-note cards,
+  // avatar wrappers) produces a link containing blank lines, which is invalid
+  // markdown and renders as literal "](https://…)" spills. Never wrap
+  // multi-line content; drop links whose content vanished (e.g. an avatar img
+  // removed above); keep plain single-line links as real links.
+  td.addRule('safe-links', {
+    filter: (node) => node.nodeName === 'A',
+    replacement: (content, node) => {
+      const href = (node as HTMLElement).getAttribute('href') ?? '';
+      let text = content.trim();
+      if (!text) return '';
+      if (/\n/.test(text) || !/^https?:/i.test(href)) return content;
+      // Strip block markers the inner content produced. An anchor wrapping a
+      // heading (Snapchat /web wraps the avatar AND the username in one link,
+      // and the username is an <h3>) collapsed to `[### name](url)`, which
+      // renders with a line struck through it. The link is the anchor's job;
+      // the heading level is meaningless inside one.
+      text = text.replace(/^#{1,6}\s+/, '').replace(/^>\s+/, '').trim();
+      if (!text) return '';
+      return `[${text}](${href})`;
+    },
+  });
+
+  // Quoted/embedded note cards (primal's bordered quote is one big <a>):
+  // render as a markdown blockquote instead of a link.
+  td.addRule('dx-quote-block', {
+    filter: (node) => {
+      const cls = (node.getAttribute?.('class') ?? '').split(/\s+/);
+      return cls.includes('dx-quote') || cls.includes('dx-quote-frag');
+    },
+    replacement: (content, node) => {
+      const inner = content.trim();
+      if (!inner) return '';
+      if (inListItem(node)) return inner.replace(/\s*\n+\s*/g, ' ');
+      const quoted = inner.split('\n').map((l) => (l.trim() ? `> ${l}` : '>')).join('\n');
+      return `\n\n${quoted}\n\n`;
+    },
+  });
+
+  // Post headers / bylines: collapse the name + handle + time link soup into a
+  // single bold plain-text line ("**Gigi · dergigi.com · 1 mo.**") — no avatar,
+  // no profile/timestamp links.
+  //
+  // The name/handle/time (and YouTube's channel/subscriber rows) sit in separate
+  // LEAF nodes with NO whitespace between them, so flattening textContent glues
+  // them ("Gigidergigi.com", "jawed6.3M subscribers"). Instead collect each
+  // leaf's own text and join with " · " — mirrors the dx-stats-counts leaf-walk.
+  td.addRule('dx-header-line', {
+    filter: (node) => {
+      const cls = (node.getAttribute?.('class') ?? '').split(/\s+/);
+      return ['dx-header', 'dx-author', 'dx-byline', 'dx-byline-col'].some((c) => cls.includes(c));
+    },
+    replacement: (_content, node) => {
+      const parts = leafTexts(node as HTMLElement).map((t) => t.replace(/\*/g, ''));
+      const joined = parts.join(' · ');
+      if (!joined) return '';
+      return inListItem(node) ? `**${joined}**` : `\n\n**${joined}**\n\n`;
+    },
+  });
+
+  // Engagement rows: re-emit just the counts with separators ("8 · 528 · 62")
+  // instead of dropping the row (casts should keep a stat line) or flattening
+  // it into glued digits. The counts sit in separate leaf nodes with no
+  // whitespace between them (primal: <div><div>8</div></div><div><div>528</div>…),
+  // so textContent alone reads "852862" — collect each leaf's own text instead.
+  // A row carrying a content link is a CONTENT row the tagger over-matched (a
+  // Spotify/Apple Music track, a ProductHunt launch, an IMDb genre list), not
+  // an engagement strip — the tagger only needs it to be a short flex row of
+  // icon-bearing children, which a track row is. Reducing it to counts turned
+  // a 10-track album into "1 · 1, 2 · 2" while the CLIP rendered it perfectly.
+  // Measured across the 206-domain corpus: 37 domains, ~6.3k chars of prose.
+  td.addRule('dx-stats-counts', {
+    filter: (node) => (node.getAttribute?.('class') ?? '').split(/\s+/).includes('dx-stats'),
+    replacement: (content, node) => {
+      const el = node as HTMLElement;
+      // Content row: keep everything, but flatten to ONE line. The tagger
+      // matched it because it IS a single visual row, and turndown would
+      // otherwise emit each wrapper div as its own paragraph — a 10-track album
+      // sprayed over 30 blocks. Links survive, so titles stay clickable.
+      if (hasContentLink(el)) {
+        const line = content
+          .replace(/\s*\n+\s*/g, ' · ')
+          .replace(/\]\(([^)\s]+)\)(?=\[)/g, ']($1) ') // adjacent links glue otherwise
+          .replace(/(?:\s*·\s*)+/g, ' · ')
+          .replace(/^\s*·\s*|\s*·\s*$/g, '')
+          .trim();
+        if (!line) return '';
+        return inListItem(node) ? line : `\n\n${line}\n\n`;
+      }
+      // A timecode is one value, not a number: "1:04" must not truncate to "1"
+      // (a track duration), so the m:ss / h:mm:ss form is matched first.
+      const COUNT_RE = /\b\d{1,2}(?::\d{2}){1,2}\b|\b\d[\d,.]*[KMB]?\b/i;
+      const counts: string[] = [];
+      // Every element with no child elements is a leaf; pull the numeric count
+      // out of its text (which may carry a leading icon glyph, e.g. "❤ 12").
+      el.querySelectorAll('*').forEach((leaf) => {
+        if (leaf.children.length > 0) return;
+        const m = COUNT_RE.exec((leaf.textContent ?? '').trim());
+        if (m) counts.push(m[0]);
+      });
+      // Fallback: no nested leaves (flat text) — pull every number from the text.
+      if (counts.length === 0) {
+        const all = (el.textContent ?? '').match(new RegExp(COUNT_RE, 'gi'));
+        if (all) counts.push(...all);
+      }
+      if (counts.length === 0) return '';
+      const row = counts.join(' · ');
+      return inListItem(node) ? row : `\n\n${row}\n\n`;
+    },
+  });
+
+  // Drop pure-chrome dx-* engagement/zap rows entirely.
+  td.addRule('drop-dx-chrome', {
+    filter: (node) => {
+      const cls = node.getAttribute?.('class');
+      if (!cls) return false;
+      return CHROME_MARKER_CLASSES.some((c) => cls.split(/\s+/).includes(c));
+    },
+    replacement: () => '',
+  });
+
+  // Tweet header: <span class="tweet-name">CIA</span><span class="tweet-handle">
+  // @CIA</span> with no whitespace between → "CIA@CIA". Rebuild as
+  // "**CIA** @CIA" so name and handle are separated and the avatar (block
+  // sibling, dropped by the image rule) doesn't leave a dangling wrapper.
+  td.addRule('tweet-header-line', {
+    filter: (node) =>
+      (node.getAttribute?.('class') ?? '').split(/\s+/).includes('tweet-header'),
+    replacement: (_content, node) => {
+      const el = node as HTMLElement;
+      const name = (el.querySelector('.tweet-name')?.textContent ?? '').replace(/\s+/g, ' ').replace(/\*/g, '').trim();
+      const handle = (el.querySelector('.tweet-handle')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+      // The avatar is deliberately NOT published. A cast is a public Nostr
+      // event read by clients that have none of our CSS, and markdown cannot
+      // express an image size — so `![](face.jpg)` is drawn full-width in
+      // Damus/Amethyst/Primal, putting a portrait above every post (and one
+      // per reply on a thread). A byline renders as text everywhere; that is
+      // worth more than an avatar that only looks right in one client.
+      const line = [name && `**${name}**`, handle].filter(Boolean).join(' ');
+      return line ? `\n\n${line}\n\n` : '';
+    },
+  });
+
+  // Tweet reply: a conversation capture stacks the focused tweet and each
+  // reply as sibling cards. In the CLIP the indent + rule make the boundary
+  // obvious; the cast has no such CSS, so without an explicit separator the
+  // replies run together and read as one long post by the original author.
+  // Emit a horizontal rule before each reply. Inline inside an <li> — a
+  // block-emitting rule there falls out of the list and parses as an indented
+  // CODE block (see the dx-quote-block / dx-header-line cases above).
+  td.addRule('tweet-reply-separator', {
+    filter: (node) =>
+      (node.getAttribute?.('class') ?? '').split(/\s+/).includes('tweet-reply'),
+    replacement: (content, node) =>
+      inListItem(node) ? content : `\n\n---\n${content}\n\n`,
+  });
+
+  // Tweet video: the <a class="tweet-video"> anchor wraps BLOCK children (the
+  // play-overlay <div> and duration <span>) — turndown would emit a link whose
+  // text contains blank lines, which is invalid markdown and renders as the
+  // image followed by a literal "](https://…)" spill. Replace the whole anchor
+  // with a clean linked poster image instead.
+  td.addRule('tweet-video-poster', {
+    filter: (node) =>
+      node.nodeName === 'A' &&
+      (node.getAttribute?.('class') ?? '').split(/\s+/).includes('tweet-video'),
+    replacement: (_content, node) => {
+      const el = node as HTMLElement;
+      const img = el.querySelector('img');
+      const dxSrc = img?.getAttribute('data-dx-src') ?? '';
+      const src = img?.getAttribute('src') ?? '';
+      const imgUrl = /^https?:/i.test(dxSrc) ? dxSrc : /^https?:/i.test(src) ? src : '';
+      // A canvas-grabbed poster's data-dx-src is the VIDEO file, not an image.
+      const url = /\.(mp4|webm|m4v|mov|ogv)($|\?)/i.test(imgUrl) ? '' : imgUrl;
+      const href = el.getAttribute('href') ?? '';
+      const linkable = /^https?:/i.test(href);
+      // No http(s) poster: the image is a canvas grab off a blob: stream, so it
+      // exists only as a data: URI that a cast must not carry (base64 art is far
+      // too large for a relay — see the image-real-url rule). Returning '' here
+      // dropped the WHOLE card, which on Snapchat /web is the entire post: the
+      // clip showed poster + views + author + caption while the cast rendered
+      // "2.4M / M'kidoWtf / 32K" with no video at all. Emit the link instead, so
+      // the cast still points at something playable.
+      if (!url) return linkable ? `\n\n[▶ Watch video](${href})\n\n` : '';
+      const image = `![Video thumbnail](${url})`;
+      return `\n\n${linkable ? `[${image}](${href})` : image}\n\n`;
+    },
+  });
+
+  // Tweet footer: date/views are inline <a>/<span> siblings and each stat is
+  // an svg icon (dropped, it has no text) + a bare count span — flattening
+  // them concatenates into "202663.5M Views4.9K13K163K44K". Rebuild the line
+  // with explicit separators and the stat glyphs the kind-1 body uses.
+  td.addRule('tweet-footer-meta', {
+    filter: (node) =>
+      (node.getAttribute?.('class') ?? '').split(/\s+/).includes('tweet-footer'),
+    replacement: (_content, node) => {
+      const el = node as HTMLElement;
+      const STAT_EMOJI: Array<[RegExp, string]> = [
+        [/repl/i, '💬'], [/repost|retweet/i, '🔁'], [/like/i, '❤️'], [/bookmark/i, '🔖'],
+      ];
+      const parts: string[] = [];
+      el.querySelectorAll('.tweet-date').forEach((d) => {
+        const t = (d.textContent ?? '').trim();
+        if (t) parts.push(t);
+      });
+      el.querySelectorAll('.tweet-stat').forEach((s) => {
+        const count = (s.querySelector('.tweet-stat-count')?.textContent ?? '').trim();
+        if (!count) return;
+        const label = s.getAttribute('aria-label') ?? '';
+        const emoji = STAT_EMOJI.find(([re]) => re.test(label))?.[1] ?? '';
+        parts.push(emoji ? `${emoji} ${count}` : count);
+      });
+      return parts.length > 0 ? `\n\n${parts.join('  ·  ')}\n\n` : '';
+    },
+  });
+
+  service = td;
+  return td;
+}
+
+// Inline elements whose adjacency, with NO whitespace between them, means the
+// source glued visually-separated runs. Bluesky renders post bodies as facets —
+// hashtags/mentions/links are separate <a>/<span> nodes with no whitespace
+// between them (and between paragraphs), so turndown concatenates them into one
+// line ("…#TRCMP RCMP#TRCMP…"). The clip fixes this via applyFlexSeparation
+// (FLEXSEP_MARKER), but that marker never reaches the markdown converter — so we
+// re-derive the same spacing here from inline-element adjacency.
+const INLINE_FACET_TAGS = new Set(['A', 'SPAN', 'STRONG', 'EM', 'B', 'I', 'MARK', 'ABBR', 'TIME', 'CODE']);
+
+// A hashtag/mention facet — a link or span whose whole text is "#tag" / "@user".
+function facetKey(el: Element): string {
+  const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+  return /^[#@]\S+$/.test(t) ? t.toLowerCase() : '';
+}
+
+// Preformatted context: <pre> and <code> declare their own whitespace to be
+// authoritative, so a boundary there was never a visual gap. A syntax
+// highlighter emits one <span> per token with no whitespace between them, and
+// separating those produced "apiVersion : v1", "r . json ( )",
+// "use serde :: { Deserialize , Serialize } ;" across ~14 sites.
+function inPreformatted(el: Element): boolean {
+  return !!el.closest?.('pre, code');
+}
+
+// Punctuation-only glue: an element whose entire text is punctuation was
+// painted flush against its neighbour, never visually separated — a facet wall
+// is "#TRCMP" next to "#RCMP", never "(" next to "nonstandard". This is the
+// PROSE half of the same defect (wiktionary's "( nonstandard )", "Audio ( US ) :"),
+// where no preformatted ancestor exists to rule the boundary out.
+const PUNCT_ONLY_RE = /^[\p{P}\p{S}]+$/u;
+function isPunctuationGlue(a: Element, b: Element): boolean {
+  const at = (a.textContent ?? '').trim();
+  const bt = (b.textContent ?? '').trim();
+  return PUNCT_ONLY_RE.test(at) || PUNCT_ONLY_RE.test(bt);
+}
+
+// DOM pre-pass mirroring applyFlexSeparation for the markdown path: insert a
+// space between adjacent inline facet siblings that the source rendered with no
+// whitespace between them, and collapse consecutive duplicate hashtag/mention
+// facets (Bluesky repeats the same "#tag" <a> back-to-back). Runs on the parsed
+// clone before turndown so the converter sees properly separated text.
+/**
+ * Pull a byline's TIMESTAMP up beside the name it belongs to.
+ *
+ * A post's author link and its "· 3h" permalink are SIBLINGS separated by
+ * wrapper <div>s (bsky's shape, and the same on other feed sites). Turndown
+ * treats those block boundaries as paragraph breaks, so the cast rendered
+ *
+ *     [rissa](…) [@chalissa.bsky.social](…)
+ *
+ *     [· 3h](…)
+ *
+ *     that looks immaculate
+ *
+ * — the timestamp stranded on its own line between the name and the comment.
+ * Moving the anchor to sit directly after the name anchor puts both in one
+ * paragraph, so the byline reads "name @handle · 3h" as it does in the clip.
+ *
+ * Identified by SHAPE, not by site: a short (<= 12 char) link to a
+ * `/post/`-style permalink whose text has no letters beyond a unit suffix, in
+ * the same post as an author link. That keeps it away from prose links, which
+ * are long and word-bearing.
+ */
+function joinBylineTimestamp(root: Element): void {
+  const TIME_TEXT = /^[·•\s]*\d+\s*[smhdwy]$|^[·•\s]*\d+\s*(sec|min|hour|day|week|mo|yr)s?$/i;
+  root.querySelectorAll('a[href*="/post/"], a[href*="/status/"]').forEach((timeLink) => {
+    const text = (timeLink.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (text.length > 12 || !TIME_TEXT.test(text)) return;
+    // The post this timestamp belongs to, and the author link within it.
+    const post = timeLink.closest('.dx-post, .dx-reply, article') ?? root;
+    // The LAST author link before the timestamp — the byline is usually two
+    // anchors (display name, then @handle), and anchoring to the first put the
+    // timestamp between them ("rissa · 3h @chalissa"). It belongs after both.
+    const authorLinks = Array.from(post.querySelectorAll('a')).filter(a =>
+      a !== timeLink
+      && /\/profile\/|\/user\/|\/@/.test(a.getAttribute('href') ?? '')
+      && (a.textContent ?? '').trim().length > 0
+      && !a.querySelector('img')
+      && (a.compareDocumentPosition(timeLink) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0);
+    const nameLink = authorLinks[authorLinks.length - 1];
+    if (!nameLink || nameLink.parentElement === timeLink.parentElement) return;
+    nameLink.parentElement?.insertBefore(timeLink, nameLink.nextSibling);
+    nameLink.parentElement?.insertBefore(
+      (timeLink.ownerDocument ?? document).createTextNode(' '), timeLink);
+  });
+}
+
+function separateInlineFacets(root: Element): void {
+  const all = [root, ...Array.from(root.querySelectorAll('*'))];
+  for (const el of all) {
+    // Skip reconstructed tweet cards — their spacing is already handled by the
+    // dedicated tweet-* rules, and their footers pack intentional adjacency.
+    if (el.closest?.('[class*="tweet-card"]')) continue;
+    const kids = Array.from(el.childNodes);
+    for (let i = 0; i < kids.length - 1; i++) {
+      const a = kids[i];
+      const b = kids[i + 1];
+      if (a.nodeType !== 1 || b.nodeType !== 1) continue;
+      const ea = a as Element;
+      const eb = b as Element;
+      if (!INLINE_FACET_TAGS.has(ea.tagName) || !INLINE_FACET_TAGS.has(eb.tagName)) continue;
+      // Collapse a consecutive duplicate hashtag/mention facet.
+      const ka = facetKey(ea);
+      const kb = facetKey(eb);
+      if (ka && ka === kb) { eb.remove(); kids.splice(i + 1, 1); i--; continue; }
+      const at = ea.textContent ?? '';
+      const bt = eb.textContent ?? '';
+      if (at.length === 0 || bt.length === 0) continue;
+      if (/\s$/.test(at) || /^\s/.test(bt)) continue;
+      // Boundaries the source never rendered as a gap — see the two helpers.
+      if (inPreformatted(ea) || inPreformatted(eb)) continue;
+      if (isPunctuationGlue(ea, eb)) continue;
+      el.insertBefore(el.ownerDocument!.createTextNode(' '), b);
+    }
+  }
+}
+
+// Restore the line breaks a <pre> expresses STRUCTURALLY rather than as text.
+// Both the bare-<pre> rule below and turndown's own fenced-code rule read
+// `textContent`, which ignores <br> and block-level line wrappers — so a code
+// block that marks each line with `<div>…<br></div>` (react.dev's shape, and
+// any Shiki/Sandpack-style renderer) collapsed into ONE line. Only <pre> is
+// touched: elsewhere turndown's own block handling already emits the breaks.
+function restorePreLineBreaks(root: Element): void {
+  for (const pre of Array.from(root.querySelectorAll('pre'))) {
+    const doc = pre.ownerDocument!;
+    for (const br of Array.from(pre.querySelectorAll('br'))) {
+      br.replaceWith(doc.createTextNode('\n'));
+    }
+    // A line wrapper is a DIV/P whose own text does not already end in a
+    // newline — append one so consecutive lines cannot run together.
+    for (const el of Array.from(pre.querySelectorAll('div, p'))) {
+      const t = el.textContent ?? '';
+      if (t.length === 0 || /\n\s*$/.test(t)) continue;
+      el.appendChild(doc.createTextNode('\n'));
+    }
+  }
+}
+
+// Move a trailing <br> out of an emphasis element. `<strong>Heading<br></strong>`
+// converts to "**Heading\n**", where the closing delimiter starts a new line and
+// CommonMark therefore never closes the emphasis — the heading and the paragraph
+// after it merge into one run of bold-looking text (aws-blog's section titles).
+// The break is a separator between the two, so it belongs after the </strong>.
+function liftTrailingBreaks(root: Element): void {
+  for (const em of Array.from(root.querySelectorAll('strong, b, em, i'))) {
+    let last = em.lastChild;
+    // Skip whitespace-only text nodes sitting after the break.
+    while (last && last.nodeType === 3 && !(last.textContent ?? '').trim()) {
+      const prev = last.previousSibling;
+      last.remove();
+      last = prev;
+    }
+    while (last && last.nodeName === 'BR') {
+      const prev = last.previousSibling;
+      em.after(last);
+      last = prev;
+    }
+  }
+}
+
+// `<i>para one<br><br>para two</i>` (Slashdot's quoted excerpts): the pair is a
+// paragraph break, which emphasis cannot span in CommonMark, so both `*` print
+// literally. Close the emphasis before each break and reopen it after.
+function splitEmphasisAtBreakPairs(root: Element): void {
+  const isBlank = (n: ChildNode) => n.nodeType === 3 && !(n.textContent ?? '').trim();
+  // Innermost first, so <b><i>…</i></b> splits the <i> and then the <b>.
+  for (const em of Array.from(root.querySelectorAll('strong, b, em, i')).reverse()) {
+    const kids = Array.from(em.childNodes);
+    const segments: ChildNode[][] = [[]];
+    const breaks: ChildNode[][] = [];
+    for (let i = 0; i < kids.length; i++) {
+      let j = i;
+      let brs = 0;
+      while (j < kids.length && (kids[j].nodeName === 'BR' || isBlank(kids[j]))) {
+        if (kids[j].nodeName === 'BR') brs++;
+        j++;
+      }
+      if (brs >= 2) {
+        breaks.push(kids.slice(i, j));
+        segments.push([]);
+        i = j - 1;
+      } else {
+        segments[segments.length - 1].push(kids[i]);
+      }
+    }
+    if (!breaks.length) continue;
+    const out: Node[] = [];
+    segments.forEach((seg, k) => {
+      if (seg.some(n => !isBlank(n))) {
+        const part = em.cloneNode(false) as Element;
+        part.append(...seg);
+        out.push(part);
+      }
+      if (k < breaks.length) out.push(...breaks[k]);
+    });
+    em.replaceWith(...out);
+  }
+}
+
+// A `<br><br>` run is the paragraph break of pre-CSS pages (paulgraham.com),
+// but turndown emits it as a hard line break. Replace it with an empty <p>,
+// which turndown renders as a blank line. Skipped inside emphasis/links/<pre>,
+// where a blank line would split the delimiters or the code.
+function brPairsToParagraphs(root: Element): void {
+  for (const br of Array.from(root.querySelectorAll('br'))) {
+    if (!br.isConnected || br.closest('pre, strong, b, em, i, a')) continue;
+    const next = br.nextSibling;
+    const second = next?.nodeName === 'BR' ? next
+      : next?.nodeType === 3 && !(next.textContent ?? '').trim() && next.nextSibling?.nodeName === 'BR'
+        ? next.nextSibling : null;
+    if (!second) continue;
+    // Swallow the whole run (3+ <br>s are still one paragraph break).
+    let tail: ChildNode | null = second.nextSibling;
+    while (tail && (tail.nodeName === 'BR' || (tail.nodeType === 3 && !(tail.textContent ?? '').trim()))) {
+      const n: ChildNode | null = tail.nextSibling;
+      tail.remove();
+      tail = n;
+    }
+    if (next !== second) next?.remove();
+    second.remove();
+    br.replaceWith(br.ownerDocument.createElement('p'));
+  }
+}
+
+/**
+ * Convert sanitised capture HTML to CommonMark for a kind-30023 body.
+ * Returns an empty string for empty/whitespace input.
+ */
+export function htmlToMarkdown(html: string): string {
+  const trimmed = (html ?? '').trim();
+  if (trimmed.length === 0) return '';
+  // Pre-pass: re-derive the inline/facet spacing the clip gets from
+  // applyFlexSeparation (its FLEXSEP_MARKER never reaches this string). Parse,
+  // separate glued inline facets + collapse duplicate hashtags, re-serialise.
+  let source = trimmed;
+  try {
+    const doc = new DOMParser().parseFromString(`<div id="__dx_md_root">${trimmed}</div>`, 'text/html');
+    const container = doc.getElementById('__dx_md_root');
+    if (container) {
+      restorePreLineBreaks(container);
+      liftTrailingBreaks(container);
+      splitEmphasisAtBreakPairs(container);
+      brPairsToParagraphs(container);
+      joinBylineTimestamp(container);
+      separateInlineFacets(container);
+      source = container.innerHTML;
+    }
+  } catch { /* fall back to the raw string if DOMParser is unavailable */ }
+  const md = getService().turndown(source);
+  // Collapse 3+ blank lines to a single blank line separator and trim edges.
+  return md.replace(/\n{3,}/g, '\n\n').trim();
+}

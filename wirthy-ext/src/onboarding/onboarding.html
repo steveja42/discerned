@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to Wirthy</title>
+  <style>
+    /* Pre-JS theme fallback, keyed off the OS's own prefers-color-scheme so the
+       very first paint already matches system dark/light — initPageTheme() then
+       corrects it if the user has an explicit stored preference (STORAGE_KEYS.THEME)
+       that differs from the OS default. Mirrors THEME_TOKENS in shared/theme.ts;
+       keep both in sync. */
+    :root {
+      --p-panel-opaque: #09090b;
+      --p-surface: #18181b;
+      --p-surface-2: #27272a;
+      --p-ink: #f4f4f5;
+      --p-ink-2: #d4d4d8;
+      --p-ink-3: #a1a1aa;
+      --p-ink-4: #52525b;
+      --p-rule: #3f3f46;
+      --p-rule-soft: #27272a;
+      --p-accent: #f59e0b;
+      --p-accent-ink: #fbbf24;
+      --p-on-accent: #09090b;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --p-panel-opaque: #efe8da;
+        --p-surface: rgba(246, 241, 232, 0.94);
+        --p-surface-2: rgba(239, 232, 218, 0.94);
+        --p-ink: #1a1714;
+        --p-ink-2: #3a342c;
+        --p-ink-3: #6b6357;
+        --p-ink-4: #6f6658;
+        --p-rule: rgba(26, 23, 20, 0.16);
+        --p-rule-soft: rgba(26, 23, 20, 0.08);
+        --p-accent: oklch(0.62 0.12 65);
+        --p-accent-ink: oklch(0.42 0.10 65);
+        --p-on-accent: #fffaf0;
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--p-panel-opaque);
+      color: var(--p-ink);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+    }
+
+    .logo {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    /* Beacon-on-cliff brand mark (was a 📡 emoji), sized to the wordmark's cap height.
+       viewBox is the mark's TIGHT bbox (5.8 1.95 20.4 29.05) so the rendered height IS
+       the height set here; the raw 0 0 32 32 box would shrink it via unused slack. */
+    .logo svg { width: 22.5px; height: 32px; flex: none; display: block; }
+
+    .tagline {
+      color: var(--p-ink-3);
+      font-size: 0.95rem;
+      margin-bottom: 48px;
+      text-align: center;
+    }
+
+    .card {
+      background: var(--p-surface);
+      border: 1px solid var(--p-rule);
+      border-radius: 16px;
+      padding: 40px;
+      width: 100%;
+      max-width: 460px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .steps-list { display: flex; flex-direction: column; gap: 12px; }
+
+    .step-item { display: flex; gap: 10px; align-items: flex-start; }
+
+    .step-num {
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--p-surface-2); color: var(--p-ink-3);
+      border: 1px solid var(--p-rule);
+      font-size: 0.68rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 1px;
+    }
+
+    .step-text { font-size: 0.82rem; color: var(--p-ink-3); line-height: 1.5; }
+
+    /* Inline beacon icon inside step text — same tight bbox as .logo svg, sized to
+       the surrounding text's cap height and colored via currentColor so it matches
+       whatever ink color the paragraph uses. */
+    .step-icon {
+      width: 10.5px; height: 15px; flex: none;
+      display: inline-block; vertical-align: -2px;
+      margin: 0 1px;
+      color: #60a5fa;
+    }
+
+    .step-text code {
+      background: var(--p-surface-2); border: 1px solid var(--p-rule); border-radius: 4px;
+      padding: 1px 6px; font-size: 0.85em; color: var(--p-accent-ink);
+    }
+
+    .hint {
+      font-size: 0.82rem; color: var(--p-ink-4); line-height: 1.5;
+      border-top: 1px solid var(--p-rule-soft); padding-top: 20px;
+    }
+    /* The footer hint sits directly under the button — no second divider. */
+    .hint-plain { border-top: none; padding-top: 0; }
+    .hint a { color: var(--p-accent-ink); text-decoration: underline; text-underline-offset: 2px; }
+
+    .btn-done {
+      /* Extra top margin on top of the card's 28px gap — the primary action needs
+         to read as separate from the section above it, not as its next control. */
+      margin-top: 12px;
+      padding: 13px 20px; border-radius: 8px; border: none;
+      font-size: 0.9rem; font-weight: 600; cursor: pointer;
+      background: var(--p-accent); color: var(--p-on-accent); transition: opacity 0.15s;
+    }
+    .btn-done:hover { opacity: 0.85; }
+
+    .perm-block {
+      border-top: 1px solid var(--p-rule-soft); padding-top: 24px;
+      display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
+    }
+    .perm-block:first-child { border-top: none; padding-top: 0; }
+    .perm-title { font-size: 1.15rem; font-weight: 600; color: var(--p-ink); }
+    .perm-text { font-size: 0.86rem; color: var(--p-ink-3); line-height: 1.55; }
+    /* Footnote aside — dimmer + smaller than .perm-text so the asterisked caveat
+       reads as secondary to the main explanation, not as a second paragraph. */
+    .perm-note { font-size: 0.8rem; color: var(--p-ink-4); line-height: 1.5; }
+
+    /* Title row with a leading glyph — the block header shape shared by the
+       Nostr and (image-permission) sections. */
+    .block-title { display: flex; align-items: center; gap: 9px; }
+    .block-icon {
+      width: 24px; height: 24px; flex: none; display: block;
+      color: var(--p-accent-ink);
+    }
+    .perm-text a { color: var(--p-accent-ink); text-decoration: underline; text-underline-offset: 2px; }
+    .btn-perm {
+      padding: 10px 16px; border-radius: 8px;
+      border: 1px solid var(--p-accent); background: transparent;
+      color: var(--p-accent-ink); font-size: 0.86rem; font-weight: 600;
+      cursor: pointer; transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-perm:hover:not(:disabled) { background: var(--p-surface-2); }
+    .btn-perm:disabled { opacity: 0.55; cursor: default; }
+    .perm-status { font-size: 0.82rem; color: var(--p-ink-3); }
+
+    /* Pinning instructions — mechanical setup steps, kept visually secondary to
+       the feature sections above (Nostr, image saving) which explain what the
+       product actually does. */
+    .setup-block {
+      border-top: 1px solid var(--p-rule-soft); padding-top: 20px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .setup-title { font-size: 0.78rem; font-weight: 600; color: var(--p-ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
+  </style>
+</head>
+<body>
+
+  <div class="logo">
+    <svg viewBox="5.8 1.95 20.4 29.05" fill="none" aria-hidden="true">
+      <g transform="translate(2.4 -0.6) scale(0.85)">
+        <g stroke="currentColor" stroke-width="1.18" stroke-linecap="round" opacity="0.5">
+          <line x1="16" y1="9" x2="16" y2="3"/><line x1="11.5" y1="10" x2="7.5" y2="6"/>
+          <line x1="20.5" y1="10" x2="24.5" y2="6"/><line x1="9" y1="13" x2="4" y2="12"/>
+          <line x1="23" y1="13" x2="28" y2="12"/>
+        </g>
+        <circle cx="16" cy="14" r="5" fill="currentColor" opacity="0.12"/>
+        <path d="M 15.5 7 L 16.5 7 L 16 4 Z" fill="currentColor"/>
+        <circle cx="16" cy="14" r="2.4" fill="currentColor"/>
+        <rect x="13.2" y="15.5" width="5.6" height="2.4" rx="0.5" fill="currentColor"/>
+        <path d="M 14.2 18 L 17.8 18 L 19.4 31.3 L 12.6 31.3 Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none"/>
+        <line x1="13.4" y1="22.5" x2="18.6" y2="22.5" stroke="currentColor" stroke-width="1.06" opacity="0.7"/>
+        <line x1="13" y1="27" x2="19" y2="27" stroke="currentColor" stroke-width="1.06" opacity="0.7"/>
+      </g>
+      <path d="M 8 26 L 24 26 L 24 29 L 19 31 L 11 30 L 8 28.4 Z" fill="currentColor"/>
+    </svg>
+    <span>Wirthy</span>
+  </div>
+  <p class="tagline">Clip it, rate it, keep it, share it. Build your own library of high-quality information.</p>
+
+  <div class="card">
+    <div class="perm-block">
+      <div class="block-title">
+        <!-- Globe + broadcast arcs: "your clips can travel beyond this device". -->
+        <svg class="block-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="6.4" stroke="currentColor" stroke-width="1.5"/>
+          <ellipse cx="12" cy="12" rx="2.8" ry="6.4" stroke="currentColor" stroke-width="1.3"/>
+          <line x1="5.7" y1="12" x2="18.3" y2="12" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M 20.4 6.6 A 8.6 8.6 0 0 1 20.4 17.4" stroke="currentColor" stroke-width="1.4"
+                stroke-linecap="round" opacity="0.55"/>
+          <path d="M 3.6 6.6 A 8.6 8.6 0 0 0 3.6 17.4" stroke="currentColor" stroke-width="1.4"
+                stroke-linecap="round" opacity="0.55"/>
+        </svg>
+        <h2 class="perm-title">Take your clips beyond this device</h2>
+      </div>
+      <p class="perm-text">
+        You can share your clips with the world by publishing to
+        <a href="https://nstart.me" target="_blank" rel="noopener">Nostr</a> — an open social network
+        where you own your identity, posts and connections.
+        <a href="https://nstart.me" target="_blank" rel="noopener">Find out more →</a>
+      </p>
+    </div>
+    <div class="perm-block" id="perm-block">
+      <div class="block-title">
+        <!-- Framed picture: the saved-image copy that lives inside the clip. -->
+        <svg class="block-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="3.2" y="4.8" width="17.6" height="14.4" rx="2.2"
+                stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="8.6" cy="10" r="1.6" fill="currentColor"/>
+          <path d="M 4.2 16.6 L 9.4 12.2 L 13.2 15.4 L 16.4 12.8 L 20 16"
+                stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h2 class="perm-title">Save images with your clips</h2>
+      </div>
+      <p class="perm-text">
+        Wirthy can store a copy of each image inside the clip*, so it still looks
+        right if the original page changes or disappears. Without this, clips link
+        back to the pictures on the original site, which can break over time.
+      </p>
+      <p class="perm-note">
+        * Your private clips only. Anything you publish always links to images where
+        they already live — stored copies are far too large to publish.
+      </p>
+      <button class="btn-perm" id="btn-perm" type="button">Save images in my clips</button>
+      <p class="perm-status" id="perm-status" hidden></p>
+    </div>
+
+    <div class="setup-block">
+      <p class="setup-title">Pin Wirthy to your toolbar</p>
+      <div class="steps-list">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <p class="step-text">Click the <code>Extensions</code> puzzle-piece icon in Chrome's top-right toolbar.</p>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <p class="step-text">Find the <strong>Wirthy</strong> beacon <svg class="step-icon" viewBox="5.8 1.95 20.4 29.05" fill="none" aria-hidden="true">
+            <g transform="translate(2.4 -0.6) scale(0.85)">
+              <g stroke="currentColor" stroke-width="1.18" stroke-linecap="round" opacity="0.5">
+                <line x1="16" y1="9" x2="16" y2="3"/><line x1="11.5" y1="10" x2="7.5" y2="6"/>
+                <line x1="20.5" y1="10" x2="24.5" y2="6"/><line x1="9" y1="13" x2="4" y2="12"/>
+                <line x1="23" y1="13" x2="28" y2="12"/>
+              </g>
+              <circle cx="16" cy="14" r="5" fill="currentColor" opacity="0.12"/>
+              <path d="M 15.5 7 L 16.5 7 L 16 4 Z" fill="currentColor"/>
+              <circle cx="16" cy="14" r="2.4" fill="currentColor"/>
+              <rect x="13.2" y="15.5" width="5.6" height="2.4" rx="0.5" fill="currentColor"/>
+              <path d="M 14.2 18 L 17.8 18 L 19.4 31.3 L 12.6 31.3 Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none"/>
+              <line x1="13.4" y1="22.5" x2="18.6" y2="22.5" stroke="currentColor" stroke-width="1.06" opacity="0.7"/>
+              <line x1="13" y1="27" x2="19" y2="27" stroke="currentColor" stroke-width="1.06" opacity="0.7"/>
+            </g>
+            <path d="M 8 26 L 24 26 L 24 29 L 19 31 L 11 30 L 8 28.4 Z" fill="currentColor"/>
+          </svg> in the list.</p>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <p class="step-text">Click the <strong>pin</strong> icon 📌 next to it so the Wirthy beacon stays visible in your toolbar.</p>
+        </div>
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <p class="step-text">Browse to any page, then <strong>right-click</strong> or click the Wirthy beacon to clip and rate the page content.</p>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-done" id="btn-done">Got it — start using Wirthy →</button>
+
+    <p class="hint hint-plain" style="margin-top: 16px; text-align: center;">
+      Something not working?
+      <a href="https://wirthy.app/feedback?target=extension" target="_blank" rel="noopener">Report it</a>.
+    </p>
+  </div>
+
+  <script type="module" src="./onboarding.ts"></script>
+</body>
+</html>

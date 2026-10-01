@@ -1,0 +1,320 @@
+# UI text — Wirthy extension
+
+Every string the user can read, grouped by where it appears. Source file and line are
+given per section so a text change can be traced to the code that renders it.
+
+Two registers live here and should be edited differently: **marketing text** (taglines,
+the gate, the connect intro) is persuasive and free to rewrite; **functional text**
+(validation errors, status lines, the key-backup warning) is UX and safety text where
+precision matters more than tone.
+
+**Scope:** the extension only. The web app (`wirthy-web/`) has its own copy, and the
+Chrome Web Store "detailed description" (the long listing field) lives in the Web Store
+dashboard, not in this repo — see the gap noted at the end.
+
+**Vocabulary rule.** *Publish* is used before the user has learned the product (store
+listing, onboarding, the connect flow); *cast* is used inside the product, once the
+Clip/Cast slider has taught the term. Both refer to the same action.
+
+**Claim discipline.** Clips are **not encrypted at rest** — the IndexedDB row's field is
+named `encrypted` but holds plaintext JSON (NIP-44 is stubbed). Copy therefore says
+"stays on this device", never "encrypted", "secure", or "only you can read". The one real
+encryption is the stored private key (NIP-49, PIN-derived), and only that copy says so.
+Ownership and portability are attributed to **Nostr**, which delivers them; Wirthy
+itself promises no reputation score and no follow graph.
+
+---
+
+## 1. Chrome Web Store listing
+
+`manifest.json` — [name + description](manifest.json#L3-L5)
+
+| Field | Text |
+|---|---|
+| Name | Wirthy |
+| Description (132 char max; currently 119) | A web clipper with a Signal Rating. Keep what's worth reading, skip the rest, and publish your ratings when you choose. |
+
+Shown in store search results, on the store item page, in `chrome://extensions`, and in
+the puzzle-piece menu. Also indexed by store search — "web clipper" is the load-bearing
+phrase.
+
+---
+
+## 2. Onboarding page
+
+Opens in a tab on first install. [src/onboarding/onboarding.html](src/onboarding/onboarding.html)
+
+| Element | Text |
+|---|---|
+| Title (browser tab) | Welcome to Wirthy |
+| Wordmark | Wirthy |
+| [Tagline](src/onboarding/onboarding.html#L140) | Clip it, rate it, keep it. Build your own library of what's worth reading. |
+| [Lede](src/onboarding/onboarding.html#L143) | Wirthy helps you build your own trusted library of high-quality information. |
+| [Card heading](src/onboarding/onboarding.html#L144) | Pin Wirthy to your toolbar |
+| [Step 1](src/onboarding/onboarding.html#L149) | Click the `Extensions` puzzle-piece icon in Chrome's top-right toolbar. |
+| [Step 2](src/onboarding/onboarding.html#L153) | Find **Wirthy** in the list. |
+| [Step 3](src/onboarding/onboarding.html#L157) | Click the **pin** icon 📌 next to it so the Wirthy beacon stays visible in your toolbar. |
+| [Step 4](src/onboarding/onboarding.html#L161) | Browse to any page, then **right-click** or click the Wirthy beacon to clip and rate what you're reading. |
+| [Hint](src/onboarding/onboarding.html#L165-L168) | Your clips stay on this device unless you choose to publish them. Publishing uses Nostr — an open social network where you own your identity and your posts. |
+| [Button](src/onboarding/onboarding.html#L170) | Got it — start using Wirthy → |
+| [Footer](src/onboarding/onboarding.html#L172-L175) | Something not working? [Report it](https://wirthy.app/feedback?target=extension). |
+
+The **lede** sits above the pinning steps so the first thing the page says is what the
+product is for, not how to pin it. It carries a `.lede` rule of its own (the card is a
+flex column, so it inherits card spacing and only needs type styling).
+
+---
+
+## 3. Toolbar popup (restricted pages only)
+
+Shown only when the toolbar icon is clicked on a page where content scripts can't run
+(`chrome://`, `file://`, the Web Store). Normal pages open the overlay instead.
+[src/popup/popup.html](src/popup/popup.html#L56-L57)
+
+| Element | Text |
+|---|---|
+| Heading | Wirthy can't clip this page |
+| Body | Browser-internal pages (chrome://, file://, the Web Store) don't allow extensions to inject the clipper. Open a normal web page and try again. |
+
+---
+
+## 4. Overlay — gate (first run, guests)
+
+The first screen a new user sees. [src/content/overlay.ts](src/content/overlay.ts#L424-L455)
+
+### 4a. No signing extension detected
+
+| Element | Text |
+|---|---|
+| Icon | 🔒 |
+| Title | Start local, publish when ready |
+| Body | Clip what's worth reading, rate it, and build a library of high-quality information. It all stays on this device. Connect a Nostr identity to publish as you go — your ratings stay yours, on an open network no company controls. |
+| Primary button | Connect a Nostr identity → |
+| Secondary button | Not now — keep clips on this device |
+
+### 4b. Signing extension detected
+
+| Element | Text |
+|---|---|
+| Icon | 🔑 |
+| Title | You're one click from publishing |
+| Body | Your Nostr signing extension is ready. Sign in to publish your posts under your own identity — they'll appear in any Nostr client, to the people who already follow you. |
+| Primary button | Sign in → |
+| Secondary button | Not now — keep clips on this device |
+
+> The "people who already follow you" line is only shown in this branch — it assumes an
+> existing Nostr presence, which the 4a user doesn't have.
+
+---
+
+## 5. Overlay — identity flow
+
+### 5a. Chooser — [overlay.ts:481-546](src/content/overlay.ts#L481-L546)
+
+| Element | Text |
+|---|---|
+| Header | Connect identity |
+| Sign-in card (only when a signer is detected) | **Sign in →** / Signing extension detected. Sign in to Wirthy to start casting. |
+| Existing card | **Connect existing identity →** / Already on Nostr? Use a signing extension, remote signer, or your private key. |
+| Create card | **Create new Nostr account →** / New to Nostr? Get set up with a guided walkthrough at nstart.me. |
+
+### 5b. Create account — [overlay.ts:548-593](src/content/overlay.ts#L548-L593)
+
+Hands off to [nstart.me] rather than minting a keypair in the extension — it introduces
+newcomers to Nostr, walks them through backup, and sets up a profile. The in-house
+generator (`GENERATE_NSEC` + the key-backup screen, 5d) is still in the codebase but is
+no longer reachable from the UI.
+
+| Element | Text |
+|---|---|
+| Header | Create account |
+| Body | New to Nostr? [nstart.me] is a free guided setup that explains how Nostr works, creates your identity, and helps you back it up safely. It takes a couple of minutes. |
+| Primary button | Create account at nstart.me → |
+| Follow-up body | Once you're done, come back here and connect the identity you just made — whichever way nstart set you up: a signing extension, a `bunker://` link, or your `nsec`. |
+| Secondary button | I've created my account — connect it |
+
+The secondary button probes the live page for `window.nostr` before switching (cached auth
+state can't know about an extension installed during the nstart trip), then lands on the
+**Extension** tab if a signer is now detected, else **Remote signer** — nstart's default.
+
+### 5c. Connect existing — tabs — [overlay.ts:594-677](src/content/overlay.ts#L594-L677)
+
+Tab labels: **Extension** (with ✓ when detected) · **Remote signer** · **Store key**
+
+**Extension tab**, three states:
+
+| State | Text |
+|---|---|
+| Connected | Signing extension connected. / Wirthy uses your browser signing extension to sign casts. No key is stored here. / *Continue* |
+| Detected, not signed in | Signing extension detected. / To finish connecting, sign in to Wirthy. This is one time only — your signing extension will then be used to sign casts. No key is stored here. / *Sign in →* |
+| Not detected | Install a signing extension like [nos2x] or [Alby] to sign with your Nostr identity. After installing, browse any page — Wirthy detects it automatically. Or click below to check now. / *Detect extension now* |
+
+**Remote signer tab:** Create a free account at [nstart.me], then paste your `bunker://`
+link below. Your private key never leaves the remote signer. — placeholder `bunker://…`,
+button *Connect account*
+
+**Store key tab:** ⚠️ Your private key gives full access to your identity. It will be
+encrypted with a PIN before being stored — only you can unlock it. — placeholders
+`nsec1…` / `PIN (minimum 6 characters)` / `Confirm PIN`, button *Encrypt and store*
+
+### 5d. Key backup — [overlay.ts:794-841](src/content/overlay.ts#L794-L841)
+
+**Currently unreachable.** It was shown once after the extension generated an account;
+account creation now hands off to nstart.me (5b). The screen and its `GENERATE_NSEC`
+backend are kept intact should in-house generation come back.
+
+| Element | Text |
+|---|---|
+| Header | Back up your keys |
+| Warning | ⚠️ This is the only time your private key is shown. Save both keys somewhere safe (a password manager). Anyone with the private key controls your identity, and it can never be recovered if lost. |
+| Labels | Public key (npub) — shareable · Private key (nsec) — keep secret |
+| Buttons | Copy public key · Copy private key |
+| Checkbox (gates *Done*) | I've saved my keys somewhere safe |
+| Button | Done |
+
+### 5e. Identity status messages — [overlay.ts:557-818](src/content/overlay.ts#L557-L818)
+
+Checking… · Connecting… · Encrypting… · Generating… · Connected! · Stored! ·
+Copied to clipboard.
+
+| Error | Text |
+|---|---|
+| No signer | No extension found. Install Alby or nos2x, visit any page, then try again. |
+| Empty bunker field | Paste your bunker:// link first. |
+| Bad nsec | Invalid key — must start with nsec1… |
+| Short PIN | PIN must be at least 6 characters. |
+| PIN mismatch | PINs don't match. |
+| Copy failed | Copy failed — select the key and copy manually. |
+| Wrong PIN | Incorrect PIN. Please try again. |
+
+---
+
+## 6. Overlay — main capture panel
+
+[overlay.ts:1245-1330](src/content/overlay.ts#L1245-L1330)
+
+| Element | Text |
+|---|---|
+| Header | Wirthy (beacon mark + wordmark) |
+| Format chips | ✂ Selection · 📄 Article · 🗞 Full page · 🔖 Bookmark |
+| Notes | label **Notes**, placeholder `Add a note or comment (optional)…` |
+| Category | label **Category** (combobox; built-ins General, Tech, Finance, Health, Politics, Philosophy, Science, Culture + custom) |
+| Preview labels | Selection · Article · Bookmark · Capturing… · No capture yet. |
+| Footer status | Connected to Nostr · Connected · Locked · Local only |
+| Footer links | Connect → · Unlock → |
+| Publish slider | Cast · Both · Clip |
+| Action button | CAST · CLIP & CAST · CLIP |
+| Loading | Saving… |
+
+**Publish-slider tooltips** — [overlay.ts:1307-1314](src/content/overlay.ts#L1307-L1314)
+
+- Cast — Publish to Nostr — your clip is public and signed with your identity
+- Both — Save locally and publish to Nostr — your clip is public and signed with your identity
+- Clip — Keep local — stored only on this device, not published
+
+**Cast size notice** — [overlay.ts:1455-1459](src/content/overlay.ts#L1455-L1459)
+
+- Short body: Cast includes the full text — ~N KB.
+- Long body: Long body — cast publishes title, URL, note & rating; full text stays local.
+
+### 6a. Signal rating — [types.ts:36-40](src/shared/types.ts#L36-L40)
+
+Section head **Signal Rating**, *Clear* button, readout `Unrated` or `N ★ Level`.
+Tooltips per tick:
+
+| Level | Tooltip |
+|---|---|
+| Toxic | 1 ★ — Outright fraud, dangerous disinformation, or malicious propaganda. |
+| Noise | 2 ★ — Clickbait, low-effort engagement bait, or highly manipulative spin. |
+| Ordinary | 3 ★ — Fine for a quick glance. Nothing wrong with it, but nothing that stays with you. |
+| Worthwhile | 4 ★ — Solid, high-signal content. It delivered exactly what it promised. |
+| Masterpiece | 5 ★ — Exceptional execution. Flawless utility, deep wisdom, or elite artistic craft. |
+
+### 6b. Qualifiers — [types.ts:47-51](src/shared/types.ts#L47-L51)
+
+Section head **Qualifiers**, custom input placeholder `+ add custom tag`.
+
+- **Tone & Style** — Humorous / Satire · Academic / Dense · Opinion / Essay
+- **Utility & Format** — Practical Tool · Primary Source · Quick Read
+- **Longevity** — Timeless · Current Event · Passing Trend
+
+---
+
+## 7. Overlay — result messages
+
+[overlay.ts:1799-1882](src/content/overlay.ts#L1799-L1882) · toast in
+[content.ts:322](src/content/content.ts#L322)
+
+| Outcome | Text |
+|---|---|
+| Local save | Clipped! 📥 |
+| Cast only | Cast published 📡 |
+| Clip + cast | Clipped & cast 📡 |
+| In progress | 📡 Casting… · Clipped! 📡 Casting… |
+| Cancelled at PIN (clip kept) | Clipped · not cast |
+| Cancelled at PIN (no clip) | Cast cancelled — your key is still locked. |
+| Cast failed (clip kept) | Clipped · cast failed |
+| Cast failed (no clip) | Cast failed — your signer may have declined or timed out. |
+| Clip failed | Failed to clip. Please try again. |
+| Error toast | 📡 Cast failed *(+ the underlying error)* |
+| Success links | View in My Clips → · View on Home → · Dismiss |
+
+**Inline unlock** — 🔒 Enter your PIN to unlock your key · *Unlock & Cast* · *Cancel*
+
+---
+
+## 8. Overlay — settings
+
+[overlay.ts:868-1005](src/content/overlay.ts#L868-L1005)
+
+| Card | Text |
+|---|---|
+| Guest | **Publishing not set up** / Your clips and ratings stay on this device. Connect a Nostr identity to publish them publicly. / *Connect a Nostr identity →* |
+| NIP-07 signed in | Status / Connected via signing extension / *Disconnect* |
+| NIP-07 detected only | Status / Signing extension detected — sign in to connect / Sign in to connect your signing extension. You'll only be asked once. / *Sign in →* |
+| NIP-46 | Status / Connected via remote signer / *Disconnect* |
+| Stored key | Status / Connected with stored key / *Disconnect* / ▸ View / unlock your key → placeholder `Enter your PIN`, *Unlock* |
+| Usage | 📥 Local clips · 📡 Public casts |
+| Appearance | 🖥️ System · 🌙 Dark · ☀️ Light |
+| Relays | Loading… / *Manage relays* / (error) Could not read relay list |
+| Feedback | Send feedback or report a bug |
+| Export | Export local clips as JSON |
+| Developer (dev builds only) | Use local relay / Publish to ws://localhost:7777 instead of the public relays. Syncs to the web app feed. |
+
+---
+
+## 10. Context menu
+
+[background.ts:363](src/background/background.ts#L363)
+
+| Element | Text |
+|---|---|
+| Right-click entry (page + selection) | Clip with Wirthy |
+
+---
+
+## Known inconsistencies
+
+Not defects, but worth a decision if the copy gets another pass:
+
+1. **"Post" is a noun, never an imperative.** A published evaluation is a
+   *post* ("publish your posts") — used only on screens the user
+   reaches after they know the product. Keep it out of first-contact strings: the context
+   menu says "Clip with Wirthy" ([background.ts:363](src/background/background.ts#L363)),
+   not "Post this page", because that's where a new user most needs to know what the
+   click does. *Rate* is the verb throughout.
+
+2. **Emoji vs. custom SVG for the same concepts.** The publish slider uses the
+   `ICON_CAST` / `ICON_CLIP` line SVGs ([overlay.ts:1998-2003](src/content/overlay.ts#L1998-L2003)),
+   but status messages and the settings usage rows use 📡 / 📥 for the identical ideas.
+   Unifying on the SVGs needs an `icon` parameter on `showSuccess`/`showError` so the
+   existing HTML escaping isn't bypassed — tracked as separate work.
+
+3. **Format chip emoji** (✂ 📄 🗞 🔖) are decorative and unrelated to the 📡/📥 status
+   glyphs. Three different jobs for emoji in one UI.
+
+4. **Web Store detailed description** now lives in
+   [STORE-SUBMISSION.md](STORE-SUBMISSION.md) → "Detailed description". It is typed into
+   the Web Store dashboard, not stored in the package, so it is not part of any build —
+   but it carries the same claim discipline as the in-product copy above, and the two
+   should be edited together.

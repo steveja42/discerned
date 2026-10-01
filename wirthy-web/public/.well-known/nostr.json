@@ -1,0 +1,38 @@
+{
+  "names": {
+    "stevo": "561dafca0fbf0e812abd941b45d6214d6f1dc4606843d3f3ecc7b45c874881fe",
+    "discerned_tester1": "0388464c203852aaf52144229bcceb80a99463f07c7751a3e2da10f60cc8bba9",
+    "discerned_tester2": "14e9842e21315fc147562ab304e7ebe109d3491d7505e943202e4f7b2ddb16b2"
+  },
+  "relays": {
+    "561dafca0fbf0e812abd941b45d6214d6f1dc4606843d3f3ecc7b45c874881fe": [
+      "wss://relay.primal.net",
+      "wss://nos.lol",
+      "wss://relay.snort.social"
+    ],
+    "0388464c203852aaf52144229bcceb80a99463f07c7751a3e2da10f60cc8bba9": [
+      "wss://relay.primal.net",
+      "wss://nos.lol",
+      "wss://relay.snort.social"
+    ],
+    "14e9842e21315fc147562ab304e7ebe109d3491d7505e943202e4f7b2ddb16b2": [
+      "wss://relay.primal.net",
+      "wss://nos.lol",
+      "wss://relay.snort.social"
+    ]
+  },
+  "profiles": {
+    "561dafca0fbf0e812abd941b45d6214d6f1dc4606843d3f3ecc7b45c874881fe": {
+      "about": "Developer, Grew up in Kansas, worked at Microsoft back in the day. Creating tools for more freedom, and resilience from authoritarianism.",
+      "picture": "https://wirthy.app/icons/icon128.png"
+    },
+     "0388464c203852aaf52144229bcceb80a99463f07c7751a3e2da10f60cc8bba9": {
+      "about": "Test account for Wirthy.",
+      "picture": "https://wirthy.app/icons/icon128.png"
+    },
+     "14e9842e21315fc147562ab304e7ebe109d3491d7505e943202e4f7b2ddb16b2": {
+      "about": "Test account 2 for Wirthy.",
+      "picture": "https://wirthy.app/icons/icon128.png"
+    }
+  }
+}

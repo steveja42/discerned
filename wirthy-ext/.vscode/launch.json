@@ -1,0 +1,299 @@
+// Use IntelliSense to learn about possible attributes.  **/.vscode/browser-test-profiles/
+// Hover to view descriptions of existing attributes.
+// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug: Chrome (Isolated)",
+      "type": "chrome",
+      "request": "launch",
+      "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/chrome-isolated",
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}/dist",
+        "--no-first-run",
+        "--no-default-browser-check",
+        // 9333, not 9222: 9222 falls inside a Windows excluded TCP port range
+        // (Hyper-V/WinNAT dynamic reservation, e.g. 9212-9311) so bind() fails
+        // and the DevTools endpoint never opens -> "Unable to find debug
+        // target". 9333 is outside all exclusions. If this recurs for ALL
+        // configs, the exclusions reshuffled: check with
+        //   netsh int ipv4 show excludedportrange protocol=tcp
+        // and pick a port outside every listed range.
+        "--remote-debugging-port=9333",
+      ],
+      "skipFiles": [
+        "<node_internals>/**/*.js"
+      ]
+    },
+    {
+      "name": "Debug: Chrome (nos2x)",
+      "type": "chrome",
+      "request": "launch",
+      "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/chrome",
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}/dist",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--remote-debugging-port=9333"
+      ],
+      "skipFiles": [
+        "<node_internals>/**/*.js"
+      ]
+    },
+    {
+      "name": "Debug: Brave (main-default)",
+      "type": "chrome",
+      "request": "launch",
+      "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
+      "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      "userDataDir": "C:\\Users\\steve\\AppData\\Local\\BraveSoftware\\Brave-Browser\\User Data",
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run",
+        "--remote-debugging-port=9333",
+        "--profile-directory=Default",
+      ]
+    },
+    {
+      "name": "Debug: Brave (no nsec)",
+      "type": "chrome",
+      "request": "launch",
+      "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
+      "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-no-nsec",
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run",
+        "--remote-debugging-port=9333",
+      ]
+    },
+    {
+      "name": "Debug: Brave (nip07-nos2x)",
+      "type": "chrome",
+      "request": "launch",
+      "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
+      /* --- Path for Windows --- */
+      "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-nip07-nos2x",
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run",
+        "--remote-debugging-port=9333",
+      ]
+    },
+    {
+  "name": "Debug: Brave Nostr wot",
+  "type": "chrome",
+  "request": "launch",
+  "webRoot": "${workspaceFolder}",
+  // 👇 Comment this out or remove it so VS Code handles this as a single session
+  // "cascadeTerminateToConfigurations": [
+  //   "Attach to Chrome (shared with extension debugger)"
+  // ],
+  "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+  "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-nip07-nostrwot",
+  "resolveSourceMapLocations": [
+    "${workspaceFolder}/**",
+    "!**/node_modules/**"
+  ],
+  "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run",
+        "--remote-debugging-port=9333",
+  ]
+},
+    {
+      "name": "Debug: Brave (nip07-alby)",
+      "type": "chrome",
+      "request": "launch",
+      "webRoot": "${workspaceFolder}",
+      // Known quirk: under this debug config the js-debug debugger attaches to
+      // Alby's MV3 service worker / popup and stalls it, so clicking the Alby
+      // toolbar button hangs (no unlock prompt) and the pause/stop toolbar
+      // lingers. Workaround: toggle Alby off/on in brave://extensions to
+      // restart its SW without the debugger attached. nos2x has a trivial SW
+      // and is unaffected. (See git log for the investigation.)
+      //
+      // The debugger wedges too, not just Alby. Clicking the Alby toolbar
+      // button kills the VSCode DEBUG CONSOLE for the whole session: all
+      // output stops (content scripts included) and the session keeps looking
+      // healthy -- it stays in the Call Stack, the CDP socket stays
+      // Established, and /json/list still lists every target. Only the panel
+      // is dead. Confirm with `console.log('x')` in the debug console REPL: no
+      // echo == wedged console, so stop debugging the extension and fix the
+      // debugger. Recovery is "Developer: Reload Window" (relaunching alone is
+      // not enough); each wedge also strands a half-closed FinWait1 socket on
+      // 9333 from the session that never terminated.
+      //
+      // If you need Alby responsive, use the "web-app only" config below -- it
+      // never attaches to Alby's SW, at the cost of third-party-site content
+      // script logs and extension SW breakpoints.
+      /* --- Path for Windows --- */
+      "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      /* --- Path for macOS (Uncomment if needed) --- */
+      // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-nip07-alby",
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run",
+        "--remote-debugging-port=9333",
+      ]
+    },
+    {
+      // Same as "Debug: Brave (nip07-alby)" but the debugger attaches ONLY to
+      // the wirthy web-app tab (localhost:3000 / wirthy.app) via
+      // urlFilter -- it never attaches to Alby's MV3 service worker or popup,
+      // so clicking the Alby button no longer hangs / strands the toolbar.
+      // Trade-off: you only get VSCode-side breakpoints + console for the web
+      // app and content scripts running ON the app tab. Content-script logs on
+      // third-party sites (capture on primal.net etc.) and extension SW/popup
+      // breakpoints are NOT available here -- use the plain "(nip07-alby)"
+      // config or chrome://extensions "inspect" for those.
+      "name": "Debug: Brave (nip07-alby, web-app only)",
+      "type": "chrome",
+      "request": "launch",
+      // webRoot + source maps point at the web app (wirthy-web), since that
+      // is the only target we debug here -- mirrors the "Attach to Chrome" cfg.
+      "webRoot": "${workspaceFolder}/../wirthy-web",
+      // On a LAUNCH config, "url" (not urlFilter) is what scopes the debug
+      // target: js-debug opens this page and attaches to it. urlFilter is
+      // attach-semantics -- on launch there is no matching tab yet, so it times
+      // out with "Unable to find debug target" and kills the browser. Opening
+      // the app tab directly gives it a target immediately and still keeps the
+      // debugger off Alby's SW/popup.
+      "url": "http://localhost:3000/",
+      "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-nip07-alby",
+      "sourceMapPathOverrides": {
+        "webpack://_N_E/*": "${workspaceFolder}/../wirthy-web/*"
+      },
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/../wirthy-web/**",
+        "!**/node_modules/**"
+      ],
+      "skipFiles": [
+        "chrome-extension://**",
+        "<node_internals>/**/*.js"
+      ],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run",
+        "--remote-debugging-port=9333",
+      ]
+    },
+    {
+      "name": "Debug: Brave (stored key)",
+      "type": "chrome",
+      "request": "launch",
+      "webRoot": "${workspaceFolder}",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
+      /* --- Path for Windows --- */
+      "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+      /* --- Path for macOS (Uncomment if needed) --- */
+      // "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      "userDataDir": "${workspaceFolder}/.vscode/browser-test-profiles/brave-stored-key",
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}\\dist",
+        "--no-first-run",
+        "--remote-debugging-port=9333",
+      ]
+    },
+    {
+      "name": "Debug: Chrome (Existing Profile)",
+      "type": "chrome",
+      "request": "launch",
+      "cascadeTerminateToConfigurations": [
+        "Attach to Chrome (shared with extension debugger)"
+      ],
+      // 1. Point this to the "User Data" folder (NOT the profile folder itself)
+      "userDataDir": "C:\\Users\\YourName\\AppData\\Local\\Google\\Chrome\\User Data",
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}",
+        // 2. Specify the folder name of the profile (e.g., "Default" or "Profile 1")
+        "--profile-directory=Default",
+        "--remote-debugging-port=9333"
+      ]
+    }
+    ,
+    {
+      "type": "chrome",
+      "request": "attach",
+      "name": "Attach to Chrome (shared with extension debugger)",
+      // Must match the launch configs' --remote-debugging-port (9333).
+      "port": 9333,
+      "urlFilter": "*://{localhost:3000,wirthy.app}/*",
+      "webRoot": "${workspaceFolder}/../wirthy-web",
+      "sourceMapPathOverrides": {
+        "webpack://_N_E/*": "${workspaceFolder}/../wirthy-web/*"
+      },
+      "disableNetworkCache": false,
+      "smartStep": true,
+      "skipFiles": [
+        "chrome-extension://**"
+      ],
+      "cascadeTerminateToConfigurations": [
+        "Debug: Brave (main-default)",
+        "Debug: Brave (no nsec)",
+        "Debug: Brave (nip07-nos2x)",
+        "Debug: Brave (nip07-alby)",
+        "Debug: Brave (stored key)",
+        "Debug: Chrome (Isolated)",
+        "Debug: Chrome (nos2x)",
+        "Debug: Chrome (Existing Profile)"
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Launch All Browsers",
+      "configurations": [
+        "Debug: Chrome (Isolated)",
+        "Debug: Brave (no nsec)"
+      ]
+    }
+  ]
+}
