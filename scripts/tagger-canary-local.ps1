@@ -10,8 +10,8 @@
 #
 # Register as a weekly Windows Scheduled Task (Mondays 09:00 local):
 #   $action  = New-ScheduledTaskAction -Execute 'pwsh' `
-#     -Argument '-NoProfile -File C:\dev\discerned\scripts\tagger-canary-local.ps1' `
-#     -WorkingDirectory 'C:\dev\discerned'
+#     -Argument '-NoProfile -File C:\dev\wirthy\scripts\tagger-canary-local.ps1' `
+#     -WorkingDirectory 'C:\dev\wirthy'
 #   $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 9am
 #   Register-ScheduledTask -TaskName 'wirthy-tagger-canary' `
 #     -Action $action -Trigger $trigger -Description 'Weekly Wirthy tagger selector canary'

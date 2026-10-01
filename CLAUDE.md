@@ -4,10 +4,10 @@ This is the parent workspace for the Wirthy project. Use this folder when a ques
 
 ## Repo shape
 
-This is a **pnpm monorepo** at `github.com/steveja42/wirthy`. It was migrated from two standalone repos (`wirthy-ext` and `wirthy-web`) via `git subtree`, so the full history of both is preserved under their respective prefixes. The old standalone repos are archived on GitHub and point at this one.
+This is a **pnpm monorepo** at `github.com/steveja42/wirthy`. It was migrated from two standalone repos (`discerned-ext` and `discerned-web`, the pre-rename names) via `git subtree`, so the full history of both is preserved under their respective prefixes. The old standalone repos are archived on GitHub and point at this one.
 
 ```
-c:\dev\discerned\               ← workspace root, git repo, also CWD for monorepo commands
+c:\dev\wirthy\               ← workspace root, git repo, also CWD for monorepo commands
 ├── wirthy-ext/              ← Chrome MV3 extension
 ├── wirthy-web/              ← Next.js companion web app (deployed by Netlify)
 ├── tests/                      ← cross-project Playwright e2e suite + shared fixtures
@@ -54,7 +54,7 @@ Each sub-project has its own `CLAUDE.md` with full stack, commands, and conventi
 ## Commands
 
 ```bash
-# === From monorepo root (c:\dev\discerned\) ===
+# === From monorepo root (c:\dev\wirthy\) ===
 pnpm install               # install workspace deps for both sub-projects
 pnpm test                  # run unit tests for both sub-projects (Vitest)
 pnpm test:e2e              # Playwright e2e suite (builds dist-test, starts dev servers)

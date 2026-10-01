@@ -1,6 +1,6 @@
 // Tiny static HTTP server for fixture HTML pages.
 // Started by Playwright's webServer (or manually for ad-hoc runs).
-// Serves c:\dev\discerned\tests\fixtures\sites\ on http://127.0.0.1:4173/<basename>
+// Serves c:\dev\wirthy\tests\fixtures\sites\ on http://127.0.0.1:4173/<basename>
 //   + /_health for the webServer wait probe.
 
 import { createServer } from 'node:http';

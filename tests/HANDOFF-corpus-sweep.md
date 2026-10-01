@@ -91,7 +91,7 @@ the clock. Leave alone.
   killed at 30s, cutting off the human's in-progress click.
 - Shell working directory silently drifted to `wirthy-ext/` after an
   earlier `cd`, causing `pnpm exec` to intermittently no-op (`playwright not
-  found`) on retries — always `cd /c/dev/discerned` (or verify `pwd`) before
+  found`) on retries — always `cd /c/dev/wirthy` (or verify `pwd`) before
   a Bash-tool Playwright invocation in this monorepo, don't trust persisted
   cwd across many tool calls in one turn.
 - Net effect of the above three: 4 real/attempted hits on science.org in

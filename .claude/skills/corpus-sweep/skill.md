@@ -6,7 +6,7 @@ disable-model-invocation: false
 
 # Corpus sweep
 
-Drives `scripts/corpus-sweep-run.ps1` from the monorepo root (`c:\dev\discerned`). Full background/details live in `CLAUDE.md` → "Running the fortnightly corpus sweep" — read that section if something here is ambiguous. This skill exists to get the **backup rule** right, since getting it wrong silently destroys the ability to detect a regression.
+Drives `scripts/corpus-sweep-run.ps1` from the monorepo root (`c:\dev\wirthy`). Full background/details live in `CLAUDE.md` → "Running the fortnightly corpus sweep" — read that section if something here is ambiguous. This skill exists to get the **backup rule** right, since getting it wrong silently destroys the ability to detect a regression.
 
 ## The one rule that matters: when to pass `-Backup`
 

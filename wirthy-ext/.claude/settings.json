@@ -3,9 +3,9 @@
     "allow": [
       "Bash(pnpm --filter=./wirthy-web type-check)",
       "Bash(pnpm -r type-check)",
-      "Bash(cd /c/dev/discerned/wirthy-web && pnpm type-check)",
-      "Read(//c/dev/discerned/wirthy-web/**)",
-      "Bash(cd /c/dev/discerned/wirthy-web && pnpm type-check && pnpm lint 2>&1 | tail -30)"
+      "Bash(cd /c/dev/wirthy/wirthy-web && pnpm type-check)",
+      "Read(//c/dev/wirthy/wirthy-web/**)",
+      "Bash(cd /c/dev/wirthy/wirthy-web && pnpm type-check && pnpm lint 2>&1 | tail -30)"
     ]
   }
 }
