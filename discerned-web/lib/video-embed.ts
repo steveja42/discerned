@@ -18,7 +18,12 @@ export interface VideoEmbed {
   provider: string;
   /** Canonical watch page, for the "open on <provider>" fallback link. */
   href: string;
+  /** True when embedUrl is a media FILE, played in a native <video> rather than an iframe. */
+  direct?: boolean;
 }
+
+/** A URL naming a playable media file rather than a page. */
+const DIRECT_VIDEO_FILE_RE = /\.(mp4|webm|m4v|mov|ogv)$/i;
 
 /**
  * Resolve a canonical media URL to an inline embed, or null when the provider
@@ -142,6 +147,12 @@ export function resolveVideoEmbed(rawUrl: string): VideoEmbed | null {
         href: canonical,
       };
     }
+  }
+
+  // A direct media file (Nostr/Blossom uploads such as primal's content-addressed
+  // .mp4) — public and permanent, so it plays natively with no provider player.
+  if (u.protocol === 'https:' && DIRECT_VIDEO_FILE_RE.test(u.pathname)) {
+    return { embedUrl: u.href, provider: 'video', href: u.href, direct: true };
   }
 
   // Rumble / Odysee / Twitch / Dailymotion — already-embeddable player URLs are

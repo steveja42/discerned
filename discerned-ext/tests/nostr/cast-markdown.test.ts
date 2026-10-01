@@ -409,3 +409,21 @@ describe('cast markdown — structural line breaks inside <pre>', () => {
     expect(md).toContain('Second line');
   });
 });
+
+// A direct-file video card (primal): the poster is a canvas grab whose only
+// http URL, in data-dx-src, is the .mp4 itself — never publish that as an image.
+describe('direct-file video card (poster url is the video)', () => {
+  const MP4 = 'https://r2a.primal.net/uploads2/1/76/d9/abc.mp4';
+  const md = htmlToMarkdown(`<div class="dx-post">
+    <a class="tweet-video" href="${MP4}">
+      <img src="data:image/jpeg;base64,AAAA" alt="Video" class="tweet-video-poster" data-dx-src="${MP4}">
+      <div class="tweet-video-play">▶</div>
+    </a>
+  </div>`);
+
+  it('emits a watch link, not a broken ![](…mp4) image', () => {
+    assertNoMarkdownDefects(md);
+    expect(md).toContain(`[▶ Watch video](${MP4})`);
+    expect(md).not.toContain('![');
+  });
+});

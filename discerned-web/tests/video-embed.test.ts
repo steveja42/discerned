@@ -52,9 +52,18 @@ describe('resolveVideoEmbed', () => {
     expect(resolveVideoEmbed('https://www.facebook.com/reel/123456')!.provider).toBe('Facebook');
   });
 
+  it('plays a direct https media file natively', () => {
+    const url = 'https://r2a.primal.net/uploads2/1/76/d9/176d929e.mp4';
+    expect(resolveVideoEmbed(url)).toEqual({ embedUrl: url, provider: 'video', href: url, direct: true });
+    expect(resolveVideoEmbed('https://cdn.example.com/clip.webm?x=1')!.direct).toBe(true);
+    // A page URL is never direct, even when a provider is known.
+    expect(resolveVideoEmbed('https://vimeo.com/123456789')!.direct).toBeUndefined();
+  });
+
   it('returns null for unknown hosts and non-http schemes', () => {
     // Callers must keep the plain link-out card in these cases, never error.
-    expect(resolveVideoEmbed('https://example.com/video.mp4')).toBeNull();
+    expect(resolveVideoEmbed('https://example.com/watch/123')).toBeNull();
+    expect(resolveVideoEmbed('http://example.com/video.mp4')).toBeNull();
     expect(resolveVideoEmbed('blob:https://www.instagram.com/abc-123')).toBeNull();
     expect(resolveVideoEmbed('javascript:alert(1)')).toBeNull();
     expect(resolveVideoEmbed('not a url')).toBeNull();

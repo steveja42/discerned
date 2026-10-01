@@ -132,9 +132,16 @@ export function useClipVideoPlayers(
       }
       const ratio = `${pw} / ${ph}`;
 
-      const frame = document.createElement('iframe');
+      // A direct media file plays natively; a provider page needs its own iframe player.
+      const frame = embed.direct ? document.createElement('video') : document.createElement('iframe');
       frame.src = embed.embedUrl;
       frame.className = 'clip-video-frame';
+      if (frame instanceof HTMLVideoElement) {
+        frame.controls = true;
+        frame.autoplay = true;
+        frame.playsInline = true;
+        if (poster?.src) frame.poster = poster.src;
+      }
       frame.style.aspectRatio = ratio;
       // Bound the WRAPPER's width to whatever the height cap allows at this
       // ratio. An iframe cannot letterbox its own content (object-fit does
@@ -265,7 +272,7 @@ export function useClipVideoPlayers(
       out.target = '_blank';
       out.rel = 'noopener noreferrer';
       out.className = 'clip-video-out';
-      out.textContent = `Open on ${embed.provider}`;
+      out.textContent = embed.direct ? 'Open video' : `Open on ${embed.provider}`;
       if (wrap.classList.contains('clip-video-embed--crop')
         || wrap.classList.contains('clip-video-embed--fixed')) {
         // The box has a pinned size (a crop clips to the player; a fixed embed

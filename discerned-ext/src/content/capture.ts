@@ -9497,10 +9497,69 @@ async function captureVideoFrames(root: Element | Document): Promise<Map<string,
   }
   // A few at a time: each cross-origin grab is a network round-trip plus a decode.
   const queue = jobs.slice();
-  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
-    for (let job = queue.shift(); job; job = queue.shift()) await job();
-  }));
+  await Promise.all([
+    ...Array.from({ length: Math.min(4, queue.length) }, async () => {
+      for (let job = queue.shift(); job; job = queue.shift()) await job();
+    }),
+    stampPrimalVideoThumbnails(videos),
+  ]);
   return frames;
+}
+
+/** On a live <video>: an http(s) still of it, which a cast can publish where a canvas frame cannot. */
+const VIDEO_THUMB_ATTR = 'data-dx-thumb';
+const PRIMAL_CACHE_WS = 'wss://cache2.primal.net/v1';
+
+/**
+ * A primal note's video carries no poster, but Primal's cache server maps each
+ * video URL to a generated JPEG (kind 10000119 `thumbnails`). Stamp it on the video.
+ */
+async function stampPrimalVideoThumbnails(videos: HTMLVideoElement[]): Promise<void> {
+  if (!/(^|\.)primal\.net$/i.test(testHostOverride ?? window.location.hostname)) return;
+  if (typeof WebSocket === 'undefined') return;
+  const byEvent = new Map<string, HTMLVideoElement[]>();
+  for (const v of videos) {
+    const id = v.closest('[data-event]')?.getAttribute('data-event') ?? '';
+    if (!/^[0-9a-f]{64}$/.test(id) || !/^https:/i.test(videoSourceUrl(v))) continue;
+    byEvent.set(id, [...(byEvent.get(id) ?? []), v]);
+  }
+  if (byEvent.size === 0) return;
+  const thumbs = await fetchPrimalThumbnails([...byEvent.keys()]);
+  for (const v of [...byEvent.values()].flat()) {
+    const thumb = thumbs.get(videoSourceUrl(v));
+    if (thumb) v.setAttribute(VIDEO_THUMB_ATTR, thumb);
+  }
+  log(LL.DEBUG, `Discerned: primal video thumbnails ${thumbs.size}/${byEvent.size} notes`, 'url:', window.location.href);
+}
+
+/** Ask Primal's cache for the media records of `eventIds`; resolves video URL → thumbnail URL. */
+function fetchPrimalThumbnails(eventIds: string[], timeoutMs = 2500): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  return new Promise(resolve => {
+    let ws: WebSocket | null = null;
+    const done = () => {
+      clearTimeout(timer);
+      try { ws?.close(); } catch { /* already closed */ }
+      resolve(out);
+    };
+    const timer = setTimeout(done, timeoutMs);
+    try { ws = new WebSocket(PRIMAL_CACHE_WS); } catch { done(); return; }
+    ws.onopen = () => ws?.send(JSON.stringify(
+      ['REQ', 'dx-thumbs', { cache: ['events', { event_ids: eventIds, extended_response: true }] }],
+    ));
+    ws.onmessage = (m: MessageEvent) => {
+      try {
+        const msg = JSON.parse(String(m.data));
+        if (msg[0] === 'EOSE') { done(); return; }
+        if (msg[2]?.kind !== 10000119) return;
+        const map = JSON.parse(msg[2].content)?.thumbnails ?? {};
+        for (const [video, thumb] of Object.entries(map)) {
+          if (typeof thumb === 'string' && /^https:/i.test(thumb)) out.set(video, thumb);
+        }
+      } catch { /* malformed frame — ignore */ }
+    };
+    ws.onerror = done;
+  });
 }
 
 async function captureOneVideoFrame(video: HTMLVideoElement, loaded: boolean): Promise<string | null> {
@@ -9710,7 +9769,11 @@ function textOutsidePlayer(el: Element): string {
   return out;
 }
 
+/** A URL naming a playable media file (not a page), which the web app can play directly. */
+const DIRECT_VIDEO_FILE_RE = /\.(mp4|webm|m4v|mov|ogv)($|[?#])/i;
+
 function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrames?: Map<string, string>): void {
+  const builtCards = new Set<Element>();
   Array.from((root as Element).querySelectorAll('video')).forEach(video => {
     // Prefer the HTML poster attribute, then a canvas frame captured from the
     // live video before cloning (keyed by data-uuid stamped on the live element).
@@ -9718,7 +9781,8 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
     const framePoster = uuid ? liveFrames?.get(uuid) : undefined;
     // A placeholder poster (the site's grey stand-in) never wins over a real frame.
     const placeholder = video.hasAttribute(PLACEHOLDER_POSTER_ATTR);
-    const poster = (placeholder ? framePoster : video.getAttribute('poster') ?? framePoster) ?? null;
+    const thumb = video.getAttribute(VIDEO_THUMB_ATTR);
+    const poster = (placeholder ? framePoster : video.getAttribute('poster') ?? framePoster) ?? thumb ?? null;
     const tweetPhoto = video.closest('[data-testid="tweetPhoto"]');
     // Media Chrome player wrapper (<media-controller>) — replace the whole
     // wrapper so the inlined shadow-DOM controls (Media Chrome's "Pause" /
@@ -9750,8 +9814,10 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
     // (TikTok, Instagram), so adding another <img> here ships the SAME frame
     // twice — the reported duplicate image below the player. Drop the video
     // instead and let the existing card stand.
-    const cardNearby = video.closest('.dx-post, .dx-reel, article')?.querySelector('a.tweet-video')
-      ?? video.parentElement?.querySelector('a.tweet-video');
+    // Cards this pass built for OTHER videos don't count: a note can hold two videos.
+    const taggerCard = (scope: Element | null | undefined) =>
+      Array.from(scope?.querySelectorAll('a.tweet-video') ?? []).find(c => !builtCards.has(c));
+    const cardNearby = taggerCard(video.closest('.dx-post, .dx-reel, article')) ?? taggerCard(video.parentElement);
     if (cardNearby) {
       (wrapper ?? video).remove();
       return;
@@ -9769,7 +9835,8 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
       // when the poster is base64: a poster that already has an http URL
       // publishes itself.
       if (/^data:/i.test(poster)) {
-        const realUrl = videoSourceUrl(video);
+        // A real still (primal's thumbnail) beats the video URL, which a cast can only link.
+        const realUrl = thumb ?? videoSourceUrl(video);
         if (/^https:/i.test(realUrl)) img.setAttribute('data-dx-src', realUrl);
       }
       // A site tagger can stamp `data-dx-link` on a video whose poster only
@@ -9777,7 +9844,11 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
       // frame grabbed before cloning). Wrapping the replacement gives that
       // poster a destination — otherwise it ships as an image with no link at
       // all, which is what a Snapchat /web capture produced.
-      const dxLink = video.getAttribute('data-dx-link');
+      // Otherwise a direct https media file (primal's content-addressed .mp4)
+      // is itself the destination: the web app plays it in a native <video>.
+      const directUrl = videoSourceUrl(video);
+      const dxLink = video.getAttribute('data-dx-link')
+        ?? (/^https:/i.test(directUrl) && DIRECT_VIDEO_FILE_RE.test(directUrl) ? directUrl : null);
       if (dxLink) {
         const a = document.createElement('a');
         a.className = 'tweet-video';
@@ -9791,6 +9862,7 @@ function substituteVideosWithPosters(root: Element | DocumentFragment, liveFrame
         play.textContent = '▶';
         a.appendChild(play);
         (wrapper ?? video).replaceWith(a);
+        builtCards.add(a);
         return;
       }
       (wrapper ?? video).replaceWith(img);

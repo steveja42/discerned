@@ -1607,7 +1607,9 @@ a { color: inherit; }
 /* Static only for an UNCROPPED player. A cropped one positions its iframe
    absolutely to shift the provider's chrome out of view, and forcing static
    here undid that. */
-.clip-body .clip-video-embed:not(.clip-video-embed--crop) > iframe { position: static !important; }
+.clip-body .clip-video-embed:not(.clip-video-embed--crop) > :is(iframe, video) { position: static !important; }
+/* A native player (direct media file) letterboxes itself; black fills the bars. */
+.clip-body video.clip-video-frame { background: #000; object-fit: contain; }
 
 /* Crop a provider embed down to just its player.
    Instagram has no media-only route — every variant ships the full post card —

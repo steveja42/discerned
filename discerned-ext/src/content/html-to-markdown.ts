@@ -452,7 +452,9 @@ function getService(): TurndownService {
       const img = el.querySelector('img');
       const dxSrc = img?.getAttribute('data-dx-src') ?? '';
       const src = img?.getAttribute('src') ?? '';
-      const url = /^https?:/i.test(dxSrc) ? dxSrc : /^https?:/i.test(src) ? src : '';
+      const imgUrl = /^https?:/i.test(dxSrc) ? dxSrc : /^https?:/i.test(src) ? src : '';
+      // A canvas-grabbed poster's data-dx-src is the VIDEO file, not an image.
+      const url = /\.(mp4|webm|m4v|mov|ogv)($|\?)/i.test(imgUrl) ? '' : imgUrl;
       const href = el.getAttribute('href') ?? '';
       const linkable = /^https?:/i.test(href);
       // No http(s) poster: the image is a canvas grab off a blob: stream, so it

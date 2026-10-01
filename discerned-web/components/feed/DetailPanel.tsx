@@ -254,12 +254,15 @@ const MD_COMPONENTS = {
     // overflow:hidden, so the sentence fragment became a rounded box, and
     // .tweet-video-play (absolute, inset:0, dark panel, 44px ▶) covered its
     // middle — the "grey pill sliced by an arrow" on 8 corpus sites.
-    const playable = !!href && wrapsImage(children) && !!resolveVideoEmbed(href);
+    const embed = href ? resolveVideoEmbed(href) : null;
+    const playable = !!embed && wrapsImage(children);
+    // A posterless link straight to a media file still plays in place, as a button.
+    const fileLink = !playable && !!embed?.direct;
     return (
       <a
         {...rest}
         href={href}
-        className={playable ? 'tweet-video' : rest.className}
+        className={playable ? 'tweet-video' : fileLink ? 'dx-video-link' : rest.className}
         target="_blank"
         rel="noopener noreferrer"
       >

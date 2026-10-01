@@ -9,9 +9,12 @@
 import { test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { launchWithExtension } from './helpers/launchExtension';
+import { activateExtensionOnTab } from './helpers/activateExtension';
 import { assertClipBodyHealth } from './helpers/clipBodyHealth';
 import { screenshotClipBody, screenshotSourcePage } from './helpers/clipShot';
 import { castShotSafe } from './helpers/castShot';
+import { buildLongFormCast } from './helpers/castFromCapture';
+import { withRenderedCast } from './helpers/renderCast';
 import { liveArtifacts } from './helpers/liveArtifacts';
 import { refreshLiveGallery } from './helpers/liveGallery';
 
@@ -125,6 +128,7 @@ test('primal: capture clip, render in web app, screenshot card', async () => {
     });
     fs.writeFileSync(out('primal-zaps-structure.txt'), zapsStructure, 'utf8');
 
+    await activateExtensionOnTab(ctx, page.url());
     const cap = (await page.evaluate(async () => {
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('capture timeout')), 30_000);
@@ -195,6 +199,37 @@ test('primal: capture clip, render in web app, screenshot card', async () => {
       });
     });
     fs.writeFileSync(out('primal-element-info.json'), JSON.stringify(elementInfo, null, 2), 'utf8');
+
+    // A note video (direct .mp4) must play IN PLACE: clicking its card mounts a
+    // native <video> that actually decodes, rather than opening a new tab.
+    const card = clipBody.locator('a.tweet-video[href$=".mp4"]').first();
+    if (await card.count()) {
+      await card.click();
+      const player = clipBody.locator('video.clip-video-frame');
+      await player.waitFor({ state: 'visible', timeout: 10_000 });
+      await libPage.waitForFunction(
+        () => ((document.querySelector('.clip-body video.clip-video-frame') as HTMLVideoElement | null)?.readyState ?? 0) >= 2,
+        undefined, { timeout: 20_000 },
+      );
+      await player.screenshot({ path: out('primal-video-playing.png') });
+
+      // The CAST must carry a real poster and play in place too, not open a tab.
+      const castEvent = await buildLongFormCast(page, cap);
+      if (castEvent) {
+        await withRenderedCast(castEvent, { rowText: (cap as { title?: string }).title, context: ctx }, async (castPage, castBody) => {
+          const castCard = castBody.locator('a.tweet-video[href$=".mp4"]').first();
+          await castCard.waitFor({ state: 'visible', timeout: 10_000 });
+          const pagesBefore = ctx.pages().length;
+          await castCard.click();
+          await castPage.waitForFunction(
+            () => ((document.querySelector('.clip-body video.clip-video-frame') as HTMLVideoElement | null)?.readyState ?? 0) >= 2,
+            undefined, { timeout: 20_000 },
+          );
+          if (ctx.pages().length !== pagesBefore) throw new Error('cast video opened a new tab');
+          await castBody.locator('video.clip-video-frame').screenshot({ path: out('primal-cast-video-playing.png') });
+        });
+      }
+    }
 
     // ── Structural assertions ────────────────────────────────────────────────
     // Shared health checks (formerly inline here): header layout, reply

@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Direct-file video note</title></head>
+<body>
+<main>
+  <article>
+    <p>A note whose video is a public, content-addressed media file, played through a
+    Media Chrome controller as primal.net renders it. The capture should keep a
+    poster that plays the file in place.</p>
+    <div class="note-video">
+      <media-controller>
+        <video slot="media" muted loop autoplay playsinline poster="https://media.example.com/frame-one.jpg">
+          <source src="https://media.example.com/uploads/abc123.mp4" type="video/mp4">
+        </video>
+      </media-controller>
+    </div>
+    <p>A posterless looping video whose still came from the host's thumbnail service
+    (the attribute the live lookup stamps), which the cast publishes as its poster.</p>
+    <div class="note-video">
+      <video muted loop autoplay playsinline data-dx-thumb="https://media.example.com/thumbs/def456.jpg">
+        <source src="https://media.example.com/uploads/def456.mp4" type="video/mp4">
+      </video>
+    </div>
+    <p>A second video streams from a blob: source, which dies with the tab and so has
+    nothing to play later; its poster stays a plain image.</p>
+    <div class="stream-video">
+      <video poster="https://media.example.com/frame-two.jpg" src="blob:https://example.com/0f0e-11"></video>
+    </div>
+  </article>
+</main>
+</body>
+</html>
