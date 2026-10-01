@@ -1225,6 +1225,10 @@ ${themeVarsBlock(this.effectiveTheme)}
           <div class="settings-card">
             <button class="link-btn" id="settings-export">Export local clips as JSON</button>
           </div>
+          <div class="settings-card version-row">
+            <div class="card-label">Version</div>
+            <div class="card-value">${chrome.runtime.getManifest().version}</div>
+          </div>
         </div>
       </div>
     `;
@@ -2921,6 +2925,7 @@ ${themeVarsBlock(this.effectiveTheme)}
       .settings-card.warning { background: var(--p-warn-bg); border-color: var(--p-warn-border); }
       .card-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
       .card-label { font-size: 11px; color: var(--p-ink-3); text-transform: uppercase; letter-spacing: 0.5px; font-family: var(--p-mono); }
+      .settings-card.version-row { flex-direction: row; align-items: baseline; gap: 8px; }
       .perm-desc { font-size: 12px; color: var(--p-ink-3); line-height: 1.5; margin: 6px 0 8px; }
       /* Footnote aside — dimmer + smaller than .perm-desc so the asterisked caveat
          reads as secondary to the main explanation. */

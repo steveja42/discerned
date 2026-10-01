@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { useLibraryBridge } from '@/hooks/useLibraryBridge';
+import pkg from '../../package.json';
 import { exportClipsJson } from '@/lib/export-utils';
 import { ImportDialog } from '@/components/clips/ImportDialog';
 import { JsonImportDialog } from '@/components/clips/JsonImportDialog';
@@ -262,6 +263,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             )}
           </div>
         )}
+
+        <p className="settings-hint">Discerned web app v{pkg.version}</p>
       </div>
     </div>
   );
