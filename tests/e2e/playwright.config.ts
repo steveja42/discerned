@@ -25,7 +25,7 @@ export default defineConfig({
   webServer: NEEDS_SERVERS
     ? [
         {
-          command: `pnpm --filter=./discerned-web dev --port ${WEB_PORT}`,
+          command: `pnpm --filter=./wirthy-web dev --port ${WEB_PORT}`,
           cwd: resolve(__dirname, '..', '..'),
           url: `http://localhost:${WEB_PORT}`,
           reuseExistingServer: !process.env.CI,

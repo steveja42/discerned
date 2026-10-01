@@ -20,7 +20,7 @@ export interface SiteFixture {
 /**
  * The sidecar's `url` is the location to SIMULATE, not a navigation target. The
  * Vitest suite fakes `window.location` with it (see
- * discerned-ext/tests/helpers/loadFixture.ts), so fixtures whose capture path
+ * wirthy-ext/tests/helpers/loadFixture.ts), so fixtures whose capture path
  * branches on hostname — Amazon entity pages, YouTube, AP — legitimately carry
  * their real source URL there.
  *

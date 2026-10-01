@@ -59,7 +59,7 @@ export async function ensureLocalRelay(): Promise<{ started: boolean }> {
 /**
  * Publish one signed event and resolve once the relay ACKs it.
  *
- * Waiting for the OK matters: the render opens `/discerns` immediately after, and
+ * Waiting for the OK matters: the render opens `/home` immediately after, and
  * an event still in flight would leave the feed empty and the row wait timing out.
  */
 export async function publishToLocalRelay(event: NostrEvent, timeoutMs = 10_000): Promise<void> {

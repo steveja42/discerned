@@ -1,6 +1,6 @@
 // Phase 3.1/3.2 — canary targets for each per-site tagger.
 //
-// At least one entry per tagger registered in SITE_TAGGERS (discerned-ext
+// At least one entry per tagger registered in SITE_TAGGERS (wirthy-ext
 // capture.ts). A tagger gets MORE than one entry when the site has distinct page
 // SHAPES that render different containers — primal has a profile feed and a
 // thread; the shared manifest must group those variants, so only a per-shape
@@ -147,7 +147,7 @@ export const TAGGER_CANARY_TARGETS: TaggerCanaryTarget[] = [
   },
 ];
 
-/** Shape returned by the __DISCERNED_TEST_ANCHORS bridge (mirrors capture.ts). */
+/** Shape returned by the __WIRTHY_TEST_ANCHORS bridge (mirrors capture.ts). */
 export interface AnchorResult { selector: string; count: number; }
 export interface TaggerAnchorReport {
   name: string;

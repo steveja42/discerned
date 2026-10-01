@@ -18,8 +18,8 @@ mkdirSync(OUT, { recursive: true });
 // a real user sees. (The local-mode guard has its own test below.)
 async function openSettings(page: import('@playwright/test').Page, mode: 'production' | 'local' = 'production') {
   await page.addInitScript((m) => {
-    try { localStorage.setItem('discerned.relayMode', m); } catch { /* blocked storage */ }
-    try { localStorage.removeItem('discerned.relayList'); } catch { /* blocked storage */ }
+    try { localStorage.setItem('wirthy.relayMode', m); } catch { /* blocked storage */ }
+    try { localStorage.removeItem('wirthy.relayList'); } catch { /* blocked storage */ }
   }, mode);
   await page.goto('/clips');
   await page.waitForLoadState('networkidle');
@@ -110,7 +110,7 @@ test.describe('web settings — relay management', () => {
   test('?settings=1 opens the settings panel directly (extension deep-link)', async ({ page }) => {
     // What the extension overlay's "Manage relays" button navigates to. Landing
     // on the feed and making the user find the gear is the bug this prevents.
-    await page.goto('/discerns?settings=1');
+    await page.goto('/home?settings=1');
     await page.waitForLoadState('networkidle');
 
     await expect(page.locator('.modal')).toBeVisible();
@@ -157,7 +157,7 @@ test.describe('web settings — relay management', () => {
     // This is exactly the message the extension posts after NIP-65 discovery.
     await page.evaluate(() => {
       window.postMessage({
-        type: 'DISCERNED_BRIDGE_RELAY_LIST',
+        type: 'WIRTHY_BRIDGE_RELAY_LIST',
         rows: [
           { url: 'wss://relay.primal.net', source: 'default' },
           { url: 'wss://relay.from-my-profile.example', source: 'discovered' },

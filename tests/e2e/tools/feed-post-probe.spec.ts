@@ -291,7 +291,7 @@ test('feed-post-probe: can we isolate the first visible post?', async () => {
         const cap = await page.evaluate(() => new Promise((res) => {
           const t = setTimeout(() => res({ error: 'capture timeout' }), 40_000);
           const on = (e: MessageEvent) => {
-            if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+            if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
             clearTimeout(t); removeEventListener('message', on);
             const c = e.data.capture;
             res(e.data.error ? { error: e.data.error } : {
@@ -302,7 +302,7 @@ test('feed-post-probe: can we isolate the first visible post?', async () => {
             });
           };
           addEventListener('message', on);
-          postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, location.origin);
+          postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, location.origin);
         })) as Record<string, number | string>;
         const pct = typeof cap.bodyTextLen === 'number' && info.bodyTextLen
           ? ((cap.bodyTextLen / info.bodyTextLen) * 100).toFixed(0) + '% of page text'

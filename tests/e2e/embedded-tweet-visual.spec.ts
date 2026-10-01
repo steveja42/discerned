@@ -37,7 +37,7 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
   try {
     const page = await ctx.newPage();
     page.on('console', (msg) => {
-      if (msg.text().includes('Discerned') || msg.text().includes('embedded') || msg.text().includes('harvest')) {
+      if (msg.text().includes('Wirthy') || msg.text().includes('embedded') || msg.text().includes('harvest')) {
         // eslint-disable-next-line no-console
         console.log(`[browser:${msg.type()}]`, msg.text());
       }
@@ -69,19 +69,19 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
 
     await screenshotSourcePage(page, live.source());
 
-    // Capture via the dev test bridge (production-code path; __DISCERNED_DEV_BUILD__ enabled in dist-test).
+    // Capture via the dev test bridge (production-code path; __WIRTHY_DEV_BUILD__ enabled in dist-test).
     const cap = (await page.evaluate(async () => {
       return new Promise((resolveCap, rejectCap) => {
         const timer = setTimeout(() => rejectCap(new Error('capture timeout')), 30_000);
         const onMessage = (e: MessageEvent) => {
-          if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+          if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
           clearTimeout(timer);
           window.removeEventListener('message', onMessage);
           if (e.data.error) rejectCap(new Error(e.data.error));
           else resolveCap(e.data.capture);
         };
         window.addEventListener('message', onMessage);
-        window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, window.location.origin);
+        window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, window.location.origin);
       });
     })) as Record<string, unknown>;
 
@@ -113,11 +113,11 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' }, encrypted: '' };
       window.postMessage(
-        { type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' },
+        { type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' },
         window.location.origin,
       );
       window.postMessage(
-        { type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] },
+        { type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] },
         window.location.origin,
       );
     }, cap);
@@ -168,7 +168,7 @@ test('embedded-tweet: capture article with widgets.js tweets, render in clips, s
     console.log('[probe] Artifacts written:');
     console.log('  test-output/live-visual-run/embed--1-source.png  (source article screenshot)');
     console.log('  test-output/live-visual-run/embed--2-clip.png    (rendered clip-body in /clips)');
-    console.log('  test-output/live-visual-run/embed--3-cast.png    (rendered PUBLIC cast in /discerns)');
+    console.log('  test-output/live-visual-run/embed--3-cast.png    (rendered PUBLIC cast in /home)');
     console.log('  test-output/embed-card-N.png                     (close-up of each tweet card)');
     console.log('  test-output/embed-capture.json                   (raw capture payload)');
   } finally {

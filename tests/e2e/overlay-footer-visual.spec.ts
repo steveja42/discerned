@@ -31,9 +31,9 @@ for (const theme of ['light', 'dark'] as const) {
         await page.waitForTimeout(400);
         await sw.evaluate(async (u) => {
           const [tab] = await chrome.tabs.query({ url: `${u}*` });
-          await chrome.tabs.sendMessage(tab!.id!, { type: 'ACTIVATE_DISCERNED' });
+          await chrome.tabs.sendMessage(tab!.id!, { type: 'ACTIVATE_WIRTHY' });
         }, FIXTURE_URL);
-        await expect(page.locator('#discerned-overlay')).toBeAttached({ timeout: 10_000 });
+        await expect(page.locator('#wirthy-overlay')).toBeAttached({ timeout: 10_000 });
         await page.waitForTimeout(1_600);
         await page.screenshot({ path: resolve(OUT_DIR, `footer-${theme}.png`) });
       } finally {

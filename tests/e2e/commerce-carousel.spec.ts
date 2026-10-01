@@ -15,12 +15,12 @@ async function capture(ctx: BrowserContext, name: string): Promise<string> {
   const cap = await page.evaluate(() => new Promise<{ bodyHtml?: string }>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('capture timeout')), 15_000);
     const on = (e: MessageEvent) => {
-      if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+      if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
       clearTimeout(timer); removeEventListener('message', on);
       resolve(e.data.capture ?? {});
     };
     addEventListener('message', on);
-    postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, location.origin);
+    postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, location.origin);
   }));
   await page.close();
   return cap.bodyHtml ?? '';

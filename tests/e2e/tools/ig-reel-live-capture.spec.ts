@@ -30,7 +30,7 @@ test('capture a live reel and render its header', async () => {
   const page = await ctx.newPage();
   page.on('console', msg => {
     const t = msg.text();
-    if (/inlineImage|Discerned/i.test(t)) console.log('[PAGE] ' + t);
+    if (/inlineImage|Wirthy/i.test(t)) console.log('[PAGE] ' + t);
   });
   try {
     await page.goto(URL_, { waitUntil: 'domcontentloaded', timeout: 90_000 });
@@ -41,12 +41,12 @@ test('capture a live reel and render its header', async () => {
       return await new Promise<Record<string, unknown> | null>(res => {
         const to = setTimeout(() => res(null), 45_000);
         window.addEventListener('message', function h(e: MessageEvent) {
-          if (e.data?.type === '__DISCERNED_TEST_CAPTURE_RESULT') {
+          if (e.data?.type === '__WIRTHY_TEST_CAPTURE_RESULT') {
             clearTimeout(to); window.removeEventListener('message', h);
             res(e.data.capture ?? null);
           }
         });
-        window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, '*');
+        window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, '*');
       });
     });
 

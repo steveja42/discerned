@@ -9,7 +9,7 @@ claim, but the true claim that sits nearest to it.
 | Never write | Write instead | Why |
 |---|---|---|
 | encrypted · secure · safe · "not even we can see it" · "only you can read it" | local-only · private · stored in your own browser | NIP-44 is stubbed. Clips are plaintext JSON in IndexedDB. See constraint on C-09. |
-| discernments | discerns | A published evaluation is a *discern*, the way a published post is a tweet. |
+| discerns · discernments · Discerned | posts · Wirthy | The product was renamed from Discerned to Wirthy; a published evaluation is a *post*. |
 | until you cast it | unless you cast it | "Until" promises that a saved clip can be published later. It cannot — casting is capture-time only. |
 | "clips pages and rates them" · "automatically evaluates" · "scores content" | lets you clip · rate it yourself · your evaluation | The user is the agent; the extension is the instrument. The banned forms read as automated scoring and invite the "isn't this just AI ranking?" misread. |
 | military-grade · bank-level · enterprise-grade | (cut entirely) | Overclaiming, and in this case also false. |

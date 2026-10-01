@@ -1,10 +1,10 @@
-# Discerned test suite
+# Wirthy test suite
 
 The project has three layers of tests. Each layer catches a different class of bug.
 
 ```
-discerned-ext/tests/   ← Vitest unit tests (jsdom, no browser)
-discerned-web/tests/   ← Vitest unit tests for the web app
+wirthy-ext/tests/   ← Vitest unit tests (jsdom, no browser)
+wirthy-web/tests/   ← Vitest unit tests for the web app
 tests/e2e/             ← Playwright e2e tests (real Chromium + extension)
 tests/fixtures/        ← shared HTML fixtures and JSON sidecars
 ```
@@ -15,14 +15,14 @@ tests/fixtures/        ← shared HTML fixtures and JSON sidecars
 
 ## Layer 1 — Vitest unit tests
 
-**Location:** `discerned-ext/tests/`  
+**Location:** `wirthy-ext/tests/`  
 **Runner:** Vitest + jsdom. No browser, no build step.
 
 ```bash
 # From the monorepo root:
 pnpm test
 
-# From discerned-ext/:
+# From wirthy-ext/:
 pnpm test
 pnpm test --watch
 ```
@@ -82,12 +82,12 @@ The `chrome.*` APIs the capture pipeline calls are shimmed in `tests/setup.ts`. 
 ## Layer 2 — Playwright e2e tests
 
 **Location:** `tests/e2e/`  
-**Runner:** Playwright. Launches Chromium with the real extension loaded from `discerned-ext/dist-test/`.
+**Runner:** Playwright. Launches Chromium with the real extension loaded from `wirthy-ext/dist-test/`.
 
 Build the test extension first (only needed once, or after source changes):
 
 ```bash
-cd discerned-ext && pnpm build:test
+cd wirthy-ext && pnpm build:test
 ```
 
 Then run any spec from the monorepo root:
@@ -98,7 +98,7 @@ pnpm test:e2e
 pnpm exec playwright test -c tests/e2e/playwright.config.ts --project=<project-name>
 ```
 
-> **Every spec must activate the extension before driving the test bridge.** There is no test-only manifest — specs run against the shipped one, which has no broad host permission, so content scripts are injected per tab on a user gesture. A spec that does `page.goto(...)` and then posts `__DISCERNED_TEST_CAPTURE` fails with **"capture timeout"** because no content script is bound yet.
+> **Every spec must activate the extension before driving the test bridge.** There is no test-only manifest — specs run against the shipped one, which has no broad host permission, so content scripts are injected per tab on a user gesture. A spec that does `page.goto(...)` and then posts `__WIRTHY_TEST_CAPTURE` fails with **"capture timeout"** because no content script is bound yet.
 >
 > ```ts
 > import { activateExtensionOnTab } from './helpers/activateExtension';
@@ -106,19 +106,19 @@ pnpm exec playwright test -c tests/e2e/playwright.config.ts --project=<project-n
 > await activateExtensionOnTab(ctx, url);   // ← before any postMessage
 > ```
 >
-> Playwright can't click the toolbar icon (browser chrome, not page DOM), so the helper presses the extension's keyboard command (`discerned-activate`, Alt+Shift+Y) over CDP — Chrome treats that as a trusted gesture and grants `activeTab` identically. `runFixtureVisual` already does this for every spec that shares it.
+> Playwright can't click the toolbar icon (browser chrome, not page DOM), so the helper presses the extension's keyboard command (`wirthy-activate`, Alt+Shift+Y) over CDP — Chrome treats that as a trusted gesture and grants `activeTab` identically. `runFixtureVisual` already does this for every spec that shares it.
 
 ### Core specs (run as part of `pnpm test:e2e`)
 
 | Spec | Project | What it covers |
 |---|---|---|
-| `extension.spec.ts` | `extension` | Drives each fixture through the real content script via `__DISCERNED_TEST_CAPTURE` postMessage. Asserts the result matches the `.expected.json` sidecar. The main integration test for the capture pipeline end-to-end. |
+| `extension.spec.ts` | `extension` | Drives each fixture through the real content script via `__WIRTHY_TEST_CAPTURE` postMessage. Asserts the result matches the `.expected.json` sidecar. The main integration test for the capture pipeline end-to-end. |
 | `end-to-end.spec.ts` | `extension` | Full pipeline: capture → CLIP handler → IndexedDB → web bridge → `/clips` rendering. |
 | `relay-prefs-e2e.spec.ts` | `extension` | A relay edit in the web Settings UI must reach `chrome.storage.local` and change the effective publish set — the round-trip the web-only spec can't cover. |
 | `clickjack-guard.spec.ts` | `extension` | `nip07-bridge.ts` must be injected **before** `content.ts`, so the `window.open` guard is armed before the overlay is clickable. Fails if the order is reversed. |
 | `web-rendering.spec.ts` | `web` | Injects fixture clips through the real `postMessage` bridge into `/clips` and asserts `<ClipRow>` renders correctly. |
 | `web-feed.spec.ts` | `web` | Uses `page.routeWebSocket` to mock the Nostr relay and verifies the public feed renders. |
-| `web-cast-render.spec.ts` | `web` | Renders a published cast through `/discerns` against a mocked relay. |
+| `web-cast-render.spec.ts` | `web` | Renders a published cast through `/home` against a mocked relay. |
 | `web-feedback.spec.ts` | `web` | Drives the `/feedback` form. Stubs both externals — the API route is route-fulfilled and Turnstile is replaced by a token-returning shim — so it never reaches GitHub or Cloudflare. |
 | `web-relay-settings.spec.ts` | `web` | Settings → Relays: add/normalise/reject a URL, remove a default, block removing the last one. Forces `relayMode=production` via `addInitScript`, since the dev server otherwise boots in local mode where the list is fixed. |
 
@@ -174,8 +174,8 @@ Each spec is gated behind an env var so it doesn't run in normal CI but can be r
 
 1. The spec calls `runFixtureVisual({ site, hostOverride?, ... })` from `helpers/fixtureVisual.ts`.
 2. Playwright launches Chromium with the extension loaded, navigates to the fixture URL on the local fixture server (`127.0.0.1:4173`).
-3. A `__DISCERNED_TEST_CAPTURE` postMessage drives `captureContext('article')` inside the content script, with optional `hostOverride`. The resulting `Capture` object is returned to the test.
-4. A second tab opens `/clips` on the Next.js dev server (`localhost:3000`) and the clip is injected via `DISCERNED_BRIDGE_CLIPS` postMessage.
+3. A `__WIRTHY_TEST_CAPTURE` postMessage drives `captureContext('article')` inside the content script, with optional `hostOverride`. The resulting `Capture` object is returned to the test.
+4. A second tab opens `/clips` on the Next.js dev server (`localhost:3000`) and the clip is injected via `WIRTHY_BRIDGE_CLIPS` postMessage.
 5. The test clicks the clip row to open the detail panel, waits for `.clip-body` to appear, waits for all `<img>` elements to decode (via `img.decode()`), and pins their dimensions to prevent layout shifts.
 6. `toHaveScreenshot()` takes a screenshot of `.clip-body` and compares it against the committed baseline PNG in `tests/e2e/<site>-fixture-visual.spec.ts-snapshots/`.
 
@@ -210,7 +210,7 @@ These load real production URLs, capture through the real extension, and screens
 | `YT=1` | `youtube-visual` | youtube.com |
 | `FB_LIVE=1` | `facebook-visual` | facebook.com (warm profile) |
 
-Every live `*-visual` spec writes **three** screenshots per site to `test-output/`: `{site}-source.png` (the live site), `{site}-rendered.png` (the private **clip**), and `{site}-cast.png` (the public **cast** — the kind-30023 markdown everyone else sees). The cast is built by the extension's own code via the test-only `BUILD_CAST` bridge, then rendered through `/discerns` in a fresh extension-free browser with a mocked relay. This catches cast-only defects that the clip render hides, since the cast body is a lossy markdown conversion. The clip assertions remain the pass/fail gate; the cast render is additive.
+Every live `*-visual` spec writes **three** screenshots per site to `test-output/`: `{site}-source.png` (the live site), `{site}-rendered.png` (the private **clip**), and `{site}-cast.png` (the public **cast** — the kind-30023 markdown everyone else sees). The cast is built by the extension's own code via the test-only `BUILD_CAST` bridge, then rendered through `/home` in a fresh extension-free browser with a mocked relay. This catches cast-only defects that the clip render hides, since the cast body is a lossy markdown conversion. The clip assertions remain the pass/fail gate; the cast render is additive.
 
 ```bash
 PRIMAL=1 PWDEBUG_HEADLESS_NEW=1 pnpm exec playwright test \
@@ -283,11 +283,11 @@ python tests/e2e/tools/refresh-gallery.py
 
 ## Layer 3 — web app unit tests
 
-**Location:** `discerned-web/tests/`  
+**Location:** `wirthy-web/tests/`  
 **Runner:** Vitest + jsdom
 
 ```bash
-cd discerned-web && pnpm test
+cd wirthy-web && pnpm test
 ```
 
 | File | What it covers |

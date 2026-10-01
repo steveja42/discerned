@@ -13,8 +13,8 @@
 #     -Argument '-NoProfile -File C:\dev\discerned\scripts\tagger-canary-local.ps1' `
 #     -WorkingDirectory 'C:\dev\discerned'
 #   $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 9am
-#   Register-ScheduledTask -TaskName 'discerned-tagger-canary' `
-#     -Action $action -Trigger $trigger -Description 'Weekly Discerned tagger selector canary'
+#   Register-ScheduledTask -TaskName 'wirthy-tagger-canary' `
+#     -Action $action -Trigger $trigger -Description 'Weekly Wirthy tagger selector canary'
 #
 # Result lands in test-output/tagger-canary.txt (also echoed to stdout). A dead
 # selector exits non-zero.
@@ -23,7 +23,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 
-Write-Host "== Discerned tagger canary (local, warm profile) =="
+Write-Host "== Wirthy tagger canary (local, warm profile) =="
 
 # Preinstalled-extension path against real Chrome — the working method for
 # CF-walled sites. Matches project_real_chrome_extension_cdp_load.
@@ -36,7 +36,7 @@ if (-not $env:PROFILE) { $env:PROFILE = 'test' }
 
 # The extension must be built into dist-test first (the profile loads dist-test).
 # Safe: build:test writes only dist-test/, never the dev dist/.
-pnpm --filter=./discerned-ext build:test
+pnpm --filter=./wirthy-ext build:test
 
 pnpm exec playwright test -c tests/e2e/playwright.config.ts --project=tagger-canary
 $code = $LASTEXITCODE

@@ -1,7 +1,7 @@
 {
   "folders": [
-    { "path": "discerned-ext", "name": "🧩 Extension" },
-    { "path": "discerned-web", "name": "🌐 Web app" },
+    { "path": "wirthy-ext", "name": "🧩 Extension" },
+    { "path": "wirthy-web", "name": "🌐 Web app" },
     { "path": "tests",         "name": "🧪 E2E tests" },
     { "path": ".",             "name": "📁 Monorepo root" }
   ],
@@ -18,15 +18,15 @@
       "**/dist": true,
       "**/dist-test": true,
       "**/test-results": true,
-      "**/discerned-web - Copy": true,
+      "**/wirthy-web - Copy": true,
       "**/discernedx": true,
       "**/legacy": true,
       "**/marketing": true
     },
-    "js/ts.tsdk.path": "discerned-web/node_modules/typescript/lib",
+    "js/ts.tsdk.path": "wirthy-web/node_modules/typescript/lib",
     "eslint.workingDirectories": [
-      { "directory": "discerned-ext", "changeProcessCWD": true },
-      { "directory": "discerned-web", "changeProcessCWD": true }
+      { "directory": "wirthy-ext", "changeProcessCWD": true },
+      { "directory": "wirthy-web", "changeProcessCWD": true }
     ],
     // Lint TS/TSX explicitly — without this the extension is inconsistent about
     // reporting them in a multi-root workspace.

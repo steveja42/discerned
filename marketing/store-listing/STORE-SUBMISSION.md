@@ -4,9 +4,9 @@
 below is text to copy into the Web Store dashboard form (and the uploaded package is the
 only other thing review looks at). Keep in sync with `manifest.json`; if a permission is
 added or removed, update the matching section here **and** re-check the privacy policy at
-`discerned-web/app/privacy/page.tsx`.
+`wirthy-web/app/privacy/page.tsx`.
 
-Privacy policy URL: **https://discerned.online/privacy**
+Privacy policy URL: **https://wirthy.app/privacy**
 
 Listing copy that lives elsewhere: the **short description** is `manifest.json`'s
 `description` field (132 char max) and auto-populates the listing summary. Every
@@ -21,11 +21,11 @@ manifest. Plain text with basic line breaks; the Store strips most formatting.
 
 **Claim discipline applies here as much as in-product** (see [UI-TEXT.md](UI-TEXT.md)): clips
 are NOT encrypted at rest, so nothing below says "encrypted", "secure", or pairs a
-padlock with local storage. Discerned has no reputation score, so none is promised —
+padlock with local storage. Wirthy has no reputation score, so none is promised —
 ownership and portability are attributed to Nostr, which does deliver them. 
 
 **The shared-feed claim** describes what ships: `lib/nostr/feed.ts` subscribes with no
-`authors` filter, so `/discerns` shows every published discern from every publisher, and
+`authors` filter, so `/home` shows every published post from every publisher, and
 the feed UI already supports follows + per-author filtering. Keep it in the present
 tense and keep it mechanical — "a public feed you can filter", not "a globally curated
 knowledge base". There is no curation, no ranking, and no reputation, so don't imply
@@ -41,9 +41,7 @@ how the listing reads end to end. Pasting it would duplicate the summary.
 **Paste only the fenced block below.**
 
 ```
-KEEP TRACK OF WHAT YOU FIND WORTHWHILE.
-
-Discerned helps you keep track of the things you discover on the web—and record what you think is worth your attention.
+Keep track of the things you discover on the web—and record what is worthy.
 
 CAPTURE WHAT MATTERS
 
@@ -67,7 +65,7 @@ KEEP YOUR LIBRARY YOURS
 
 Your personal clips can stay private on your device. No account is required to start building your collection.
 
-Bring your existing collection with you using Evernote import, or import and export your clips as JSON. Your data isn't locked into Discerned.
+Bring your existing collection with you using Evernote import, or import and export your clips as JSON. Your data isn't locked into Wirthy.
 
 SHARE WHAT YOU DISCOVER
 
@@ -75,13 +73,13 @@ When you clip something, choose whether to keep it private, publish it to Nostr,
 
 Nostr is an open, decentralized network where you can publish without relying on a single platform. Your identity and content aren't tied to one company's social network, and you can use different Nostr apps and services to access the same network.
 
-Your published discerns aren't confined to Discerned. They're published to the open Nostr network and can be viewed through Discerned and other Nostr clients.
+Your published posts aren't confined to Wirthy. They're published to the open Nostr network and can be viewed through Wirthy and other Nostr clients.
 
 DISCOVER WHAT OTHERS VALUE
 
-Explore public discerns, follow people whose judgment you trust, and discover worthwhile things through the recommendations of other people.
+Explore public posts, follow people whose judgment you trust, and discover worthwhile things through the recommendations of other people.
 
-The web is full of information. Discerned helps you keep track of what you think is worth your attention.
+The web is full of information. Keep track of what you think is worthy
 
 ```
 
@@ -90,7 +88,7 @@ The web is full of information. Discerned helps you keep track of what you think
 ## Single purpose
 
 ```
-Discerned is a web clipper and content-evaluation tool. It lets a user capture an
+Wirthy is a web clipper and content-evaluation tool. It lets a user capture an
 article, selection, or page they are reading, attach a structured evaluation to it
 (a quality rating, descriptive tags, and a category), save it privately on their own
 device, and — only when they explicitly choose to — publish that evaluation as a
@@ -132,12 +130,24 @@ Adds the right-click menu entries the user invokes to capture the current page o
 selected passage. This is one of the two primary entry points to the extension.
 ```
 
+`offscreen`
+
+```
+Used to decode a single still frame from a video file so a saved clip can show a poster image. When a user clips a page containing a video, the extension fetches the first few hundred KB of the video file and decodes one frame in an offscreen document, then saves that frame as a JPEG with the clip.
+
+A page's own content security policy can block this decoding inside the page itself, which is why it runs in an extension-owned offscreen document (reason: BLOBS). The document is created only during a user-initiated capture, loads no remote code, and is closed after 30 seconds idle. The frame is stored locally with the clip; nothing is sent to any server.
+```
+
 `scripting`
 
 ```
-Used exclusively for a single read-only feature: extracting embedded tweet content (author, text, images) rendered inside cross-origin platform.twitter.com iframes on news and article pages.
+Used for two things, both triggered only by the user's own gesture (toolbar icon, context menu, or keyboard shortcut):
 
-Because cross-origin iframe content cannot be accessed by the parent page's content script, chrome.scripting.executeScript runs a small, bundled, read-only extractor targeted strictly at those specific iframe targets. This script contains no remote code, executes only during a user-initiated capture event, and makes no network requests.
+1. Injecting the extension's bundled capture script into the tab the user invoked it on. The script is not declared in content_scripts, so it is absent from every page until the user asks to capture.
+
+2. Reading content that a parent page's content script cannot reach: embedded tweets (author, text, images) rendered inside cross-origin platform.twitter.com iframes, and the body of a live-blog or article iframe on the page being clipped. chrome.scripting.executeScript runs a small, bundled, read-only extractor targeted strictly at those frames.
+
+All injected code is bundled in the package. It contains no remote code and makes no network requests of its own.
 ```
 
 `storage`
@@ -151,9 +161,9 @@ transmitted to us.
 `tabs`
 
 ```
-Used solely to open, focus, and communicate with the extension's own pages: the onboarding page shown after install, the permissions page where the user grants or reviews the optional image permission, and the extension's web application (discerned.online), which provides the user's clip library and the Nostr identity connect and signing flow.
+Used solely to open, focus, and communicate with the extension's own pages: the onboarding page shown after install, the permissions page where the user grants or reviews the optional image permission, and the extension's web application (wirthy.app), which provides the user's clip library and the Nostr identity connect and signing flow.
 
-Every query is filtered to those specific extension and discerned.online URLs. The extension queries for an already-open instance so it can focus that tab instead of spawning a redundant duplicate, and so it can send a newly saved clip to an open library tab to keep it up to date.
+Every query is filtered to those specific extension and wirthy.app URLs. The extension queries for an already-open instance so it can focus that tab instead of spawning a redundant duplicate, and so it can send a newly saved clip to an open library tab to keep it up to date.
 
 This permission is never used to monitor, record, or transmit user tab history or general browsing activity. The extension does not enumerate, read, or report the URLs of the user's other tabs.
 ```
@@ -172,7 +182,7 @@ Host permission — covers BOTH `host_permissions: https://platform.twitter.com/
 ```
 REQUIRED — https://platform.twitter.com/*: Extracts the content of embedded tweets (author, text, images) that article pages render inside cross-origin platform.twitter.com iframes. A fixed, single-origin target, read only during a user-initiated capture, used for no other purpose.
 
-OPTIONAL — <all_urls>: Not requested at install. Discerned is a web clipper, so the user may clip from any domain; that cannot be reduced to a static host list. It is requested only where the user opts in — the "Save images with your clips" step during onboarding, or the extension's Permissions page — and used solely to save a clip's own copy of the page's images and video poster frames, so the clip still renders if the source site later removes them. Those fetches go directly to the servers already hosting that media. Declining is fully supported — clips simply reference the original URLs instead.
+OPTIONAL — <all_urls>: Not requested at install. Wirthy is a web clipper, so the user may clip from any domain; that cannot be reduced to a static host list. It is requested only where the user opts in — the "Save images with your clips" step during onboarding, or the extension's Permissions page — and used solely to save a clip's own copy of the page's images and video poster frames, so the clip still renders if the source site later removes them. Those fetches go directly to the servers already hosting that media. Declining is fully supported — clips simply reference the original URLs instead.
 
 Neither permission is used for routine capture. Content scripts are injected per tab under activeTab on the user's own gesture (toolbar icon, context menu, or keyboard shortcut) and are absent until then. No background tracking, no browsing-history monitoring, and no backend server receives page content.
 ```
@@ -208,7 +218,7 @@ Certify all three required statements:
 - ✅ I do not use or transfer user data for purposes unrelated to my item's single purpose
 - ✅ I do not use or transfer user data to determine creditworthiness or for lending purposes
 
-**Analytics note.** The discerned.online *website* uses GoatCounter (cookieless,
+**Analytics note.** The wirthy.app *website* uses GoatCounter (cookieless,
 no personal data, no cross-site tracking). The **extension contains no analytics**. The
 privacy policy states this distinction explicitly; keep it accurate if that ever changes.
 
@@ -218,18 +228,18 @@ privacy policy states this distinction explicitly; keep it accurate if that ever
 
 Verified for the current build:
 
-- [x] `key` field removed from `manifest.json` (store assigns its own ID)
+- [x] `key` field absent from the uploaded package (`manifest.json` carries the store's key for local builds; `pnpm build` / `pnpm pack:ext` strip it, since the store rejects a package with a `key`)
 - [x] `alarms` permission removed (was unused)
 - [x] `REMOTE_LOGGING = false` in `src/shared/logger.ts`
 - [x] `activeLogLevel = LL.WARN`
 - [x] No sourcemaps in the production build
-- [x] No test hooks (`__DISCERNED_TEST_*`) in the production build
+- [x] No test hooks (`__WIRTHY_TEST_*`) in the production build
 - [x] `pnpm type-check`, `pnpm lint`, `pnpm test` all clean
 - [x] Short description written (`manifest.json` `description`, 123/132 chars)
 - [x] Detailed description drafted (see the Store listing section above)
-- [x] Privacy policy **deployed** and reachable at https://discerned.online/privacy
-      (`discerned-web/app/privacy/page.tsx`, ships with the static export)
-- [x] Screenshots (1280×800 or 640×400) — four, in `discerned-web/public/press/`
+- [x] Privacy policy **deployed** and reachable at https://wirthy.app/privacy
+      (`wirthy-web/app/privacy/page.tsx`, ships with the static export)
+- [x] Screenshots (1280×800 or 640×400) — four, in `wirthy-web/public/press/`
 - [x] Small promo tile (440×280) — `store-listing/promo-tile-440x280-azure.png`
 - [ ] Version bumped in `manifest.json` if re-submitting
       *(per-resubmission reminder — leave unticked by design)*
@@ -237,10 +247,10 @@ Verified for the current build:
 Known consequence of removing `key`
 
 The extension ID is no longer pinned. An unpacked/side-loaded install now gets a random
-per-profile ID, so its IndexedDB (`discerned`) is a **separate store** from a Web Store
+per-profile ID, so its IndexedDB (`wirthy`) is a **separate store** from a Web Store
 install's — side-load users' existing clips do not carry over. Once the store ID is
 assigned, add it to `ALLOWED_ORIGINS` in
-`discerned-web/netlify/functions/feedback.mts` (currently listing the old pinned ID;
+`wirthy-web/netlify/functions/feedback.mts` (currently listing the old pinned ID;
 nothing is broken today because the extension opens a tab rather than posting directly).
 
 Note on the download zip

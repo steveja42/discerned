@@ -33,7 +33,7 @@ test('wikipedia-visual: capture article, render in /clips, screenshot', async ()
     const page = await ctx.newPage();
     page.on('console', (msg) => {
       const t = msg.text();
-      if (t.includes('Discerned') || t.includes('dx-')) {
+      if (t.includes('Wirthy') || t.includes('dx-')) {
         // eslint-disable-next-line no-console
         console.log(`[browser:${msg.type()}]`, t);
       }
@@ -60,14 +60,14 @@ test('wikipedia-visual: capture article, render in /clips, screenshot', async ()
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('capture timeout')), 30_000);
         const onMessage = (e: MessageEvent) => {
-          if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+          if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
           clearTimeout(timer);
           window.removeEventListener('message', onMessage);
           if (e.data.error) reject(new Error(e.data.error));
           else resolve(e.data.capture);
         };
         window.addEventListener('message', onMessage);
-        window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, window.location.origin);
+        window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, window.location.origin);
       });
     })) as Record<string, unknown>;
 
@@ -75,8 +75,8 @@ test('wikipedia-visual: capture article, render in /clips, screenshot', async ()
     await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' }, encrypted: '' };
-      window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
-      window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
     }, cap);
 
     const row = libPage.locator('article.clip').first();

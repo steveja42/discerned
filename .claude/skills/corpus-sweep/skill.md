@@ -1,6 +1,6 @@
 ---
 name: corpus-sweep
-description: Run the fortnightly 206-domain capture-quality corpus sweep (discerned-ext) — preflight, background capture, parallel visual review, staged recovery of blocked domains. Use when the user asks to run, start, resume, or recover a corpus sweep, or to review sweep results.
+description: Run the fortnightly 206-domain capture-quality corpus sweep (wirthy-ext) — preflight, background capture, parallel visual review, staged recovery of blocked domains. Use when the user asks to run, start, resume, or recover a corpus sweep, or to review sweep results.
 disable-model-invocation: false
 ---
 
@@ -48,7 +48,7 @@ pwsh -File scripts/corpus-sweep-run.ps1 -Stop
 
 The script checks, and exits early if any fail:
 - **Chrome must be fully closed** — the sweep drives the warm `Profile 3`; a live Chrome holds its lock.
-- **`discerned-ext/dist-test/` must be current** — rebuilt automatically via `pnpm build:test` when missing, or when any build input (`src/`, `manifest.json`, `vite.config.ts`, `tsconfig.json`, `scripts/build-injected.mjs`) is newer than the last build. It compares source mtimes, not wall-clock age: a day-old build with no source changes is fine, a 20-minute-old one is stale if you edited `capture.ts` after it.
+- **`wirthy-ext/dist-test/` must be current** — rebuilt automatically via `pnpm build:test` when missing, or when any build input (`src/`, `manifest.json`, `vite.config.ts`, `tsconfig.json`, `scripts/build-injected.mjs`) is newer than the last build. It compares source mtimes, not wall-clock age: a day-old build with no source changes is fine, a 20-minute-old one is stale if you edited `capture.ts` after it.
 - **The web app must be up on `:3000`** — needed for the clip/cast render steps.
 
 ## Review (not scriptable — this is the actual work)

@@ -86,7 +86,7 @@ test('stackernews: capture clip, render in web app, screenshot card', async () =
   try {
     const page = await ctx.newPage();
     page.on('console', (msg) => {
-      if (msg.text().includes('Discerned')) {
+      if (msg.text().includes('Wirthy')) {
         // eslint-disable-next-line no-console
         console.log(`[browser:${msg.type()}]`, msg.text());
       }
@@ -104,14 +104,14 @@ test('stackernews: capture clip, render in web app, screenshot card', async () =
         return new Promise((res, rej) => {
           const timer = setTimeout(() => rej(new Error('capture timeout')), 40_000);
           const onMessage = (e: MessageEvent) => {
-            if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+            if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
             clearTimeout(timer);
             window.removeEventListener('message', onMessage);
             if (e.data.error) rej(new Error(e.data.error));
             else res(e.data.capture);
           };
           window.addEventListener('message', onMessage);
-          window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: fmt }, window.location.origin);
+          window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: fmt }, window.location.origin);
         });
       }, format)) as Record<string, unknown>;
 
@@ -121,8 +121,8 @@ test('stackernews: capture clip, render in web app, screenshot card', async () =
       await libPage.evaluate((c) => {
         const clip = { capture: c, evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' }, encrypted: '' };
         const pubkey = new Array(64).fill('a').join('');
-        window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey, authMethod: 'nip07' }, window.location.origin);
-        window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
+        window.postMessage({ type: 'WIRTHY_BRIDGE_HELLO', pubkey, authMethod: 'nip07' }, window.location.origin);
+        window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
       }, cap);
       const row = libPage.locator('article.clip').first();
       await row.waitFor({ state: 'visible', timeout: 10_000 });

@@ -50,8 +50,8 @@ test('emoji-render-probe', async () => {
         bodyHtml: html, bodyText: 'JUST IN: SEC Chairman speaks',
       };
       const clip = { capture, evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' }, encrypted: '' };
-      window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
-      window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
     }, BODY_HTML);
     await page.locator('article.clip').first().click({ timeout: 15_000 });
     const body = page.locator('.clip-body');
@@ -91,8 +91,8 @@ test('emoji-render-probe', async () => {
         markdown: md, bodyText: 'cast',
       };
       const clip = { capture, evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' }, encrypted: '' };
-      window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
-      window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
     }, MARKDOWN);
     await page.locator('article.clip').first().click({ timeout: 15_000 });
     await page.locator('.clip-body').waitFor({ state: 'visible', timeout: 15_000 });

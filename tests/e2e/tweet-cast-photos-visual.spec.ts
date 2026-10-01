@@ -11,7 +11,7 @@
 // Format note: these events use the CURRENT cast shape — the attribution
 // snippet is sentinel-wrapped at the top of content (stripped by the web
 // parser), the tweet body lives in the `body` tag, and images ride as imeta
-// tags. The retired "Discerned: …" + "--- body ---" markers are gone.
+// tags. The retired "Wirthy: …" + "--- body ---" markers are gone.
 //
 // Run with: TWEET_CAST=1 pnpm exec playwright test \
 //   -c tests/e2e/playwright.config.ts --project=tweet-cast-photos-visual
@@ -63,17 +63,17 @@ function buildTweetCast(): NostrEvent {
   return signCast(
     [
       ['r', 'https://x.com/CIA/status/2055074954375254084'],
-      ['L', 'online.discerned.category'],
-      ['l', 'General', 'online.discerned.category'],
-      ['t', 'discerned'],
+      ['L', 'app.wirthy.category'],
+      ['l', 'General', 'app.wirthy.category'],
+      ['t', 'wirthy'],
       ['format', 'full-page'],
-      ['client', 'discerned'],
+      ['client', 'wirthy'],
       ['title', 'CIA on X: "Havana, Cuba'],
       ['image', PHOTOS[0]],
       ['body', body],
       ...PHOTOS.map((u): string[] => ['imeta', `url ${u}`]),
     ],
-    `${snippet('Discerned → in General')}\n\nCIA on X: "Havana, Cuba\nhttps://x.com/CIA/status/2055074954375254084\n\n${body}`,
+    `${snippet('Wirthy → in General')}\n\nCIA on X: "Havana, Cuba\nhttps://x.com/CIA/status/2055074954375254084\n\n${body}`,
   );
 }
 
@@ -92,17 +92,17 @@ function buildQuoteTweetCast(): NostrEvent {
   return signCast(
     [
       ['r', 'https://x.com/coinbureau/status/2074913657469984786'],
-      ['L', 'online.discerned.category'],
-      ['l', 'General', 'online.discerned.category'],
-      ['t', 'discerned'],
+      ['L', 'app.wirthy.category'],
+      ['l', 'General', 'app.wirthy.category'],
+      ['t', 'wirthy'],
       ['format', 'full-page'],
-      ['client', 'discerned'],
+      ['client', 'wirthy'],
       ['title', 'Coin Bureau on X'],
       ['image', OUTER_PHOTOS[0]],
       ['body', body],
       ...allPhotos.map((u): string[] => ['imeta', `url ${u}`]),
     ],
-    `${snippet('Discerned → in General')}\n\nCoin Bureau on X\nhttps://x.com/coinbureau/status/2074913657469984786\n\n${body}`,
+    `${snippet('Wirthy → in General')}\n\nCoin Bureau on X\nhttps://x.com/coinbureau/status/2074913657469984786\n\n${body}`,
   );
 }
 
@@ -125,24 +125,24 @@ function buildArticleCast(): NostrEvent {
   return signCast(
     [
       ['r', 'https://example.com/home-server-article'],
-      ['L', 'online.discerned.category'],
-      ['l', 'General', 'online.discerned.category'],
-      ['t', 'discerned'],
+      ['L', 'app.wirthy.category'],
+      ['l', 'General', 'app.wirthy.category'],
+      ['t', 'wirthy'],
       ['format', 'article'],
-      ['client', 'discerned'],
+      ['client', 'wirthy'],
       ['title', 'Your Home Server Deserves Better'],
       ['image', PHOTOS[0]],
       ['body', body],
       ['imeta', `url ${PHOTOS[0]}`],
       ['imeta', `url ${PHOTOS[1]}`],
     ],
-    `${snippet('Discerned → in General')}\n\nYour Home Server Deserves Better\nhttps://example.com/home-server-article\n\n${body}`,
+    `${snippet('Wirthy → in General')}\n\nYour Home Server Deserves Better\nhttps://example.com/home-server-article\n\n${body}`,
   );
 }
 
 async function mockRelayWith(page: Page, event: NostrEvent): Promise<void> {
   await page.addInitScript(() => {
-    try { localStorage.setItem('discerned.relayMode', 'production'); } catch { /* ignore */ }
+    try { localStorage.setItem('wirthy.relayMode', 'production'); } catch { /* ignore */ }
   });
   await page.routeWebSocket(/^wss:\/\//, (ws) => {
     ws.onMessage((message: string | Buffer) => {
@@ -160,7 +160,7 @@ async function mockRelayWith(page: Page, event: NostrEvent): Promise<void> {
 }
 
 async function openDetailAndDecode(page: Page, rowText: string) {
-  await page.goto('/discerns');
+  await page.goto('/home');
   const row = page.locator('article.clip', { hasText: rowText }).first();
   await row.waitFor({ state: 'visible', timeout: 10_000 });
   await row.click();

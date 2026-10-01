@@ -203,7 +203,7 @@ test('instagram-probe: what is actually capturable on a reel page', async () => 
     const cap = await page.evaluate(() => new Promise((res) => {
       const t = setTimeout(() => res({ error: 'capture timeout' }), 40_000);
       const on = (e: MessageEvent) => {
-        if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+        if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
         clearTimeout(t); removeEventListener('message', on);
         res(e.data.error ? { error: e.data.error } : {
           title: e.data.capture?.title,
@@ -214,7 +214,7 @@ test('instagram-probe: what is actually capturable on a reel page', async () => 
         });
       };
       addEventListener('message', on);
-      postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, location.origin);
+      postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, location.origin);
     }));
     report.push('\n── current capture (article) ──', JSON.stringify(cap, null, 2));
   } catch (e) {

@@ -11,7 +11,7 @@ visual specs run and screenshots inspected, always-on e2e baseline run. Evidence
 - Live visual specs for bsky/goodreads/reddit/youtube/wikipedia/bbc/stackoverflow had **zero assertions**
   (screenshot-only). Broken Reddit output "passed". Only primal-visual asserted structure, and its checks
   missed its own defect (stray stretched avatar outside the dx elements it checks).
-- `discerned-web/tests/parse.test.ts` hand-mirrors the **old** event format (leading `Discerned:` summary
+- `wirthy-web/tests/parse.test.ts` hand-mirrors the **old** event format (leading `Wirthy:` summary
   line) that the extension no longer emits — the cross-package round-trip test can't catch drift anymore.
   `tweet-cast-photos-visual.spec.ts` likewise mirrors the retired `--- body ---` format.
 - Screenshots of clip bodies taller than 16,384 px are garbage (Chromium raster-tile limit: first ~8k px
@@ -63,7 +63,7 @@ DetailPanel gallery, feed.ts/follows.ts.
 - [x] 1.4 Tall-safe screenshots: `tests/e2e/helpers/clipShot.ts` (`screenshotClipBody`) replaces the
       per-spec viewport/element-screenshot blocks. Elements taller than 8,000 px get a viewport-clipped
       page screenshot of the top instead of Chromium's blank/tile-duplicated element capture.
-- [x] 1.5 Kill parse.test.ts drift: `discerned-ext/tests/nostr/event-fixture-generation.test.ts`
+- [x] 1.5 Kill parse.test.ts drift: `wirthy-ext/tests/nostr/event-fixture-generation.test.ts`
       regenerates `tests/fixtures/events/*.json` (16 templates: kind1 / kind1-longform-ref / kind30023
       per clip fixture) from the REAL factory on every ext `pnpm test` (write-if-changed, committed).
       Web `parse.test.ts` signs + parses all of them; the old hand-mirrored block is kept as an explicit
@@ -75,7 +75,7 @@ DetailPanel gallery, feed.ts/follows.ts.
       `tests/enex-parser.test.ts` — **found + fixed a real bug**: `querySelector('parseerror')` typo
       (should be `parsererror`) meant invalid ENEX silently returned `[]` instead of throwing,
       `tests/export-utils.test.ts` (CSV escaping incl. quotes/commas/newlines, JSON payload),
-      `discerned-ext/tests/background/relay-manager.test.ts` (ACK thresholds local/production, the
+      `wirthy-ext/tests/background/relay-manager.test.ts` (ACK thresholds local/production, the
       resolved-"connection failure"-string-is-a-failure quirk, explicit override).
       *Deferred:* background GET_CLIPS bodyHtml/thumbnail-strip unit test — the handlers are closures
       inside background.ts (importing it boots the whole SW against incomplete chrome shims, and
@@ -132,7 +132,7 @@ substring assertion in `long-form.test.ts` passed while the rendered output was 
 
 Two new layers, both proven to fail on the pre-fix code (verified by disabling the fix rules):
 
-- **Unit — `discerned-ext/tests/nostr/cast-markdown.test.ts`**: runs the REAL `htmlToMarkdown` over
+- **Unit — `wirthy-ext/tests/nostr/cast-markdown.test.ts`**: runs the REAL `htmlToMarkdown` over
   representative tweet-card and primal-note-card HTML; asserts no brace spills (a `](` with no `[` opener
   on the same line), no data: URIs, name/handle separated, video poster as one nested linked image, photo
   inline, stats separated (`8 · 528 · 62`, never glued), avatars dropped (never full-width images).
@@ -143,7 +143,7 @@ Two new layers, both proven to fail on the pre-fix code (verified by disabling t
 
 **Fixtures:** `event-fixture-generation.test.ts` now also emits `card-{tweet-card,primal-note,article-
 inline-img}.kind30023.json` from real card HTML through the real `htmlToMarkdown` + `createLongFormEvent`.
-Regenerate via `pnpm test` in discerned-ext; commit the diff.
+Regenerate via `pnpm test` in wirthy-ext; commit the diff.
 
 **Converter fixes (`html-to-markdown.ts`):** avatar/icon-image drop (alt=avatar, dx-avatar, ≤72px);
 `safe-links` rule (never wrap multi-line anchor content → no spill; drop emptied links); `dx-quote` →
@@ -157,18 +157,18 @@ odometer count reading. Web: DetailPanel suppresses the top hero when the markdo
 Foundation is the **selector-anchor manifest** (3.2): each `SITE_TAGGERS` entry declares its load-bearing
 selectors, and `checkTaggerAnchors(host, root)` (exported from `capture.ts`) reports per-selector match
 counts + the dead list + `allDead`. 3.1 and 3.4 both consume it. Guarded by
-`discerned-ext/tests/extraction/tagger-anchors.test.ts` (unknown-host → null, real fixture → all live,
-redesigned page → allDead). Full write-up in `discerned-ext/CLAUDE.md` → "Tagger canary / repair loop".
+`wirthy-ext/tests/extraction/tagger-anchors.test.ts` (unknown-host → null, real fixture → all live,
+redesigned page → allDead). Full write-up in `wirthy-ext/CLAUDE.md` → "Tagger canary / repair loop".
 
 - [x] 3.1 Lightweight weekly canary `tests/e2e/tagger-canary.spec.ts` (`CANARY=1`, `--project=tagger-canary`):
       visits each tagger's live target (`helpers/taggerCanaryTargets.ts`), runs its anchor manifest against
-      the live DOM via a new `__DISCERNED_TEST_ANCHORS` bridge (tree-shaken in prod), FAILS naming the exact
+      the live DOM via a new `__WIRTHY_TEST_ANCHORS` bridge (tree-shaken in prod), FAILS naming the exact
       dead selector, page-load flakes are SKIPs not fails. Scheduled two ways: `scripts/tagger-canary-local.ps1`
       (warm `test` Chrome profile → covers CF-walled Reddit/YT/SO — the authoritative run) and
       `.github/workflows/tagger-canary.yml` (Mondays 08:00 UTC, open sites only). *Verified live 2026-07-21:*
       reddit/youtube/bsky/goodreads anchors all matched; primal/SO skipped on infra as designed.
 - [x] 3.2 Selector-anchor manifests per tagger — the `anchors` field on every `SITE_TAGGERS` entry (see above).
-- [x] 3.3 Repair loop documented in `discerned-ext/CLAUDE.md` (+ root pointer): canary fail → read
+- [x] 3.3 Repair loop documented in `wirthy-ext/CLAUDE.md` (+ root pointer): canary fail → read
       `test-output/tagger-canary.txt` → `SNAP=1` re-snapshot → fix tagger + `anchors` offline against the
       fixture-visual spec → `--update-snapshots` → refresh gallery → commit together.
 - [x] 3.4 Graceful degradation: `applySiteTagger()` runs the anchor check BEFORE the tagger — if `allDead`
@@ -238,7 +238,7 @@ into three buckets — only the first is a real pipeline defect:
       byline) but the e2e ran the GENERIC pipeline — site taggers gate on the live hostname, which is
       `127.0.0.1` under the fixture server, so `tagReddit` never fired. Fixed by threading an optional
       `hostOverride` from the sidecar (`ExpectedCapture.hostOverride`) through `loadSiteFixtures` →
-      `extension.spec` → the `__DISCERNED_TEST_CAPTURE` bridge, and through `article.test.ts` via
+      `extension.spec` → the `__WIRTHY_TEST_CAPTURE` bridge, and through `article.test.ts` via
       `__setTestHostOverride`; `reddit-thread.expected.json` sets `hostOverride: "www.reddit.com"`. Also
       fixed a genuine tagger leak the firing exposed: `tagReddit` now dx-excl's `shreddit-sort-dropdown`
       wholesale (its "Open comment sort options" tooltip text lived in a slotted `<div>` the label pass

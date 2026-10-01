@@ -1,7 +1,7 @@
 // Regression guard for the overlay click-jacking defence.
 //
 // Some ad-funded pages register a capture-phase click listener on document that
-// calls window.open() for ANY click — including clicks inside the Discerned
+// calls window.open() for ANY click — including clicks inside the Wirthy
 // overlay. nip07-bridge.ts (MAIN world) neutralises this by overriding
 // window.open while the overlay is present.
 //
@@ -48,10 +48,10 @@ test('overlay clicks do not trigger the page\'s window.open hijack', async () =>
     ).toBe(false);
 
     // Open the overlay through the real activation path (inject bridge, then
-    // content script, then ACTIVATE_DISCERNED) — the same function the toolbar
+    // content script, then ACTIVATE_WIRTHY) — the same function the toolbar
     // click handler runs.
     await openOverlayOnTab(ctx, FIXTURE_URL);
-    const host = page.locator('#discerned-overlay');
+    const host = page.locator('#wirthy-overlay');
     await expect(host).toBeAttached({ timeout: 15_000 });
 
     // Click inside the overlay PANEL (not just the full-viewport host: the panel
@@ -84,7 +84,7 @@ test('overlay clicks do not trigger the page\'s window.open hijack', async () =>
     // installs the override — the isolated content-script world has its own.
     const guard = await page.evaluate(() => ({
       overridden: !/\[native code\]/.test(String(window.open)),
-      overlayPresent: !!document.querySelector('#discerned-overlay'),
+      overlayPresent: !!document.querySelector('#wirthy-overlay'),
     }));
 
     expect(

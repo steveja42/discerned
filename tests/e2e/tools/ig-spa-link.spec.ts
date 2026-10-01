@@ -29,12 +29,12 @@ test('ig-spa-link: clip embeds the CURRENT reel, not the previously viewed one',
   const capture = () => page.evaluate(() => new Promise((res) => {
     const t = setTimeout(() => res({ error: 'capture timeout' }), 60_000);
     const on = (e: MessageEvent) => {
-      if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+      if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
       clearTimeout(t); removeEventListener('message', on);
       res(e.data.error ? { error: e.data.error } : { html: e.data.capture?.bodyHtml ?? '' });
     };
     addEventListener('message', on);
-    postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, location.origin);
+    postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, location.origin);
   })) as Promise<{ html?: string; error?: string }>;
 
   try {

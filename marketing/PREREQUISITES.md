@@ -13,8 +13,8 @@ Verified 2026-09-02.
 ## (a) No landing page to send campaign traffic to
 
 **There is no URL that explains the product to someone who has never heard of it.** `/about` is
-the closest thing, but nothing routes to it by default: `discerned-web/app/page.tsx` redirects
-`/` to `/discerns`, so anyone arriving at the bare domain lands in a feed of strangers' clips.
+the closest thing, but nothing routes to it by default: `wirthy-web/app/page.tsx` redirects
+`/` to `/home`, so anyone arriving at the bare domain lands in a feed of strangers' clips.
 
 **Severity: blocking for one-shot channels.** Repeatable channels (Nostr posts, directory
 listings, store search) are unaffected — they carry their own context or point at the Web Store
@@ -25,7 +25,7 @@ listing.
 Two separable problems, and only the first is blocking:
 
 - **A destination for campaign links.** Any route works. Links can point anywhere.
-- **What the bare domain does.** Matters for someone typing "discerned.online" or following an
+- **What the bare domain does.** Matters for someone typing "wirthy.app" or following an
   unlinked mention, but no campaign depends on it.
 
 The root redirect is also doing real work — it preserves the query string so the extension's
@@ -60,7 +60,7 @@ Distinct per-channel URLs are not a controlled experiment, but they are honest a
 which is the thing actually missing.
 
 **Cheapest resolution:** one page at a fixed route, linked from campaign posts. The pitch, the
-flow, and a "Get the extension" button already exist in `discerned-web/lib/marketing-copy.tsx`
+flow, and a "Get the extension" button already exist in `wirthy-web/lib/marketing-copy.tsx`
 and `app/about/page.tsx`, so this is mostly routing, not writing. Add per-channel variants later
 if the attribution turns out to be worth the pages. What `/` does can stay as it is.
 
@@ -69,7 +69,7 @@ if the attribution turns out to be worth the pages. What `/` does can stay as it
 ## (b) Empty-feed cold start
 
 A first-time visitor with no Nostr identity and no follows sees whatever exists globally under
-`{ kinds: [1, 30023], '#t': ['discerned'] }` — the filter in `discerned-web/lib/nostr/feed.ts`.
+`{ kinds: [1, 30023], '#t': ['wirthy'] }` — the filter in `wirthy-web/lib/nostr/feed.ts`.
 Today that is sparse.
 
 This is the classic discovery-product cold start, and it compounds (a): a visitor arriving from
@@ -78,18 +78,18 @@ outcome than not posting at all, which is why the one-shot channels are gated on
 
 **Severity: blocking for one-shot channels.**
 
-**Cheapest partial mitigation is A1 in `STRATEGY.md`** — cast real discerns on a regular
+**Cheapest partial mitigation is A1 in `STRATEGY.md`** — cast real posts on a regular
 cadence from the maintainer npub. Each cast is simultaneously a product demonstration and feed
 inventory. Nothing else on the plan addresses this at zero cost, which is the main reason A1
 leads Track A now that the directory work is finished.
 
-A fuller resolution would be an empty/near-empty state on `/discerns` that explains what the
-feed is and what a discern looks like, rather than rendering a short list with no framing. Not
+A fuller resolution would be an empty/near-empty state on `/home` that explains what the
+feed is and what a post looks like, rather than rendering a short list with no framing. Not
 proposed here — flagging that the empty state is a marketing surface, not just a UI edge case.
 
 ---
 
-## (c) `discerned-ext/UI-TEXT.md` has drifted from shipped strings
+## (c) `wirthy-ext/UI-TEXT.md` has drifted from shipped strings
 
 Two confirmed mismatches:
 

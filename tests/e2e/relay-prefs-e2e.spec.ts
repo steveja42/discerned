@@ -124,20 +124,20 @@ test.describe('relay preferences — extension round-trip', () => {
       });
 
       // The regression this guards: landing on the feed with the relay UI
-      // hidden behind the settings gear. Find the discerns tab by URL rather
+      // hidden behind the settings gear. Find the home tab by URL rather
       // than taking the next 'page' event — the extension opens its own tabs.
       let opened: import('@playwright/test').Page | undefined;
       for (let i = 0; i < 30 && !opened; i++) {
-        opened = ctx.pages().find((p) => p.url().includes('/discerns?settings=1'));
+        opened = ctx.pages().find((p) => p.url().includes('/home?settings=1'));
         if (!opened) await extPage.waitForTimeout(500);
       }
-      if (!opened) throw new Error(`no /discerns tab; open: ${ctx.pages().map((p) => p.url()).join(', ')}`);
+      if (!opened) throw new Error(`no /home tab; open: ${ctx.pages().map((p) => p.url()).join(', ')}`);
       // The tab is caught the moment its URL is set, which can be before the
       // document has even parsed — wait for the app itself, not just the URL.
       await opened.waitForLoadState('domcontentloaded');
       await opened.locator('.topbar').waitFor({ state: 'visible', timeout: 20_000 });
 
-      expect(opened.url()).toContain('/discerns');
+      expect(opened.url()).toContain('/home');
       await expect(opened.locator('.modal')).toBeVisible({ timeout: 15_000 });
       await expect(opened.locator('.relay-row').first()).toBeVisible();
     } finally {

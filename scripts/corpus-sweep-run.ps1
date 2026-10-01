@@ -139,7 +139,7 @@ function Ok($msg)   { Write-Host "  + $msg" -ForegroundColor Green }
 
 # ── -Stop: abort a background sweep WITHOUT touching the dev servers ─────────
 # Deliberately scoped. A blanket `Get-Process node | Stop-Process` also kills the
-# always-running `pnpm dev` watchers for discerned-ext and discerned-web, and the
+# always-running `pnpm dev` watchers for wirthy-ext and wirthy-web, and the
 # only symptom is a later preflight claiming the web app was never started.
 # So: Chrome by name (the sweep drives its own), node ONLY where the command line
 # says playwright.
@@ -181,7 +181,7 @@ Ok 'Chrome is closed (Profile 3 lock free)'
 # could capture all 209 domains with superseded code — hours of wall-clock plus
 # the IP-reputation budget against walled sites, spent measuring the wrong
 # pipeline, and a set of verdicts describing code that no longer exists.
-$ext = Join-Path $repo 'discerned-ext'
+$ext = Join-Path $repo 'wirthy-ext'
 $distTest = Join-Path $ext 'dist-test\manifest.json'
 
 function newestBuildInput {
@@ -211,7 +211,7 @@ if (-not (Test-Path $distTest)) {
 
 if ($needsBuild) {
   Warn "Rebuilding dist-test ($reason)..."
-  pnpm --filter=./discerned-ext build:test
+  pnpm --filter=./wirthy-ext build:test
   if ($LASTEXITCODE -ne 0) { Warn 'build:test failed'; exit 1 }
   Ok 'dist-test rebuilt from current source'
 } else {
@@ -225,7 +225,7 @@ try {
   Ok 'web app responding on :3000'
 } catch {
   Warn 'No web app on http://localhost:3000 — the clip/cast render steps will fail.'
-  Warn 'Start it with: cd discerned-web; pnpm dev'
+  Warn 'Start it with: cd wirthy-web; pnpm dev'
   exit 1
 }
 

@@ -3,7 +3,7 @@
 // For each tagger's live target (helpers/taggerCanaryTargets.ts) this navigates
 // to the real page and runs that tagger's SELECTOR-ANCHOR MANIFEST (Phase 3.2,
 // declared in capture.ts SITE_TAGGERS) against the live DOM via the extension's
-// __DISCERNED_TEST_ANCHORS bridge. A dead anchor (zero matches) means the site
+// __WIRTHY_TEST_ANCHORS bridge. A dead anchor (zero matches) means the site
 // redesigned out from under the tagger — the test FAILS and names the exact
 // dead selector, so a redesign is caught within a week instead of by accident.
 //
@@ -73,13 +73,13 @@ test('tagger-canary: every tagger anchor still matches the live DOM', async () =
             new Promise<TaggerAnchorReport | null>((resolvePromise, reject) => {
               const timer = setTimeout(() => reject(new Error('anchor check timeout')), 10_000);
               const onMessage = (e: MessageEvent) => {
-                if (e.data?.type !== '__DISCERNED_TEST_ANCHORS_RESULT') return;
+                if (e.data?.type !== '__WIRTHY_TEST_ANCHORS_RESULT') return;
                 clearTimeout(timer);
                 window.removeEventListener('message', onMessage);
                 resolvePromise(e.data.report ?? null);
               };
               window.addEventListener('message', onMessage);
-              window.postMessage({ type: '__DISCERNED_TEST_ANCHORS', hostOverride }, window.location.origin);
+              window.postMessage({ type: '__WIRTHY_TEST_ANCHORS', hostOverride }, window.location.origin);
             }),
           { hostOverride: target.hostOverride },
         )) as TaggerAnchorReport | null;
@@ -98,7 +98,7 @@ test('tagger-canary: every tagger anchor still matches the live DOM', async () =
         // NB: plain `querySelectorAll`, so unlike the manifest's
         // `querySelectorAllDeep` this does NOT pierce shadow roots. Fine for the
         // current users (primal is shadow-free); if you add extraAnchors for a
-        // shadow-DOM site, route them through the __DISCERNED_TEST_ANCHORS
+        // shadow-DOM site, route them through the __WIRTHY_TEST_ANCHORS
         // bridge instead of counting them here.
         if (target.extraAnchors?.length) {
           const extra = await page.evaluate(

@@ -10,11 +10,11 @@
 // leaking) left all 29 clip baselines green.
 //
 // The pipeline here is production code end to end:
-//   fixture page → __DISCERNED_TEST_CAPTURE (real captureContext)
-//                → __DISCERNED_TEST_CAST    (real deriveLongFormMarkdown
+//   fixture page → __WIRTHY_TEST_CAPTURE (real captureContext)
+//                → __WIRTHY_TEST_CAST    (real deriveLongFormMarkdown
 //                                            + real buildCastTemplates)
 //                → sign with a throwaway key
-//                → /discerns via a mocked relay (real feed + DetailPanel)
+//                → /home via a mocked relay (real feed + DetailPanel)
 // Only the signing key and the relay are fakes; nothing about the markdown is
 // reimplemented here.
 
@@ -160,7 +160,7 @@ async function captureFixture(
   const page = await ctx.newPage();
   page.on('console', (msg) => {
     const t = msg.text();
-    if (t.includes('Discerned') || t.includes('dx-')) {
+    if (t.includes('Wirthy') || t.includes('dx-')) {
       // eslint-disable-next-line no-console
       console.log(`[browser:${msg.type()}]`, t);
     }
@@ -182,7 +182,7 @@ async function captureFixture(
     return new Promise((resolveCap, rejectCap) => {
       const timer = setTimeout(() => rejectCap(new Error('capture timeout')), 30_000);
       const onMessage = (e: MessageEvent) => {
-        if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+        if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
         clearTimeout(timer);
         window.removeEventListener('message', onMessage);
         if (e.data.error) rejectCap(new Error(e.data.error));
@@ -190,7 +190,7 @@ async function captureFixture(
       };
       window.addEventListener('message', onMessage);
       window.postMessage(
-        { type: '__DISCERNED_TEST_CAPTURE', format, hostOverride, pathOverride },
+        { type: '__WIRTHY_TEST_CAPTURE', format, hostOverride, pathOverride },
         window.location.origin,
       );
     });

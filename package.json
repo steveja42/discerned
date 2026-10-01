@@ -1,13 +1,13 @@
 {
-  "name": "discerned-monorepo",
+  "name": "wirthy-monorepo",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "pnpm --filter=./discerned-web build",
-    "test": "pnpm -r --filter=./discerned-ext --filter=./discerned-web test",
+    "build": "pnpm --filter=./wirthy-web build",
+    "test": "pnpm -r --filter=./wirthy-ext --filter=./wirthy-web test",
     "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
     "test:live": "cross-env LIVE=1 playwright test -c tests/e2e/playwright.config.ts --grep @live",
-    "pretest:e2e": "pnpm --filter=./discerned-ext build:test && pnpm --filter=./discerned-web build",
+    "pretest:e2e": "pnpm --filter=./wirthy-ext build:test && pnpm --filter=./wirthy-web build",
     "relay:local": "powershell -ExecutionPolicy Bypass -File tools/nostr-relay/run.ps1",
     "relay:tls": "powershell -ExecutionPolicy Bypass -File tools/nostr-relay/run-tls.ps1"
   },

@@ -20,7 +20,7 @@ test('probe medium article header + engagement row', async () => {
   const outDir = resolve(__dirname, '..', '..', 'test-output');
   mkdirSync(outDir, { recursive: true });
 
-  const userDataDir = mkdtempSync(join(tmpdir(), 'discerned-probe-'));
+  const userDataDir = mkdtempSync(join(tmpdir(), 'wirthy-probe-'));
   const ctx = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
     args: ['--headless=new', '--no-sandbox', '--no-first-run'],

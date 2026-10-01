@@ -275,19 +275,19 @@ async function purgeStoredClips(ctx: BrowserContext): Promise<number> {
     const ids = await page.evaluate(() => new Promise<string[]>((res) => {
       const timer = setTimeout(() => { window.removeEventListener('message', on); res([]); }, 8_000);
       function on(e: MessageEvent) {
-        if (e.data?.type !== 'DISCERNED_BRIDGE_CLIPS') return;
+        if (e.data?.type !== 'WIRTHY_BRIDGE_CLIPS') return;
         clearTimeout(timer);
         window.removeEventListener('message', on);
         const clips = (e.data.clips ?? []) as Array<{ capture?: { id?: string } }>;
         res(clips.map(c => c.capture?.id).filter((x): x is string => !!x));
       }
       window.addEventListener('message', on);
-      // DISCERNED_WEB_READY makes the bridge (re-)push its stored clip list.
-      window.postMessage({ type: 'DISCERNED_WEB_READY' }, window.location.origin);
+      // WIRTHY_WEB_READY makes the bridge (re-)push its stored clip list.
+      window.postMessage({ type: 'WIRTHY_WEB_READY' }, window.location.origin);
     }));
     if (ids.length === 0) return 0;
     await page.evaluate((toDelete: string[]) => {
-      window.postMessage({ type: 'DISCERNED_DELETE_CLIPS', ids: toDelete }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_DELETE_CLIPS', ids: toDelete }, window.location.origin);
     }, ids);
     await page.waitForTimeout(2_000);
     return ids.length;
@@ -736,12 +736,12 @@ async function captureDomain(
         () => new Promise((res, rej) => {
           const t = setTimeout(() => rej(new Error('capture timeout')), 30_000);
           const on = (e: MessageEvent) => {
-            if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+            if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
             clearTimeout(t); window.removeEventListener('message', on);
             if (e.data.error) rej(new Error(e.data.error)); else res(e.data.capture);
           };
           window.addEventListener('message', on);
-          window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, window.location.origin);
+          window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, window.location.origin);
         }),
       )) as Record<string, unknown>;
     } catch (capErr) {
@@ -762,8 +762,8 @@ async function captureDomain(
       await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
       const postClip = () => libPage.evaluate((capture) => {
         const clip = { capture, evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' }, encrypted: '' };
-        window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
-        window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
+        window.postMessage({ type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
+        window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
       }, cap);
 
       // Select THIS capture's row, never `.first()`. The real extension's

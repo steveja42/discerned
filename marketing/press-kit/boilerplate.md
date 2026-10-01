@@ -5,9 +5,9 @@ same everywhere.
 
 ---
 
-## About Discerned (~60 words)
+## About Wirthy (~60 words)
 
-> Discerned is a browser extension and companion web app for clipping the web. It captures a
+> Wirthy is a browser extension and companion web app for clipping the web. It captures a
 > page with its original layout intact, lets you rate and tag what you saved, and keeps it
 > privately in your own browser. You can publish a clip and your evaluation to Nostr, signed
 > with your own key — but that's opt-in, and nothing is scored automatically.
@@ -18,7 +18,7 @@ same everywhere.
 
 ## Shorter (~30 words)
 
-> Discerned is a browser extension that clips web pages with their layout intact, lets you rate
+> Wirthy is a browser extension that clips web pages with their layout intact, lets you rate
 > and tag them, and keeps them on your machine — or publishes them to Nostr, if you choose.
 
 *[C-01, C-02, C-04, C-09, C-10]*
@@ -34,7 +34,7 @@ same everywhere.
 
 ## Maintainer
 
-> Discerned is built by Steve, a solo developer. It's free, open source under GPL-3.0-or-later,
+> Wirthy is built by Steve, a solo developer. It's free, open source under GPL-3.0-or-later,
 > carries no ads, and sells nothing.
 
 Nostr: `npub12cw6ljs0hu8gz24ajsd5t43pf4h3m3rqdppa8ulvc769ep6gs8lq3mz0aa`
@@ -45,11 +45,11 @@ Nostr: `npub12cw6ljs0hu8gz24ajsd5t43pf4h3m3rqdppa8ulvc769ep6gs8lq3mz0aa`
 
 | | |
 |---|---|
-| Website | https://discerned.online |
-| Chrome Web Store | https://chromewebstore.google.com/detail/discerned/gpfeknmodijdlehpnkfannklhplmfoma |
-| Source | https://github.com/steveja42/discerned |
-| Feedback | https://discerned.online/feedback |
-| Public feed | https://discerned.online/discerns |
+| Website | https://wirthy.app |
+| Chrome Web Store | https://chromewebstore.google.com/detail/wirthy/gpfeknmodijdlehpnkfannklhplmfoma |
+| Source | https://github.com/steveja42/wirthy |
+| Feedback | https://wirthy.app/feedback |
+| Public feed | https://wirthy.app/home |
 
 **Extension ID:** `gpfeknmodijdlehpnkfannklhplmfoma`
 **Current version:** 0.2.3
@@ -59,9 +59,9 @@ Nostr: `npub12cw6ljs0hu8gz24ajsd5t43pf4h3m3rqdppa8ulvc769ep6gs8lq3mz0aa`
 
 ## Standard call to action
 
-> View more discerns at discerned.online
+> View more at wirthy.app
 
-Use this wording. "Discerns" is the term for a published evaluation — never "discernments".
+Use this wording. "Post" is the term for a published evaluation.
 
 ---
 
@@ -75,5 +75,5 @@ publisher and their evaluation. Nothing extra needs adding.
 ## Version note
 
 The version number above is coupled to the extension. When it changes, it changes in
-`discerned-ext/manifest.json`, `discerned-ext/package.json`, and `discerned-web/package.json`
+`wirthy-ext/manifest.json`, `wirthy-ext/package.json`, and `wirthy-web/package.json`
 together — and this file, plus `../store-listing/STORE-SUBMISSION.md`, need the same bump.

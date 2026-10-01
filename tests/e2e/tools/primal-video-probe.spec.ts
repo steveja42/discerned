@@ -27,7 +27,7 @@ test('primal video poster probe', async () => {
   try {
     const page = await ctx.newPage();
     page.on('console', (m) => {
-      if (m.text().includes('Discerned')) console.log(`[browser:${m.type()}]`, m.text());
+      if (m.text().includes('Wirthy')) console.log(`[browser:${m.type()}]`, m.text());
     });
     await page.goto(URL_, { waitUntil: 'load', timeout: 60_000 });
     await page.waitForTimeout(6_000);
@@ -143,14 +143,14 @@ test('primal video poster probe', async () => {
       return new Promise((res, rej) => {
         const t = setTimeout(() => rej(new Error('capture timeout')), 60_000);
         const onMsg = (e: MessageEvent) => {
-          if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+          if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
           clearTimeout(t);
           window.removeEventListener('message', onMsg);
           if (e.data.error) rej(new Error(e.data.error));
           else res(e.data.capture);
         };
         window.addEventListener('message', onMsg);
-        window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, window.location.origin);
+        window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, window.location.origin);
       });
     })) as { bodyHtml?: string };
 

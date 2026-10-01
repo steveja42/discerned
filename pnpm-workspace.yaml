@@ -1,6 +1,6 @@
 packages:
-  - 'discerned-ext'
-  - 'discerned-web'
+  - 'wirthy-ext'
+  - 'wirthy-web'
 allowBuilds:
   esbuild: true
   sharp: true

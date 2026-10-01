@@ -29,11 +29,11 @@ test('ig-climb-probe: ancestor chain from the visible reel video', async () => {
     await page.evaluate(() => new Promise<void>((res) => {
       const t = setTimeout(() => res(), 40_000);
       const on = (e: MessageEvent) => {
-        if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+        if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
         clearTimeout(t); removeEventListener('message', on); res();
       };
       addEventListener('message', on);
-      postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, location.origin);
+      postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, location.origin);
     }));
     out = await page.evaluate(() => {
       const vw = innerWidth, vh = innerHeight;

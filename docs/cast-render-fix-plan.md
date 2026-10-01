@@ -11,16 +11,16 @@ correct on every site: it keeps the `dx-*` classes + `width`/`height` attrs, and
 `globals.css` uses them to pin avatars to 44px circles, lay out bylines, grid photos, etc.
 
 The **cast** render is what the public feed shows: a **kind-30023 markdown body** produced by
-`discerned-ext/src/content/html-to-markdown.ts` (`htmlToMarkdown`, turndown), rendered by
+`wirthy-ext/src/content/html-to-markdown.ts` (`htmlToMarkdown`, turndown), rendered by
 `DetailPanel` via `ReactMarkdown` + `remarkGfm`. Markdown carries **no classes and no width**,
 so every layout hint the clip relies on is gone. The markdown converter is therefore the *only*
 gatekeeper for cast fidelity, and it is coarser than the clip's CSS. Every defect below lives in
-`html-to-markdown.ts` (converter) or `discerned-ext/src/shared/nostr/events.ts` (tag/image
-selection) or `discerned-web/components/feed/DetailPanel.tsx` (hero suppression) — **not** in the
+`html-to-markdown.ts` (converter) or `wirthy-ext/src/shared/nostr/events.ts` (tag/image
+selection) or `wirthy-web/components/feed/DetailPanel.tsx` (hero suppression) — **not** in the
 capture pipeline (the clip proves the capture is good).
 
 All fixes belong to the extension/web packages. After any converter change, regenerate the
-`card-*` event fixtures (`pnpm test` in `discerned-ext` → `event-fixture-generation.test.ts`) and
+`card-*` event fixtures (`pnpm test` in `wirthy-ext` → `event-fixture-generation.test.ts`) and
 re-run `web-cast-render.spec.ts` (always-on) plus `cast-markdown.test.ts`.
 
 ---
@@ -105,7 +105,7 @@ its cells flatten. The web renderer already loads `remarkGfm`, so a GFM table in
 render — the gap is purely converter-side.
 
 **Fix:** add `turndown-plugin-gfm`'s `tables` (and `strikethrough`) rule to the turndown service in
-`html-to-markdown.ts` (add `turndown-plugin-gfm` to `discerned-ext` deps). For infobox-style 2-col
+`html-to-markdown.ts` (add `turndown-plugin-gfm` to `wirthy-ext` deps). For infobox-style 2-col
 key/value tables consider emitting a definition-style list if GFM tables read poorly. **Verify:** a
 table card in `cast-markdown.test.ts` → a `| … | … |` GFM table; `web-cast-render.spec.ts` renders it
 as `<table>`.
@@ -164,7 +164,7 @@ clip and cast in sync as the taggers evolve.
 - **breitbart** DID clear via a headed retry against the warm `test` profile (`PWDEBUG_HEADED=1`).
 - Fixture staleness (for the offline-fixture option): `medium-article.html` last touched **2026-06-02**,
   `stackoverflow-question.html` **2026-06-05**. Both are trimmed DOM snapshots (~7–8 KB); the SO one is
-  **hand-crafted** (real SO snapshots hit a Cloudflare hard-deny — see `discerned-ext/CLAUDE.md`). They
+  **hand-crafted** (real SO snapshots hit a Cloudflare hard-deny — see `wirthy-ext/CLAUDE.md`). They
   exercise the extraction pipeline + `tagStackOverflow`/Medium byline paths but won't reflect a very
   recent site redesign. Refresh via `SNAP=1 --project=snapshot-fixtures` (works for non-hard-denied
   sites) or by hand.

@@ -22,14 +22,14 @@ tells you that.
 
 ### 1. GoatCounter — website only
 
-Cookieless, no personal data, aggregate only. Covers discerned.online; **the extension has no
+Cookieless, no personal data, aggregate only. Covers wirthy.app; **the extension has no
 analytics at all**, by design.
 
 | Metric | Use |
 |---|---|
 | Sessions, top pages | Baseline traffic |
 | **Referrers** | The only channel attribution available. Interpretable only if you log what was posted when — see the campaign log below |
-| `/discerns` vs `/clips` split | Proxies discovery-reader vs. installed-user |
+| `/home` vs `/clips` split | Proxies discovery-reader vs. installed-user |
 
 ### 2. Chrome Web Store dashboard
 
@@ -40,30 +40,30 @@ analytics at all**, by design.
 | Impressions → installs | The only true conversion rate available | Moves with listing changes; note when you edit the listing |
 | Ratings, reviews | Also the only qualitative feedback with any volume | — |
 
-### 3. Relay query — discerns published
+### 3. Relay query — posts published
 
 Count events across the default relays and dedupe by event ID (the same event will come back
 from more than one relay).
 
 ```
-filter: { kinds: [1], '#t': ['discerned'] }
+filter: { kinds: [1], '#t': ['wirthy'] }
 relays: wss://relay.primal.net, wss://nos.lol, wss://relay.snort.social
 ```
 
-- **Total discerns** = distinct event IDs.
+- **Total posts** = distinct event IDs.
 - **Distinct publishers** = distinct `pubkey` values across those events.
-- **Discerns per publisher** = the first divided by the second. This separates "many people
+- **Posts per publisher** = the first divided by the second. This separates "many people
   tried it once" from "a few people use it regularly" — situations that call for opposite
   responses.
 
 **Three things to get right:**
 
-- **Don't reuse the app's filter as-is.** `discerned-web/lib/nostr/feed.ts` uses
-  `{ kinds: [1, 30023], '#t': ['discerned'], limit: 50 }`. The `limit: 50` is right for a feed
+- **Don't reuse the app's filter as-is.** `wirthy-web/lib/nostr/feed.ts` uses
+  `{ kinds: [1, 30023], '#t': ['wirthy'], limit: 50 }`. The `limit: 50` is right for a feed
   and wrong for a count — drop it, or page with `until`.
-- **Exclude kind 30023 when counting discerns.** A single capture with an article body
+- **Exclude kind 30023 when counting posts.** A single capture with an article body
   publishes a kind-1 *and* a companion kind-30023, so counting both double-counts. The kind-1
-  is the discern.
+  is the post.
 - **Relays don't guarantee completeness.** A relay may not hold everything, and querying three
   gives a floor, not a total. Track the trend, not the absolute.
 
@@ -87,7 +87,7 @@ admits blindness.
 - **True reach of a Nostr post.** No impression data — replies and reposts only.
 - **Attribution beyond referrer.** A Show HN spike is visible; a slow burn from an
   AlternativeTo listing largely isn't.
-- **Whether a discern came from Discerned** or from another client using the same tag. The
+- **Whether a post came from Wirthy** or from another client using the same tag. The
   `client` tag helps; it isn't a guarantee.
 
 ---
@@ -96,7 +96,7 @@ admits blindness.
 
 Weekly. Append; don't overwrite.
 
-| Date | Installs | Weekly users | Sessions | Discerns | Distinct publishers | Notes |
+| Date | Installs | Weekly users | Sessions | Posts | Distinct publishers | Notes |
 |---|---|---|---|---|---|---|
 | | | | | | | *(no measurements taken yet — first baseline is Phase 3)* |
 

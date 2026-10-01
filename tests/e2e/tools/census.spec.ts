@@ -28,17 +28,17 @@ test('census: per-stage element counts', async () => {
     await p.goto(process.env.CENSUS_URL ?? 'https://www.snapchat.com/spotlight',
       { waitUntil: 'domcontentloaded', timeout: 90_000 });
     await p.waitForTimeout(15_000);
-    await p.evaluate(() => { (window as unknown as { DISCERNED_CENSUS_IMGS?: boolean }).DISCERNED_CENSUS_IMGS = true; });
+    await p.evaluate(() => { (window as unknown as { WIRTHY_CENSUS_IMGS?: boolean }).WIRTHY_CENSUS_IMGS = true; });
     await activateExtensionOnTab(ctx, p.url());
     const cap = await p.evaluate(() => new Promise((res) => {
       const t = setTimeout(() => res({ error: 'timeout' }), 60_000);
       const on = (e: MessageEvent) => {
-        if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+        if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
         clearTimeout(t); removeEventListener('message', on);
         res({ html: e.data.capture?.bodyHtml ?? '' });
       };
       addEventListener('message', on);
-      postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, location.origin);
+      postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, location.origin);
     })) as { html?: string };
     await p.waitForTimeout(1200);
     const html = cap.html ?? '';

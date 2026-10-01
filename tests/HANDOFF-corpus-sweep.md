@@ -45,13 +45,13 @@ missed both — same lesson as Phase 4.6's 7 false passes):
 - `ndtv` — old URL 404'd. Found a live replacement
   (`/business-news/india-space-economy-...`) via a throwaway DOM-scrape probe
   against the real ndtv.com homepage (warm Profile 3). The new URL then hit a
-  hard 30s/60s `__DISCERNED_TEST_CAPTURE` timeout on 3 attempts — root cause
+  hard 30s/60s `__WIRTHY_TEST_CAPTURE` timeout on 3 attempts — root cause
   was NOT the site or the pipeline: the SAME throwaway discovery probe passed
   `clearSwCacheForRawDir: true` (copied from the established
   `corpus-sweep-manual.spec.ts` pattern) and was re-run several times while
   debugging its own unrelated failures, which deletes `Extension State` /
   `Extension Rules` dirs under Profile 3 — this silently deregistered
-  Discerned from the profile with zero trace (not even a disabled record in
+  Wirthy from the profile with zero trace (not even a disabled record in
   `Secure Preferences`). 18 captures earlier in the SAME session had worked
   fine; the probe broke it partway through. User caught it (dev mode was off,
   extension missing), reinstalled from `dist-test`, and the exact same ndtv
@@ -89,7 +89,7 @@ the clock. Leave alone.
 - Forgot to raise the Playwright per-test timeout above the 30s default when
   writing a throwaway headed probe with a coded 60s wait — the process was
   killed at 30s, cutting off the human's in-progress click.
-- Shell working directory silently drifted to `discerned-ext/` after an
+- Shell working directory silently drifted to `wirthy-ext/` after an
   earlier `cd`, causing `pnpm exec` to intermittently no-op (`playwright not
   found`) on retries — always `cd /c/dev/discerned` (or verify `pwd`) before
   a Bash-tool Playwright invocation in this monorepo, don't trust persisted
@@ -102,7 +102,7 @@ the clock. Leave alone.
   true`, copied uncritically from `corpus-sweep-manual.spec.ts`'s launch
   call without noticing it deletes `Extension State`/`Extension Rules`, not
   just an SW cache. Re-running it several times against the live persistent
-  Profile 3 silently deregistered the hand-installed Discerned extension
+  Profile 3 silently deregistered the hand-installed Wirthy extension
   with zero trace — not a Cloudflare/site issue, not a different session.
   18 prior captures in this same session had worked fine; this broke it
   mid-run. Cost: a real "is this my fault" back-and-forth with the user
@@ -621,7 +621,7 @@ wall but is really just a dead id).
 
 ## RESOLVED (2026-07-24) — AP News (P1), Hacker News, YouTube view-count (P2)
 
-All three fixed in `discerned-ext/src/content/capture.ts`; guarded by fixtures.
+All three fixed in `wirthy-ext/src/content/capture.ts`; guarded by fixtures.
 
 - **AP News — fixed GENERICALLY, no tagger. VERIFIED LIVE (the offline-only
   diagnosis was WRONG).** The handoff's "layout finder picks comments" was
@@ -684,7 +684,7 @@ extension. **`capture.ts` is back at clean HEAD.** AP currently captures comment
 (wrong, but not empty — no regression).
 
 **Recommended fix — a per-site tagger** (the clean tool for this, like
-reddit/youtube/goodreads). See `SITE_TAGGERS` in `discerned-ext/src/content/capture.ts`
+reddit/youtube/goodreads). See `SITE_TAGGERS` in `wirthy-ext/src/content/capture.ts`
 and `tagGoodreads` / `tagReddit` as templates. Sketch:
 ```ts
 // match: host === 'apnews.com'
@@ -750,7 +750,7 @@ finding") and the artifact at the URL in the session. Priorities:
 - `tests/e2e/playwright.config.ts` — registered `corpus-sweep-manual` project
   (and anchored `corpus-sweep` testMatch so it doesn't also match `-manual`).
 - `tests/e2e/helpers/sweepArtifacts.ts` — added `note` + `VisualFinding` types.
-- `discerned-ext/src/content/capture.ts` — **CLEAN HEAD** (AP comment-exclusion
+- `wirthy-ext/src/content/capture.ts` — **CLEAN HEAD** (AP comment-exclusion
   fully reverted). Amazon cross-sell (`removeCrossSellRails`) + Prime/commerce-promo
   removal + the substack cast phantom-hero fix (`markdownHasAnyImage`) from earlier
   in the session ARE committed/kept — verify with `git diff` if unsure which.

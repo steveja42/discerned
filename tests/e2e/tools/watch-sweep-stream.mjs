@@ -66,7 +66,7 @@ const baselineDir = findBaselineDir(OUT_ROOT);
  *
  * slice-clip.py is a plain Pillow crop (~0.3s per domain, no browser) — an
  * earlier version shelled out to a Chromium-based slicer, which was needless
- * weight for cropping an already-rendered PNG (discerned-ext/CLAUDE.md's own
+ * weight for cropping an already-rendered PNG (wirthy-ext/CLAUDE.md's own
  * refresh-gallery.py had already established the Pillow-crop pattern; the
  * Chromium version should never have been built). Batching is kept anyway: it
  * groups log output into one line per burst instead of one per domain, and

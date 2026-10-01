@@ -23,7 +23,7 @@ test('capture medium article', async () => {
   try {
     const page = await ctx.newPage();
     page.on('console', (msg) => {
-      if (msg.text().includes('Discerned')) {
+      if (msg.text().includes('Wirthy')) {
         // eslint-disable-next-line no-console
         console.log(`[browser:${msg.type()}]`, msg.text());
       }
@@ -123,14 +123,14 @@ test('capture medium article', async () => {
       return new Promise((resolveCap, rejectCap) => {
         const timer = setTimeout(() => rejectCap(new Error('capture timeout')), 30_000);
         const onMessage = (e: MessageEvent) => {
-          if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+          if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
           clearTimeout(timer);
           window.removeEventListener('message', onMessage);
           if (e.data.error) rejectCap(new Error(e.data.error));
           else resolveCap(e.data.capture);
         };
         window.addEventListener('message', onMessage);
-        window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, window.location.origin);
+        window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, window.location.origin);
       });
     })) as Record<string, unknown>;
 
@@ -143,8 +143,8 @@ test('capture medium article', async () => {
     await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await libPage.evaluate((capture) => {
       const clip = { capture, evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' }, encrypted: '' };
-      window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
-      window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
     }, cap);
     const row = libPage.locator('article.clip').first();
     await row.waitFor({ state: 'visible', timeout: 10_000 });

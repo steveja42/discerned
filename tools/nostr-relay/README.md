@@ -25,7 +25,7 @@ stdout to a real TTY — piped through the `pnpm → powershell → podman` chai
 never appear (the relay still runs, you just can't see it). So `pnpm relay:local` launches the
 container in a separate window (Windows Terminal if available) where the banner and per-cast
 `persisted event: "..."` lines stream live, then returns. **Stop the relay with Ctrl+C in
-that window**, or `podman stop discerned-local-relay`.
+that window**, or `podman stop wirthy-local-relay`.
 
 The container mounts land under the image's WorkingDir `/usr/src/app` (config →
 `/usr/src/app/config.toml`, data → `/usr/src/app/db`, which is the image's `APP_DATA`). The
@@ -55,12 +55,12 @@ silently fall back to built-in defaults (ignoring our `max_event_bytes`, etc.).
 ## How the apps point at it
 
 - **Extension**: dev/test builds (`pnpm dev`, `pnpm build:test`) compile with
-  `__DISCERNED_DEV_BUILD__ = true`, which defaults the relay mode to `local` — so
-  `getEffectiveRelays()` (in `discerned-ext/src/shared/relays.ts`) resolves to
+  `__WIRTHY_DEV_BUILD__ = true`, which defaults the relay mode to `local` — so
+  `getEffectiveRelays()` (in `wirthy-ext/src/shared/relays.ts`) resolves to
   `[ws://localhost:7777]`, replacing the public relays. Local mode is exclusive: the
   user's own relays are ignored, so test casts can never reach the real network.
   Production (`pnpm build`) tree-shakes this out.
-- **Web app**: set `NEXT_PUBLIC_LOCAL_RELAY=ws://localhost:7777` in `discerned-web/.env.local`
+- **Web app**: set `NEXT_PUBLIC_LOCAL_RELAY=ws://localhost:7777` in `wirthy-web/.env.local`
   (already created). Keep the web app on `http://localhost:3000` — an `https://` page can't
   open a `ws://` socket (mixed content).
 
@@ -96,10 +96,10 @@ cert whose SAN covers that host. Simplest desktop-only preview is a browser clie
 ## Inspect what was cast
 
 - **Dump raw event JSON** (no install — uses Node's built-in WebSocket):
-  `node tools/dump-casts.mjs` (all `#discerned` notes + long-form),
+  `node tools/dump-casts.mjs` (all `#wirthy` notes + long-form),
   `node tools/dump-casts.mjs 30023` (long-form only),
   `node tools/dump-casts.mjs 1` (notes only). Prints each signed event as pretty JSON.
 - Watch the relay's stdout, or
-- `nak req -k 1 -t t=discerned ws://localhost:7777` (if you have [nak](https://github.com/fiatjaf/nak)), or
+- `nak req -k 1 -t t=wirthy ws://localhost:7777` (if you have [nak](https://github.com/fiatjaf/nak)), or
 - open the web feed at `http://localhost:3000`, or
 - preview in a real Nostr client via `pnpm relay:tls` (see above).

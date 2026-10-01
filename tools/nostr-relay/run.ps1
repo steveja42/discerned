@@ -1,4 +1,4 @@
-# Launches the local nostr-rs-relay for Discerned dev/test on ws://localhost:7777.
+# Launches the local nostr-rs-relay for Wirthy dev/test on ws://localhost:7777.
 # Order of preference: native nostr-rs-relay on PATH -> Podman -> Docker.
 # Run from anywhere: "pnpm relay:local" (root) or "pwsh tools/nostr-relay/run.ps1".
 #
@@ -8,7 +8,7 @@
 # generate a temp config that listens on 0.0.0.0:8080 so the "-p 7777:8080" host
 # mapping can reach it, keeping config.toml as the single human-edited source.
 #
-# Pass -Yes (or set DISCERNED_RELAY_YES=1) to skip the confirmation prompt. The VS Code
+# Pass -Yes (or set WIRTHY_RELAY_YES=1) to skip the confirmation prompt. The VS Code
 # "dev: relay" task passes -Yes so it never blocks the parallel "dev: both" launch.
 
 param([switch]$Yes)
@@ -20,7 +20,7 @@ Set-Location $here
 # Confirm before starting. Prompt only when a real interactive console is attached;
 # when launched non-interactively (e.g. by a VS Code task or CI), auto-continue so we
 # don't hang waiting on input that can never arrive.
-if (-not $Yes -and $env:DISCERNED_RELAY_YES -ne '1') {
+if (-not $Yes -and $env:WIRTHY_RELAY_YES -ne '1') {
   $interactive = -not [System.Console]::IsInputRedirected -and $Host.UI.RawUI -ne $null
   if ($interactive) {
     $answer = Read-Host 'Starting local relay, continue? [Y/n]'
@@ -91,7 +91,7 @@ function Invoke-Container([string]$engine, [string]$image) {
   $cfg = Write-ContainerConfig
   # Remove any leftover container with our name first, so a name collision can't block
   # a fresh run or leave casts landing on an old container.
-  & $engine rm -f discerned-local-relay 2>$null | Out-Null
+  & $engine rm -f wirthy-local-relay 2>$null | Out-Null
 
   # Run the relay in a NEW console window: podman on Windows only flushes container
   # stdout (the relay banner + per-cast log lines) to a real TTY. Piped through
@@ -113,14 +113,14 @@ function Invoke-Container([string]$engine, [string]$image) {
 
   $script = @"
 Set-Location '$here'
-Write-Host 'Discerned local relay - ws://localhost:7777 (Ctrl+C to stop)'
+Write-Host 'Wirthy local relay - ws://localhost:7777 (Ctrl+C to stop)'
 `$localTz = [System.TimeZoneInfo]::Local
 & '$engine' run --rm ``
   -e 'RUST_LOG=$logLevel' ``
   -p '127.0.0.1:7777:8080' ``
   -v '$($cfg):/usr/src/app/config.toml:ro' ``
   -v '$($here)\data:/usr/src/app/db' ``
-  --name discerned-local-relay ``
+  --name wirthy-local-relay ``
   '$image' 2>&1 | ForEach-Object {
     # Rewrite UTC timestamps like 2026-06-16T17:01:04.123456Z to local time.
     `$line = `$_ -as [string]
@@ -166,7 +166,7 @@ Write-Host 'Discerned local relay - ws://localhost:7777 (Ctrl+C to stop)'
 
   Write-Host "Relay launched in a separate window on ws://localhost:7777 (RUST_LOG=$logLevel)."
   Write-Host "Watch that window for the startup banner and a line per cast."
-  Write-Host "Stop it with Ctrl+C in that window, or: $engine stop discerned-local-relay"
+  Write-Host "Stop it with Ctrl+C in that window, or: $engine stop wirthy-local-relay"
 
   # A hidden Caddy instance from a previous run can outlive its launcher (Ctrl+C on
   # the launching window doesn't reliably reach a detached -WindowStyle Hidden child),

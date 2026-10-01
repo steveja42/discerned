@@ -20,7 +20,7 @@
 
 import { finalizeEvent, getPublicKey } from 'nostr-tools/pure';
 
-const RELAY = process.env.DISCERNED_LOCAL_RELAY ?? 'ws://localhost:7777';
+const RELAY = process.env.WIRTHY_LOCAL_RELAY ?? 'ws://localhost:7777';
 const DRY = process.argv.includes('--dry-run');
 
 // Must match TEST_CAST_SECRET_KEY in tests/e2e/helpers/castFromCapture.ts.

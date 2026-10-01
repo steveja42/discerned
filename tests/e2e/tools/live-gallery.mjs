@@ -71,7 +71,7 @@ function build() {
       <div class="cols">
         ${col('source (live site)', e.source)}
         ${col('clip (/clips)', e.clip)}
-        ${col('cast (/discerns)', e.cast)}
+        ${col('cast (/home)', e.cast)}
       </div>
     </a>`).join('\n');
 
@@ -87,7 +87,7 @@ function build() {
       <div class="detail-cols">
         ${detailCol('source', 'source (live site)', e.source)}
         ${detailCol('clip', 'clip (/clips)', e.clip)}
-        ${detailCol('cast', 'cast (/discerns)', e.cast)}
+        ${detailCol('cast', 'cast (/home)', e.cast)}
       </div>
       <div class="scroll-driver"></div>
     </section>`).join('\n');

@@ -1,6 +1,6 @@
-// Dump the most recent Discerned cast events from the local relay for verification.
+// Dump the most recent Wirthy cast events from the local relay for verification.
 //
-//   node tools/dump-casts.mjs            # 2 most recent #discerned kind-1 + kind-30023
+//   node tools/dump-casts.mjs            # 2 most recent #wirthy kind-1 + kind-30023
 //   node tools/dump-casts.mjs 30023      # 2 most recent long-form events
 //   node tools/dump-casts.mjs 1          # 2 most recent notes
 //   node tools/dump-casts.mjs 0          # 2 most recent profiles (metadata parsed)
@@ -16,16 +16,16 @@ const kindArg = process.argv[2];
 const kinds = kindArg ? [Number(kindArg)] : [1, 30023];
 
 // Ask for a few extra so sorting by created_at picks the true newest COUNT.
-// Kind-0 profiles carry no `t` tag, so the #discerned filter would exclude them.
+// Kind-0 profiles carry no `t` tag, so the #wirthy filter would exclude them.
 const filter = { kinds, limit: Math.max(COUNT * 5, 20) };
-if (!kinds.includes(0)) filter['#t'] = ['discerned'];
+if (!kinds.includes(0)) filter['#t'] = ['wirthy'];
 const subId = 'dump-' + Math.random().toString(36).slice(2);
 
 const ws = new WebSocket(RELAY);
 const events = [];
 
 ws.addEventListener('open', () => {
-  console.error(`[dump] connected ${RELAY}, asking for kinds ${kinds.join(',')} #discerned`);
+  console.error(`[dump] connected ${RELAY}, asking for kinds ${kinds.join(',')} #wirthy`);
   ws.send(JSON.stringify(['REQ', subId, filter]));
 });
 

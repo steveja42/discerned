@@ -827,13 +827,13 @@ test('live-page diagnostics (finder / picker)', async () => {
         const res = (await page.evaluate(async () => new Promise<{ capture?: Record<string, unknown>; diag?: string[]; __err?: string }>((resolve) => {
           const t = setTimeout(() => resolve({ __err: 'capture timeout' }), 40_000);
           const on = (e: MessageEvent) => {
-            if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+            if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
             clearTimeout(t); window.removeEventListener('message', on);
             if (e.data.error) resolve({ __err: e.data.error });
             else resolve({ capture: e.data.capture, diag: e.data.diag });
           };
           window.addEventListener('message', on);
-          window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, window.location.origin);
+          window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, window.location.origin);
         }))) as { capture?: Record<string, unknown>; diag?: string[]; __err?: string };
         if (res.__err) { out.push(`CAPTURE ERROR: ${res.__err}`); }
         else {

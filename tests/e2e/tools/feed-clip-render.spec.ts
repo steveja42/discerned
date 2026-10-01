@@ -178,12 +178,12 @@ test('feed-clip-render: what the narrowed feed clip actually looks like', async 
         const cap = await page.evaluate(() => new Promise((res) => {
           const t = setTimeout(() => res({ error: 'capture timeout' }), 60_000);
           const on = (e: MessageEvent) => {
-            if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+            if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
             clearTimeout(t); removeEventListener('message', on);
             res(e.data.error ? { error: e.data.error } : e.data.capture);
           };
           addEventListener('message', on);
-          postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, location.origin);
+          postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, location.origin);
         })) as Record<string, unknown>;
         const html = String((cap as { bodyHtml?: string }).bodyHtml ?? '');
         // Why don't the captured images render? Report each <img>'s tag as it
@@ -250,8 +250,8 @@ test('feed-clip-render: what the narrowed feed clip actually looks like', async 
           for (let i = 0; i < 4; i++) {
             await lib.evaluate((capture) => {
               const clip = { capture, evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' }, encrypted: '' };
-              window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
-              window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
+              window.postMessage({ type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
+              window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
             }, cap);
             const row = lib.locator('article.clip', { hasText: marker }).first();
             try { await row.waitFor({ state: 'visible', timeout: 8_000 }); await row.click(); break; }

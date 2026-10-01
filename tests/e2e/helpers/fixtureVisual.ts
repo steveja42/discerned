@@ -127,7 +127,7 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
   const page = await ctx.newPage();
   page.on('console', (msg) => {
     const t = msg.text();
-    if (t.includes('Discerned') || t.includes('dx-')) {
+    if (t.includes('Wirthy') || t.includes('dx-')) {
       // eslint-disable-next-line no-console
       console.log(`[browser:${msg.type()}]`, t);
     }
@@ -146,7 +146,7 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
     return new Promise((resolveCap, rejectCap) => {
       const timer = setTimeout(() => rejectCap(new Error('capture timeout')), 30_000);
       const onMessage = (e: MessageEvent) => {
-        if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+        if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
         clearTimeout(timer);
         window.removeEventListener('message', onMessage);
         if (e.data.error) rejectCap(new Error(e.data.error));
@@ -154,7 +154,7 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
       };
       window.addEventListener('message', onMessage);
       window.postMessage(
-        { type: '__DISCERNED_TEST_CAPTURE', format, hostOverride, pathOverride },
+        { type: '__WIRTHY_TEST_CAPTURE', format, hostOverride, pathOverride },
         window.location.origin,
       );
     });
@@ -189,11 +189,11 @@ async function driveSpec(ctx: BrowserContext, args: DriveArgs): Promise<void> {
       encrypted: '',
     };
     window.postMessage(
-      { type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' },
+      { type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' },
       window.location.origin,
     );
     window.postMessage(
-      { type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] },
+      { type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] },
       window.location.origin,
     );
   }, pinnedCap);

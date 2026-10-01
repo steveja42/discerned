@@ -52,7 +52,7 @@ for (const { slug, url } of TARGETS) {
       const page = await ctx.newPage();
       page.on('console', (msg) => {
         const t = msg.text();
-        if (t.includes('Discerned') || t.includes('dx-')) {
+        if (t.includes('Wirthy') || t.includes('dx-')) {
           // eslint-disable-next-line no-console
           console.log(`[browser:${msg.type()}]`, t);
         }
@@ -77,14 +77,14 @@ for (const { slug, url } of TARGETS) {
         return new Promise((resolveCap, rejectCap) => {
           const timer = setTimeout(() => rejectCap(new Error('capture timeout')), 30_000);
           const onMessage = (e: MessageEvent) => {
-            if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+            if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
             clearTimeout(timer);
             window.removeEventListener('message', onMessage);
             if (e.data.error) rejectCap(new Error(e.data.error));
             else resolveCap(e.data.capture);
           };
           window.addEventListener('message', onMessage);
-          window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, window.location.origin);
+          window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, window.location.origin);
         });
       })) as Record<string, unknown>;
 
@@ -101,8 +101,8 @@ for (const { slug, url } of TARGETS) {
       await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
       const postClip = () => libPage.evaluate((capture) => {
         const clip = { capture, evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' }, encrypted: '' };
-        window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
-        window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
+        window.postMessage({ type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
+        window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
       }, cap);
 
       const row = libPage.locator('article.clip').first();

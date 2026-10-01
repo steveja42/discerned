@@ -42,8 +42,8 @@ regression there would leave every existing test green.
 
 The machinery already exists and drives production code — no new harness:
 - `tests/e2e/helpers/castFromCapture.ts` (`buildCastTemplates`, via the real
-  `__DISCERNED_TEST_CAST` bridge → real `deriveLongFormMarkdown` + `BUILD_CAST`)
-- `tests/e2e/helpers/renderCast.ts` (mocked-relay `/discerns` render)
+  `__WIRTHY_TEST_CAST` bridge → real `deriveLongFormMarkdown` + `BUILD_CAST`)
+- `tests/e2e/helpers/renderCast.ts` (mocked-relay `/home` render)
 - `tests/e2e/helpers/castShot.ts`
 
 **Task:** add `*-cast-fixture-visual.spec.ts` with `toHaveScreenshot()` baselines
@@ -66,9 +66,9 @@ least one new snapshot is likely needed.
 
 `tests/e2e/helpers/castFixtureVisual.ts` — the cast-side twin of
 `fixtureVisual.ts`. Production path end to end: fixture →
-`__DISCERNED_TEST_CAPTURE` → `__DISCERNED_TEST_CAST` (real
+`__WIRTHY_TEST_CAPTURE` → `__WIRTHY_TEST_CAST` (real
 `deriveLongFormMarkdown` + `buildCastTemplates`) → sign with a throwaway key →
-`/discerns` via a mocked relay. Only the key and the relay are fakes.
+`/home` via a mocked relay. Only the key and the relay are fakes.
 `renderCast.ts` gained `withRenderedCast` (yields the settled page + locator, so
 `toHaveScreenshot` can drive it); `renderCastAndScreenshot` now shares that same
 `openCast` path, so the live artifacts and the baselines cannot drift.
@@ -91,7 +91,7 @@ red (and ignored) or silent about its own fix.
 ### Findings that change later phases
 
 1. **Phase 2's cause is identified.** `separateInlineFacets`
-   (`discerned-ext/src/content/html-to-markdown.ts` ~387) has `SPAN` and `CODE`
+   (`wirthy-ext/src/content/html-to-markdown.ts` ~387) has `SPAN` and `CODE`
    in `INLINE_FACET_TAGS`, so it inserts a space at EVERY token boundary of a
    syntax-highlighted block. The new fixture reproduces all four sweep shapes
    verbatim — `apiVersion : v1`, `r . json ( )`,
@@ -134,7 +134,7 @@ Confirmed: `postgresql-docs` (~450px) `gitlab-repo` (~350px)
 `og:image` into the body when the capture has no hero. That `<img>` is
 synthesised, never walked by `annotateLiveImageSizes` (~line 7879), so it
 carries **no `width` attribute** — and the CSS cap at
-`discerned-web/app/globals.css` ~1439
+`wirthy-web/app/globals.css` ~1439
 (`max-width: min(100%, attr(width px, 100%))`) falls back to 100%.
 
 **Do:** stamp width/height on the synthesised `<img>` so the existing cap
@@ -171,7 +171,7 @@ It is simply not the fix for these five domains.
 reads as 609px and looks like a 100% stretch when nothing is stretched).
 
 **Do NOT** change *whether* to promote in this phase. Promotion exists for the
-MSN syndication case — see `discerned-ext/CLAUDE.md`, "A CROSS-HOST canonical is
+MSN syndication case — see `wirthy-ext/CLAUDE.md`, "A CROSS-HOST canonical is
 syndication, not staleness"; misfiring cost bodyHtml 2,265 → 177,294 chars.
 `msn-slideshow` in this sweep is the working case. Promotion *policy* (should a
 site's own logo or a 1200x630 OG card be promoted at all?) is a separate
@@ -314,7 +314,7 @@ where separators should be:
 
 **Cause (identified in Phase 0, reproduced offline):** NOT `applyFlexSeparation`
 — that is the CLIP's pass and its marker never reaches the converter. It is
-`separateInlineFacets` in `discerned-ext/src/content/html-to-markdown.ts` (~387),
+`separateInlineFacets` in `wirthy-ext/src/content/html-to-markdown.ts` (~387),
 a cast-only re-derivation of the same idea, whose `INLINE_FACET_TAGS` includes
 `SPAN` and `CODE`. A syntax highlighter emits one `<span>` per token with no
 whitespace between them, so it inserts a space at every boundary.
@@ -405,9 +405,9 @@ then reproducible offline in a unit test.
   RENDER is what is slow (the conversion takes 851ms). Cast-size policy for
   such pages is out of Phase 2's scope and not yet addressed.
 
-Guards added: 10 unit tests in `discerned-ext/tests/nostr/cast-markdown.test.ts`
+Guards added: 10 unit tests in `wirthy-ext/tests/nostr/cast-markdown.test.ts`
 (inline-boundary whitespace + structural line breaks) and 5 in
-`discerned-ext/tests/extraction/pre-whitespace.test.ts` (the Chroma/Pygments
+`wirthy-ext/tests/extraction/pre-whitespace.test.ts` (the Chroma/Pygments
 shapes, plus the counter-guard that a whitespace-only element OUTSIDE `<pre>`
 is still collapsed). The `knownBroken` strings in the cast fixture moved to
 `castMustNotContain`, with the repaired text asserted positively, and the
@@ -448,7 +448,7 @@ triggers it. `signalvnoise` has six on one page.
 
 **Cause — not `htmlToMarkdown` at all; the render side.** The markdown is
 correct; `DetailPanel`'s ReactMarkdown `a` renderer
-(`discerned-web/components/feed/DetailPanel.tsx`) decided a cast link was a
+(`wirthy-web/components/feed/DetailPanel.tsx`) decided a cast link was a
 click-to-play card from the **href alone**:
 
 ```ts
@@ -482,11 +482,11 @@ real poster shape `[![](poster)](watch-url)` is unaffected.
 
 **Ruled out in Phase 0 (and still ruled out):** the CSS pill rules
 `.clip-body a:has(img) + a` and `a:has(img) ~ a:nth-of-type(3)`
-(`discerned-web/app/globals.css` ~1792) cannot fire in a cast — casts drop
+(`wirthy-web/app/globals.css` ~1792) cannot fire in a cast — casts drop
 inlined images, so `:has(img)` never matches. Not the cause.
 
 **Regression guards added:**
-- `discerned-web/tests/components/CastPlayCard.test.tsx` — prose link to an
+- `wirthy-web/tests/components/CastPlayCard.test.tsx` — prose link to an
   embeddable provider stays a plain link; the poster shape stays playable; a
   prose link to a non-embeddable host is untouched.
 - `tests/fixtures/sites/linked-prose-article.html` now carries a prose link to
@@ -925,7 +925,7 @@ literal markdown, and escaping it is correct. Left alone.
 
 Structured lists reduced to bare numbers. `spotify-album` is the severe case —
 the whole tracklist becomes `1 · 1`, `2 · 2`. Related: the YouTube odometer
-rebuild in `discerned-ext/CLAUDE.md` solved the same shape of problem.
+rebuild in `wirthy-ext/CLAUDE.md` solved the same shape of problem.
 
 **Cause: `dx-stats-counts` firing on a CONTENT row, not a tagger defect.** The
 generic tagger stamps `dx-stats` on any short flex row of icon-bearing children
@@ -1048,7 +1048,7 @@ fake socket instead of a real relay.
 
 Measured end to end on ndtv, in the warm `Profile 3` with the extension loaded:
 capture (http 200, 10,303 chars) → build the real long-form cast → `EVENT` to the
-local relay (`["OK",…,true,""]`) → open `/discerns` in the SAME browser → the feed
+local relay (`["OK",…,true,""]`) → open `/home` in the SAME browser → the feed
 subscribes normally and renders it. The hero image reports **`naturalWidth`
 1010** and is visibly present, against **0** and a broken glyph in the current
 harness. No `routeWebSocket`, no second browser.
@@ -1056,7 +1056,7 @@ harness. No `routeWebSocket`, no second browser.
 Why the extension stops mattering once the mock is gone: it injects clips over
 `postMessage` (a different data path from the cast feed, and the CLIP render
 already coexists with it by selecting its own row via a per-run marker), and its
-`DISCERNED_BRIDGE_RELAYS` message early-returns in `applyRelayMode` when the
+`WIRTHY_BRIDGE_RELAYS` message early-returns in `applyRelayMode` when the
 mode already matches — which it does, since both sides are `local`.
 
 This is also more faithful than the mock: it exercises the real subscribe path

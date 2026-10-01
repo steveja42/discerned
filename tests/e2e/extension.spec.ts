@@ -1,4 +1,4 @@
-// Real Chromium with the built Discerned extension loaded. For each fixture
+// Real Chromium with the built Wirthy extension loaded. For each fixture
 // page, programmatically trigger captureContext() via the dev-mode test bridge
 // and assert the returned Capture matches the sidecar.
 
@@ -25,7 +25,7 @@ test.describe('extension capture pipeline', () => {
         const page = await ctx.newPage();
         // Surface content-script console.log/error so a failure to inject is visible.
         page.on('console', (msg) => {
-          if (msg.text().includes('Discerned')) {
+          if (msg.text().includes('Wirthy')) {
             // eslint-disable-next-line no-console
             console.log(`[browser:${msg.type()}]`, msg.text());
           }
@@ -47,7 +47,7 @@ test.describe('extension capture pipeline', () => {
             const onMessage = (e: MessageEvent) => {
               if (e.source !== window) return;
               if (!e.data || typeof e.data !== 'object') return;
-              if (e.data.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+              if (e.data.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
               clearTimeout(timer);
               window.removeEventListener('message', onMessage);
               if (e.data.error) reject(new Error(String(e.data.error)));
@@ -57,7 +57,7 @@ test.describe('extension capture pipeline', () => {
             // hostOverride (when set in the sidecar) fires the real per-site
             // tagger against the 127.0.0.1-served fixture — taggers otherwise
             // gate on window.location.hostname (= 127.0.0.1 here) and never run.
-            window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format, hostOverride }, window.location.origin);
+            window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format, hostOverride }, window.location.origin);
           });
         }, { format: fx.expected.format, hostOverride: fx.hostOverride });
 

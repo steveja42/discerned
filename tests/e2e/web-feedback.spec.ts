@@ -15,7 +15,7 @@ import { join } from 'node:path';
 const OUT = join(process.cwd(), 'test-output');
 mkdirSync(OUT, { recursive: true });
 
-const ISSUE_URL = 'https://github.com/steveja42/discerned/issues/42';
+const ISSUE_URL = 'https://github.com/steveja42/wirthy/issues/42';
 
 /**
  * Replace Cloudflare's script with a stub exposing the same tiny surface the form uses
@@ -57,7 +57,7 @@ const submitBtn = (page: Page) => page.getByRole('button', { name: /send feedbac
  * The form's own error line. Scoped to .relay-error because Next mounts its route
  * announcer with role="alert" too, which would make a bare [role=alert] ambiguous.
  */
-const errorLine = (page: Page) => page.locator('.relay-error[role="alert"]');
+const errorLine = (page: Page) => page.locator('.error-note[role="alert"]');
 /**
  * The radios are visually hidden and styled as chips, so a user clicks the LABEL —
  * .check() on the input itself fails as "not visible". Click the chip like a user does.

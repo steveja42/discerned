@@ -1,6 +1,6 @@
 # Marketing strategy
 
-How Discerned gets in front of people, who those people are, and what we're allowed to say.
+How Wirthy gets in front of people, who those people are, and what we're allowed to say.
 
 **This is strategy, not copy.** Copy lives in `copy/`. Every product claim in any material
 traces to an ID in `copy/claims.md` — that file is canonical and this one defers to it.
@@ -10,18 +10,18 @@ budget.
 
 ---
 
-## 1. What Discerned is
+## 1. What Wirthy is
 
 A Chrome extension plus a companion web app. You clip something you're reading — a selection,
 an article, a full page, or just a bookmark — optionally rate it, tag it, and file it under a
 category, and then choose whether it stays on your machine, gets published to Nostr, or both.
 Private clips are **clips**; published ones are **casts**, and a published evaluation is a
-**discern**.
+**post**.
 
-The shipped tagline is in `discerned-web/lib/marketing-copy.tsx`:
+The shipped tagline is in `wirthy-web/lib/marketing-copy.tsx`:
 
 > **A value-attribution layer for the web** — Signal, *not noise*.
-> Discerned is powered by a browser extension that lets you clip and rate anything on the web.
+> Wirthy is powered by a browser extension that lets you clip and rate anything on the web.
 > See what your friends and follows love and hate.
 
 That `PITCH` constant feeds both the About page hero and the first-visit popover. **Changing
@@ -35,8 +35,8 @@ only is how the two drift.
 Reproduced from `CLAUDE.md` rather than linked, because a strategy doc that only links to its
 constraints gets read without them. `copy/banned-phrases.md` is the operational version.
 
-- **"Discerns", never "discernments".** Standard call to action: "View more discerns at
-  discerned.online".
+- **A published evaluation is a "post"; the public feed is Home.** Standard call to action: "View more at
+  wirthy.app".
 - **Clip = private and local. Cast = public and on Nostr.** Never blur them; the distinction is
   the product.
 - **Casting is capture-time only.** Write "**unless** you cast it", never "**until** you cast
@@ -53,7 +53,7 @@ constraints gets read without them. `copy/banned-phrases.md` is the operational 
   of", stacked superlatives, or stubbed capability presented as shipped.
 - **Spell out uncommon acronyms** on first use.
 - **Not shipped:** NIP-44, publish retry, casting a saved clip.
-  **Planned and must be labelled planned:** Bitcoin tipping (NIP-57 zaps), voting on discerns,
+  **Planned and must be labelled planned:** Bitcoin tipping (NIP-57 zaps), voting on posts,
   Firefox, Android and iOS.
 
 ---
@@ -67,7 +67,7 @@ Both run at once. They differ in what leads, not in what's true.
 | **Who** | People already on Nostr; sovereignty-minded, key-owning, protocol-literate | People who clip and keep things: Evernote and Pocket refugees, researchers, writers, note-takers |
 | **Where** | Nostr itself, Nostr app directories, curation- and reading-focused communities | Chrome Web Store search, AlternativeTo, PKM and tools-for-thought communities, Hacker News |
 | **Lead claim** | Your evaluation, signed by your key, on a network no company owns (C-11, C-13, C-18) | A web clipper that keeps the page's real layout — including sites that defeat ordinary clippers (C-02, C-03) |
-| **Lead artifact** | A real cast discern, visible in any Nostr client | The Chrome Web Store listing |
+| **Lead artifact** | A real cast post, visible in any Nostr client | The Chrome Web Store listing |
 | **Nostr appears** | First sentence | Below the fold, as an optional destination |
 | **Misread to avoid** | *"another Nostr client"* — it's a capture tool that publishes to Nostr, not a general client | *"a crypto thing"* — no blockchain, no wallet, no token |
 
@@ -122,9 +122,9 @@ Every numbered row is actionable this quarter.
 
 | # | Channel | Effort | Requires | Notes |
 |---|---|---|---|---|
-| **A1** | **Nostr posts from the maintainer npub** | 30 min, repeatable | The claim set | **Track A's lead activity.** The only genuinely repeatable channel and the only one that compounds. Dogfooding *is* the strategy: each real discern cast is simultaneously a product demo and feed inventory — the cheapest thing on this plan that addresses the cold-start problem. |
+| **A1** | **Nostr posts from the maintainer npub** | 30 min, repeatable | The claim set | **Track A's lead activity.** The only genuinely repeatable channel and the only one that compounds. Dogfooding *is* the strategy: each real post cast is simultaneously a product demo and feed inventory — the cheapest thing on this plan that addresses the cold-start problem. |
 | **A2** | **Nostr community and topic spaces** (curation, reading, long-form) | 30 min each | Posting history from A1 | Effective only after A1 builds a visible history. Cold-posting a launch into a community you've never participated in reads as spam on Nostr as anywhere else. |
-| **A3** | **Watch awesome-nostr PR #725** | ~0 | Already open | A tracking item, not a campaign task. PR #723 is merged and Discerned is listed on nostr.net; #725 only fixes the link. Keep `directories/awesome-nostr-nostr.net.md` in sync when it lands, per that folder's "entry as submitted" rule. |
+| **A3** | **Watch awesome-nostr PR #725** | ~0 | Already open | A tracking item, not a campaign task. PR #723 is merged and Wirthy is listed on nostr.net; #725 only fixes the link. Keep `directories/awesome-nostr-nostr.net.md` in sync when it lands, per that folder's "entry as submitted" rule. |
 
 **Track A's directory work is done** — nostrapps.com submitted, awesome-nostr merged,
 nostr.co.uk dropped. There's no quick win left to open with, which is why A1 is an ongoing
@@ -137,7 +137,7 @@ builds anything.
 |---|---|---|---|---|
 | **B1** | **Chrome Web Store listing optimization** | 2–3 hrs | Nothing — unblocked | **Highest-leverage item on either track.** It's already the destination every other Track B channel funnels into, so a weak listing taxes all of them, and it's the only channel with compounding organic yield. Tune the 132-char description toward "web clipper" search intent; make sure screenshots show the capture quality, which is the actual differentiator. |
 | **B2** | **AlternativeTo** | ~1 hr | Live product + listing URL | Low effort, evergreen, exact intent match — "alternative to Evernote Web Clipper / Pocket". Pocket's shutdown makes this well-timed. Self-submission is normal and accepted there. |
-| **B3** | **PKM / tools-for-thought communities** (Obsidian, Zettelkasten, note-taking forums and Discords) | 1 hr each | Participation history | ⚠️ Strongly anti-drive-by. A first post that is an announcement gets removed or ignored. The workable entry is **answering an existing question** — "what clipper handles Reddit threads properly?" — which Discerned genuinely does (C-03). Requires patience, not effort. |
+| **B3** | **PKM / tools-for-thought communities** (Obsidian, Zettelkasten, note-taking forums and Discords) | 1 hr each | Participation history | ⚠️ Strongly anti-drive-by. A first post that is an announcement gets removed or ignored. The workable entry is **answering an existing question** — "what clipper handles Reddit threads properly?" — which Wirthy genuinely does (C-03). Requires patience, not effort. |
 | **B4** | **Subreddits** | 1 hr each | Per-sub rule check, same day | ⚠️ **Biggest trap on the list.** Rules vary sharply and change. Some relevant subs ban self-promotion outright; others require a participation ratio, flair, or a specific weekly thread. Posting into a no-self-promo sub gets the post removed, the account flagged, and sometimes a shadowban that quietly kills *all* future Reddit reach. **Read the sidebar and wiki the same day you post, every time.** Prefer subs with an explicit showcase thread. Never cross-post the same body simultaneously — Reddit's spam heuristics treat that as spam regardless of individual sub rules. |
 | **B5** | **Show HN** | 2 hrs | **Gated** (Phase 4) | One shot, non-renewable. Lead clipper; let Nostr be the second paragraph or the thread becomes a protocol argument instead of a product conversation. Prepare for "why not Obsidian Web Clipper?" — the answer is layout preservation on sites that defeat ordinary clippers, which is demonstrable rather than asserted. |
 | **B6** | **Product Hunt** | 3–4 hrs | **Gated** (Phase 4) | One shot. Effort is disproportionate for a free developer tool with no launch-day audience to mobilise; PH rewards pre-built follower lists, which a zero-budget solo project doesn't have. Ranked last deliberately — worth doing eventually for the backlink and the evergreen listing, not for launch-day traffic. |
@@ -150,7 +150,7 @@ because it's where every other Track B channel points.
 
 ### Not enterable — don't rediscover these dead ends
 
-- **Zapstore** — an Android app store. Discerned is a Chrome extension; Android is planned, not
+- **Zapstore** — an Android app store. Wirthy is a Chrome extension; Android is planned, not
   shipped.
 - **Lobsters** — invite-only, and harsh on self-promotion from new accounts. Opportunistic at
   best.
@@ -183,13 +183,13 @@ Phase 4 fires on a condition, not a calendar. **If the prerequisites are never r
 |---|---|---|
 | Sessions, top pages | GoatCounter (cookieless, website only) | Weekly |
 | Referrer breakdown | GoatCounter — the only channel attribution available | Per campaign action |
-| `/discerns` vs `/clips` split | GoatCounter — proxies discovery-reader vs. installed-user | Monthly |
+| `/home` vs `/clips` split | GoatCounter — proxies discovery-reader vs. installed-user | Monthly |
 | Installs, weekly users | Web Store dashboard (weekly-users lags installs) | Weekly |
 | Impressions → installs | Web Store dashboard — the only true conversion rate | Monthly |
 | Ratings and reviews | Web Store listing — also the only qualitative feedback with volume | Weekly |
-| **Total discerns published** | Relay query, deduped by event ID | Weekly |
+| **Total posts published** | Relay query, deduped by event ID | Weekly |
 | **Distinct publishers** | Distinct `pubkey` in that result — **the number to steer by** | Weekly |
-| Discerns per publisher | Derived — separates "many tried once" from "a few use it" | Monthly |
+| Posts per publisher | Derived — separates "many tried once" from "a few use it" | Monthly |
 
 The exact relay query and method live in `analytics/README.md` so the figure is reproducible
 rather than re-derived each time.
@@ -209,7 +209,7 @@ admits blindness.
 - **True reach of a Nostr post.** No impression data — replies and reposts only.
 - **Attribution beyond referrer.** A Show HN spike is visible; a slow burn from AlternativeTo
   largely isn't.
-- **Whether a discern came from Discerned** or another client using the same tag. The `client`
+- **Whether a post came from Wirthy** or another client using the same tag. The `client`
   tag helps; it isn't a guarantee.
 
 **Steer by distinct publishers over time.** If installs rise while publishers stay flat, the

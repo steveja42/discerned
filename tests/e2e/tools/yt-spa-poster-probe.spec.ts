@@ -34,12 +34,12 @@ test('yt-spa-poster-probe: poster follows the CURRENT video across SPA nav', asy
   const capture = async () => page.evaluate(() => new Promise((res) => {
     const t = setTimeout(() => res({ error: 'capture timeout' }), 60_000);
     const on = (e: MessageEvent) => {
-      if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+      if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
       clearTimeout(t); removeEventListener('message', on);
       res(e.data.error ? { error: e.data.error } : { html: e.data.capture?.bodyHtml ?? '' });
     };
     addEventListener('message', on);
-    postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, location.origin);
+    postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, location.origin);
   })) as Promise<{ html?: string; error?: string }>;
 
   const idOf = (u: string) => new URL(u).searchParams.get('v')!;

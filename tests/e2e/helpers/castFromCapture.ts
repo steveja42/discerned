@@ -4,7 +4,7 @@
 // private CLIP render (the rich dx-* HTML only the author sees).
 //
 // This drives the extension's OWN code, not a reimplementation: it posts a
-// __DISCERNED_TEST_CAST message to the loaded dist-test extension's dev test
+// __WIRTHY_TEST_CAST message to the loaded dist-test extension's dev test
 // bridge (content.ts), which runs the real deriveLongFormMarkdown + the real
 // background BUILD_CAST handler (buildShortNote + createLongFormEvent). The
 // returned templates are exactly what handleCast would sign and publish; we only
@@ -42,7 +42,7 @@ export async function buildCastTemplates(
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('BUILD_CAST timeout')), 30_000);
         const onMessage = (e: MessageEvent) => {
-          if (e.data?.type !== '__DISCERNED_TEST_CAST_RESULT') return;
+          if (e.data?.type !== '__WIRTHY_TEST_CAST_RESULT') return;
           clearTimeout(timer);
           window.removeEventListener('message', onMessage);
           if (e.data.error) reject(new Error(e.data.error));
@@ -50,7 +50,7 @@ export async function buildCastTemplates(
         };
         window.addEventListener('message', onMessage);
         window.postMessage(
-          { type: '__DISCERNED_TEST_CAST', capture, evaluation },
+          { type: '__WIRTHY_TEST_CAST', capture, evaluation },
           window.location.origin,
         );
       });

@@ -1,15 +1,15 @@
-# Discerned — one-pager
+# Wirthy — one-pager
 
 **A browser extension for clipping the web, rating what you clipped, and publishing your picks
 — or keeping them entirely to yourself.**
 
-discerned.online · [Chrome Web Store](https://chromewebstore.google.com/detail/discerned/gpfeknmodijdlehpnkfannklhplmfoma) · [github.com/steveja42/discerned](https://github.com/steveja42/discerned)
+wirthy.app · [Chrome Web Store](https://chromewebstore.google.com/detail/wirthy/gpfeknmodijdlehpnkfannklhplmfoma) · [github.com/steveja42/wirthy](https://github.com/steveja42/wirthy)
 
 ---
 
 ## What it is
 
-Discerned is a Chrome extension paired with a companion web app. You clip something you're
+Wirthy is a Chrome extension paired with a companion web app. You clip something you're
 reading, optionally evaluate it, and decide whether it stays on your machine or goes public.
 
 Clips are private and stored locally in your browser. Casts are public, published to Nostr and
@@ -40,7 +40,7 @@ own. Ratings go into someone else's platform, on someone else's terms, and stay 
 
 ## What makes the capture different
 
-This is the part that's unusual. Discerned keeps the page's real structure rather than
+This is the part that's unusual. Wirthy keeps the page's real structure rather than
 flattening it — bylines, images, threaded replies, code blocks, engagement counts land roughly
 where they were.
 
@@ -55,7 +55,7 @@ mode that's easiest to miss.
 
 ## Evaluation, and who does it
 
-The user does. Discerned doesn't rate anything on its own; there is no scoring model, no
+The user does. Wirthy doesn't rate anything on its own; there is no scoring model, no
 ranking, and no reputation system. The extension is the instrument and the person is the agent
 — which is also why the public feed has no algorithm. You filter it; nothing curates it for
 you.
@@ -83,7 +83,7 @@ Images are inlined into private clips. A public cast links to images at their or
 
 Not yet built, and labelled as such wherever it's mentioned:
 
-- **Tipping** — send Bitcoin to someone whose discern you valued.
+- **Tipping** — send Bitcoin to someone whose post you valued.
 - **Voting** — agree or disagree with someone else's assessment.
 - **Firefox support.**
 - **Android and iOS apps.**
@@ -93,11 +93,11 @@ Not yet built, and labelled as such wherever it's mentioned:
 Steve, working solo. Free, open source under GPL-3.0-or-later, no ads, nothing sold.
 
 Nostr: `npub12cw6ljs0hu8gz24ajsd5t43pf4h3m3rqdppa8ulvc769ep6gs8lq3mz0aa`
-Feedback: https://discerned.online/feedback — reports become public GitHub issues, so you can
+Feedback: https://wirthy.app/feedback — reports become public GitHub issues, so you can
 follow what happens next.
 
 ---
 
-*Version 0.2.3. Screenshots at `https://discerned.online/press/screenshot1.png` through
-`screenshot4.png`; icon at `https://discerned.online/icons/icon128.png`. Please link these
+*Version 0.2.3. Screenshots at `https://wirthy.app/press/screenshot1.png` through
+`screenshot4.png`; icon at `https://wirthy.app/icons/icon128.png`. Please link these
 rather than re-hosting, so they stay current.*

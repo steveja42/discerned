@@ -9,7 +9,7 @@
 //
 // This is a spec (not the old tools/*.mjs) specifically so it can import the TS
 // cast helpers — castShotSafe builds the real kind-30023 cast via the extension's
-// BUILD_CAST bridge and renders it through /discerns. The .mjs couldn't do that.
+// BUILD_CAST bridge and renders it through /home. The .mjs couldn't do that.
 //
 // Requires: Chrome fully closed (single-instance lock on Profile 3), pnpm dev
 // running (web app :3000), dist-test built. Run:
@@ -307,12 +307,12 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
             () => new Promise((res, rej) => {
               const t = setTimeout(() => rej(new Error('capture timeout')), 30_000);
               const on = (e: MessageEvent) => {
-                if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+                if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
                 clearTimeout(t); window.removeEventListener('message', on);
                 if (e.data.error) rej(new Error(e.data.error)); else res(e.data.capture);
               };
               window.addEventListener('message', on);
-              window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, window.location.origin);
+              window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, window.location.origin);
             }),
           )) as Record<string, unknown>;
         } catch (capErr) {
@@ -333,8 +333,8 @@ test('corpus-sweep-manual: headed capture for hard-blocked domains', async () =>
           await libPage.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
           const postClip = () => libPage.evaluate((capture) => {
             const clip = { capture, evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' }, encrypted: '' };
-            window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
-            window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
+            window.postMessage({ type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
+            window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
           }, cap);
           const row = libPage.locator('article.clip').first();
           let vis = false;

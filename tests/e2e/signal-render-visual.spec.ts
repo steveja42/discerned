@@ -25,10 +25,10 @@ test.describe('signal render visual', () => {
 
     await page.evaluate((injected) => {
       window.postMessage(
-        { type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' },
+        { type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' },
         window.location.origin,
       );
-      window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: injected }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: injected }, window.location.origin);
     }, clips);
 
     await page.locator('article.clip').first().waitFor();

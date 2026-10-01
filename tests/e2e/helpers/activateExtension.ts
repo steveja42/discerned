@@ -26,12 +26,12 @@ import type { BrowserContext, Worker } from '@playwright/test';
 /** Must match the `commands` key in manifest.json. */
 const ACTIVATE_COMMAND_KEY = { key: 'Y', code: 'KeyY', vk: 89, modifiers: 9 }; // Alt+Shift+Y
 
-// Discerned's MV3 worker is emitted by crxjs under this fixed name, which is
+// Wirthy's MV3 worker is emitted by crxjs under this fixed name, which is
 // what distinguishes it from every OTHER extension's worker in the context.
-const DISCERNED_SW_MARKER = 'service-worker-loader';
+const WIRTHY_SW_MARKER = 'service-worker-loader';
 
 /**
- * Find DISCERNED's service worker — not merely the first one in the context.
+ * Find WIRTHY's service worker — not merely the first one in the context.
  *
  * `ctx.serviceWorkers()[0]` is only correct when the profile holds exactly one
  * extension, which is true of a throwaway profile and false of the warm
@@ -47,7 +47,7 @@ const DISCERNED_SW_MARKER = 'service-worker-loader';
  * after; poll briefly before giving up.
  */
 async function getServiceWorker(ctx: BrowserContext): Promise<Worker> {
-  const mine = () => ctx.serviceWorkers().find(w => w.url().includes(DISCERNED_SW_MARKER));
+  const mine = () => ctx.serviceWorkers().find(w => w.url().includes(WIRTHY_SW_MARKER));
   const found = mine();
   if (found) return found;
 
@@ -59,7 +59,7 @@ async function getServiceWorker(ctx: BrowserContext): Promise<Worker> {
   }
   const seen = ctx.serviceWorkers().map(w => w.url()).join(', ') || '(none)';
   throw new Error(
-    `getServiceWorker: Discerned's service worker (${DISCERNED_SW_MARKER}) not found. `
+    `getServiceWorker: Wirthy's service worker (${WIRTHY_SW_MARKER}) not found. `
     + `Is the extension installed + enabled in this profile? Workers seen: ${seen}`,
   );
 }
@@ -103,24 +103,24 @@ async function pressActivationShortcut(ctx: BrowserContext, url: string): Promis
 /**
  * Inject the content scripts into the tab serving `url` via the real gesture,
  * and wait until the content script is listening. Use before driving capture
- * through the __DISCERNED_TEST_* bridge.
+ * through the __WIRTHY_TEST_* bridge.
  */
 export async function activateExtensionOnTab(ctx: BrowserContext, url: string): Promise<void> {
   const page = ctx.pages().find(p => p.url().startsWith(url));
   if (!page) throw new Error(`activateExtensionOnTab: no page for ${url}`);
 
   // Cheap probe: is a content script already listening on this document? The
-  // bridge answers __DISCERNED_TEST_PING synchronously once bound.
+  // bridge answers __WIRTHY_TEST_PING synchronously once bound.
   const isReady = async (): Promise<boolean> => {
     try {
       return await page.evaluate(() => new Promise<boolean>((res) => {
         const t = setTimeout(() => { window.removeEventListener('message', on); res(false); }, 300);
         const on = (e: MessageEvent) => {
-          if ((e.data as { type?: string })?.type !== '__DISCERNED_TEST_PING_RESULT') return;
+          if ((e.data as { type?: string })?.type !== '__WIRTHY_TEST_PING_RESULT') return;
           clearTimeout(t); window.removeEventListener('message', on); res(true);
         };
         window.addEventListener('message', on);
-        window.postMessage({ type: '__DISCERNED_TEST_PING' }, window.location.origin);
+        window.postMessage({ type: '__WIRTHY_TEST_PING' }, window.location.origin);
       }));
     } catch {
       return false; // page navigated/closed mid-probe
@@ -139,7 +139,7 @@ export async function activateExtensionOnTab(ctx: BrowserContext, url: string): 
     if (await isReady()) {
       // Activation opens the overlay. Capture specs drive the test bridge
       // directly, so drop it — a mounted panel would sit in their screenshots.
-      await page.evaluate(() => document.getElementById('discerned-overlay')?.remove()).catch(() => {});
+      await page.evaluate(() => document.getElementById('wirthy-overlay')?.remove()).catch(() => {});
       return;
     }
     await page.waitForTimeout(100).catch(() => { /* navigated away */ });
@@ -189,5 +189,5 @@ export async function openOverlayOnTab(ctx: BrowserContext, url: string): Promis
   const page = ctx.pages().find(p => p.url().startsWith(url));
   if (!page) throw new Error(`openOverlayOnTab: no page for ${url}`);
   await pressActivationShortcut(ctx, url);
-  await page.waitForSelector('#discerned-overlay', { state: 'attached', timeout: 15_000 });
+  await page.waitForSelector('#wirthy-overlay', { state: 'attached', timeout: 15_000 });
 }

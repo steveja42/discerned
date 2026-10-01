@@ -35,14 +35,14 @@ test.describe('@live extension capture against real URLs', () => {
             const timer = setTimeout(() => reject(new Error('capture timeout')), 20_000);
             const onMessage = (e: MessageEvent) => {
               if (e.source !== window) return;
-              if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+              if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
               clearTimeout(timer);
               window.removeEventListener('message', onMessage);
               if (e.data.error) reject(new Error(e.data.error));
               else resolve(e.data.capture);
             };
             window.addEventListener('message', onMessage);
-            window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format }, window.location.origin);
+            window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format }, window.location.origin);
           });
         }, item.format);
 

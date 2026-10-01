@@ -27,7 +27,7 @@ test('probe: dump platform.twitter.com embed iframe DOM structure', async () => 
   const out = (name: string) => resolve(outDir, name);
 
   // No extension needed — we just need to inspect the embed iframe DOM.
-  const userDataDir = mkdtempSync(join(tmpdir(), 'discerned-probe-'));
+  const userDataDir = mkdtempSync(join(tmpdir(), 'wirthy-probe-'));
   const ctx = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
     args: ['--headless=new', '--no-sandbox', '--no-first-run'],

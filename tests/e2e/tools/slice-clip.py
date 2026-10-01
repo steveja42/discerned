@@ -13,7 +13,7 @@ whose verdict depends on reading the words.
 
 This REPLACES an earlier version that opened each PNG in a headless Chromium
 tab and screenshotted a clip region -- a whole browser round-trip to do what is
-a two-line crop. discerned-ext/CLAUDE.md already established the precedent
+a two-line crop. wirthy-ext/CLAUDE.md already established the precedent
 (refresh-gallery.py crops fixture baselines with Pillow); this tool should have
 followed it from the start. A plain PIL.Image.open().crop() is milliseconds per
 band with no browser, no file:// shim page, no waiting for naturalWidth > 0.
@@ -138,7 +138,7 @@ def main() -> None:
     else:
         domains = [d.strip() for d in args.domains.split(",") if d.strip()]
     # --cast slices the CAST image instead of the clip. The cast is a separate
-    # render (kind-30023 markdown through /discerns) with its own failure modes
+    # render (kind-30023 markdown through /home) with its own failure modes
     # -- dropped headline, link-pill spills -- that a clean clip does not reveal.
     kind = "3-cast" if args.cast else "2-clip"
     suffix = "castslice" if args.cast else "slice"

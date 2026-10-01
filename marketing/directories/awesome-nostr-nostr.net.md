@@ -26,7 +26,7 @@ description:
 ## Draft line
 
 ```
-- [Discerned](https://github.com/steveja42/discerned)![stars](https://img.shields.io/github/stars/steveja42/discerned.svg?style=social) - Browser extension that lets you clip a page with its original layout intact, rate it on a five-level signal scale, and publish your evaluation to Nostr; private clips stay in your browser and publishing is always opt-in
+- [Wirthy](https://github.com/steveja42/wirthy)![stars](https://img.shields.io/github/stars/steveja42/wirthy.svg?style=social) - Browser extension that lets you clip a page with its original layout intact, rate it on a five-level signal scale, and publish your evaluation to Nostr; private clips stay in your browser and publishing is always opt-in
 ```
 
 Keep it to one sentence to match house style. There is no dedicated browser-extension

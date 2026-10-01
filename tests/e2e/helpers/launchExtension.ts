@@ -1,4 +1,4 @@
-// Helper for launching a Chromium persistent context with the built Discerned
+// Helper for launching a Chromium persistent context with the built Wirthy
 // extension loaded. Used by extension.spec.ts and end-to-end.spec.ts.
 
 import { chromium, type BrowserContext } from '@playwright/test';
@@ -38,7 +38,7 @@ const SW_CACHE_SUBDIRS = [
 // clear-before-launch (Chrome rebuilds it from the extension on disk on the
 // next launch) but NOT safe to call while another Chrome process still holds
 // the profile lock / has these dirs open — that race silently deregistered
-// Discerned from a persistent test profile with zero trace (2026-08-22, see
+// Wirthy from a persistent test profile with zero trace (2026-08-22, see
 // memory project_extension_silently_deregistered). Never invoke this (via
 // `clearSwCacheForRawDir`) from a throwaway probe that gets re-run several
 // times in quick succession against the SAME persistent profile without a
@@ -58,7 +58,7 @@ function clearServiceWorkerCache(userDataDir: string, profileFolder = 'Default')
 // EXT_PATH_OVERRIDE points the harness at another build (e.g. a git-worktree
 // build of an older commit) so two versions can be compared on one page.
 export const EXTENSION_PATH = process.env.EXT_PATH_OVERRIDE
-  ?? resolve(__dirname, '..', '..', '..', 'discerned-ext', 'dist-test');
+  ?? resolve(__dirname, '..', '..', '..', 'wirthy-ext', 'dist-test');
 
 // Root for reusable browser profiles. Gitignored at .vscode/browser-test-profiles/.
 // Subdirs named 'test', 'medium', etc. let specs share login state across runs.
@@ -134,7 +134,7 @@ export interface LaunchOptions {
   /** Playwright browser channel, e.g. 'chrome' for the installed Chrome. */
   channel?: 'chrome' | 'msedge' | 'chrome-beta';
   /**
-   * The Discerned extension is ALREADY installed in this profile (you did
+   * The Wirthy extension is ALREADY installed in this profile (you did
    * chrome://extensions → Load unpacked → dist-test once, by hand). When true we
    * launch a plain persistent context on the given `channel` and do NOT try to
    * load the extension ourselves — neither the `--load-extension` flag (Chrome
@@ -195,7 +195,7 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
     ? opts.rawUserDataDir!
     : opts.profile
       ? (() => { const d = resolve(PROFILES_ROOT, opts.profile!); mkdirSync(d, { recursive: true }); return d; })()
-      : mkdtempSync(join(tmpdir(), 'discerned-e2e-'));
+      : mkdtempSync(join(tmpdir(), 'wirthy-e2e-'));
   // Persistent profiles cache a stale extension SW after a rebuild — clear it so
   // the launch picks up the current dist-test background. Throwaway temp
   // profiles are already fresh, so this only matters (and only runs) for named
@@ -301,7 +301,7 @@ export async function launchWithExtension(opts: LaunchOptions = {}): Promise<Ext
       // ignoreDefaultArgs strips Playwright defaults that would break this path:
       //  - --disable-extensions and --disable-component-extensions-with-background-
       //    pages: Playwright injects these by default, which turns OFF every
-      //    extension in the profile — including the hand-installed Discerned one.
+      //    extension in the profile — including the hand-installed Wirthy one.
       //    Removing them is what lets the preinstalled extension actually run
       //    (verified: with them present, chrome://extensions shows ZERO extensions).
       //  - --enable-automation: the "controlled by test software" banner + internal

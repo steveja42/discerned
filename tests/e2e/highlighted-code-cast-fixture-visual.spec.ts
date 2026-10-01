@@ -9,7 +9,7 @@
 // cause is element boundaries rather than "code".
 //
 // Suspect for the padding half: separateInlineFacets in
-// discerned-ext/src/content/html-to-markdown.ts, whose INLINE_FACET_TAGS
+// wirthy-ext/src/content/html-to-markdown.ts, whose INLINE_FACET_TAGS
 // includes SPAN and CODE — so it inserts a space at every token boundary. It
 // exists to unglue Bluesky facets ("#TRCMP RCMP#TRCMP"), so narrowing it must
 // keep that working; bsky-thread's cast is the counter-guard.

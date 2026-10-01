@@ -1,4 +1,4 @@
-// Renders a signed cast event through the REAL public feed (/discerns +
+// Renders a signed cast event through the REAL public feed (/home +
 // DetailPanel) and screenshots the resulting .clip-body — the CAST render path
 // (kind-30023 markdown → ReactMarkdown), as opposed to the private CLIP render
 // (rich dx-* bodyHtml).
@@ -40,9 +40,9 @@ async function mockRelayWith(page: Page, event: NostrEvent): Promise<void> {
   // Force production relay mode so the feed subscribes over wss:// (which we
   // intercept) rather than the local dev relay.
   await page.addInitScript(() => {
-    try { localStorage.setItem('discerned.relayMode', 'production'); } catch { /* ignore */ }
+    try { localStorage.setItem('wirthy.relayMode', 'production'); } catch { /* ignore */ }
     // The feed hides TEST_CAST_PUBKEY's casts by default, and every cast here is one.
-    try { localStorage.setItem('discerned.showTestCasts', '1'); } catch { /* ignore */ }
+    try { localStorage.setItem('wirthy.showTestCasts', '1'); } catch { /* ignore */ }
   });
   await page.routeWebSocket(/^wss:\/\//, (ws) => {
     ws.onMessage((message: string | Buffer) => {
@@ -64,7 +64,7 @@ async function mockRelayWith(page: Page, event: NostrEvent): Promise<void> {
  *
  * The mode pin is what makes the feed look at ws://localhost:7777. It also keeps
  * a connected extension harmless: `applyRelayMode` early-returns when the mode
- * it is handed already matches, so the extension's DISCERNED_BRIDGE_RELAYS
+ * it is handed already matches, so the extension's WIRTHY_BRIDGE_RELAYS
  * message (which reports `local` for a dev/test build) is a no-op rather than a
  * re-subscribe to somewhere else.
  */
@@ -72,8 +72,8 @@ async function serveViaLocalRelay(page: Page, event: NostrEvent): Promise<void> 
   await ensureLocalRelay();
   await publishToLocalRelay(event);
   await page.addInitScript(() => {
-    try { localStorage.setItem('discerned.relayMode', 'local'); } catch { /* ignore */ }
-    try { localStorage.setItem('discerned.showTestCasts', '1'); } catch { /* ignore */ }
+    try { localStorage.setItem('wirthy.relayMode', 'local'); } catch { /* ignore */ }
+    try { localStorage.setItem('wirthy.showTestCasts', '1'); } catch { /* ignore */ }
   });
 }
 
@@ -136,7 +136,7 @@ export async function withRenderedCast<T>(
 }
 
 /**
- * Shared readiness path: mock the relay with this one event, open /discerns,
+ * Shared readiness path: mock the relay with this one event, open /home,
  * select the row, and wait for the cast body + its images to settle.
  */
 async function openCast(
@@ -153,7 +153,7 @@ async function openCast(
   // (github-pr, whose clip and web-app render had both already succeeded).
   // 'domcontentloaded' + the explicit row/clip-body waits below are the real
   // readiness signal.
-  await page.goto('http://localhost:3000/discerns', {
+  await page.goto('http://localhost:3000/home', {
     waitUntil: 'domcontentloaded', timeout: 30_000,
   });
 
@@ -193,7 +193,7 @@ function titleOf(event: NostrEvent): string {
 
 /**
  * Render a cast through the real feed: publish the single event to the local
- * relay, select the row on /discerns, wait for images to decode, and screenshot
+ * relay, select the row on /home, wait for images to decode, and screenshot
  * the cast body. Returns its innerText for optional assertions.
  *
  * Pass `context` to render in a warm, extension-loaded browser (see the module

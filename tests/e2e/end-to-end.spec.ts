@@ -25,7 +25,7 @@ test.describe('end-to-end clip pipeline', () => {
           const timer = setTimeout(() => reject(new Error('capture timeout')), 10_000);
           const onMessage = (e: MessageEvent) => {
             if (e.source !== window) return;
-            if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+            if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
             clearTimeout(timer);
             window.removeEventListener('message', onMessage);
             if (e.data.error) reject(new Error(e.data.error));
@@ -33,7 +33,7 @@ test.describe('end-to-end clip pipeline', () => {
           };
           window.addEventListener('message', onMessage);
           window.postMessage(
-            { type: '__DISCERNED_TEST_CAPTURE', format: 'article' },
+            { type: '__WIRTHY_TEST_CAPTURE', format: 'article' },
             window.location.origin,
           );
         });
@@ -42,13 +42,13 @@ test.describe('end-to-end clip pipeline', () => {
       expect(capture).toMatchObject({ format: 'article', url: fixtureUrl });
 
       // 2. Drive the real CLIP path. Background writes IndexedDB and pushes
-      //    DISCERNED_BRIDGE_NEW_CLIP to any open discerned.online tab.
+      //    WIRTHY_BRIDGE_NEW_CLIP to any open wirthy.app tab.
       const clipResult = await page.evaluate((cap) => {
         return new Promise((resolve, reject) => {
           const timer = setTimeout(() => reject(new Error('clip timeout')), 10_000);
           const onMessage = (e: MessageEvent) => {
             if (e.source !== window) return;
-            if (e.data?.type !== '__DISCERNED_TEST_CLIP_RESULT') return;
+            if (e.data?.type !== '__WIRTHY_TEST_CLIP_RESULT') return;
             clearTimeout(timer);
             window.removeEventListener('message', onMessage);
             if (e.data.error) reject(new Error(e.data.error));
@@ -57,7 +57,7 @@ test.describe('end-to-end clip pipeline', () => {
           window.addEventListener('message', onMessage);
           window.postMessage(
             {
-              type: '__DISCERNED_TEST_CLIP',
+              type: '__WIRTHY_TEST_CLIP',
               capture: cap,
               evaluation: { signal: 'Worthwhile', qualifiers: ['Primary Source'], category: 'Philosophy' },
             },
@@ -70,11 +70,11 @@ test.describe('end-to-end clip pipeline', () => {
 
       // 3. Open the web app's /clips — the bridge content script runs there
       //    because manifest.json includes http://localhost:3000/*. It will fetch
-      //    the stored clips from IndexedDB and post DISCERNED_BRIDGE_CLIPS.
+      //    the stored clips from IndexedDB and post WIRTHY_BRIDGE_CLIPS.
       //
-      //    Race condition: the bridge posts DISCERNED_BRIDGE_CLIPS once after a
-      //    200ms proactive timer OR on DISCERNED_WEB_READY. The web-app listener
-      //    rejects DISCERNED_WEB_READY for the same isolated-world reason our
+      //    Race condition: the bridge posts WIRTHY_BRIDGE_CLIPS once after a
+      //    200ms proactive timer OR on WIRTHY_WEB_READY. The web-app listener
+      //    rejects WIRTHY_WEB_READY for the same isolated-world reason our
       //    dev hook hit, so production effectively always uses the 200ms timer.
       //    If React hasn't mounted its useLibraryBridge listener by then, the
       //    clip message is delivered to nobody. Reload until it sticks.

@@ -4,7 +4,7 @@ import { chromium } from '@playwright/test';
 import { resolve } from 'node:path';
 
 const userDataDir = resolve('.vscode/browser-test-profiles/chrome');
-const EXT = resolve('discerned-ext/dist-test');
+const EXT = resolve('wirthy-ext/dist-test');
 const URLS = [
   'https://www.discogs.com/release/249504-Rick-Astley-Never-Gonna-Give-You-Up',
   'https://www.producthunt.com/products/chatgpt',

@@ -34,12 +34,12 @@ test('bsky-layout-probe', async () => {
     const cap = (await page.evaluate(async () => new Promise((res, rej) => {
       const t = setTimeout(() => rej(new Error('capture timeout')), 60_000);
       const on = (e: MessageEvent) => {
-        if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+        if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
         clearTimeout(t); window.removeEventListener('message', on);
         if (e.data.error) rej(new Error(e.data.error)); else res(e.data.capture);
       };
       window.addEventListener('message', on);
-      window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, window.location.origin);
+      window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, window.location.origin);
     }))) as Record<string, unknown>;
 
     const lib = await ctx.newPage();
@@ -47,8 +47,8 @@ test('bsky-layout-probe', async () => {
     await lib.goto('http://localhost:3000/clips', { waitUntil: 'networkidle' });
     await lib.evaluate((c) => {
       const clip = { capture: c, evaluation: { signal: 'Worthwhile', qualifiers: [], category: 'General' }, encrypted: '' };
-      window.postMessage({ type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
-      window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
     }, cap);
     await lib.locator('article.clip').first().click({ timeout: 15_000 });
     await lib.locator('.clip-body').waitFor({ state: 'visible', timeout: 15_000 });

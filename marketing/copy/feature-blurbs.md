@@ -24,7 +24,7 @@ same, so the two tracks can't drift apart in substance. Claim IDs refer to `clai
 ## 2. Layout-preserving capture — **the differentiator**
 
 **Body**
-> Most clippers flatten a page into prose and lose whatever made it worth saving. Discerned
+> Most clippers flatten a page into prose and lose whatever made it worth saving. Wirthy
 > keeps the page's real structure: bylines, images, threaded replies, code blocks, engagement
 > counts. It has dedicated handling for sixteen sites that ordinarily defeat clippers —
 > Reddit, YouTube, Hacker News, Stack Overflow, Bluesky, primal.net, Instagram, TikTok,

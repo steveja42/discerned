@@ -14,17 +14,17 @@ const clips = loadClipFixtures().map((f) => ({
 test.describe('web rendering — /clips via bridge', () => {
   test('renders one ClipRow per injected clip with title, domain, excerpt', async ({ page }) => {
     await page.goto('/clips');
-    // Wait for the bridge hook to mount and post DISCERNED_WEB_READY.
+    // Wait for the bridge hook to mount and post WIRTHY_WEB_READY.
     await page.waitForLoadState('networkidle');
 
     await page.evaluate((injectedClips) => {
       // Simulate the extension's HELLO + CLIPS bursts.
       window.postMessage(
-        { type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' },
+        { type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' },
         window.location.origin,
       );
       window.postMessage(
-        { type: 'DISCERNED_BRIDGE_CLIPS', clips: injectedClips },
+        { type: 'WIRTHY_BRIDGE_CLIPS', clips: injectedClips },
         window.location.origin,
       );
     }, clips);
@@ -50,10 +50,10 @@ test.describe('web rendering — /clips via bridge', () => {
 
     await page.evaluate((c) => {
       window.postMessage(
-        { type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' },
+        { type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' },
         window.location.origin,
       );
-      window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [c] }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: [c] }, window.location.origin);
     }, articleClip);
 
     const row = page.locator('article.clip', { hasText: articleClip!.capture.title });

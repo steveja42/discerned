@@ -17,7 +17,7 @@ Track A. Post from the maintainer npub.
 >
 > The capture is the part I spent the most time on. Most clippers flatten a page into plain
 > text, which throws away the thing you wanted — a Reddit thread's reply structure, a Stack
-> Overflow answer's code blocks, a forum post's attribution. Discerned keeps the layout. It has
+> Overflow answer's code blocks, a forum post's attribution. Wirthy keeps the layout. It has
 > dedicated handling for sixteen sites that usually defeat clippers, and generic structure
 > detection for the rest.
 >
@@ -32,7 +32,7 @@ Track A. Post from the maintainer npub.
 >
 > Chrome/Chromium for now, Firefox planned. Free and open source.
 >
-> View more discerns at discerned.online
+> View more at wirthy.app
 
 *[C-01, C-02, C-03, C-04, C-05, C-09, C-10, C-11, C-12, C-14, C-18]*
 
@@ -46,7 +46,7 @@ For reposting, or when the long one is too much.
 > posts, code blocks and all — lets you rate what you saved, and publishes your picks to Nostr
 > signed with your own key. Or keeps them entirely local, which is the default.
 >
-> discerned.online
+> wirthy.app
 
 *[C-02, C-03, C-04, C-09, C-10, C-11]*
 
@@ -54,11 +54,11 @@ For reposting, or when the long one is too much.
 
 ## Nostr — ongoing casts (A1, the actual work)
 
-**This is the channel that matters, and it isn't an announcement.** Cast real discerns on a
+**This is the channel that matters, and it isn't an announcement.** Cast real posts on a
 regular cadence: things you genuinely read and rated. Each one demonstrates the product and
 adds inventory to a feed that is otherwise sparse.
 
-No template — a real discern with a real note is the whole point. The occasional one can
+No template — a real post with a real note is the whole point. The occasional one can
 mention the tool; most shouldn't.
 
 ---
@@ -81,13 +81,13 @@ first post that is an announcement gets removed or ignored. **The entry is answe
 question, not posting.**
 
 The question to watch for is some variant of *"what clipper actually handles Reddit / Hacker
-News / forums properly?"* — which Discerned genuinely does, so the answer is honest rather than
+News / forums properly?"* — which Wirthy genuinely does, so the answer is honest rather than
 promotional.
 
 **Reply shape:**
 
 > Most clippers flatten those into prose and lose the thread structure. I ended up writing one
-> that keeps it — [Discerned](https://chromewebstore.google.com/detail/discerned/gpfeknmodijdlehpnkfannklhplmfoma).
+> that keeps it — [Wirthy](https://chromewebstore.google.com/detail/wirthy/gpfeknmodijdlehpnkfannklhplmfoma).
 > It has specific handling for Reddit, HN, Stack Overflow and a few forum engines, so replies
 > stay nested and code blocks stay code blocks. Clips are stored locally, no account.
 >
@@ -145,7 +145,7 @@ The "Chrome only for now" line stays. It pre-empts the first reply and buys cred
 language. It should say what the thing is.
 
 **Title:**
-> Show HN: Discerned – a web clipper that keeps the page's layout
+> Show HN: Wirthy – a web clipper that keeps the page's layout
 
 **First comment:**
 

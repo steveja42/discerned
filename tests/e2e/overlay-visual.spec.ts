@@ -1,6 +1,6 @@
 // Opt-in visual harness for the extension's evaluation overlay (OVERLAY=1).
 // Loads a fixture page in real Chromium with the dist-test extension, triggers
-// ACTIVATE_DISCERNED through the extension service worker (the same path the
+// ACTIVATE_WIRTHY through the extension service worker (the same path the
 // toolbar click uses), and screenshots the rendered panel. The overlay lives in
 // a closed shadow root, so this is a bitmap artifact for human review — no
 // pixel baseline. Run:
@@ -37,13 +37,13 @@ test.describe('overlay visual', () => {
         sw!.evaluate(async (fixtureUrl) => {
           const [tab] = await chrome.tabs.query({ url: `${fixtureUrl}*` });
           if (!tab?.id) throw new Error(`no tab matching ${fixtureUrl}`);
-          await chrome.tabs.sendMessage(tab.id, { type: 'ACTIVATE_DISCERNED' });
+          await chrome.tabs.sendMessage(tab.id, { type: 'ACTIVATE_WIRTHY' });
         }, FIXTURE_URL);
 
       // 1. Fresh guest profile → connect gate.
       await activate();
       // Host div is in the light DOM even though the panel is a closed shadow root.
-      await expect(page.locator('#discerned-overlay')).toBeAttached({ timeout: 10_000 });
+      await expect(page.locator('#wirthy-overlay')).toBeAttached({ timeout: 10_000 });
       await page.waitForTimeout(800);
       await page.screenshot({ path: resolve(OUT_DIR, 'overlay-gate.png') });
 
@@ -52,7 +52,7 @@ test.describe('overlay visual', () => {
       await page.reload({ waitUntil: 'load' });
       await page.waitForTimeout(500);
       await activate();
-      await expect(page.locator('#discerned-overlay')).toBeAttached({ timeout: 10_000 });
+      await expect(page.locator('#wirthy-overlay')).toBeAttached({ timeout: 10_000 });
       // Give the panel time to finish its async capture + preview render.
       await page.waitForTimeout(1_500);
       await page.screenshot({ path: resolve(OUT_DIR, 'overlay-main-unrated.png') });

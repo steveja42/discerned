@@ -57,7 +57,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # Test build of the extension (writes dist-test/, which the canary loads).
-      - run: pnpm --filter=./discerned-ext build:test
+      - run: pnpm --filter=./wirthy-ext build:test
 
       - run: pnpm exec playwright install --with-deps chromium
 

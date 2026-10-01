@@ -78,7 +78,7 @@ test('same page, N captures — does the pipeline diverge?', async () => {
       }>((resolve) => {
         const t = setTimeout(() => resolve({ err: 'timeout' }), 40_000);
         const on = (e: MessageEvent) => {
-          if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+          if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
           clearTimeout(t); window.removeEventListener('message', on);
           if (e.data.error) { resolve({ err: String(e.data.error) }); return; }
           const c = e.data.capture ?? {};
@@ -90,7 +90,7 @@ test('same page, N captures — does the pipeline diverge?', async () => {
           });
         };
         window.addEventListener('message', on);
-        window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, window.location.origin);
+        window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, window.location.origin);
       }))) as { len?: number; text?: string; err?: string; html?: string; title?: string };
 
       // Re-measure the page each round: if the DOM itself changed between

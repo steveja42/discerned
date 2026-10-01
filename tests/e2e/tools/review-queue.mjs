@@ -176,7 +176,7 @@ for (const f of readdirSync(RUN_DIR)) {
 
   const castOnDisk = existsSync(cast);
 
-  // The cast is a separate render (kind-30023 markdown through /discerns) with
+  // The cast is a separate render (kind-30023 markdown through /home) with
   // its own failure modes — dropped headline, clipped link pills, missing
   // images — that a clean clip hides. bbc-news is the proof: clip clean, cast
   // missing its headline. Hence a per-surface verdict, never one for both.

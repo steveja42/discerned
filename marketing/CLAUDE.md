@@ -1,6 +1,6 @@
 # CLAUDE.md — Marketing
 
-Positioning, voice, and marketing materials for Discerned. **Read this before writing any
+Positioning, voice, and marketing materials for Wirthy. **Read this before writing any
 user-facing copy**, in this folder or in the app — the terminology rules below are hard
 constraints, not preferences, and several of them contradict what the product used to be.
 
@@ -10,9 +10,9 @@ anyone. Draft copy, taglines, and store listings are fine; keep genuinely privat
 especially.
 
 Nothing here is built or deployed. Netlify's `ignore` rule
-(`git diff --quiet … -- discerned-web` in `discerned-web/netlify.toml`) scopes deploys to
-`discerned-web/`, so commits under `marketing/` never trigger a build. Keep it that way: if
-a marketing asset needs to ship, it goes in `discerned-web/public/`, not here.
+(`git diff --quiet … -- wirthy-web` in `wirthy-web/netlify.toml`) scopes deploys to
+`wirthy-web/`, so commits under `marketing/` never trigger a build. Keep it that way: if
+a marketing asset needs to ship, it goes in `wirthy-web/public/`, not here.
 
 ## Layout
 
@@ -21,9 +21,9 @@ a marketing asset needs to ship, it goes in `discerned-web/public/`, not here.
 | `STRATEGY.md` | The marketing plan: positioning, the two tracks, ranked channels, timeline, metrics |
 | `PREREQUISITES.md` | Product gaps that block conversion — recommendations, not commitments |
 | `store-listing/` | Chrome Web Store submission checklist, promo tiles, marquees |
-| | *(screenshots live in `discerned-web/public/press/` — served from discerned.online)* |
+| | *(screenshots live in `wirthy-web/public/press/` — served from wirthy.app)* |
 | `directories/` | Third-party app-directory submissions (nostrapps.com, …), as submitted |
-| `press-kit/` | One-pager, boilerplate description. *(No image files — icons and screenshots are served from discerned.online; see its README.)* |
+| `press-kit/` | One-pager, boilerplate description. *(No image files — icons and screenshots are served from wirthy.app; see its README.)* |
 | `copy/` | Taglines, elevator pitches, feature blurbs — and **`copy/claims.md`, the canonical claim registry** |
 | `social/` | Launch posts, Nostr/X threads |
 | `analytics/` | Install numbers, notes on what landed |
@@ -42,15 +42,14 @@ read like finished marketing.
 - **`jungle.md`** — the original Goodreads-scraper concept, before the product became a
   general web capture tool.
 
-What actually changed: the name is **Discerned**, evaluation is **Signal + Qualifiers +
+What actually changed: the name is **Wirthy**, evaluation is **Signal + Qualifiers +
 Category** (not Interest/Ethics), and nothing publishes kind 9802. Mine these for *tone* if
 you like — "signal vs. noise" survived and is still the core hook — but verify every product
 claim against the source before reusing a sentence.
 
 ## Terminology — hard rules
 
-**"Discerns", never "discernments".** A published evaluation is a *discern*, the way a
-published post is a tweet. Standard call to action: "View more discerns at discerned.online".
+**A published evaluation is a "post".** The public feed is **Home**. Standard call to action: "View more at wirthy.app".
 
 **Clip vs. Cast.** A **clip** is private, stored in the user's own browser. A **cast** is
 public, published to Nostr relays. Never blur these — the distinction is the product.
@@ -62,9 +61,9 @@ never imply clips are queued or waiting to be published. Write "**unless** you c
 **Signal levels are the five shipped names**, in order: Toxic, Noise, Ordinary, Worthwhile,
 Masterpiece. Signal is optional — an unrated clip is valid, so don't describe rating as
 mandatory. The definitive list is `SIGNAL_LEVELS` in
-`discerned-ext/src/shared/types.ts` — check it rather than trusting this file.
+`wirthy-ext/src/shared/types.ts` — check it rather than trusting this file.
 
-**The user evaluates, not the extension.** Discerned does not clip or rate anything on its
+**The user evaluates, not the extension.** Wirthy does not clip or rate anything on its
 own — it is the instrument, the user is the agent. Never write "clips pages and rates them":
 it reads as automated scoring, which is the opposite of the product (human judgment, signed
 by a human key) and invites the "isn't this just AI ranking?" misread from exactly the
@@ -94,7 +93,7 @@ either cut it or mark it as planned in the copy itself.
 
 ## Links
 
-**Lead with `discerned.online`, not the GitHub repo.** Where a listing takes one primary link,
+**Lead with `wirthy.app`, not the GitHub repo.** Where a listing takes one primary link,
 it goes to the web app. A repo as the headline link reads as source-only — an unfinished
 project — to someone scanning a directory of usable apps. In awesome-nostr the entries leading
 with a repo are the ones with no product to point at; the shipped ones (Deepmarks, Pinstr,
@@ -113,10 +112,10 @@ secondary, never the headline.
    rows: the likeliest error is two individually-true sentences combining into a false one
    (private + you-own-it reading as *encrypted*, which is not shipped).
 3. Verify product claims against source — `SIGNAL_LEVELS` and `QUALIFIER_GROUPS` in
-   `discerned-ext/src/shared/types.ts`, `INITIAL_CATEGORIES` in
-   `discerned-ext/src/background/background.ts`.
-4. If the copy also appears in the app, edit `discerned-web/lib/marketing-copy.tsx` — the
+   `wirthy-ext/src/shared/types.ts`, `INITIAL_CATEGORIES` in
+   `wirthy-ext/src/background/background.ts`.
+4. If the copy also appears in the app, edit `wirthy-web/lib/marketing-copy.tsx` — the
    `PITCH` constant feeds both the first-visit popover and the About page hero. Copy that
    lives in two places drifts.
 5. Store-listing copy is version-coupled. Bump it in the same commit as
-   `discerned-ext/manifest.json`, `discerned-ext/package.json`, `discerned-web/package.json`.
+   `wirthy-ext/manifest.json`, `wirthy-ext/package.json`, `wirthy-web/package.json`.

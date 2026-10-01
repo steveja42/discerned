@@ -40,10 +40,10 @@ test('video card geometry probe', async () => {
         encrypted: '',
       };
       window.postMessage(
-        { type: 'DISCERNED_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' },
+        { type: 'WIRTHY_BRIDGE_HELLO', pubkey: 'a'.repeat(64), authMethod: 'nip07' },
         window.location.origin,
       );
-      window.postMessage({ type: 'DISCERNED_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
+      window.postMessage({ type: 'WIRTHY_BRIDGE_CLIPS', clips: [clip] }, window.location.origin);
     }, bodyHtml);
 
     const row = page.locator('article.clip').first();

@@ -13,12 +13,12 @@ test('htg gallery cast images present + main-res', async () => {
     const cap = (await page.evaluate(async () => new Promise((res, rej) => {
       const t = setTimeout(() => rej(new Error('timeout')), 30_000);
       const on = (e: MessageEvent) => {
-        if (e.data?.type !== '__DISCERNED_TEST_CAPTURE_RESULT') return;
+        if (e.data?.type !== '__WIRTHY_TEST_CAPTURE_RESULT') return;
         clearTimeout(t); window.removeEventListener('message', on);
         e.data.error ? rej(new Error(e.data.error)) : res(e.data.capture);
       };
       window.addEventListener('message', on);
-      window.postMessage({ type: '__DISCERNED_TEST_CAPTURE', format: 'article' }, window.location.origin);
+      window.postMessage({ type: '__WIRTHY_TEST_CAPTURE', format: 'article' }, window.location.origin);
     }))) as Record<string, unknown>;
 
     const body = (cap.bodyHtml as string) ?? '';
